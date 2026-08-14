@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
@@ -7,9 +7,10 @@ import {
   CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, STATUS_FLOW,
   equipmentLabel, formatAED, formatDate, formatLabel,
 } from '../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Select, Textarea, EmptyState, StatusBadge, Badge, RatingPill, Pagination } from '../components/ui.jsx';
-import { IconPlus, IconPackage, IconChevronRight, IconSearch, IconUpload, IconDownload, IconCheck, IconX } from '../components/icons.jsx';
+import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
+import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+import { usePageFab } from '../components/Fab.jsx';
 import LocationPicker from '../components/LocationPicker.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 
@@ -32,6 +33,7 @@ const emptyJob = {
 export default function Dashboard() {
   usePageTitle('Dashboard');
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
   const [jobs, setJobs] = useState(null);
   const [jobsTotal, setJobsTotal] = useState(0);
@@ -117,32 +119,35 @@ export default function Dashboard() {
     load();
   }
 
+  usePageFab({ icon: <IconPlus size={24} />, label: 'Post a job', onClick: () => setShowForm(true) });
+
   return (
-    <div className="container-page py-10" dir="ltr">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Welcome back, {user?.profile?.company_name}</h1>
-          <p className="mt-1 text-sm text-ink-muted">Tier {user?.tier} · {analytics?.jobsPosted ?? 0} jobs posted all-time</p>
+    <div className="container-page py-6" dir="ltr">
+      {/* Profile banner — the Stitch shipper-dashboard header pattern. */}
+      <section className="card flex items-center justify-between gap-4 p-5">
+        <div className="flex items-center gap-4">
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-ink-inverse" style={{ background: 'var(--brand-primary)' }}>
+            {user?.profile?.company_name?.[0]?.toUpperCase() || '?'}
+          </span>
+          <div>
+            <h1 className="font-display text-lg font-bold text-ink">{user?.profile?.company_name}</h1>
+            <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">Tier {user?.tier} · {analytics?.jobsPosted ?? 0} jobs posted</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setShowImport((v) => !v)}>
-            <IconUpload size={16} /> Import CSV
-          </Button>
-          <Button onClick={() => setShowForm((v) => !v)}>
-            <IconPlus size={16} /> Post a job
-          </Button>
-        </div>
-      </div>
+        <Button variant="ghost" size="sm" onClick={() => setShowImport((v) => !v)}>
+          <IconUpload size={15} /> Import CSV
+        </Button>
+      </section>
 
       {showImport && <CsvImportPanel onDone={() => { setShowImport(false); load(); }} onCancel={() => setShowImport(false)} />}
 
       {analytics && (
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Stat label="Active jobs" value={analytics.activeJobs} />
-          <Stat label="Completed" value={analytics.jobsCompleted} />
-          <Stat label="Total spent" value={formatAED(analytics.totalSpentAED)} />
-          <Stat label="Savings vs. market" value={`${analytics.savingsPercent}%`} tone="accent" />
-        </div>
+        <section className="mt-4 grid grid-cols-2 gap-3">
+          <BentoStat label="Active jobs" value={analytics.activeJobs} />
+          <BentoStat label="Completed" value={analytics.jobsCompleted} />
+          <BentoStat label="Total spent" value={formatAED(analytics.totalSpentAED)} icon={<IconWallet size={22} />} />
+          <BentoStat label="Savings vs. market" value={`${analytics.savingsPercent}%`} tone="accent" />
+        </section>
       )}
 
       {showForm && (
@@ -262,11 +267,11 @@ export default function Dashboard() {
       )}
 
       {templates.length > 0 && (
-        <div className="mt-8">
-          <p className="mb-3 text-sm font-medium text-ink-secondary">Re-run a saved lane</p>
-          <div className="flex flex-wrap gap-3">
+        <div className="mt-6">
+          <p className="mb-2 font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Re-run a saved lane</p>
+          <div className="scroll-fade-x flex gap-2.5 overflow-x-auto pb-1">
             {templates.map((t) => (
-              <button key={t.id} onClick={() => rerun(t.id)} className="card flex items-center gap-2 px-4 py-3 text-sm hover:shadow-md">
+              <button key={t.id} onClick={() => rerun(t.id)} className="card flex shrink-0 items-center gap-2 px-4 py-3 text-sm hover:shadow-md">
                 <IconPackage size={16} style={{ color: 'var(--brand-accent)' }} />
                 <span className="font-medium text-ink">{t.name}</span>
                 <span className="text-ink-muted">· re-run</span>
@@ -276,12 +281,12 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mt-10">
-        <p className="mb-3 text-sm font-medium text-ink-secondary">Your jobs</p>
+      <div className="mt-8">
+        <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">Your jobs</h2>
         {jobs === null ? (
-          <p className="text-sm text-ink-muted">Loading…</p>
+          <p className="mt-3 text-sm text-ink-muted">Loading…</p>
         ) : jobs.length === 0 && filter === 'all' && !debouncedSearch ? (
-          <EmptyState title="No jobs yet" description="Post your first drayage job to start getting carrier bids." action={<Button onClick={() => setShowForm(true)}>Post a job</Button>} />
+          <EmptyState className="mt-3" title="No jobs yet" description="Post your first drayage job to start getting carrier bids." action={<Button onClick={() => setShowForm(true)}>Post a job</Button>} />
         ) : (
           <div className="mt-3">
             <div className="flex flex-wrap items-end gap-3">
@@ -309,49 +314,28 @@ export default function Dashboard() {
             {jobs.length === 0 ? (
               <EmptyState className="mt-4" title="No jobs match these filters" description="Try a broader search or clear a filter." />
             ) : (
-            <div className="mt-3 overflow-hidden">
-              <div className="overflow-x-auto scroll-fade-x">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b text-xs uppercase tracking-wide text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
-                      <th className="px-5 py-3 font-medium">Job</th>
-                      <th className="px-5 py-3 font-medium">Lane</th>
-                      <th className="px-5 py-3 font-medium">Status</th>
-                      <th className="px-5 py-3 font-medium">Price</th>
-                      <th className="px-5 py-3 font-medium">Deadline</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {jobs.map((j) => (
-                      <tr key={j.id} className="border-b last:border-0 hover:bg-raised" style={{ borderColor: 'var(--border-subtle)' }}>
-                        <td className="px-5 py-3">
-                          <p className="font-mono text-xs text-ink-muted">{j.job_code}</p>
-                          <p className="font-medium text-ink">
-                            {CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type)}
-                          </p>
-                          {j.container_count > 1 && <Badge className="mt-1" color="accent">×{j.container_count} containers</Badge>}
-                          {j.truck_count > 1 && <Badge className="mt-1" color="accent">×{j.truck_count} trucks</Badge>}
-                        </td>
-                        <td className="px-5 py-3 text-ink-secondary">{formatLabel(j.pickup_terminal)} → {formatLabel(j.delivery_area)}</td>
-                        <td className="px-5 py-3">
-                          <StatusBadge status={j.status} />
-                          <RatingPill rating={j.carrier_rating} className="mt-1" />
-                        </td>
-                        <td className="tabular px-5 py-3 text-ink-secondary">{formatAED(j.agreed_price_aed || j.max_budget_aed)}</td>
-                        <td className="px-5 py-3 text-ink-secondary">{formatDate(j.deadline)}</td>
-                        <td className="px-5 py-3 text-right">
-                          <Link to={`/jobs/${j.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-brand-secondary hover:underline">
-                            View <IconChevronRight size={14} />
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {jobs.map((j) => (
+                    <JobCard
+                      key={j.id}
+                      onClick={() => navigate(`/jobs/${j.id}`)}
+                      jobCode={j.job_code}
+                      topRight={<StatusBadge status={j.status} />}
+                      priceLabel={formatAED(j.agreed_price_aed || j.max_budget_aed)}
+                      origin={formatLabel(j.pickup_terminal)}
+                      destination={formatLabel(j.delivery_area)}
+                      chips={[
+                        CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
+                        ...(j.container_count > 1 ? [`×${j.container_count} containers`] : []),
+                        ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
+                      ]}
+                      meta={<span className="flex items-center justify-between"><span>Deadline {formatDate(j.deadline)}</span><RatingPill rating={j.carrier_rating} /></span>}
+                    />
+                  ))}
+                </div>
+                <Pagination total={jobsTotal} limit={PAGE_SIZE} offset={offset} onChange={setOffset} />
               </div>
-              <Pagination total={jobsTotal} limit={PAGE_SIZE} offset={offset} onChange={setOffset} />
-            </div>
             )}
           </div>
         )}

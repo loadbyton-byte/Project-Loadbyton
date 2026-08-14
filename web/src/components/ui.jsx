@@ -220,7 +220,7 @@ export function BentoStat({ label, value, icon, tone = 'default', span, classNam
 // monospaced job code + AED price header, a route-path visual (origin dot
 // → line → destination dot), and a chip footer. `onClick`/`href` both
 // optional; renders as a plain div if neither is given.
-export function JobCard({ jobCode, status, statusColor = 'neutral', priceLabel, origin, destination, chips = [], meta, onClick, className }) {
+export function JobCard({ jobCode, topRight, priceLabel, origin, destination, chips = [], meta, onClick, className }) {
   const Wrapper = onClick ? 'button' : 'div';
   return (
     <Wrapper
@@ -237,7 +237,7 @@ export function JobCard({ jobCode, status, statusColor = 'neutral', priceLabel, 
           <span className="font-mono text-xs font-semibold text-ink-muted">{jobCode}</span>
           <div className="flex items-center gap-2">
             {priceLabel && <span className="font-mono text-sm font-bold text-ink">{priceLabel}</span>}
-            {status && <Badge color={statusColor}>{status}</Badge>}
+            {topRight}
           </div>
         </div>
 
