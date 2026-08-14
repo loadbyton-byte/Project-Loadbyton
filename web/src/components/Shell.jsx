@@ -32,12 +32,14 @@ function navByRole(t) {
       { to: '/dashboard', label: t('nav.dashboard', 'Dashboard') },
       { to: '/templates', label: t('nav.templates', 'Templates') },
       { to: '/contracts', label: t('nav.contracts', 'Contract lanes') },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics') },
     ],
     CARRIER: [
       { to: '/open-loads', label: t('nav.openLoads', 'Open loads') },
       { to: '/my-bids', label: t('nav.myBids', 'My bids') },
       { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs') },
       { to: '/earnings', label: t('nav.earnings', 'Earnings') },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics') },
     ],
     ADMIN: [
       { to: '/admin', label: t('nav.admin', 'Admin console') },
