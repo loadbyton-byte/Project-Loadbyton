@@ -4,6 +4,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, formatLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconPackage } from '../components/icons.jsx';
+import { usePageFab } from '../components/Fab.jsx';
 
 const empty = { name: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAddress: '', containerSize: '40HC', containerType: 'DRY', cadence: 'WEEKLY', notes: '' };
 
@@ -43,18 +44,17 @@ export default function Templates() {
     }
   }
 
+  usePageFab({ icon: <IconPlus size={24} />, label: 'New template', onClick: () => setShowForm(true) });
+
   return (
-    <div className="container-page py-10" dir="ltr">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Templates</h1>
-          <p className="mt-1 text-sm text-ink-muted">Save a repeat lane once. Re-run it into a fresh open job in one click.</p>
-        </div>
-        <Button onClick={() => setShowForm((v) => !v)} className="self-start"><IconPlus size={16} /> New template</Button>
+    <div className="container-page py-6" dir="ltr">
+      <div>
+        <h1 className="font-display text-xl font-bold text-ink">Templates</h1>
+        <p className="mt-1 text-sm text-ink-muted">Save a repeat lane once. Re-run it into a fresh open job in one click.</p>
       </div>
 
       {showForm && (
-        <Card className="mt-6">
+        <Card className="mt-5">
           <form onSubmit={submit}>
             <Card.Content className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">

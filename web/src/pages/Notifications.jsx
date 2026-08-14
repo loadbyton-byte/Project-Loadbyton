@@ -54,16 +54,16 @@ export default function Notifications() {
   }
 
   return (
-    <div className="container-page py-10" dir="ltr">
+    <div className="container-page py-6" dir="ltr">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-semibold text-ink">Notifications</h1>
-        {items && items.some((n) => !n.is_read) && <Button variant="secondary" onClick={markRead}>Mark all read</Button>}
+        <h1 className="font-display text-xl font-bold text-ink">Notifications</h1>
+        {items && items.some((n) => !n.is_read) && <Button variant="secondary" size="sm" onClick={markRead}>Mark all read</Button>}
       </div>
 
       {prefs && prefs.types.length > 0 && (
-        <Card className="mt-6">
+        <Card className="mt-5">
           <Card.Content>
-            <p className="text-sm font-medium text-ink">Notify me about</p>
+            <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Notify me about</p>
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {prefs.types.map((type) => (
                 <label key={type} className="flex items-center gap-2 text-sm text-ink-secondary">
@@ -81,30 +81,30 @@ export default function Notifications() {
         </Card>
       )}
 
-      <div className="mt-6">
+      <div className="mt-5">
         {items === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
         ) : items.length === 0 ? (
           <EmptyState icon={<IconBell size={26} />} title="No notifications" description="Bids, awards, status changes and payouts will show up here." />
         ) : (
-          <Card className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="flex flex-col gap-2">
             {items.map((n) => {
               const body = (
-                <div className="flex items-start justify-between gap-3 px-5 py-4" style={{ background: n.is_read ? 'transparent' : 'var(--bg-raised)' }}>
+                <div className="card flex items-start justify-between gap-3 px-4 py-3.5" style={{ background: n.is_read ? undefined : 'var(--surface-container-low)' }}>
                   <div>
-                    <p className="text-sm font-medium text-ink">{n.title}</p>
+                    <p className="text-sm font-semibold text-ink">{n.title}</p>
                     {n.body && <p className="mt-0.5 text-sm text-ink-muted">{n.body}</p>}
                   </div>
-                  <p className="shrink-0 whitespace-nowrap text-xs text-ink-muted">{formatDateTime(n.created_at)}</p>
+                  <p className="shrink-0 whitespace-nowrap font-mono text-[11px] text-ink-muted">{formatDateTime(n.created_at)}</p>
                 </div>
               );
               return n.job_id ? (
-                <Link key={n.id} to={`/jobs/${n.job_id}`} className="block hover:bg-raised">{body}</Link>
+                <Link key={n.id} to={`/jobs/${n.job_id}`} className="block">{body}</Link>
               ) : (
                 <div key={n.id}>{body}</div>
               );
             })}
-          </Card>
+          </div>
         )}
       </div>
     </div>

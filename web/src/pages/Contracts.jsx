@@ -4,6 +4,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { TERMINALS, AREAS, formatAED, formatLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, EmptyState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconShield } from '../components/icons.jsx';
+import { usePageFab } from '../components/Fab.jsx';
 
 const empty = { pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAddress: '', monthlyLoads: '', targetPriceAed: '' };
 
@@ -32,18 +33,17 @@ export default function Contracts() {
     }
   }
 
+  usePageFab({ icon: <IconPlus size={24} />, label: 'New contract lane', onClick: () => setShowForm(true) });
+
   return (
-    <div className="container-page py-10" dir="ltr">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Contract lanes</h1>
-          <p className="mt-1 text-sm text-ink-muted">Commit monthly volume on a lane for priority carrier visibility and a discounted rate.</p>
-        </div>
-        <Button onClick={() => setShowForm((v) => !v)} className="self-start"><IconPlus size={16} /> New contract lane</Button>
+    <div className="container-page py-6" dir="ltr">
+      <div>
+        <h1 className="font-display text-xl font-bold text-ink">Contract lanes</h1>
+        <p className="mt-1 text-sm text-ink-muted">Commit monthly volume on a lane for priority carrier visibility and a discounted rate.</p>
       </div>
 
       {showForm && (
-        <Card className="mt-6">
+        <Card className="mt-5">
           <form onSubmit={submit}>
             <Card.Content className="grid gap-4 sm:grid-cols-2">
               <div>
