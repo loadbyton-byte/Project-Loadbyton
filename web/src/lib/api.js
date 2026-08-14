@@ -71,6 +71,7 @@ export const api = {
   optimizeRoute: (id, body) => post(`/jobs/${id}/optimize-route`, body),
   awardJob: (id, bidId) => post(`/jobs/${id}/award`, { bidId }),
   setStatus: (id, status) => patch(`/jobs/${id}/status`, { status }),
+  updateDriver: (id, body) => patch(`/jobs/${id}/driver`, body),
   submitPod: (id, body) => post(`/jobs/${id}/pod`, body),
   track: (id) => get(`/jobs/${id}/track`),
   disputeJob: (id, reason) => post(`/jobs/${id}/dispute`, { reason }),

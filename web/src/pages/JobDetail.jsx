@@ -4,8 +4,8 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { STATUS_FLOW, formatAED, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, TERMINALS, AREAS } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill } from '../components/ui.jsx';
-import { IconCheck, IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft } from '../components/icons.jsx';
+import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, StatusTracker, ChatBubble } from '../components/ui.jsx';
+import { IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft, IconCompass, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
 import LocationPicker from '../components/LocationPicker.jsx';
@@ -36,30 +36,18 @@ function Section({ title, children, action }) {
   );
 }
 
-function StatusStepper({ job }) {
-  const idx = STATUS_FLOW.indexOf(job.status);
-  const terminal = job.status === 'CANCELLED' || job.status === 'DISPUTED';
+// Steps shown to the user skip DRAFT (jobs are never displayed in that
+// state) — STATUS_FLOW.slice(1) is OPEN..COMPLETED, the same 6 stages
+// Industrial Trust's spec names explicitly.
+const TRACKER_STEPS = STATUS_FLOW.slice(1).map((s) => ({ key: s, label: formatLabel(s) }));
+
+function JobStatusTracker({ job }) {
+  const terminal = job.status === 'CANCELLED' ? 'danger' : job.status === 'DISPUTED' ? 'danger' : undefined;
+  const idx = Math.max(0, STATUS_FLOW.indexOf(job.status) - 1);
   return (
-    <div className="flex items-center gap-1 overflow-x-auto scroll-fade-x pb-1">
-      {STATUS_FLOW.slice(1).map((s, i) => {
-        const stepIdx = STATUS_FLOW.indexOf(s);
-        const done = !terminal && stepIdx <= idx;
-        return (
-          <React.Fragment key={s}>
-            {i > 0 && <div className="h-px w-6 shrink-0" style={{ background: done ? 'var(--brand-accent)' : 'var(--border-default)' }} />}
-            <div className="flex shrink-0 flex-col items-center gap-1.5">
-              <div
-                className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
-                style={done ? { background: 'var(--brand-accent)', color: 'var(--text-on-accent)' } : { background: 'var(--bg-raised)', color: 'var(--text-muted)' }}
-              >
-                {done ? <IconCheck size={13} /> : stepIdx}
-              </div>
-              <span className="whitespace-nowrap text-[11px] text-ink-muted">{formatLabel(s)}</span>
-            </div>
-          </React.Fragment>
-        );
-      })}
-      {terminal && <Badge color="danger" className="ml-3">{job.status}</Badge>}
+    <div className="overflow-x-auto scroll-fade-x pb-1">
+      <StatusTracker steps={TRACKER_STEPS} currentIndex={idx} terminal={terminal} className="min-w-[560px]" />
+      {terminal && <Badge color="danger" className="mt-3">{job.status}</Badge>}
     </div>
   );
 }
@@ -165,7 +153,7 @@ export default function JobDetail() {
 
       <Card className="mb-6">
         <Card.Content>
-          <StatusStepper job={job} />
+          <JobStatusTracker job={job} />
         </Card.Content>
       </Card>
 
@@ -292,6 +280,14 @@ export default function JobDetail() {
 
           {isAwardedCarrier && BACKLOAD_ELIGIBLE_STATUSES.includes(job.status) && <BackloadMatches jobId={job.id} />}
 
+          {job.status === 'DISPUTED' && (isShipper || isAwardedCarrier) && (
+            <Link to={`/jobs/${job.id}/dispute`} className="btn-danger mb-6 w-full justify-center">
+              <IconGavel size={15} /> View dispute
+            </Link>
+          )}
+
+          <RouteOptimizer jobId={job.id} />
+
           <Card className="mb-6">
             <Card.Header><Card.Title>Actions</Card.Title></Card.Header>
             <Card.Content className="space-y-2">
@@ -321,6 +317,10 @@ export default function JobDetail() {
               )}
             </Card.Content>
           </Card>
+
+          {isAwardedCarrier && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status) && (
+            <DriverUpdateForm job={job} onDone={load} />
+          )}
 
           <RateTool jobId={job.id} />
         </div>
@@ -566,6 +566,109 @@ function BackloadMatches({ jobId }) {
   );
 }
 
+// POST /api/jobs/:id/optimize-route — built server-side (server/lib/lanes.js)
+// but had no caller anywhere in the app before this redesign pass.
+function RouteOptimizer({ jobId }) {
+  const [priority, setPriority] = useState('balanced');
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    setBusy(true);
+    try {
+      const r = await api.optimizeRoute(jobId, { priority });
+      setResult(r.optimized);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card className="mb-6">
+      <Card.Header><Card.Title>Route optimizer</Card.Title></Card.Header>
+      <Card.Content className="space-y-3">
+        <div className="flex items-center gap-2">
+          <IconCompass size={16} className="text-brand-accent" />
+          <Select value={priority} onChange={(e) => setPriority(e.target.value)} className="flex-1">
+            <option value="balanced">Balanced</option>
+            <option value="fastest">Fastest</option>
+            <option value="cheapest">Cheapest</option>
+          </Select>
+          <Button variant="secondary" onClick={run} loading={busy}>Optimize</Button>
+        </div>
+        {result && (
+          <dl className="grid grid-cols-2 gap-3 rounded-md p-3 text-sm" style={{ background: 'var(--surface-container-low)' }}>
+            <div><dt className="text-xs text-ink-muted">Distance</dt><dd className="tabular font-semibold text-ink">{result.distance_km} km</dd></div>
+            <div><dt className="text-xs text-ink-muted">Est. time</dt><dd className="tabular font-semibold text-ink">{result.estimated_time_min} min</dd></div>
+            <div><dt className="text-xs text-ink-muted">Fuel cost</dt><dd className="tabular font-semibold text-ink">{formatAED(result.fuel_cost_aed)}</dd></div>
+            <div><dt className="text-xs text-ink-muted">vs. standard</dt><dd className="tabular font-semibold text-status-success">{result.savings_vs_standard}% saved</dd></div>
+          </dl>
+        )}
+      </Card.Content>
+    </Card>
+  );
+}
+
+// PATCH /api/jobs/:id/driver — built server-side, no caller anywhere in the
+// app before this redesign pass. Lets the awarded carrier correct the
+// driver on record if it changes before pickup, instead of the driver name
+// being fixed forever at bid time.
+function DriverUpdateForm({ job, onDone }) {
+  const { addToast } = useToasts();
+  const [open, setOpen] = useState(false);
+  const [driverName, setDriverName] = useState(job.assigned_driver_name || '');
+  const [driverPhone, setDriverPhone] = useState(job.assigned_driver_phone || '');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await api.updateDriver(job.id, { driverName, driverPhone });
+      addToast({ type: 'status_change', title: 'Driver updated', body: `${driverName} is now the assigned driver.` });
+      setOpen(false);
+      onDone();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not update driver', body: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Card className="mb-6">
+        <Card.Content className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-ink-muted">Assigned driver</p>
+            <p className="font-medium text-ink">{job.assigned_driver_name || 'Not set'}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>Update</Button>
+        </Card.Content>
+      </Card>
+    );
+  }
+  return (
+    <Card className="mb-6">
+      <Card.Header><Card.Title>Update driver</Card.Title></Card.Header>
+      <form onSubmit={submit}>
+        <Card.Content className="space-y-3">
+          <div>
+            <Label>Driver name</Label>
+            <Input required value={driverName} onChange={(e) => setDriverName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Driver mobile (UAE)</Label>
+            <Input required placeholder="05XXXXXXXX" value={driverPhone} onChange={(e) => setDriverPhone(e.target.value)} />
+          </div>
+        </Card.Content>
+        <Card.Footer>
+          <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button type="submit" loading={busy}>Save</Button>
+        </Card.Footer>
+      </form>
+    </Card>
+  );
+}
+
 function PodForm({ jobId, onDone, busy, setBusy, setError }) {
   const [file, setFile] = useState(null);
   async function submit() {
@@ -696,11 +799,9 @@ function MessageThread({ messages, jobId, onSent }) {
       {messages.length === 0 ? (
         <p className="text-sm text-ink-muted">No messages yet.</p>
       ) : (
-        <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+        <div className="flex max-h-72 flex-col gap-3 overflow-y-auto pr-1">
           {messages.map((m) => (
-            <div key={m.id} className={`max-w-[80%] rounded-lg px-3.5 py-2.5 text-sm ${m.sender_id === user.id ? 'ml-auto' : ''}`} style={{ background: m.sender_id === user.id ? 'var(--brand-primary)' : 'var(--bg-raised)', color: m.sender_id === user.id ? 'var(--text-inverse)' : 'var(--text-primary)' }}>
-              {m.content}
-            </div>
+            <ChatBubble key={m.id} body={m.content} mine={m.sender_id === user.id} />
           ))}
         </div>
       )}
