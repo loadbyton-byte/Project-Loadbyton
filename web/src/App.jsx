@@ -40,6 +40,7 @@ const Analytics = lazy(() => import('./pages/Analytics.jsx'));
 const Notifications = lazy(() => import('./pages/Notifications.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
+const DocumentCompliance = lazy(() => import('./pages/DocumentCompliance.jsx'));
 
 function FullScreenSpinner() {
   return (
@@ -100,6 +101,7 @@ export default function App() {
           <Route path="/jobs/:id/dispute" element={<RequireAuth><JobDispute /></RequireAuth>} />
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
+          <Route path="/documents" element={<RequireAuth roles={['SHIPPER', 'CARRIER']}><DocumentCompliance /></RequireAuth>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

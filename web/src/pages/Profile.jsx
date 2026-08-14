@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { Button, Card, Input, Label, Select, Badge, EmptyState } from '../components/ui.jsx';
-import { IconUser } from '../components/icons.jsx';
+import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
 import ScanWithAi from '../components/ScanWithAi.jsx';
 
 const TRN_LICENCE_SCAN_FIELDS = [
@@ -183,7 +184,15 @@ export default function Profile() {
         </p>
       )}
 
-      <Card className="mt-6">
+      <Link to="/documents" className="card mt-5 flex items-center justify-between gap-3 p-4">
+        <div className="flex items-center gap-3">
+          <IconShield size={18} className="text-brand-accent" />
+          <span className="text-sm font-semibold text-ink">Document compliance</span>
+        </div>
+        <IconChevronRight size={16} className="text-ink-muted" />
+      </Link>
+
+      <Card className="mt-5">
         <form onSubmit={save}>
           <Card.Header><Card.Title>Company profile</Card.Title></Card.Header>
           <Card.Content className="grid gap-4 sm:grid-cols-2">
