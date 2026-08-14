@@ -65,7 +65,7 @@ primitive, tokens — that's what makes the light/dark themes swap cleanly.
 |---|---|---|---|
 | `brand.primary` | Ink `#111113` | Paper `#F8FAFC` | Primary buttons, active nav, brand chrome |
 | `brand.secondary` | Blue `#3B82F6` | Blue `#93C5FD` | Text links only — kept distinct from `brand.primary` precisely so a link still reads as a link on a monochrome UI |
-| `brand.accent` | Orange `#F2600C` | Orange `#FF7A33` | The **one** accent — award/confirm actions, the primary marketing CTA. Nothing else. |
+| `brand.accent` | Safety orange `#FD761A` | Orange `#FF7A33` | The **one** accent — award/confirm actions, the primary marketing CTA. Nothing else. |
 | `status.success` | Teal `#0D9488` | Teal `#14B8A6` | Delivered, released, verified |
 | `status.warning` | Amber `#D97706` | Amber `#F59E0B` | Pending review, demurrage exposure — deliberately a different hue from `brand.accent` (gold vs. orange-red) so the two are never mistaken for each other at a glance |
 | `status.danger` | Red `#DC2626` | Red `#F87171` | Disputed, rejected, overdue |
@@ -113,10 +113,12 @@ it never gets confused with the accent doing its actual job.
   the display slot.
 - **Body — Inter** (400/500/600). Everything you read at length: forms, tables,
   descriptions, nav labels.
-- **Mono — IBM Plex Mono.** Reserved for data that lines up: job codes
-  (`LBT-DXB-2608-4921`), AED amounts, IBANs, timestamps, audit-log entries. Gives
-  the ledger-adjacent parts of the product a deliberately technical, tabular
-  feel — `font-variant-numeric: tabular-nums` wherever figures stack in a column.
+- **Mono — JetBrains Mono** (replaced IBM Plex Mono in the Industrial Trust
+  redesign pass — same role, a slightly more geometric/technical face).
+  Reserved for data that lines up: job codes (`LBT-DXB-2608-4921`), AED
+  amounts, IBANs, timestamps, audit-log entries. Gives the ledger-adjacent
+  parts of the product a deliberately technical, tabular feel —
+  `font-variant-numeric: tabular-nums` wherever figures stack in a column.
 
 Type scale (rem, 16px base): `xs` 0.75 · `sm` 0.875 · `base` 1 · `md` 1.125 ·
 `lg` 1.25 · `xl` 1.5 · `2xl` 1.875 · `3xl` 2.375 · `4xl` 3 · `5xl` 3.75.

@@ -31,6 +31,12 @@
         "200": "#FFD3B0",
         "100": "#FFE8D6"
       },
+      "safety": {
+        "500": "#FD761A",
+        "600": "#C2410C",
+        "container": "#FFDBCA",
+        "onContainer": "#5C2400"
+      },
       "amber": {
         "700": "#B45309",
         "600": "#D97706",
@@ -54,9 +60,9 @@
     },
     "font": {
       "family": {
-        "display": "'Space Grotesk', ui-sans-serif, sans-serif",
+        "display": "'Manrope', ui-sans-serif, sans-serif",
         "body": "'Inter', ui-sans-serif, sans-serif",
-        "mono": "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace"
+        "mono": "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace"
       },
       "size": {
         "xs": "0.75rem", "sm": "0.875rem", "base": "1rem", "md": "1.125rem",
@@ -72,22 +78,27 @@
       "sm": "0 1px 2px rgba(10,10,11,0.06)",
       "md": "0 6px 20px rgba(10,10,11,0.10)",
       "lg": "0 16px 40px rgba(10,10,11,0.18)",
-      "focus": "0 0 0 3px rgba(242,96,12,0.35)"
+      "elevated": "0 10px 25px rgba(15,23,42,0.12)",
+      "focus": "0 0 0 3px rgba(253,118,26,0.35)"
     }
   },
   "semantic": {
     "light": {
-      "bg": { "canvas": "{slate.50}", "surface": "{slate.0}", "raised": "{slate.0}", "inverse": "{ink.900}" },
+      "bg": { "canvas": "{slate.50}", "surface": "{slate.0}", "raised": "{slate.100}", "inverse": "{ink.900}" },
+      "surfaceContainer": { "lowest": "{slate.0}", "low": "{slate.50}", "DEFAULT": "{slate.100}", "high": "{slate.200}", "highest": "{slate.300}" },
+      "outline": { "DEFAULT": "{slate.500}", "variant": "{slate.200}" },
       "border": { "default": "{slate.200}", "subtle": "{slate.100}", "strong": "{slate.300}" },
       "text": { "primary": "{ink.900}", "secondary": "{slate.700}", "muted": "{slate.500}", "inverse": "{slate.0}", "onAccent": "{slate.0}" },
-      "brand": { "primary": "{ink.900}", "primaryHover": "{ink.800}", "secondary": "{blue.500}", "accent": "{orange.600}", "accentHover": "{orange.700}" },
+      "brand": { "primary": "{ink.900}", "primaryHover": "{ink.800}", "secondary": "{blue.500}", "accent": "{safety.500}", "accentHover": "{safety.600}" },
       "status": { "success": "{teal.600}", "successBg": "{teal.100}", "warning": "{amber.600}", "warningBg": "{amber.100}", "danger": "{red.600}", "dangerBg": "{red.100}", "info": "{blue.600}", "infoBg": "{blue.50}" }
     },
     "dark": {
       "bg": { "canvas": "{ink.950}", "surface": "{ink.900}", "raised": "{ink.800}", "inverse": "{slate.50}" },
+      "surfaceContainer": { "lowest": "{ink.950}", "low": "{ink.900}", "DEFAULT": "{ink.800}", "high": "{ink.700}", "highest": "{ink.600}" },
+      "outline": { "DEFAULT": "{slate.400}", "variant": "{ink.700}" },
       "border": { "default": "{ink.700}", "subtle": "{ink.800}", "strong": "{ink.600}" },
       "text": { "primary": "{slate.50}", "secondary": "{slate.300}", "muted": "{slate.500}", "inverse": "{ink.900}", "onAccent": "{ink.900}" },
-      "brand": { "primary": "{slate.50}", "primaryHover": "{slate.200}", "secondary": "{blue.300}", "accent": "{orange.500}", "accentHover": "#FFA05C" },
+      "brand": { "primary": "{slate.50}", "primaryHover": "{slate.200}", "secondary": "{blue.300}", "accent": "{safety.500}", "accentHover": "#FF9142" },
       "status": { "success": "{teal.500}", "successBg": "#123832", "warning": "{amber.500}", "warningBg": "#3A2A10", "danger": "#F87171", "dangerBg": "#3A1616", "info": "{blue.300}", "infoBg": "#122540" }
     }
   },

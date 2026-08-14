@@ -11,6 +11,20 @@ module.exports = {
         surface: 'var(--bg-surface)',
         raised: 'var(--bg-raised)',
         inverse: 'var(--bg-inverse)',
+        // Industrial Trust's tonal-layering ladder — additive to
+        // surface/raised above, used by the new bento-grid/nested-card
+        // components (BentoStat, JobCard, TopAppBar, BottomNavBar).
+        'surface-container': {
+          lowest: 'var(--surface-container-lowest)',
+          low: 'var(--surface-container-low)',
+          DEFAULT: 'var(--surface-container)',
+          high: 'var(--surface-container-high)',
+          highest: 'var(--surface-container-highest)',
+        },
+        outline: {
+          DEFAULT: 'var(--outline)',
+          variant: 'var(--outline-variant)',
+        },
         border: {
           DEFAULT: 'var(--border-default)',
           subtle: 'var(--border-subtle)',
@@ -44,18 +58,20 @@ module.exports = {
       fontFamily: {
         display: ['Manrope', 'ui-sans-serif', 'sans-serif'],
         body: ['Inter', 'ui-sans-serif', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'ui-monospace', '"SF Mono"', 'Menlo', 'monospace'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', '"SF Mono"', 'Menlo', 'monospace'],
       },
       borderRadius: {
         sm: 'var(--lb-radius-sm)',
         md: 'var(--lb-radius-md)',
         lg: 'var(--lb-radius-lg)',
         xl: 'var(--lb-radius-xl)',
+        full: 'var(--lb-radius-full)',
       },
       boxShadow: {
         sm: 'var(--lb-shadow-sm)',
         md: 'var(--lb-shadow-md)',
         lg: 'var(--lb-shadow-lg)',
+        elevated: 'var(--lb-shadow-elevated)',
         focus: 'var(--lb-shadow-focus)',
       },
       maxWidth: {

@@ -41,6 +41,14 @@
   --lb-orange-200: #FFD3B0;
   --lb-orange-100: #FFE8D6;
 
+  /* Industrial Trust "Safety Orange" — the current reserved accent (award,
+     confirm, release, primary marketing CTA). Distinct primitive from
+     --lb-orange-* above so the two ramps never get confused. */
+  --lb-safety-500: #FD761A;
+  --lb-safety-600: #C2410C;
+  --lb-safety-container: #FFDBCA;
+  --lb-safety-on-container: #5C2400;
+
   --lb-amber-700: #B45309;
   --lb-amber-600: #D97706;
   --lb-amber-500: #F59E0B;
@@ -77,7 +85,7 @@
   /* primitive: type */
   --lb-font-display: 'Manrope', ui-sans-serif, sans-serif;
   --lb-font-body: 'Inter', ui-sans-serif, sans-serif;
-  --lb-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --lb-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* primitive: radius / shadow — bumped rounder and more shadow-led than the
      old navy system (elevation over hairlines, per BRAND_GUIDELINES.md §2). */
@@ -89,13 +97,24 @@
   --lb-shadow-sm: 0 1px 2px rgba(10,10,11,0.06);
   --lb-shadow-md: 0 6px 20px rgba(10,10,11,0.10);
   --lb-shadow-lg: 0 16px 40px rgba(10,10,11,0.18);
-  --lb-shadow-focus: 0 0 0 3px rgba(242,96,12,0.35);
+  --lb-shadow-elevated: 0 10px 25px rgba(15, 23, 42, 0.12);
+  --lb-shadow-focus: 0 0 0 3px rgba(253,118,26,0.35);
 
   /* semantic: light theme (default) */
   --bg-canvas: var(--lb-slate-50);
   --bg-surface: var(--lb-slate-0);
-  --bg-raised: var(--lb-slate-0);
+  --bg-raised: var(--lb-slate-100);
   --bg-inverse: var(--lb-ink-900);
+
+  /* Industrial Trust's tonal-layering ladder — additive to bg.surface/
+     bg.raised above, used by nested-card/bento-grid components. */
+  --surface-container-lowest: var(--lb-slate-0);
+  --surface-container-low: var(--lb-slate-50);
+  --surface-container: var(--lb-slate-100);
+  --surface-container-high: var(--lb-slate-200);
+  --surface-container-highest: var(--lb-slate-300);
+  --outline: var(--lb-slate-500);
+  --outline-variant: var(--lb-slate-200);
 
   --border-default: var(--lb-slate-200);
   --border-subtle: var(--lb-slate-100);
@@ -113,14 +132,14 @@
   --brand-primary: var(--lb-ink-900);
   --brand-primary-hover: var(--lb-ink-800);
   --brand-secondary: var(--lb-blue-500);
-  --brand-accent: var(--lb-orange-600);
-  --brand-accent-hover: var(--lb-orange-700);
+  --brand-accent: var(--lb-safety-500);
+  --brand-accent-hover: var(--lb-safety-600);
   /* gstack review D4: Badge's "accent" variant and the carrier tier badge
      read the raw --lb-orange-100 primitive directly (unthemed) — a light
      peach chip with orange-500 text at ~2.2:1 in dark mode. A semantic
      token, the same pattern every --status-*-bg already uses, is what lets
      the dark override below actually apply. */
-  --brand-accent-bg: var(--lb-orange-100);
+  --brand-accent-bg: var(--lb-safety-container);
 
   --status-success: var(--lb-teal-600);
   --status-success-bg: var(--lb-teal-100);
@@ -139,6 +158,14 @@
     --bg-raised: var(--lb-ink-800);
     --bg-inverse: var(--lb-slate-50);
 
+    --surface-container-lowest: var(--lb-ink-950);
+    --surface-container-low: var(--lb-ink-900);
+    --surface-container: var(--lb-ink-800);
+    --surface-container-high: var(--lb-ink-700);
+    --surface-container-highest: var(--lb-ink-600);
+    --outline: var(--lb-slate-400);
+    --outline-variant: var(--lb-ink-700);
+
     --border-default: var(--lb-ink-700);
     --border-subtle: var(--lb-ink-800);
     --border-strong: var(--lb-ink-600);
@@ -152,8 +179,8 @@
     --brand-primary: var(--lb-slate-50);
     --brand-primary-hover: var(--lb-slate-200);
     --brand-secondary: var(--lb-blue-300);
-    --brand-accent: var(--lb-orange-500);
-    --brand-accent-hover: #FFA05C;
+    --brand-accent: var(--lb-safety-500);
+    --brand-accent-hover: #FF9142;
     --brand-accent-bg: #3A2410;
 
     --status-success: var(--lb-teal-500);
@@ -173,6 +200,14 @@
   --bg-raised: var(--lb-ink-800);
   --bg-inverse: var(--lb-slate-50);
 
+  --surface-container-lowest: var(--lb-ink-950);
+  --surface-container-low: var(--lb-ink-900);
+  --surface-container: var(--lb-ink-800);
+  --surface-container-high: var(--lb-ink-700);
+  --surface-container-highest: var(--lb-ink-600);
+  --outline: var(--lb-slate-400);
+  --outline-variant: var(--lb-ink-700);
+
   --border-default: var(--lb-ink-700);
   --border-subtle: var(--lb-ink-800);
   --border-strong: var(--lb-ink-600);
@@ -186,8 +221,8 @@
   --brand-primary: var(--lb-slate-50);
   --brand-primary-hover: var(--lb-slate-200);
   --brand-secondary: var(--lb-blue-300);
-  --brand-accent: var(--lb-orange-500);
-  --brand-accent-hover: #FFA05C;
+  --brand-accent: var(--lb-safety-500);
+  --brand-accent-hover: #FF9142;
   --brand-accent-bg: #3A2410;
 
   --status-success: var(--lb-teal-500);
