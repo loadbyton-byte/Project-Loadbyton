@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { EQUIPMENT_TYPES, equipmentLabel } from '../lib/constants.js';
+import { EQUIPMENT_TYPES, equipmentLabel, formatAED, formatLabel } from '../lib/constants.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
@@ -31,6 +31,7 @@ export default function Landing() {
   const { t } = useLocale();
   const [carriers, setCarriers] = useState([]);
   const [market, setMarket] = useState(null);
+  const [lanes, setLanes] = useState([]);
   const [heroAnim] = useState(() => {
     if (skipHeroAnimOnce) {
       skipHeroAnimOnce = false;
@@ -42,6 +43,11 @@ export default function Landing() {
   useEffect(() => {
     api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 4))).catch(() => {});
     api.publicMarket().then((d) => setMarket(d.market)).catch(() => {});
+    // GET /api/public/lanes — the unified lane index was built server-side
+    // (server/lib/lanes.js) but, before this redesign pass, no page ever
+    // called it; the "Lane Index" copy elsewhere on this page was static
+    // marketing text, not real numbers. This is that data, live.
+    api.publicLanes().then((d) => setLanes(d.lanes.slice(0, 4))).catch(() => {});
   }, []);
 
   return (
@@ -183,6 +189,26 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* Live Lane Index preview — real data from GET /api/public/lanes,
+          not just the "1 Lane Index" stat card above claiming it exists. */}
+      {lanes.length > 0 && (
+        <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
+          <div className="container-page">
+            <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">The Lane Index — live, not a quote you have to ask for.</Reveal>
+            <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Base price, distance, and on-time performance for real UAE lanes, updated as jobs complete.</Reveal>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {lanes.map((l, i) => (
+                <Reveal key={l.laneId} delay={i * 60} className="card p-4">
+                  <p className="text-sm font-semibold text-ink">{formatLabel(l.terminal)} → {formatLabel(l.area)}</p>
+                  <p className="tabular mt-2 font-display text-xl font-bold" style={{ color: 'var(--brand-accent)' }}>{formatAED(l.basePriceAed)}</p>
+                  <p className="mt-1 font-mono text-xs text-ink-muted">{l.distanceKm} km · {l.onTimePct}% on-time</p>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Volume & enterprise CTA band */}
       <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
