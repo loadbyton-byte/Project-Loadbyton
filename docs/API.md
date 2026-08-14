@@ -299,8 +299,8 @@ All routes below require `auth(['ADMIN'])`.
 - **Body:** `{ determination, decision: "RELEASE_TO_CARRIER" | "REFUND_SHIPPER" | "SPLIT" }`
 - **200** `{ ok }` — releases the payout (marking escrow `RELEASED` with `release_type='DISPUTE_RESOLUTION'`) or refunds, audits + notifies both parties.
 
-### `GET /api/admin/disputes/:id/evidence`
-- **200** `{ evidence: { job, bids, documents, messages, ratings, auditTrail } }` — the dispute dossier.
+### `GET /api/admin/evidence/:jobId`
+- **200** `{ evidence: { job, bids, documents, messages, ratings, auditTrail } }` — the dispute dossier for that job. (A dispute-id-keyed alias, `GET /api/admin/disputes/:id/evidence`, existed briefly but was removed as a redundant duplicate — the Disputes admin UI and `docs/TUTORIAL.md` both use this job-id-keyed form.)
 
 ### `GET /api/admin/revenue`
 - **200** `{ revenue: { gmvAED, platformFeesAED, escrowHeldAED, avgTakeRate } }` (`avgTakeRate` is a `%` string).
@@ -352,6 +352,9 @@ See `TUTORIAL.md` for the full demo walkthrough.
 
 ## 9. Endpoints added beyond the original spec
 
-Two aliases exist for the dispute evidence dossier — both return the same shape:
-- `GET /api/admin/disputes/:id/evidence` (dispute-id keyed, per §6 above)
-- `GET /api/admin/evidence/:jobId` (job-id keyed, matches the phrasing in `ARCHITECTURE.md` §6 and `TUTORIAL.md` step 10)
+Several routes exist beyond this document's original scope; the notable ones the
+Industrial Trust redesign pass newly wired into the UI (they were built and
+tested server-side but had no caller anywhere in the app before that):
+`POST /api/jobs/:id/optimize-route`, `PATCH /api/jobs/:id/driver`,
+`POST /api/admin/confirm-receipt`, `GET /api/admin/evidence/:jobId`, and
+`GET /api/public/lanes`.

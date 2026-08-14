@@ -6,7 +6,7 @@ import { useToasts } from '../components/Toast.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../lib/constants.js';
 import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState } from '../components/ui.jsx';
-import { IconShield, IconAlert, IconCheck, IconInfo, IconUser } from '../components/icons.jsx';
+import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
 
@@ -15,8 +15,8 @@ export default function Admin() {
   const [tab, setTab] = useState('Health');
 
   return (
-    <div className="container-page py-10" dir="ltr">
-      <h1 className="font-display text-2xl font-semibold text-ink">Admin console</h1>
+    <div className="container-page py-6" dir="ltr">
+      <h1 className="font-display text-xl font-bold text-ink">Admin console</h1>
       <p className="mt-1 text-sm text-ink-muted">Verification, escrow oversight, disputes, and the audit trail.</p>
 
       <div className="mt-6 flex gap-1 overflow-x-auto scroll-fade-x border-b" style={{ borderColor: 'var(--border-default)' }}>
@@ -60,6 +60,9 @@ function HealthTab() {
         <Stat label="Completion rate" value={`${health.completionRate}%`} tone="accent" />
         <Stat label="Escrow held" value={formatAED(health.escrowHeld)} />
       </div>
+
+      <EscrowConfirmationPanel />
+
       <p className="mt-6 mb-3 text-sm font-medium text-ink-secondary">Lane health</p>
       <Card className="overflow-hidden">
         <div className="overflow-x-auto scroll-fade-x">
@@ -87,6 +90,62 @@ function HealthTab() {
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+// POST /api/admin/confirm-receipt moves escrow HELD -> FUNDED. Built and
+// tested server-side but had no caller anywhere in the app before this
+// redesign pass — there was literally no way, through the UI, to advance
+// escrow past HELD. Reuses GET /api/jobs (unfiltered for ADMIN) rather than
+// a new endpoint, since that already returns escrow_status on every row.
+function EscrowConfirmationPanel() {
+  const { addToast } = useToasts();
+  const [jobs, setJobs] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  function load() {
+    api.listJobs({ status: 'AWARDED,PICKED_UP,IN_TRANSIT,DELIVERED', limit: 100 })
+      .then((d) => setJobs(d.jobs.filter((j) => j.escrow_status === 'HELD')))
+      .catch(() => setJobs([]));
+  }
+  useEffect(load, []);
+
+  async function confirm(job) {
+    setBusyId(job.id);
+    try {
+      await api.adminConfirmReceipt(job.id);
+      addToast({ type: 'payout_released', title: 'Receipt confirmed', body: `${job.job_code} escrow is now FUNDED.` });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not confirm receipt', body: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (jobs === null) return null;
+
+  return (
+    <div className="mt-6">
+      <p className="mb-3 flex items-center gap-2 text-sm font-medium text-ink-secondary">
+        <IconWallet size={16} /> Escrow awaiting fund confirmation ({jobs.length})
+      </p>
+      {jobs.length === 0 ? (
+        <p className="text-sm text-ink-muted">Nothing HELD right now — every awarded job's funds have been confirmed as received.</p>
+      ) : (
+        <div className="space-y-2">
+          {jobs.map((j) => (
+            <Card key={j.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div>
+                <p className="font-mono text-xs text-ink-muted">{j.job_code}</p>
+                <p className="tabular font-semibold text-ink">{formatAED(j.agreed_price_aed)}</p>
+              </div>
+              <Button size="sm" variant="accent" loading={busyId === j.id} onClick={() => confirm(j)}>Confirm receipt</Button>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -206,6 +265,7 @@ function DisputesTab() {
   const [form, setForm] = useState({ jobId: '', reason: '' });
   const [resolveDrafts, setResolveDrafts] = useState({});
   const [busy, setBusy] = useState(false);
+  const [evidenceFor, setEvidenceFor] = useState(null);
 
   function load() {
     api.adminDisputes().then((d) => setDisputes(d.disputes)).catch(() => setDisputes([]));
@@ -265,8 +325,14 @@ function DisputesTab() {
                   <p className="mt-0.5 font-medium text-ink">{d.reason}</p>
                   {d.determination && <p className="mt-1 text-sm text-ink-muted">Determination: {d.determination}</p>}
                 </div>
-                <Badge color={d.status === 'RESOLVED' ? 'success' : 'warning'}>{d.status}</Badge>
+                <div className="flex flex-col items-end gap-2">
+                  <Badge color={d.status === 'RESOLVED' ? 'success' : 'warning'}>{d.status}</Badge>
+                  <Button size="sm" variant="ghost" onClick={() => setEvidenceFor(evidenceFor === d.id ? null : d)}>
+                    <IconFile size={13} /> {evidenceFor?.id === d.id ? 'Hide evidence' : 'View evidence'}
+                  </Button>
+                </div>
               </div>
+              {evidenceFor?.id === d.id && <EvidenceDossier jobId={d.job_id} />}
               {d.status === 'OPEN' && (
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
                   <Input placeholder="Determination note" value={resolveDrafts[d.id] || ''} onChange={(e) => setResolveDrafts({ ...resolveDrafts, [d.id]: e.target.value })} className="flex-1 min-w-[220px]" />
@@ -278,6 +344,50 @@ function DisputesTab() {
             </Card>
           ))
         )}
+      </div>
+    </div>
+  );
+}
+
+// GET /api/admin/evidence/:jobId — built server-side (the "dispute dossier":
+// job, bids, docs, messages, ratings, audit trail) but the Disputes tab had
+// no view for it at all before this redesign pass.
+function EvidenceDossier({ jobId }) {
+  const [evidence, setEvidence] = useState(null);
+  useEffect(() => { api.adminEvidence(jobId).then((d) => setEvidence(d.evidence)).catch(() => setEvidence(false)); }, [jobId]);
+
+  if (evidence === null) return <p className="mt-4 text-sm text-ink-muted">Loading evidence…</p>;
+  if (evidence === false) return <p className="mt-4 text-sm text-status-danger">Could not load evidence.</p>;
+
+  return (
+    <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-2" style={{ borderColor: 'var(--border-subtle)' }}>
+      <div>
+        <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Bids ({evidence.bids.length})</p>
+        <ul className="mt-1.5 space-y-1 text-sm text-ink-secondary">
+          {evidence.bids.map((b) => <li key={b.id}>{formatAED(b.amount_aed)} · {b.eta_minutes}min · <Badge>{b.status}</Badge></li>)}
+          {evidence.bids.length === 0 && <li className="text-ink-muted">None</li>}
+        </ul>
+      </div>
+      <div>
+        <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Documents ({evidence.documents.length})</p>
+        <ul className="mt-1.5 space-y-1 text-sm text-ink-secondary">
+          {evidence.documents.map((doc) => <li key={doc.id}>{doc.title} <Badge>{doc.doc_type}</Badge></li>)}
+          {evidence.documents.length === 0 && <li className="text-ink-muted">None</li>}
+        </ul>
+      </div>
+      <div>
+        <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Messages ({evidence.messages.length})</p>
+        <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto text-sm text-ink-secondary">
+          {evidence.messages.map((m) => <li key={m.id}>{m.content}</li>)}
+          {evidence.messages.length === 0 && <li className="text-ink-muted">None</li>}
+        </ul>
+      </div>
+      <div>
+        <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Audit trail ({evidence.auditTrail.length})</p>
+        <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto text-sm text-ink-secondary">
+          {evidence.auditTrail.map((a) => <li key={a.id}>{a.action} — {formatDateTime(a.created_at)}</li>)}
+          {evidence.auditTrail.length === 0 && <li className="text-ink-muted">None</li>}
+        </ul>
       </div>
     </div>
   );

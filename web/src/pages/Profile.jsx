@@ -173,9 +173,9 @@ export default function Profile() {
   }
 
   return (
-    <div className="container-page max-w-2xl py-10" dir="ltr">
-      <h1 className="font-display text-2xl font-semibold text-ink">Profile & settings</h1>
-      <p className="mt-1 text-sm text-ink-muted">{user.email} · {user.role} · Tier {user.tier}</p>
+    <div className="container-page max-w-2xl py-6" dir="ltr">
+      <h1 className="font-display text-xl font-bold text-ink">Profile &amp; settings</h1>
+      <p className="mt-1 font-mono text-xs text-ink-muted">{user.email} · {user.role} · Tier {user.tier}</p>
       {actingAs && (
         <p className="mt-1 text-xs text-ink-muted">
           Logged in as {actingAs.displayName || actingAs.email} ({actingAs.seatRole}) — company details below are shared

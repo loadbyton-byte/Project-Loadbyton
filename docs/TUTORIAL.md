@@ -110,7 +110,7 @@ Log in as `admin@loadbyton.ae`.
 
 Still as admin, on the **Disputes** tab, open a dispute on a job (job ID + reason). The job **and its escrow** freeze to `DISPUTED` — no payout moves while open.
 
-Resolve it with decision `RELEASE_TO_CARRIER` (payout releases, `release_type=DISPUTE_RESOLUTION`), `REFUND_SHIPPER` (escrow back to the shipper), or `SPLIT`. Both parties get notified. The evidence dossier behind any dispute — job, bids, documents, messages, ratings, and the full audit trail — is available at `GET /api/admin/disputes/:id/evidence` (or `GET /api/admin/evidence/:jobId`).
+Resolve it with decision `RELEASE_TO_CARRIER` (payout releases, `release_type=DISPUTE_RESOLUTION`), `REFUND_SHIPPER` (escrow back to the shipper), or `SPLIT`. Both parties get notified. The evidence dossier behind any dispute — job, bids, documents, messages, ratings, and the full audit trail — is available at `GET /api/admin/evidence/:jobId`, with a "View evidence" button in the Admin console's Disputes tab.
 
 ---
 

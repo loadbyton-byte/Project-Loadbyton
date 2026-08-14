@@ -2168,12 +2168,6 @@ function buildEvidence(jobId) {
   };
 }
 
-app.get('/api/admin/disputes/:id/evidence', auth(['ADMIN']), (req, res) => {
-  const dispute = db.prepare('SELECT * FROM disputes WHERE id=?').get(req.params.id);
-  if (!dispute) return sendError(res, 404, 'Dispute not found');
-  res.json({ evidence: buildEvidence(dispute.job_id) });
-});
-
 app.get('/api/admin/evidence/:jobId', auth(['ADMIN']), (req, res) => {
   const evidence = buildEvidence(req.params.jobId);
   if (!evidence) return sendError(res, 404, 'Job not found');
