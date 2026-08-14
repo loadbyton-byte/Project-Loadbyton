@@ -1,0 +1,594 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Loadbyton design tokens — mirrors docs/brand/design-tokens.css.
+  Light is default (:root); dark via [data-theme="dark"] or, absent an
+  explicit choice, prefers-color-scheme. See docs/brand/BRAND_GUIDELINES.md.
+*/
+:root {
+  --lb-ink-950: #0A0A0B;
+  --lb-ink-900: #111113;
+  --lb-ink-800: #1C1C1F;
+  --lb-ink-700: #2A2A2E;
+  --lb-ink-600: #3D3D42;
+
+  --lb-navy-950: #0A0E17;
+  --lb-navy-900: #0F172A;
+  --lb-navy-800: #132043;
+  --lb-navy-700: #1B2C56;
+  --lb-navy-600: #1E3A8A;
+
+  --lb-blue-700: #1E40AF;
+  --lb-blue-600: #2563EB;
+  --lb-blue-500: #3B82F6;
+  --lb-blue-300: #93C5FD;
+  --lb-blue-100: #DBEAFE;
+  --lb-blue-50: #EFF6FF;
+
+  --lb-orange-700: #C2410C;
+  --lb-orange-600: #F2600C;
+  --lb-orange-500: #FF7A33;
+  --lb-orange-200: #FFD3B0;
+  --lb-orange-100: #FFE8D6;
+
+  --lb-amber-700: #B45309;
+  --lb-amber-600: #D97706;
+  --lb-amber-500: #F59E0B;
+  --lb-amber-200: #FDE3B4;
+  --lb-amber-100: #FEF3D9;
+
+  --lb-slate-900: #0F172A;
+  --lb-slate-700: #334155;
+  --lb-slate-500: #64748B;
+  /* D3 (gstack review): dark-mode --text-muted sat at slate-500 in every
+     theme, which is 4.16:1 on the near-black dark canvas — below AA's
+     4.5:1. slate-400 sits between muted (500) and secondary (300) rather
+     than collapsing the two into the same brightness. */
+  --lb-slate-400: #94A3B8;
+  --lb-slate-300: #CBD5E1;
+  --lb-slate-200: #E2E8F0;
+  --lb-slate-100: #F1F5F9;
+  --lb-slate-50: #F8FAFC;
+  --lb-slate-0: #FFFFFF;
+
+  --lb-teal-600: #0D9488;
+  --lb-teal-500: #14B8A6;
+  --lb-teal-100: #CCFBF1;
+  --lb-red-600: #DC2626;
+  --lb-red-500: #EF4444;
+  --lb-red-100: #FEE2E2;
+
+  --lb-radius-sm: 8px;
+  --lb-radius-md: 12px;
+  --lb-radius-lg: 16px;
+  --lb-radius-xl: 24px;
+  --lb-radius-full: 999px;
+  --lb-shadow-sm: 0 1px 2px rgba(10,10,11,0.06);
+  --lb-shadow-md: 0 6px 20px rgba(10,10,11,0.10);
+  --lb-shadow-lg: 0 16px 40px rgba(10,10,11,0.18);
+  --lb-shadow-focus: 0 0 0 3px rgba(242,96,12,0.35);
+
+  --bg-canvas: var(--lb-slate-50);
+  --bg-surface: var(--lb-slate-0);
+  --bg-raised: var(--lb-slate-0);
+  --bg-inverse: var(--lb-ink-900);
+
+  --border-default: var(--lb-slate-200);
+  --border-subtle: var(--lb-slate-100);
+  --border-strong: var(--lb-slate-300);
+
+  --text-primary: var(--lb-ink-900);
+  --text-secondary: var(--lb-slate-700);
+  --text-muted: var(--lb-slate-500);
+  --text-inverse: var(--lb-slate-0);
+  /* D2 (gstack review): white text on the orange-600 accent is 3.25:1,
+     below AA's 4.5:1 for the primary CTA (.btn-accent). Dark text already
+     passed comfortably (~5.8:1) in the dark-mode block below — this makes
+     light mode match that same "dark text on accent" language instead of
+     inventing a second treatment. */
+  --text-on-accent: var(--lb-ink-900);
+
+  --brand-primary: var(--lb-ink-900);
+  --brand-primary-hover: var(--lb-ink-800);
+  --brand-secondary: var(--lb-blue-500);
+  --brand-accent: var(--lb-orange-600);
+  --brand-accent-hover: var(--lb-orange-700);
+  /* D4 (gstack review): Badge's "accent" variant and the carrier tier badge
+     both read this. It used to be the raw --lb-orange-100 primitive
+     (unthemed) reused directly in components — giving dark mode a light
+     peach chip with orange-500 text at ~2.2:1. Routing it through a
+     semantic token, the same pattern every --status-*-bg already uses,
+     is what makes the dark override below actually apply. */
+  --brand-accent-bg: var(--lb-orange-100);
+
+  --status-success: var(--lb-teal-600);
+  --status-success-bg: var(--lb-teal-100);
+  --status-warning: var(--lb-amber-600);
+  --status-warning-bg: var(--lb-amber-100);
+  --status-danger: var(--lb-red-600);
+  --status-danger-bg: var(--lb-red-100);
+  --status-info: var(--lb-blue-600);
+  --status-info-bg: var(--lb-blue-50);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-canvas: var(--lb-ink-950);
+    --bg-surface: var(--lb-ink-900);
+    --bg-raised: var(--lb-ink-800);
+    --bg-inverse: var(--lb-slate-50);
+    --border-default: var(--lb-ink-700);
+    --border-subtle: var(--lb-ink-800);
+    --border-strong: var(--lb-ink-600);
+    --text-primary: var(--lb-slate-50);
+    --text-secondary: var(--lb-slate-300);
+    --text-muted: var(--lb-slate-400);
+    --text-inverse: var(--lb-ink-900);
+    --text-on-accent: var(--lb-ink-900);
+    --brand-primary: var(--lb-slate-50);
+    --brand-primary-hover: var(--lb-slate-200);
+    --brand-secondary: var(--lb-blue-300);
+    --brand-accent: var(--lb-orange-500);
+    --brand-accent-hover: #FFA05C;
+    --brand-accent-bg: #3A2410;
+    --status-success: var(--lb-teal-500);
+    --status-success-bg: #123832;
+    --status-warning: var(--lb-amber-500);
+    --status-warning-bg: #3A2A10;
+    --status-danger: #F87171;
+    --status-danger-bg: #3A1616;
+    --status-info: var(--lb-blue-300);
+    --status-info-bg: #122540;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-canvas: var(--lb-ink-950);
+  --bg-surface: var(--lb-ink-900);
+  --bg-raised: var(--lb-ink-800);
+  --bg-inverse: var(--lb-slate-50);
+  --border-default: var(--lb-ink-700);
+  --border-subtle: var(--lb-ink-800);
+  --border-strong: var(--lb-ink-600);
+  --text-primary: var(--lb-slate-50);
+  --text-secondary: var(--lb-slate-300);
+  --text-muted: var(--lb-slate-400);
+  --text-inverse: var(--lb-ink-900);
+  --text-on-accent: var(--lb-ink-900);
+  --brand-primary: var(--lb-slate-50);
+  --brand-primary-hover: var(--lb-slate-200);
+  --brand-secondary: var(--lb-blue-300);
+  --brand-accent: var(--lb-orange-500);
+  --brand-accent-hover: #FFA05C;
+  --brand-accent-bg: #3A2410;
+  --status-success: var(--lb-teal-500);
+  --status-success-bg: #123832;
+  --status-warning: var(--lb-amber-500);
+  --status-warning-bg: #3A2A10;
+  --status-danger: #F87171;
+  --status-danger-bg: #3A1616;
+  --status-info: var(--lb-blue-300);
+  --status-info-bg: #122540;
+}
+
+* { border-color: var(--border-default); }
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: 'Inter', ui-sans-serif, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: 'Manrope', ui-sans-serif, sans-serif;
+}
+
+/* Arabic locale: Manrope/Inter have no Arabic glyphs, so without this the
+   whole app would silently fall back to the browser's unstyled default
+   font the moment dir="rtl" is set (see lib/i18n.jsx). Noto Sans Arabic
+   covers both display and body weight, keeping Arabic text intentional
+   rather than a fallback accident. */
+html[lang="ar"] body,
+html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, html[lang="ar"] .font-display {
+  font-family: 'Noto Sans Arabic', 'Inter', ui-sans-serif, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-secondary);
+  outline-offset: 2px;
+  border-radius: var(--lb-radius-sm);
+}
+
+::selection {
+  background: var(--lb-amber-200);
+  color: var(--lb-navy-900);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion system — two deliberately different mechanisms:              */
+/*   .animate-hero-in  — pure CSS @keyframes, no JS. Runs identically  */
+/*     whether client JS has loaded yet or not, so above-the-fold      */
+/*     content (the hero) never depends on a script executing to be    */
+/*     visible — including in the prerendered response a crawler sees. */
+/*   .reveal/.reveal-visible — paired with the useReveal() hook        */
+/*     (lib/motion.js), an IntersectionObserver flips the class. Only  */
+/*     used below the fold, where "hidden until scrolled to" is        */
+/*     correct, not a bug a slow script could turn into a blank page.  */
+/* Both durations collapse near-zero under prefers-reduced-motion via  */
+/* the block above — neither needs its own reduced-motion check.       */
+/* ------------------------------------------------------------------ */
+
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-hero-in {
+  animation: hero-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Mount-triggered (not scroll-triggered) — dropdowns, mobile nav panel.
+   Plain CSS @keyframes again: these render the instant they mount, no
+   IntersectionObserver needed since there's no "off-screen until scrolled"
+   state for a menu that only exists while open. */
+@keyframes menu-in {
+  from { opacity: 0; transform: scale(0.97) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-menu-in {
+  animation: menu-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top right;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-panel-in {
+  animation: panel-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Equipment strip on the landing page — a slow, continuous drift rather
+   than a wall of 12 labeled cards. The track holds two copies of the same
+   list back to back; animating exactly -50% loops seamlessly regardless of
+   viewport width, since that's always "one full copy" of a track sized to
+   its content (w-max). Pauses on hover so a curious visitor can actually
+   read a label instead of chasing it. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Hero visual (components/FreightMotionScene.jsx) — a looping motion-graphic
+   of a truck driving a dusk highway, with a status chip cycling through a
+   job's real lifecycle. Deliberately more vivid than the rest of the page
+   (dusk gradient, glow, warmer color use) — contained entirely inside its
+   own dark card so it reads as one intentional vivid moment, not a break
+   from the page's restraint elsewhere. All keyframe-driven, so the global
+   prefers-reduced-motion block above collapses every one of these to a
+   single static frame for free. */
+.freight-scene { position: relative; width: 100%; }
+.freight-scene-svg { display: block; width: 100%; height: auto; }
+
+.freight-scene-skyline {
+  animation: freight-skyline-drift 42s linear infinite;
+}
+@keyframes freight-skyline-drift {
+  to { transform: translateX(-152px); }
+}
+
+.freight-scene-lanes {
+  animation: freight-lane-scroll 0.7s linear infinite;
+}
+@keyframes freight-lane-scroll {
+  to { stroke-dashoffset: -36; }
+}
+
+.freight-scene-glow {
+  animation: freight-glow-pulse 2.2s ease-in-out infinite;
+}
+@keyframes freight-glow-pulse {
+  0%, 100% { opacity: 0.65; }
+  50% { opacity: 1; }
+}
+
+.freight-scene-truck {
+  transform-box: view-box;
+  animation: freight-truck-bounce 1.1s ease-in-out infinite;
+}
+@keyframes freight-truck-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.5px); }
+}
+
+.freight-scene-wheel {
+  animation: freight-wheel-spin 0.9s linear infinite;
+}
+@keyframes freight-wheel-spin {
+  to { transform: rotate(360deg); }
+}
+
+.freight-scene-headlight {
+  filter: drop-shadow(0 0 3px rgba(255, 232, 194, 0.9));
+  animation: freight-headlight-pulse 1.6s ease-in-out infinite;
+}
+@keyframes freight-headlight-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+.freight-scene-chips {
+  position: absolute;
+  top: 26%;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+.freight-scene-chip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 5px 12px;
+  border-radius: var(--lb-radius-full);
+  background: rgba(17, 17, 19, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  animation-name: freight-chip-cycle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+@keyframes freight-chip-cycle {
+  0%, 3%, 25%, 100% { opacity: 0; transform: translate(-50%, 6px); }
+  8%, 20% { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Component classes — in @layer components so plain Tailwind utility  */
+/* classes (hidden, w-full, sm:inline-flex, …) always win the cascade  */
+/* when combined with these, regardless of source order.               */
+/* ------------------------------------------------------------------ */
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-content px-5 sm:px-6 lg:px-8;
+  }
+
+  /* Fades the trailing edge of a horizontally-scrollable, dir=ltr container
+     (a data table, a tab bar, the job-status stepper) so a mobile user sees
+     a visual cue that there's more content to swipe to, instead of a hard
+     edge that reads as "the page cut off" — these all already scroll
+     correctly, they just gave no hint that they do. Right-edge fade only:
+     every container this is applied to is explicitly dir="ltr". */
+  .scroll-fade-x {
+    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+  }
+
+  .card {
+    @apply rounded-lg bg-surface shadow-sm transition-shadow duration-300 ease-out;
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* Elevation, not hairlines, is the primary way interactive surfaces read as
+     "raised" in this system (the ride-hailing-app school, not the enterprise-
+     SaaS-border school) — pair with hover:shadow-md in JSX for anything
+     clickable, the way OpenLoads' job cards already do. */
+  .card-interactive {
+    @apply card transition-shadow duration-150;
+  }
+  .card-interactive:hover {
+    box-shadow: var(--lb-shadow-md);
+  }
+  /* Opt-in — only cards meant to read as interactive (a whole card that's a
+     link/button, not a form panel) get the lift. Applied via .card-hover in
+     the JSX, not baked into .card itself, so a settings panel doesn't lift
+     on hover for no reason. */
+  .card-hover {
+    @apply transition-[transform,box-shadow] duration-300 ease-out;
+  }
+  .card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--lb-shadow-md);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold
+      transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out
+      active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap;
+  }
+  .btn-primary {
+    @apply btn text-ink-inverse;
+    background: var(--brand-primary);
+  }
+  .btn-primary:hover { background: var(--brand-primary-hover); box-shadow: var(--lb-shadow-md); transform: translateY(-1px); }
+
+  .btn-accent {
+    @apply btn;
+    background: var(--brand-accent);
+    color: var(--text-on-accent);
+  }
+  .btn-accent:hover { background: var(--brand-accent-hover); box-shadow: var(--lb-shadow-md); transform: translateY(-1px); }
+
+  .btn-secondary {
+    @apply btn border bg-surface text-ink;
+    border-color: var(--border-strong);
+  }
+  .btn-secondary:hover { background: var(--bg-raised); }
+
+  .btn-ghost {
+    @apply btn text-ink-secondary font-semibold;
+  }
+  .btn-ghost:hover { background: var(--bg-raised); color: var(--text-primary); }
+
+  .btn-danger {
+    @apply btn;
+    background: var(--status-danger);
+    color: white;
+  }
+  .btn-danger:hover { filter: brightness(0.92); }
+
+  .btn-success {
+    @apply btn;
+    background: var(--status-success);
+    color: white;
+  }
+  .btn-success:hover { filter: brightness(0.92); }
+
+  .btn-link {
+    @apply inline-flex items-center gap-1.5 text-sm font-medium text-brand-secondary underline-offset-2;
+    padding: 0;
+    background: none;
+  }
+  .btn-link:hover { text-decoration: underline; }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  .btn-lg {
+    @apply px-6 py-3 text-base rounded-full;
+  }
+
+  .input,
+  .textarea,
+  .select {
+    @apply w-full rounded-md border bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted;
+    border-color: var(--border-strong);
+  }
+  .input:focus,
+  .textarea:focus,
+  .select:focus {
+    outline: none;
+    box-shadow: var(--lb-shadow-focus);
+    border-color: var(--brand-secondary);
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink-secondary;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .nav-link {
+    @apply rounded-full px-3.5 py-2 text-sm font-semibold text-ink-secondary transition-colors hover:bg-raised hover:text-ink;
+  }
+  /* Filled pill, not a soft tint — the current page reads as a decision that
+     was made, not a hover state that happened to stick (the ride-hailing-app
+     tab-bar convention, not the enterprise-dashboard soft-highlight one). */
+  .nav-link-active {
+    @apply rounded-full px-3.5 py-2 text-sm font-semibold;
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Toast notifications — a single React-driven `.toast-leaving` class
+     controls the exit transition; there is no separate CSS `animation`
+     racing the JS dismiss timer (that was a real bug: two independently
+     timed fade-outs meant a toast could sit invisible-but-still-mounted
+     for about a second before actually unmounting). */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: calc(100vw - 32px);
+    pointer-events: none;
+    z-index: 60;
+  }
+
+  .toast {
+    pointer-events: auto;
+    width: 380px;
+    max-width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: var(--lb-radius-lg);
+    border: 1px solid var(--border-strong);
+    /* --bg-raised, not --bg-surface: in dark mode --bg-surface (navy-900) is
+       nearly indistinguishable from the page's own --bg-canvas (navy-950), so
+       a toast using it renders but is functionally invisible against a busy
+       page. --bg-raised (navy-800) is the token this codebase already uses
+       for "this should read as elevated" (cards-on-cards, dropdown menus). */
+    background: var(--bg-raised);
+    box-shadow: var(--lb-shadow-lg);
+    padding: 14px 16px;
+    font-size: 0.875rem;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.2s ease-in, transform 0.2s ease-in;
+  }
+  .toast-leaving {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  .toast-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .toast-message {
+    flex: 1;
+    min-width: 0;
+  }
+  .toast-message p + p {
+    margin-top: 2px;
+  }
+  .toast-dismiss {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    padding: 2px;
+    border-radius: 4px;
+  }
+  .toast-dismiss:hover {
+    background: var(--bg-raised);
+    color: var(--text-primary);
+  }
+}

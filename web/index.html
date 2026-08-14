@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Loadbyton — UAE Road Freight & Container Drayage Marketplace</title>
+    <meta name="description" content="Post a freight job — container, flatbed, tripper, or a multi-truck volume inquiry — get verified-carrier bids across Dubai, Abu Dhabi, Sharjah and Fujairah, and move it under escrow with live tracking and payout on delivery." />
+    <meta property="og:title" content="Loadbyton — UAE Road Freight & Container Drayage Marketplace" />
+    <meta property="og:description" content="Post a freight job, get verified-carrier bids from across the UAE, and move it under escrow — with live tracking, a demurrage clock, and payout on delivery." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Loadbyton — UAE Road Freight & Container Drayage Marketplace" />
+    <meta name="twitter:description" content="Post a freight job, get verified-carrier bids from across the UAE, and move it under escrow — with live tracking and payout on delivery." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Loaded non-render-blocking (media=print, swapped to all in main.jsx) so a
+         slow or unreachable font CDN never delays first paint of the app shell. -->
+    <!-- Noto Sans Arabic covers both display and body weights so the
+         Arabic locale never falls back to the browser's unstyled default
+         font next to the branded Latin type — see web/src/index.css
+         [lang="ar"] rule and web/src/lib/i18n.jsx. -->
+    <!-- Manrope is the display face (see docs/brand/BRAND_GUIDELINES.md §3) —
+         corporate/enterprise register without the "AI-startup default" read
+         that Space Grotesk had picked up by 2026. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      data-async-font
+    />
+    <!-- Scroll-reveal (.reveal in index.css) starts at opacity:0 and is
+         only flipped visible by an IntersectionObserver in lib/motion.js —
+         correct for a JS-enabled browser, but a fetcher that never
+         executes JS at all would see that content stuck invisible
+         forever. This forces it to its final visible state whenever
+         JavaScript doesn't run, so a no-JS crawler still gets full
+         content, matching the crawlability fix in server/index.js. -->
+    <noscript>
+      <style>.reveal { opacity: 1 !important; transform: none !important; }</style>
+    </noscript>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Puter.js: free, no-API-key browser access to GPT/Claude/Gemini
+         vision models — the signed-in Puter user's own free account covers
+         usage, not Loadbyton's. Used only for the optional "scan with AI"
+         document-extraction helpers (carrier TRN/trade licence, job
+         documents) in web/src/lib/puterOcr.js; the app works fully without
+         it if js.puter.com is ever unreachable — see waitForPuter's timeout
+         there. `defer` so it never blocks first paint. -->
+    <script src="https://js.puter.com/v2/" defer></script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
