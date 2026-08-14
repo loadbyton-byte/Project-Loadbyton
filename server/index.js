@@ -1528,6 +1528,28 @@ app.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRole(
   res.status(201).json({ dispute });
 });
 
+// Party-facing dispute view — the shipper/carrier on the job (or an admin)
+// can see their own dispute's status/determination and reply in the same
+// job-messages thread an admin can also post into (messages already carry
+// sender_id, so an admin reply renders as a distinct "Admin" bubble on the
+// client for free — no schema change). Previously disputes were entirely
+// admin-only: a party could file one (above) but never see its outcome
+// short of an email/call, and had no way to add more context after filing.
+app.get('/api/jobs/:id/dispute', auth(), (req, res) => {
+  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return sendError(res, 404, 'Job not found');
+  const isParty = req.user.id === job.shipper_id || req.user.id === job.carrier_id;
+  if (!isParty && req.user.role !== 'ADMIN') return sendError(res, 403, 'Not permitted');
+
+  const dispute = db.prepare('SELECT * FROM disputes WHERE job_id=? ORDER BY created_at DESC LIMIT 1').get(job.id);
+  if (!dispute) return sendError(res, 404, 'No dispute on this job');
+
+  res.json({
+    dispute,
+    job: { id: job.id, job_code: job.job_code, status: job.status, escrow_status: job.escrow_status },
+  });
+});
+
 app.get('/api/jobs/:id/track', auth(), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
@@ -1705,7 +1727,13 @@ app.get('/api/jobs/:id/messages', auth(), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (!isParticipantOrBidder(job, req.user)) return sendError(res, 403, 'Not permitted');
-  const messages = db.prepare('SELECT * FROM messages WHERE job_id=? ORDER BY created_at ASC').all(job.id);
+  // sender_role is additive (existing consumers only ever read
+  // sender_id/content) — lets the party-facing dispute view (JobDispute.jsx)
+  // render an admin's reply as a distinct "Admin" bubble instead of looking
+  // like a second copy of the counterparty.
+  const messages = db
+    .prepare('SELECT m.*, u.role as sender_role FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.job_id=? ORDER BY m.created_at ASC')
+    .all(job.id);
   res.json({ messages });
 });
 

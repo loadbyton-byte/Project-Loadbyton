@@ -75,6 +75,7 @@ export const api = {
   submitPod: (id, body) => post(`/jobs/${id}/pod`, body),
   track: (id) => get(`/jobs/${id}/track`),
   disputeJob: (id, reason) => post(`/jobs/${id}/dispute`, { reason }),
+  getDispute: (id) => get(`/jobs/${id}/dispute`),
   backloadMatches: (id) => get(`/jobs/${id}/backload-matches`),
   addDocument: (id, body) => post(`/jobs/${id}/documents`, body),
   rateJob: (id, body) => post(`/jobs/${id}/rating`, body),

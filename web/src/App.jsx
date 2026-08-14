@@ -30,6 +30,7 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail.jsx'));
 const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
 const OpenLoads = lazy(() => import('./pages/OpenLoads.jsx'));
 const JobDetail = lazy(() => import('./pages/JobDetail.jsx'));
+const JobDispute = lazy(() => import('./pages/JobDispute.jsx'));
 const MyBids = lazy(() => import('./pages/MyBids.jsx'));
 const WonJobs = lazy(() => import('./pages/WonJobs.jsx'));
 const Templates = lazy(() => import('./pages/Templates.jsx'));
@@ -96,6 +97,7 @@ export default function App() {
 
           <Route path="/analytics" element={<RequireAuth roles={['SHIPPER', 'CARRIER']}><Analytics /></RequireAuth>} />
           <Route path="/jobs/:id" element={<RequireAuth><JobDetail /></RequireAuth>} />
+          <Route path="/jobs/:id/dispute" element={<RequireAuth><JobDispute /></RequireAuth>} />
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
 
