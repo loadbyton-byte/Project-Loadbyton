@@ -1,31 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 72" role="img" aria-label="Loadbyton">
-  <!-- Same lockup, paper-white wordmark, for the dark ink surface (nav,
-       footer, hero). The tile keeps its own fixed ink fill either way. -->
-  <defs>
-    <clipPath id="lb-tile-56-dark"><rect width="56" height="56" rx="12.25" /></clipPath>
-  </defs>
-  <g transform="translate(0,8)">
-    <g clip-path="url(#lb-tile-56-dark)">
-      <rect width="56" height="56" fill="#111113" />
-      <g stroke="#2A2A2E" stroke-width="1.4" opacity="0.8">
-        <line x1="7" y1="0" x2="7" y2="56" />
-        <line x1="16" y1="0" x2="16" y2="56" />
-        <line x1="40" y1="0" x2="40" y2="56" />
-        <line x1="49" y1="0" x2="49" y2="56" />
-      </g>
-    </g>
-    <rect x="1" y="1" width="54" height="54" rx="11.25" fill="none" stroke="#3D3D42" stroke-width="1" />
-    <rect x="16.5" y="14" width="2.6" height="28" rx="1.3" fill="#E0472F" />
-    <rect x="36.9" y="14" width="2.6" height="28" rx="1.3" fill="#E0472F" />
-    <rect x="23.5" y="20" width="9" height="16" rx="2.2" fill="#F8FAFC" />
-  </g>
-
-  <g font-family="'Space Grotesk','Segoe UI',ui-sans-serif,sans-serif" font-weight="700" fill="#F8FAFC">
-    <text x="76" y="46" font-size="32" letter-spacing="0.5">LOAD</text>
-    <rect x="179" y="14" width="3" height="28" rx="1.5" fill="#E0472F" />
-    <text x="200" y="30" font-size="18" text-anchor="middle" letter-spacing="0.5">B</text>
-    <text x="200" y="48" font-size="18" text-anchor="middle" letter-spacing="0.5">Y</text>
-    <rect x="216" y="14" width="3" height="28" rx="1.5" fill="#E0472F" />
-    <text x="229" y="46" font-size="32" letter-spacing="0.5">TON</text>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" role="img" aria-label="Loadbyton">
+  <!-- Same lockup, white wordmark on a navy fill, for dark surfaces (nav,
+       footer, hero). The divider bars stay Loadbyton Red either way. -->
+  <rect width="400" height="120" fill="#0F2B3D" />
+  <text x="20" y="80" font-family="sans-serif" font-weight="900" font-size="60" letter-spacing="4" fill="#FFFFFF">LOAD</text>
+  <line x1="210" y1="30" x2="210" y2="90" stroke="#E53935" stroke-width="4" />
+  <text x="220" y="55" font-family="sans-serif" font-weight="900" font-size="22" fill="#FFFFFF">B</text>
+  <text x="220" y="85" font-family="sans-serif" font-weight="900" font-size="22" fill="#FFFFFF">Y</text>
+  <line x1="255" y1="30" x2="255" y2="90" stroke="#E53935" stroke-width="4" />
+  <text x="270" y="80" font-family="sans-serif" font-weight="900" font-size="60" letter-spacing="4" fill="#FFFFFF">TON</text>
 </svg>

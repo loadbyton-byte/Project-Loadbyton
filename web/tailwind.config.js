@@ -56,7 +56,7 @@ module.exports = {
         },
       },
       fontFamily: {
-        display: ['Manrope', 'ui-sans-serif', 'sans-serif'],
+        display: ['Geist', 'ui-sans-serif', 'sans-serif'],
         body: ['Inter', 'ui-sans-serif', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', '"SF Mono"', 'Menlo', 'monospace'],
       },

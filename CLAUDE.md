@@ -128,11 +128,14 @@ crawlability fix for that page specifically.
   `web/src/lib/constants.js` maps each terminal to its emirate/operator for
   display. Don't reintroduce Jebel-Ali-only copy on the Landing/About/Features
   pages or in `index.html` meta tags.
-- The brand mark (`web/public/brand/*.svg`, `favicon.svg`) is the "container
-  plate" — fixed navy/white/crimson tile, not a `currentColor` glyph. The crimson
-  divider bars use `--lb-logo-accent-500`/`400` (`docs/brand/design-tokens.css`) —
-  a token reserved for the logo only, kept deliberately separate from
-  `--lb-red-*` (UI danger/status color) so the two never drift together.
+- The brand mark (`web/public/brand/*.svg`, `favicon.svg`) is the "LOAD | BY |
+  TON" wordmark — navy (`#0F2B3D`) type split by two Loadbyton Red divider
+  bars, with a rounded-navy-tile "LB" monogram as the icon-only mark. Fixed
+  navy/red on every surface, not a `currentColor` glyph. Unlike the previous
+  "container plate" mark, the divider bars deliberately use `--brand-accent`
+  directly rather than a logo-reserved token — see `docs/brand/
+  BRAND_GUIDELINES.md` §1–2 for why this rebrand merges the mark's red with
+  the UI's accent/danger red instead of keeping them separate.
 
 ## Verification
 

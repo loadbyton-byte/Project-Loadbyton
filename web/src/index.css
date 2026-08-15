@@ -8,17 +8,17 @@
   explicit choice, prefers-color-scheme. See docs/brand/BRAND_GUIDELINES.md.
 */
 :root {
-  --lb-ink-950: #0A0A0B;
-  --lb-ink-900: #111113;
-  --lb-ink-800: #1C1C1F;
-  --lb-ink-700: #2A2A2E;
-  --lb-ink-600: #3D3D42;
-
-  --lb-navy-950: #0A0E17;
-  --lb-navy-900: #0F172A;
-  --lb-navy-800: #132043;
-  --lb-navy-700: #1B2C56;
-  --lb-navy-600: #1E3A8A;
+  /* "Loadbyton Navy" ramp — replaces the Industrial Trust near-black
+     primary. Variable names kept as --lb-ink-* on purpose: several
+     marketing pages (About.jsx, Features.jsx, Landing.jsx, Pricing.jsx)
+     reference these primitives directly for fixed-dark panels that never
+     theme-swap, and renaming would mean touching those files for no
+     functional reason — only the values change here. */
+  --lb-ink-950: #0A1A24;
+  --lb-ink-900: #0F2B3D;
+  --lb-ink-800: #1A3A52;
+  --lb-ink-700: #2C4E68;
+  --lb-ink-600: #3E6280;
 
   --lb-blue-700: #1E40AF;
   --lb-blue-600: #2563EB;
@@ -27,21 +27,17 @@
   --lb-blue-100: #DBEAFE;
   --lb-blue-50: #EFF6FF;
 
-  --lb-orange-700: #C2410C;
-  --lb-orange-600: #F2600C;
-  --lb-orange-500: #FF7A33;
-  --lb-orange-200: #FFD3B0;
-  --lb-orange-100: #FFE8D6;
-
-  /* Industrial Trust "Safety Orange" — the one reserved accent (award,
-     confirm, release, primary marketing CTA). Distinct primitive from
-     --lb-orange-* above so the two ramps can't be confused: this is
-     specifically the brighter, higher-visibility hue the redesign's
-     Industrial Trust theme names "the Action Color". */
-  --lb-safety-500: #FD761A;
-  --lb-safety-600: #C2410C;
-  --lb-safety-container: #FFDBCA;
-  --lb-safety-on-container: #5C2400;
+  /* "Loadbyton Red" — the one reserved accent (award, confirm, release,
+     primary marketing CTA), and — per the brand kit's own CSS variables,
+     which alias --loadbyton-error to the same red — also status.danger.
+     Kept as --lb-orange-* names for the same reason as --lb-ink-* above
+     (Features.jsx/Landing.jsx reference --lb-orange-500 directly for
+     decorative dots/badges); only the values changed. */
+  --lb-orange-700: #C62828;
+  --lb-orange-600: #E53935;
+  --lb-orange-500: #E53935;
+  --lb-orange-200: #FDE8E8;
+  --lb-orange-100: #FDE8E8;
 
   --lb-amber-700: #B45309;
   --lb-amber-600: #D97706;
@@ -63,79 +59,88 @@
   --lb-slate-50: #F8FAFC;
   --lb-slate-0: #FFFFFF;
 
-  --lb-teal-600: #0D9488;
-  --lb-teal-500: #14B8A6;
-  --lb-teal-100: #CCFBF1;
-  --lb-red-600: #DC2626;
-  --lb-red-500: #EF4444;
-  --lb-red-100: #FEE2E2;
+  /* Loadbyton's "Success Green" / kept named --lb-teal-* (used only via
+     --status-success below) for the same minimal-diff reason as above. */
+  --lb-teal-600: #2E7D32;
+  --lb-teal-500: #43A047;
+  --lb-teal-100: #E3F2E4;
+  --lb-red-600: #C62828;
+  --lb-red-500: #E53935;
+  --lb-red-100: #FDE8E8;
 
-  --lb-radius-sm: 8px;
-  --lb-radius-md: 12px;
-  --lb-radius-lg: 16px;
-  --lb-radius-xl: 24px;
+  /* Sharper, more geometric shape language — matches the navy/red/Geist
+     "corporate enterprise" register (confirmed with the user), replacing
+     Industrial Trust's rounder 8/12/16/24 scale. */
+  --lb-radius-sm: 4px;
+  --lb-radius-md: 6px;
+  --lb-radius-lg: 8px;
+  --lb-radius-xl: 12px;
   --lb-radius-full: 999px;
-  --lb-shadow-sm: 0 1px 2px rgba(10,10,11,0.06);
-  --lb-shadow-md: 0 6px 20px rgba(10,10,11,0.10);
-  --lb-shadow-lg: 0 16px 40px rgba(10,10,11,0.18);
-  --lb-shadow-focus: 0 0 0 3px rgba(253,118,26,0.35);
+  --lb-shadow-sm: 0 1px 2px rgba(15,43,61,0.08);
+  --lb-shadow-md: 0 2px 6px rgba(15,43,61,0.10);
+  --lb-shadow-lg: 0 4px 12px rgba(15,43,61,0.14);
+  --lb-shadow-focus: 0 0 0 3px rgba(229,57,53,0.35);
 
-  --bg-canvas: var(--lb-slate-50);
+  /* "Warm White" / "Light Gray" from the brand kit, replacing Industrial
+     Trust's cool slate-50/white. */
+  --bg-canvas: #FFFDF7;
   --bg-surface: var(--lb-slate-0);
-  --bg-raised: var(--lb-slate-100);
+  --bg-raised: #F5F6F4;
   --bg-inverse: var(--lb-ink-900);
 
-  /* Industrial Trust's tonal-layering ladder — used by the new bento-grid /
-     nested-card components (BentoStat, JobCard, TopAppBar, BottomNavBar)
-     that need more than one step of "elevated over the canvas" surface.
-     Existing components keep using bg-surface/bg-raised above; this ladder
-     is additive, not a replacement. */
+  /* Tonal-layering ladder used by the nested-card components (BentoStat,
+     JobCard, sidebar). Existing components keep using bg-surface/bg-raised
+     above; this ladder is additive, not a replacement. */
   --surface-container-lowest: var(--lb-slate-0);
-  --surface-container-low: var(--lb-slate-50);
-  --surface-container: var(--lb-slate-100);
+  --surface-container-low: #FFFDF7;
+  --surface-container: #F5F6F4;
   --surface-container-high: var(--lb-slate-200);
   --surface-container-highest: var(--lb-slate-300);
   --outline: var(--lb-slate-500);
-  --outline-variant: var(--lb-slate-200);
+  --outline-variant: #E5E8E3;
 
-  --border-default: var(--lb-slate-200);
+  --border-default: #E5E8E3;
   --border-subtle: var(--lb-slate-100);
   --border-strong: var(--lb-slate-300);
 
-  --text-primary: var(--lb-ink-900);
-  --text-secondary: var(--lb-slate-700);
-  --text-muted: var(--lb-slate-500);
+  /* "Dark" body-text color from the brand kit (#0F2129) — a hair off
+     Loadbyton Navy (#0F2B3D, --lb-ink-900) but close enough that adding a
+     second "headline vs. body" text-color token isn't worth the extra
+     architecture for the difference; headlines read fine off this same
+     token via .font-display. */
+  --text-primary: #0F2129;
+  --text-secondary: #586A72;
+  --text-muted: #7A8A90;
   --text-inverse: var(--lb-slate-0);
-  /* D2 (gstack review): white text on the accent is below AA's 4.5:1 for the
-     primary CTA (.btn-accent). Dark text passes comfortably (~5.8:1) — this
-     matches Industrial Trust's own spec ("Text must be navy for contrast"
-     on the safety-orange button) rather than inventing a second treatment. */
-  --text-on-accent: var(--lb-ink-900);
+  /* White text on Loadbyton Red (#E53935) measures ~4.2:1 — passes AA for
+     large/bold text and UI components (3:1) but falls just short of the
+     4.5:1 normal-text bar; navy-on-red measures worse (~3.5:1). White is
+     the better of the two real options here, same reasoning as the D2
+     gstack-review comment this replaces, just a different accent hue. */
+  --text-on-accent: var(--lb-slate-0);
 
   --brand-primary: var(--lb-ink-900);
   --brand-primary-hover: var(--lb-ink-800);
   --brand-secondary: var(--lb-blue-500);
-  /* Industrial Trust's "Safety Orange" — see the primitive block above.
-     Replaces the previous --lb-orange-600 accent; the old orange-* ramp
-     stays defined (still used by a couple of illustrative/marketing
-     surfaces) but is no longer the reserved action color. */
-  --brand-accent: var(--lb-safety-500);
-  --brand-accent-hover: var(--lb-safety-600);
+  --brand-accent: var(--lb-orange-600);
+  --brand-accent-hover: var(--lb-orange-700);
   /* D4 (gstack review): Badge's "accent" variant and the carrier tier badge
      both read this. Routed through a semantic token (not a raw primitive)
      so the dark-mode override below actually applies. */
-  --brand-accent-bg: var(--lb-safety-container);
+  --brand-accent-bg: var(--lb-orange-200);
 
   --status-success: var(--lb-teal-600);
   --status-success-bg: var(--lb-teal-100);
-  --status-warning: var(--lb-amber-600);
-  --status-warning-bg: var(--lb-amber-100);
-  --status-danger: var(--lb-red-600);
+  --status-warning: #F57C00;
+  --status-warning-bg: #FEF0E0;
+  /* Brand kit's own --loadbyton-error is the same red as the accent — kept
+     merged rather than re-split, per the redesign plan's note on this. */
+  --status-danger: var(--lb-red-500);
   --status-danger-bg: var(--lb-red-100);
   --status-info: var(--lb-blue-600);
   --status-info-bg: var(--lb-blue-50);
 
-  --lb-shadow-elevated: 0 10px 25px rgba(15, 23, 42, 0.12);
+  --lb-shadow-elevated: 0 4px 10px rgba(15,43,61,0.12);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -158,19 +163,19 @@
     --text-secondary: var(--lb-slate-300);
     --text-muted: var(--lb-slate-400);
     --text-inverse: var(--lb-ink-900);
-    --text-on-accent: var(--lb-ink-900);
+    --text-on-accent: var(--lb-slate-0);
     --brand-primary: var(--lb-slate-50);
     --brand-primary-hover: var(--lb-slate-200);
     --brand-secondary: var(--lb-blue-300);
-    --brand-accent: var(--lb-safety-500);
-    --brand-accent-hover: #FF9142;
-    --brand-accent-bg: #3A2410;
+    --brand-accent: #FF5449;
+    --brand-accent-hover: #FF7A70;
+    --brand-accent-bg: #3D1616;
     --status-success: var(--lb-teal-500);
     --status-success-bg: #123832;
-    --status-warning: var(--lb-amber-500);
-    --status-warning-bg: #3A2A10;
-    --status-danger: #F87171;
-    --status-danger-bg: #3A1616;
+    --status-warning: #FFA733;
+    --status-warning-bg: #3D2A10;
+    --status-danger: #FF5449;
+    --status-danger-bg: #3D1616;
     --status-info: var(--lb-blue-300);
     --status-info-bg: #122540;
   }
@@ -195,19 +200,19 @@
   --text-secondary: var(--lb-slate-300);
   --text-muted: var(--lb-slate-400);
   --text-inverse: var(--lb-ink-900);
-  --text-on-accent: var(--lb-ink-900);
+  --text-on-accent: var(--lb-slate-0);
   --brand-primary: var(--lb-slate-50);
   --brand-primary-hover: var(--lb-slate-200);
   --brand-secondary: var(--lb-blue-300);
-  --brand-accent: var(--lb-safety-500);
-  --brand-accent-hover: #FF9142;
-  --brand-accent-bg: #3A2410;
+  --brand-accent: #FF5449;
+  --brand-accent-hover: #FF7A70;
+  --brand-accent-bg: #3D1616;
   --status-success: var(--lb-teal-500);
   --status-success-bg: #123832;
-  --status-warning: var(--lb-amber-500);
-  --status-warning-bg: #3A2A10;
-  --status-danger: #F87171;
-  --status-danger-bg: #3A1616;
+  --status-warning: #FFA733;
+  --status-warning-bg: #3D2A10;
+  --status-danger: #FF5449;
+  --status-danger-bg: #3D1616;
   --status-info: var(--lb-blue-300);
   --status-info-bg: #122540;
 }
@@ -227,10 +232,10 @@ body {
 }
 
 h1, h2, h3, h4, .font-display {
-  font-family: 'Manrope', ui-sans-serif, sans-serif;
+  font-family: 'Geist', ui-sans-serif, sans-serif;
 }
 
-/* Arabic locale: Manrope/Inter have no Arabic glyphs, so without this the
+/* Arabic locale: Geist/Inter have no Arabic glyphs, so without this the
    whole app would silently fall back to the browser's unstyled default
    font the moment dir="rtl" is set (see lib/i18n.jsx). Noto Sans Arabic
    covers both display and body weight, keeping Arabic text intentional
@@ -248,7 +253,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
 
 ::selection {
   background: var(--lb-amber-200);
-  color: var(--lb-navy-900);
+  color: var(--lb-ink-900);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -555,7 +560,7 @@ html[dir="rtl"] .animate-drawer-in {
     @apply px-3 py-1.5 text-xs;
   }
   .btn-lg {
-    @apply px-6 py-3 text-base rounded-full;
+    @apply px-6 py-3 text-base rounded-lg;
   }
 
   .input,
@@ -576,18 +581,20 @@ html[dir="rtl"] .animate-drawer-in {
     @apply mb-1.5 block text-sm font-medium text-ink-secondary;
   }
 
+  /* Tag-style, not a pill — sharper shape language (confirmed with the
+     user for this rebrand) reads status badges as data tags, not the
+     rounded consumer-app chip style Industrial Trust used. */
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold;
+    @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold;
   }
 
   .nav-link {
-    @apply rounded-full px-3.5 py-2 text-sm font-semibold text-ink-secondary transition-colors hover:bg-raised hover:text-ink;
+    @apply rounded-md px-3.5 py-2 text-sm font-semibold text-ink-secondary transition-colors hover:bg-raised hover:text-ink;
   }
-  /* Filled pill, not a soft tint — the current page reads as a decision that
-     was made, not a hover state that happened to stick (the ride-hailing-app
-     tab-bar convention, not the enterprise-dashboard soft-highlight one). */
+  /* Filled block, not a soft tint — the current page reads as a decision
+     that was made, not a hover state that happened to stick. */
   .nav-link-active {
-    @apply rounded-full px-3.5 py-2 text-sm font-semibold;
+    @apply rounded-md px-3.5 py-2 text-sm font-semibold;
     background: var(--brand-primary);
     color: var(--text-inverse);
   }

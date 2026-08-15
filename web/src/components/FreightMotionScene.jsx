@@ -33,7 +33,7 @@ export default function FreightMotionScene() {
           <linearGradient id="fs-sky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#15111f" />
             <stop offset="60%" stopColor="#3a1f14" />
-            <stop offset="100%" stopColor="#F2600C" />
+            <stop offset="100%" stopColor="#E53935" />
           </linearGradient>
           <radialGradient id="fs-sun" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#FFB067" stopOpacity="0.9" />
@@ -68,15 +68,15 @@ export default function FreightMotionScene() {
 
         <g className="freight-scene-truck">
           <g className="freight-scene-wheel" style={{ transformOrigin: '158px 168px' }}>
-            <circle cx="158" cy="168" r="8" fill="#111113" stroke="#3D3D42" strokeWidth="1.5" />
+            <circle cx="158" cy="168" r="8" fill="#0F2B3D" stroke="#3D3D42" strokeWidth="1.5" />
             <line x1="158" y1="161" x2="158" y2="175" stroke="#5A5A60" strokeWidth="1.5" />
           </g>
           <g className="freight-scene-wheel" style={{ transformOrigin: '224px 168px' }}>
-            <circle cx="224" cy="168" r="8" fill="#111113" stroke="#3D3D42" strokeWidth="1.5" />
+            <circle cx="224" cy="168" r="8" fill="#0F2B3D" stroke="#3D3D42" strokeWidth="1.5" />
             <line x1="224" y1="161" x2="224" y2="175" stroke="#5A5A60" strokeWidth="1.5" />
           </g>
           <rect x="128" y="122" width="86" height="42" rx="3" fill="#F1F5F9" />
-          <rect x="128" y="142" width="86" height="6" fill="#F2600C" />
+          <rect x="128" y="142" width="86" height="6" fill="#E53935" />
           <line x1="205" y1="122" x2="205" y2="164" stroke="#94A3B8" strokeWidth="1" />
           <path d="M214,124 h20 l12,16 v24 h-32 Z" fill="#1C1C1F" />
           <path d="M220,130 h13 l7,10 h-20 Z" fill="#7DD3FC" opacity="0.85" />

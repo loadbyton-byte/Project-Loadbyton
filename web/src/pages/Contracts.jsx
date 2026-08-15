@@ -4,7 +4,6 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { TERMINALS, AREAS, formatAED, formatLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, EmptyState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconShield } from '../components/icons.jsx';
-import { usePageFab } from '../components/Fab.jsx';
 
 const empty = { pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAddress: '', monthlyLoads: '', targetPriceAed: '' };
 
@@ -33,13 +32,16 @@ export default function Contracts() {
     }
   }
 
-  usePageFab({ icon: <IconPlus size={24} />, label: 'New contract lane', onClick: () => setShowForm(true) });
-
   return (
     <div className="container-page py-6" dir="ltr">
-      <div>
-        <h1 className="font-display text-xl font-bold text-ink">Contract lanes</h1>
-        <p className="mt-1 text-sm text-ink-muted">Commit monthly volume on a lane for priority carrier visibility and a discounted rate.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-xl font-bold text-ink">Contract lanes</h1>
+          <p className="mt-1 text-sm text-ink-muted">Commit monthly volume on a lane for priority carrier visibility and a discounted rate.</p>
+        </div>
+        <Button onClick={() => setShowForm(true)} className="shrink-0">
+          <IconPlus size={18} /> New contract lane
+        </Button>
       </div>
 
       {showForm && (

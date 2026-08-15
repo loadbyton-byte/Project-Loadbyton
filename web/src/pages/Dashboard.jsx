@@ -10,7 +10,6 @@ import {
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
-import { usePageFab } from '../components/Fab.jsx';
 import LocationPicker from '../components/LocationPicker.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 
@@ -119,8 +118,6 @@ export default function Dashboard() {
     load();
   }
 
-  usePageFab({ icon: <IconPlus size={24} />, label: 'Post a job', onClick: () => setShowForm(true) });
-
   return (
     <div className="container-page py-6" dir="ltr">
       {/* Profile banner — the Stitch shipper-dashboard header pattern. */}
@@ -134,9 +131,14 @@ export default function Dashboard() {
             <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">Tier {user?.tier} · {analytics?.jobsPosted ?? 0} jobs posted</p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setShowImport((v) => !v)}>
-          <IconUpload size={15} /> Import CSV
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowImport((v) => !v)}>
+            <IconUpload size={15} /> Import CSV
+          </Button>
+          <Button size="sm" onClick={() => setShowForm(true)}>
+            <IconPlus size={15} /> Post a job
+          </Button>
+        </div>
       </section>
 
       {showImport && <CsvImportPanel onDone={() => { setShowImport(false); load(); }} onCancel={() => setShowImport(false)} />}

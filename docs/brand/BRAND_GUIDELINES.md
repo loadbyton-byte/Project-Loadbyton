@@ -13,43 +13,43 @@ drift from them.
 
 ## 1. The mark
 
-**Concept — "the container plate."** The mark is an ink, ribbed-panel tile with
-rounded corner rivets — a real container corner-casting, abstracted — carrying a
-white load pictogram at its centre, flanked by two thin **crimson bars**. Those
-bars are the mark's one fixed signature: the same two bars split the wordmark
-itself, between `LOAD`, `BY`, and `TON` — with `BY` set as a stacked two-letter
-monogram (B over Y) between the bars, echoing the reference container-plate
-photograph the mark is built from — so the icon and the wordmark always read as
-one system. The tile is not a `currentColor` glyph — it's a fixed ink/white/
-crimson unit that looks the same on every surface, the way a physical plate
-riveted to a container would.
+**Concept — the "LOAD | BY | TON" wordmark.** The mark is a set-in-stone
+wordmark, not a pictogram: `LOAD` and `TON` in heavy navy type, with `BY` set
+as a stacked two-letter monogram (`B` over `Y`) between them, the whole thing
+split by two thin **Loadbyton Red divider bars**. Those bars are the mark's
+one fixed signature — the same construction repeats at every size, from the
+navy-tile "LB" icon mark down to the browser-tab favicon. Navy and red are
+fixed on every surface; the wordmark is not a `currentColor` glyph that
+recolors to match its container.
 
-- `web/public/brand/logo-mark.svg` — icon only, with the ribbed-panel texture and
-  corner rivets at full detail. Used at nav scale (~28px) and anywhere the mark
-  stands alone.
-- `web/public/brand/logo-full.svg` — full lockup (tile + wordmark) for light
-  surfaces; ink `LOAD · [B/Y] · TON`, crimson divider bars.
-- `web/public/brand/logo-full-on-dark.svg` — same lockup, paper-white wordmark and
-  a slightly lifted crimson (`--lb-logo-accent-400`) for contrast, for the dark
-  ink surface (nav bar, footer, hero).
-- `web/public/favicon.svg` — the tile simplified to its three load-bearing shapes
-  (ink ground, crimson bars, white pictogram) with the ribbing dropped — at
-  16–32px browser-tab scale, texture reads as noise, not detail.
+- `web/public/brand/logo-mark.svg` — the icon-only monogram: a rounded navy
+  tile with "LB" in red. Used at nav/sidebar scale (~28–30px) and anywhere the
+  mark needs to stand alone without the full wordmark.
+- `web/public/brand/logo-full.svg` — full lockup (`LOAD | BY | TON`) for light
+  surfaces: navy type, red divider bars, transparent background.
+- `web/public/brand/logo-full-on-dark.svg` — same lockup on a solid navy fill,
+  white type, red divider bars — for the dark navy surface (nav bar, footer,
+  hero panels).
+- `web/public/favicon.svg` — the icon mark simplified for 16–32px browser-tab
+  scale: navy tile, red "LB", nothing else.
 
-**Clear space & minimum size.** Keep clear space around the tile equal to one
-corner-rivet's diameter on every side. Never render the full-detail mark below
-20px; below that, use the favicon variant, which is built for exactly that scale.
+**Clear space & minimum size.** Keep clear space around the wordmark or the
+icon mark equal to the height of one divider bar on every side. Below ~24px,
+use the icon mark or favicon variant rather than shrinking the full wordmark
+— at that scale the "BY" monogram stops being legible as two letters.
 
 **Don't:**
-- Don't recolor the crimson bars to anything but `--lb-logo-accent-500` (light
-  surfaces) or `--lb-logo-accent-400` (dark surfaces) — this is a reserved pair,
-  never `--lb-red-*` (that's the UI danger/status color; keeping them separate
-  means the two can never accidentally drift together).
-- Don't stretch, skew, or rotate the tile, and don't drop the rounded corners.
-- Don't place the light-wordmark lockup on anything lighter than `--lb-slate-200`,
-  or the dark-wordmark lockup on anything darker than `--lb-ink-800`.
-- Don't add a drop shadow, bevel, or outline beyond the tile's own 1px edge —
-  the mark is otherwise flat by design.
+- Don't recolor the divider bars to anything but `--brand-accent` (Loadbyton
+  Red) — they're the same token the UI's accent buttons and CTAs use, by
+  design (see §2 on why this rebrand merges rather than reserves a second red).
+- Don't stretch, skew, or rotate the wordmark or the icon tile, and don't
+  round the icon tile's corners past its own 16px radius.
+- Don't place the dark-surface (white-type) lockup on anything lighter than
+  `--lb-ink-700`, or the light-surface (navy-type) lockup on anything darker
+  than `--lb-slate-100` — either direction loses contrast fast.
+- Don't add a drop shadow, bevel, or outline — the mark is flat by design,
+  matching the app's sharper, more geometric shape language (tighter radii,
+  flatter shadows — see `--lb-radius-*`/`--lb-shadow-*` in `design-tokens.css`).
 
 ---
 
@@ -63,54 +63,54 @@ primitive, tokens — that's what makes the light/dark themes swap cleanly.
 
 | Role | Light | Dark | Used for |
 |---|---|---|---|
-| `brand.primary` | Ink `#111113` | Paper `#F8FAFC` | Primary buttons, active nav, brand chrome |
+| `brand.primary` | Loadbyton Navy `#0F2B3D` | Paper `#F8FAFC` | Primary buttons, active nav, brand chrome |
 | `brand.secondary` | Blue `#3B82F6` | Blue `#93C5FD` | Text links only — kept distinct from `brand.primary` precisely so a link still reads as a link on a monochrome UI |
-| `brand.accent` | Safety orange `#FD761A` | Orange `#FF7A33` | The **one** accent — award/confirm actions, the primary marketing CTA. Nothing else. |
-| `status.success` | Teal `#0D9488` | Teal `#14B8A6` | Delivered, released, verified |
-| `status.warning` | Amber `#D97706` | Amber `#F59E0B` | Pending review, demurrage exposure — deliberately a different hue from `brand.accent` (gold vs. orange-red) so the two are never mistaken for each other at a glance |
-| `status.danger` | Red `#DC2626` | Red `#F87171` | Disputed, rejected, overdue |
+| `brand.accent` | Loadbyton Red `#E53935` | Red `#FF5449` | The **one** accent — award/confirm actions, the primary marketing CTA, and (see below) `status.danger` too. Nothing else. |
+| `status.success` | Green `#2E7D32` | Green `#43A047` | Delivered, released, verified |
+| `status.warning` | Amber `#F57C00` | Amber `#FFA733` | Pending review, demurrage exposure — deliberately a different hue from `brand.accent` (gold vs. red) so the two are never mistaken for each other at a glance |
+| `status.danger` | Loadbyton Red `#E53935` | Red `#FF5449` | Disputed, rejected, overdue |
 
-**Why near-black + one accent, not navy-as-safety-blanket:** the previous
-navy-and-amber system read as freight/maritime, but two competing "brand" hues
-(a blue-family primary *and* a warm accent) is how you end up with "another
-blue-on-white SaaS dashboard" — safe, forgettable, indistinguishable from a
-hundred other B2B tools. The system that actually reads as a confident,
-app-native product — the Uber/Ola school, not the enterprise-SaaS school — uses
-**one** brand color for everything structural (buttons, nav, active states) and
-holds color in reserve for the handful of moments that are genuinely
-time-sensitive or decision-worthy. Near-black does the "handles money
-carefully" work navy used to do (it's the same instinct that makes a bank card
-matte black instead of bright blue), and it's a stronger, more legible base for
-a data-dense product than a mid-tone navy ever was — full black/white contrast,
-not navy-on-slate.
+**Why navy + red:** this is a deliberate reversal of the previous system's
+argument for near-black-plus-one-accent (a blue-family primary reads as
+"another SaaS dashboard," it said). The brand kit this app now ships makes the
+opposite bet on purpose: navy is the industry's own visual language for
+"handles money and cargo carefully" — the same instinct that put navy on bank
+statements and bills of lading long before this app existed — and pairing it
+with a single decisive red accent keeps the "one brand color for structure,
+one accent held in reserve" discipline the previous system got right, just on
+a different hue pair. The result reads as *enterprise freight infrastructure*
+rather than a consumer app wearing freight as a skin — the register this
+rebrand's sharper, more geometric shape language and Geist's corporate
+register are both reaching for too.
 
-**Discipline — now more important, not less:** the single accent
-(`brand.accent`) is not a "series 4" color, and pushing it more saturated than
-the old amber raises the stakes on this rule rather than lowering them. It
-never gets reused to mean something else on the same screen — a chart, a badge
-system, and the accent button all draw from the same reserved orange, so an
-orange badge always means the same category of "needs a decision or is
-time-sensitive." `status.warning` stays a distinguishable gold specifically so
-it never gets confused with the accent doing its actual job.
+**One merge, stated plainly:** `brand.accent` and `status.danger` are the
+*same* red (`#E53935` / `#FF5449`) in this system — the brand kit's own CSS
+aliases its error color to the accent, and this app keeps that merge rather
+than re-splitting it into two reds. That means an orange-red "Award bid"
+button and a red "Disputed" badge share a hue; `status.warning`'s amber is
+the one color that exists specifically so a *pending/at-risk* state still
+reads as visually distinct from both.
+
+**Discipline still applies:** `brand.accent` is not a "series 4" color — it
+never gets reused to mean something else on the same screen. A chart accent,
+a badge system, and the accent button all draw from the same reserved red, so
+red always means the same category of "needs a decision, is time-sensitive,
+or went wrong."
 
 ---
 
 ## 3. Typography
 
-- **Display — Manrope** (600/700/800). Replaced Space Grotesk in 2026: the
-  prior pass argued Space Grotesk avoided the "safe AI-generated default"
-  read as long as it stayed at display sizes only — in practice, by 2026 it
-  and its immediate peers (Sora, General Sans, Cabinet Grotesk) had become
-  the default display face of AI-product marketing broadly enough that the
-  size argument stopped mattering; the association reads on sight. Manrope
-  sits in a different lineage — semi-condensed, enterprise/fintech-dashboard
-  register rather than consumer-AI-launch register — while keeping the same
-  practical properties that made Space Grotesk work here: geometric enough
-  to read as infrastructure, holds up at 600/700/800 from stat-number sizes
-  down to page titles, tightens cleanly at hero sizes (32px+). Headlines,
-  page titles, the wordmark, stat numbers. Still never used as body text at
-  paragraph sizes — that discipline stays regardless of which face is in
-  the display slot.
+- **Display — Geist** (400/500/600/700/900). Replaced Manrope with this
+  rebrand: the Loadbyton Brand Kit specifies Geist as its headline face, and
+  it keeps the properties that made both Manrope and Space Grotesk work in
+  this display slot before it — geometric enough to read as infrastructure,
+  holds up across a wide weight range from stat-number sizes down to page
+  titles, tightens cleanly at hero sizes (32px+) — while sitting in a
+  cleaner, more neutral enterprise-dashboard register than either
+  predecessor. Headlines, page titles, the wordmark, stat numbers. Still
+  never used as body text at paragraph sizes — that discipline stays
+  regardless of which face is in the display slot.
 - **Body — Inter** (400/500/600). Everything you read at length: forms, tables,
   descriptions, nav labels.
 - **Mono — JetBrains Mono** (replaced IBM Plex Mono in the Industrial Trust

@@ -4,7 +4,6 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, formatLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconPackage } from '../components/icons.jsx';
-import { usePageFab } from '../components/Fab.jsx';
 
 const empty = { name: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAddress: '', containerSize: '40HC', containerType: 'DRY', cadence: 'WEEKLY', notes: '' };
 
@@ -44,13 +43,16 @@ export default function Templates() {
     }
   }
 
-  usePageFab({ icon: <IconPlus size={24} />, label: 'New template', onClick: () => setShowForm(true) });
-
   return (
     <div className="container-page py-6" dir="ltr">
-      <div>
-        <h1 className="font-display text-xl font-bold text-ink">Templates</h1>
-        <p className="mt-1 text-sm text-ink-muted">Save a repeat lane once. Re-run it into a fresh open job in one click.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-xl font-bold text-ink">Templates</h1>
+          <p className="mt-1 text-sm text-ink-muted">Save a repeat lane once. Re-run it into a fresh open job in one click.</p>
+        </div>
+        <Button onClick={() => setShowForm(true)} className="shrink-0">
+          <IconPlus size={18} /> New template
+        </Button>
       </div>
 
       {showForm && (

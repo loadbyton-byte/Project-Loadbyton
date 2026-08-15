@@ -5,10 +5,10 @@ import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
 import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
-  IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle,
+  IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
+  IconTrendUp, IconSettings,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
-import { FabProvider, Fab } from './Fab.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -25,56 +25,32 @@ export function Logo({ dark = false, className = '' }) {
   );
 }
 
-// Full descriptive nav — used in the drawer.
+// Role-based nav — drives both the desktop sidebar and the mobile drawer,
+// so there is exactly one source of truth for "what links does this role
+// see" (see CLAUDE.md's navigation note for why that matters).
 function navByRole(t) {
   return {
     SHIPPER: [
-      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard') },
-      { to: '/templates', label: t('nav.templates', 'Templates') },
-      { to: '/contracts', label: t('nav.contracts', 'Contract lanes') },
-      { to: '/analytics', label: t('nav.analytics', 'Analytics') },
+      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} /> },
+      { to: '/templates', label: t('nav.templates', 'Templates'), icon: <IconHistory size={20} /> },
+      { to: '/contracts', label: t('nav.contracts', 'Contract lanes'), icon: <IconFile size={20} /> },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],
     CARRIER: [
-      { to: '/open-loads', label: t('nav.openLoads', 'Open loads') },
-      { to: '/my-bids', label: t('nav.myBids', 'My bids') },
-      { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs') },
-      { to: '/earnings', label: t('nav.earnings', 'Earnings') },
-      { to: '/analytics', label: t('nav.analytics', 'Analytics') },
+      { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} /> },
+      { to: '/my-bids', label: t('nav.myBids', 'My bids'), icon: <IconGavel size={20} /> },
+      { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} /> },
+      { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],
     ADMIN: [
-      { to: '/admin', label: t('nav.admin', 'Admin console') },
+      { to: '/admin', label: t('nav.admin', 'Admin console'), icon: <IconSettings size={20} /> },
     ],
-  };
-}
-
-// Abbreviated 4-tab bottom bar — the Stitch shipper/carrier dashboards both
-// use exactly this shape (Home / Loads / Jobs / Profile). ADMIN gets no
-// bottom nav: the console is desk-bound ops work, not a mobile flow Stitch
-// designed for (see the redesign plan §2).
-function bottomNavByRole(t) {
-  return {
-    SHIPPER: [
-      { to: '/dashboard', label: t('nav.home', 'Home'), icon: <IconHome size={22} /> },
-      { to: '/templates', label: t('nav.templates', 'Templates'), icon: <IconHistory size={22} /> },
-      { to: '/contracts', label: t('nav.contracts', 'Contracts'), icon: <IconFile size={22} /> },
-      { to: '/profile', label: t('nav.profile', 'Profile'), icon: <IconUser size={22} /> },
-    ],
-    CARRIER: [
-      { to: '/open-loads', label: t('nav.home', 'Home'), icon: <IconHome size={22} /> },
-      { to: '/my-bids', label: t('nav.myBids', 'Bids'), icon: <IconGavel size={22} /> },
-      { to: '/won-jobs', label: t('nav.wonJobs', 'Jobs'), icon: <IconCheckCircle size={22} /> },
-      { to: '/profile', label: t('nav.profile', 'Profile'), icon: <IconUser size={22} /> },
-    ],
-    ADMIN: [],
   };
 }
 
 export function Shell({ children }) {
-  return (
-    <FabProvider>
-      <ShellInner>{children}</ShellInner>
-    </FabProvider>
-  );
+  return <ShellInner>{children}</ShellInner>;
 }
 
 function ShellInner({ children }) {
@@ -85,7 +61,6 @@ function ShellInner({ children }) {
   const [endingImpersonation, setEndingImpersonation] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
   const navItems = user ? navByRole(t)[user.role] || [] : [];
-  const bottomTabs = user ? bottomNavByRole(t)[user.role] || [] : [];
   const { addToast } = useToasts();
 
   function closeDrawer() {
@@ -148,10 +123,12 @@ function ShellInner({ children }) {
         </div>
       )}
 
-      {/* TopAppBar — sticky, frosted-blur, hamburger + centered mark + bell,
-          matching the Stitch "TopAppBar" pattern used on every screen. */}
+      {/* TopAppBar — mobile only (md:hidden). Desktop replaces this with a
+          persistent sidebar + slim top bar below, per the enterprise-layout
+          restructure; this stays the nav for narrow widths since it already
+          works well there. */}
       <header
-        className="sticky top-0 z-40 border-b backdrop-blur-md"
+        className="sticky top-0 z-40 border-b backdrop-blur-md md:hidden"
         style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)' }}
       >
         <div className="flex h-14 items-center justify-between px-3">
@@ -182,9 +159,9 @@ function ShellInner({ children }) {
         </div>
       </header>
 
-      {/* Drawer — replaces the old desktop nav row; carries the full role
-          nav, account actions, and the theme/locale toggles for every
-          width, since the shell is mobile-app-shaped everywhere now. */}
+      {/* Drawer — mobile nav (only reachable via the hamburger above, which
+          is itself md:hidden). Carries the full role nav, account actions,
+          and the theme/locale toggles. */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
           <button aria-label="Close menu" className="absolute inset-0 bg-black/50" onClick={closeDrawer} />
@@ -250,49 +227,120 @@ function ShellInner({ children }) {
         <WalkthroughModal step={walkthroughStep} onStep={setWalkthroughStep} onFinish={completeWalkthrough} />
       )}
 
-      <main className={cx('flex-1', bottomTabs.length > 0 && 'pb-20')}>{children}</main>
-
-      <Fab />
-
-      {/* BottomNavBar — role-aware 4-tab bar, active tab a filled pill, per
-          the Stitch shipper/carrier dashboards. Absent for guests and ADMIN. */}
-      {bottomTabs.length > 0 && (
-        <nav
-          className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t px-2"
-          style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-surface)', paddingBottom: 'env(safe-area-inset-bottom, 0px)', boxShadow: '0 -4px 16px rgba(15,23,42,0.06)' }}
-        >
-          {bottomTabs.map((tab) => (
-            <NavLink key={tab.to} to={tab.to} className="flex flex-1 flex-col items-center justify-center py-2.5">
-              {({ isActive }) => (
-                <span
-                  className="flex flex-col items-center gap-0.5 rounded-2xl px-4 py-1.5 transition-colors"
-                  style={isActive ? { background: 'var(--brand-primary)', color: 'var(--text-inverse)' } : { color: 'var(--text-muted)' }}
-                >
-                  {tab.icon}
-                  <span className="font-mono text-[10px] font-semibold uppercase tracking-wide">{tab.label}</span>
-                </span>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-      )}
-
-      {!user && (
-        <footer className="border-t" style={{ borderColor: 'var(--border-default)' }}>
-          <div className="container-page flex flex-col gap-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-            <Logo />
-            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-muted">
-              <Link to="/features" className="hover:text-ink">Features</Link>
-              <Link to="/pricing" className="hover:text-ink">Pricing</Link>
-              <Link to="/about" className="hover:text-ink">About</Link>
-              <Link to="/blog" className="hover:text-ink">Blog</Link>
-              <Link to="/security" className="hover:text-ink">Security</Link>
-              <Link to="/compliance" className="hover:text-ink">Compliance</Link>
+      <div className="flex flex-1 md:flex-row">
+        {/* Sidebar — persistent, desktop only (md:flex). Replaces the
+            drawer as the primary nav surface at wide widths; reuses
+            navByRole's per-role link data, no new routing logic. */}
+        {user && (
+          <aside
+            className="hidden md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col md:border-r"
+            style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}
+          >
+            <div className="flex h-14 items-center border-b px-5" style={{ borderColor: 'var(--border-subtle)' }}>
+              <Logo />
             </div>
-            <p className="text-xs text-ink-muted" dir="ltr">© {new Date().getFullYear()} Loadbyton. Demo system — payouts are simulated, not real transfers.</p>
-          </div>
-        </footer>
-      )}
+
+            <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => cx('flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-semibold transition-colors', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
+                >
+                  {item.icon}
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+
+            <div className="border-t p-3" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div className="mb-2 rounded-md px-3 py-2.5" style={{ background: 'var(--surface-container)' }}>
+                <p className="truncate text-sm font-semibold text-ink">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
+                <p className="text-xs text-ink-muted">{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+              </div>
+              <Link to="/profile" className="mb-1 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold text-ink-secondary hover:bg-surface-container">
+                <IconUser size={16} /> Profile &amp; settings
+              </Link>
+              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-semibold text-ink-secondary hover:bg-surface-container">
+                {theme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />}
+                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              </button>
+              <button onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')} className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-ink-secondary hover:bg-surface-container">
+                {locale === 'ar' ? 'English' : 'العربية'}
+              </button>
+              <button onClick={handleLogout} className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-surface-container" style={{ color: 'var(--status-danger)' }}>
+                <IconLogOut size={16} /> Log out
+              </button>
+            </div>
+          </aside>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Desktop slim top bar (md:flex, hidden on mobile — the
+              TopAppBar above covers mobile). Guests get a traditional
+              horizontal marketing nav here; signed-in users get just the
+              notifications bell, since role nav already lives in the
+              sidebar. */}
+          <header
+            className="sticky top-0 z-30 hidden h-14 items-center justify-between border-b px-6 backdrop-blur-md md:flex"
+            style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)' }}
+          >
+            {user ? (
+              <div />
+            ) : (
+              <div className="flex items-center gap-6">
+                <Logo />
+                <nav className="flex items-center gap-1">
+                  {guestLinks.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) => cx('rounded-md px-3 py-1.5 text-sm font-semibold transition-colors', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </nav>
+              </div>
+            )}
+
+            {user ? (
+              <Link to="/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label="Notifications">
+                <IconBell size={20} />
+                {user.unreadNotifications > 0 && (
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)' }} />
+                )}
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Link to="/login" className="rounded-md px-3.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
+                  {t('nav.login', 'Log in')}
+                </Link>
+                <Link to="/register" className="btn-accent px-4 py-1.5 text-sm">{t('nav.register', 'Get started')}</Link>
+              </div>
+            )}
+          </header>
+
+          <main className="flex-1">{children}</main>
+
+          {!user && (
+            <footer className="border-t" style={{ borderColor: 'var(--border-default)' }}>
+              <div className="container-page flex flex-col gap-6 py-10 sm:flex-row sm:items-center sm:justify-between">
+                <Logo />
+                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-muted">
+                  <Link to="/features" className="hover:text-ink">Features</Link>
+                  <Link to="/pricing" className="hover:text-ink">Pricing</Link>
+                  <Link to="/about" className="hover:text-ink">About</Link>
+                  <Link to="/blog" className="hover:text-ink">Blog</Link>
+                  <Link to="/security" className="hover:text-ink">Security</Link>
+                  <Link to="/compliance" className="hover:text-ink">Compliance</Link>
+                </div>
+                <p className="text-xs text-ink-muted" dir="ltr">© {new Date().getFullYear()} Loadbyton. Demo system — payouts are simulated, not real transfers.</p>
+              </div>
+            </footer>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
