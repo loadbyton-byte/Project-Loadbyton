@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth, roleHome } from '../lib/auth.jsx';
+import { useAuth } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
 import {
@@ -15,12 +15,14 @@ function cx(...parts) {
 }
 
 export function Logo({ dark = false, className = '' }) {
+  const { theme } = useAuth();
+  // The light-surface wordmark is navy-on-transparent — on the app's dark
+  // theme, --bg-surface resolves to the same navy, so it must swap to the
+  // white-on-navy variant rather than going invisible.
+  const isDarkSurface = dark || theme === 'dark';
   return (
-    <Link to="/" className={`flex shrink-0 items-center gap-2 ${className}`} aria-label="Loadbyton home">
-      <img src="/brand/logo-mark.svg" alt="" width={30} height={30} />
-      <span className="whitespace-nowrap font-display text-lg font-bold tracking-tight" style={{ color: dark ? '#F8FAFC' : 'var(--text-primary)' }}>
-        Loadbyton
-      </span>
+    <Link to="/" className={`flex shrink-0 items-center ${className}`} aria-label="Loadbyton home">
+      <img src={isDarkSurface ? '/brand/logo-full-on-dark.svg' : '/brand/logo-full.svg'} alt="Loadbyton" className="h-8 w-auto" />
     </Link>
   );
 }
@@ -140,9 +142,7 @@ function ShellInner({ children }) {
             <IconMenu size={22} />
           </button>
 
-          <Link to={user ? roleHome(user.role) : '/'} className="flex items-center gap-2" aria-label="Loadbyton home">
-            <img src="/brand/logo-mark.svg" alt="Loadbyton" width={30} height={30} />
-          </Link>
+          <Logo />
 
           {user ? (
             <Link to="/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label="Notifications">
