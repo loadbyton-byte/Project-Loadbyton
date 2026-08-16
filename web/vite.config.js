@@ -1,8 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import sentry from '@sentry/vite-plugin';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    process.env.SENTRY_AUTH_TOKEN && sentry({
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      include: './dist',
+      release: process.env.SENTRY_RELEASE,
+    }),
+  ].filter(Boolean),
   server: {
     port: 5173,
     proxy: {
@@ -14,6 +24,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    sourcemap: true,
   },
   // React Router v7's package exports resolve to a CJS-flavored entry under
   // Vite's Node SSR condition (used by scripts/prerender.mjs's

@@ -8,10 +8,17 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "lint": "eslint . --ext .js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
+  "optionalDependencies": {
+    "@sentry/node": "^8.0.0"
   }
 }

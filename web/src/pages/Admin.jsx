@@ -625,7 +625,6 @@ function MembersTab() {
   });
 
   const roleOptions = ['all', 'SHIPPER', 'CARRIER', 'ADMIN'];
-  const verifiedOptions = ['all', 'yes', 'no'];
 
   async function impersonate(u) {
     if (!window.confirm(`Impersonate ${u.profile?.company_name || u.email}? This is logged to the audit trail and expires in 30 minutes.`)) return;

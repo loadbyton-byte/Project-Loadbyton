@@ -70,6 +70,7 @@ export const api = {
   rateEstimate: (id, body) => post(`/jobs/${id}/rate`, body),
   optimizeRoute: (id, body) => post(`/jobs/${id}/optimize-route`, body),
   awardJob: (id, bidId) => post(`/jobs/${id}/award`, { bidId }),
+  paymentCheckout: (id) => post(`/jobs/${id}/payment-checkout`, {}),
   setStatus: (id, status) => patch(`/jobs/${id}/status`, { status }),
   updateDriver: (id, body) => patch(`/jobs/${id}/driver`, body),
   submitPod: (id, body) => post(`/jobs/${id}/pod`, body),

@@ -1,0 +1,88 @@
+// Sentry error tracking — safely no-ops if SENTRY_DSN is not set.
+// Mirrors server/lib/email.js and server/lib/whatsapp.js patterns.
+
+let Sentry = null;
+let initialized = false;
+
+function init() {
+  if (initialized) return;
+  initialized = true;
+
+  const dsn = process.env.SENTRY_DSN;
+  if (!dsn) {
+    console.log('[Sentry] SENTRY_DSN not set — error tracking disabled');
+    return;
+  }
+
+  try {
+    Sentry = require('@sentry/node');
+    Sentry.init({
+      dsn,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: 0.1,
+      beforeSend(event, hint) {
+        const error = hint.originalException;
+        if (error && error.status && error.status < 500) {
+          return null;
+        }
+        return event;
+      },
+    });
+    console.log('[Sentry] initialized');
+  } catch (e) {
+    console.warn('[Sentry] failed to initialize:', e.message);
+    Sentry = null;
+  }
+}
+
+function captureException(error, context = {}) {
+  if (!Sentry) return;
+  try {
+    Sentry.withScope((scope) => {
+      if (context.requestId) scope.setTag('request_id', context.requestId);
+      if (context.userId) scope.setUser({ id: String(context.userId) });
+      if (context.jobId) scope.setTag('job_id', String(context.jobId));
+      if (context.extra) scope.setExtras(context.extra);
+      Sentry.captureException(error);
+    });
+  } catch (e) {
+    console.error('[Sentry] captureException failed:', e.message);
+  }
+}
+
+function captureMessage(message, level = 'info', context = {}) {
+  if (!Sentry) return;
+  try {
+    Sentry.withScope((scope) => {
+      if (context.requestId) scope.setTag('request_id', context.requestId);
+      if (context.userId) scope.setUser({ id: String(context.userId) });
+      if (context.extra) scope.setExtras(context.extra);
+      Sentry.captureMessage(message, level);
+    });
+  } catch (e) {
+    console.error('[Sentry] captureMessage failed:', e.message);
+  }
+}
+
+function expressErrorHandler() {
+  if (!Sentry) return (err, req, res, next) => next(err);
+  return Sentry.Handlers.errorHandler({
+    shouldHandleError(error) {
+      return error.status >= 500;
+    },
+  });
+}
+
+function requestHandler() {
+  if (!Sentry) return (req, res, next) => next();
+  return Sentry.Handlers.requestHandler();
+}
+
+module.exports = {
+  init,
+  captureException,
+  captureMessage,
+  expressErrorHandler,
+  requestHandler,
+  isEnabled: () => !!Sentry,
+};

@@ -32,8 +32,28 @@ services:
         value: https://claudeloadbyton.onrender.com
       - key: DB_PATH
         value: /data/loadbyton.db
+      # Before real data: replace generateValue with a FIXED secret you
+      # generate once (openssl rand -base64 32) and paste in the Render
+      # dashboard — a regenerated key would orphan every AES-encrypted
+      # IBAN/TRN. See docs/PAYMENTS.md §7.
       - key: ENCRYPTION_KEY
         generateValue: true   # AES-256-GCM key for IBAN/TRN field encryption — see server/lib/crypto.js
+      # Payment processor (TODO-3, see docs/PAYMENTS.md). Leave
+      # PAYMENTS_PROVIDER unset for internal escrow; set to `mock` for a
+      # simulated processor, `telr` for real charges once merchant
+      # onboarding is done. TELR_TEST stays 1 until go-live.
+      # - key: PAYMENTS_PROVIDER
+      #   value: mock
+      # - key: PAYMENTS_WEBHOOK_SECRET
+      #   generateValue: true
+      # - key: TELR_STORE_ID
+      #   sync: false
+      # - key: TELR_AUTH_KEY
+      #   sync: false
+      # - key: TELR_WEBHOOK_SECRET
+      #   sync: false
+      # - key: TELR_TEST
+      #   value: "1"
     disk:
       name: loadbyton-data
       mountPath: /data

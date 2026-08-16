@@ -175,7 +175,17 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 - **Auth:** `SHIPPER`, job owner, job `OPEN`
 - **Body:** `{ bidId }`
 - **200** `{ ok: true, job }` — transactional award: job → `AWARDED` (legal from `OPEN`/`BIDDING`/`DRAFT`), bid → `ACCEPTED`, others → `REJECTED`, escrow → `HELD`, payout row created (gross/fee/net, `release_type=MANUAL`), audit entries, notifications.
+- With a payment processor configured (`PAYMENTS_PROVIDER`, see `docs/PAYMENTS.md`) the job is also marked `processor_payment_status=REQUIRES_PAYMENT` — the shipper must pay before the carrier picks up.
 - **409** awarded concurrently; **404** bad bid.
+
+### `POST /api/jobs/:id/payment-checkout`
+- **Auth:** `SHIPPER` (owner), seat `OPS`
+- Creates (or re-returns, idempotent per job) the processor-hosted checkout for an `AWARDED` job with escrow `HELD`.
+- **200** `{ ok: true, paymentUrl, ref, provider, testMode }` — redirect the shipper to `paymentUrl` (`paymentUrl` is `null` in `mock` mode; confirmation arrives via webhook). **409** not AWARDED/HELD or already paid. **400** processor not configured (internal escrow — the admin confirm-receipt path applies). **502** provider unavailable.
+
+### `POST /api/webhooks/payments`
+- **No auth** — the processor's callback endpoint (`https://<host>/api/webhooks/payments`). Signature-verified (fail-closed: `401` on mismatch) and idempotent (`200 { ok: true, idempotent: true }` on replays).
+- Accepts JSON (mock provider) and form-encoded (Telr) bodies. Events: `AUTHORISED` (escrow `HELD → FUNDED`, `processor_payment_status → PAID`, stores `processor_tranref`), `DECLINED`/`CANCELLED` (`FAILED`), `REFUNDED` (`REFUNDED`). Every application is audited (`ESCROW_FUND`, `PAYMENT_REFUND`, `PAYMENT_WEBHOOK_REJECTED`, ...).
 
 ### `PATCH /api/jobs/:id/status`
 - **Auth:** job participant (role rules) — see state machine in `ARCHITECTURE.md` §3.4

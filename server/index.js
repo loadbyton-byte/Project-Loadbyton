@@ -16,6 +16,7 @@ const { rateLimiter, byIp } = require('./lib/rateLimit');
 const { encryptField, decryptField } = require('./lib/crypto');
 const { notifyDriverAsync } = require('./lib/whatsapp');
 const { sendEmailAsync } = require('./lib/email');
+const payments = require('./lib/payments');
 const {
   cookieParser,
   requestId,
@@ -26,6 +27,7 @@ const {
   referralCode,
   randomToken,
 } = require('./lib/http');
+const { init: initSentry, requestHandler: sentryRequestHandler, expressErrorHandler: sentryErrorHandler } = require('./lib/sentry');
 
 const PORT = Number(process.env.PORT) || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -44,11 +46,18 @@ app.disable('x-powered-by');
 // limiter below would throttle all users as if they were one.
 app.set('trust proxy', 1);
 // 8mb covers a 5MB (MAX_UPLOAD_BYTES) file at its ~33% base64 inflation plus
-// JSON overhead; every other route's body is a few KB at most.
-app.use(express.json({ limit: '8mb' }));
+// JSON overhead; every other route's body is a few KB at most. The verify
+// hook is a side-channel capture of the raw bytes as transmitted — only the
+// payment webhook route reads req.rawBody (its signature covers the raw
+// body, so it must be the exact bytes, not a re-serialization).
+app.use(express.json({ limit: '8mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 app.use(cookieParser);
 app.use(requestId);
 app.use(securityHeaders);
+
+// Sentry request handler — must be before routes but after requestId
+initSentry();
+app.use(sentryRequestHandler());
 
 // General API rate limiting — previously the ONLY throttle anywhere in the
 // app was the per-email login lockout further down; every other route,
@@ -268,6 +277,117 @@ function notifyAdmins(title, body, jobId = null, type = 'dispute') {
   for (const a of admins) notify(a.id, title, body, jobId, type);
 }
 
+// ---------------------------------------------------------------------------
+// Payment processor integration (TODO-3 — see server/lib/payments.js and
+// docs/PAYMENTS.md). Every helper here is a no-op in the default "internal"
+// mode (PAYMENTS_PROVIDER unset), where escrow is pure bookkeeping and the
+// pre-existing admin confirm-receipt / mark-transferred flows apply —
+// nothing below can change money behavior that was already correct.
+// ---------------------------------------------------------------------------
+
+function markJobPaymentFailed(jobId, error) {
+  db.prepare(`UPDATE jobs SET processor_payment_status='FAILED', processor_last_error=?, updated_at=datetime('now') WHERE id=?`).run(String(error).slice(0, 500), jobId);
+}
+
+// Fire-and-forget payout execution — called AFTER the DB release commits,
+// never inside a transaction (network calls don't belong in DB locks).
+// Idempotent via payouts.transfer_executed_at: a payout released but not
+// yet confirmed (including any processor failure) keeps appearing in
+// /api/admin/payouts-sla, exactly like the manual flow it replaces.
+function executePayoutAsync(job, payout, req) {
+  if (!payments.isConfigured() || !payout || payout.transfer_executed_at) return;
+  const profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(payout.carrier_id);
+  const reference = `LB-${job.job_code}-${payout.id}`;
+  payments
+    .executePayout({
+      paymentRef: job.processor_payment_ref,
+      jobCode: job.job_code,
+      amountAed: payout.net_aed,
+      carrierAccountId: profile ? profile.processor_account_id : null,
+      carrierIban: profile ? profile.iban : null,
+      reference,
+    })
+    .then((r) => {
+      if (r.ok) {
+        db.prepare(`UPDATE payouts SET processor_payout_status='SENT', processor_payout_ref=?, transfer_executed_at=datetime('now'), transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`).run(
+          r.payoutRef,
+          `processor:${reference}`,
+          payout.id
+        );
+        writeAudit(req, {
+          action: 'PAYOUT_PROCESSOR',
+          details: `${job.job_code}: payout #${payout.id} (AED ${payout.net_aed}) sent via ${payments.provider()} (ref ${r.payoutRef})`,
+          entityType: 'payout',
+          entityId: payout.id,
+          beforeState: 'RELEASED',
+          afterState: 'SENT',
+        });
+      } else if (r.error !== 'not_implemented') {
+        db.prepare(`UPDATE payouts SET processor_payout_status='FAILED', processor_payout_ref=? WHERE id=?`).run(String(r.error).slice(0, 200), payout.id);
+        writeAudit(req, {
+          action: 'PAYOUT_PROCESSOR_FAILED',
+          details: `${job.job_code}: processor payout failed: ${r.error}${r.detail ? ` — ${r.detail}` : ''}`,
+          entityType: 'payout',
+          entityId: payout.id,
+          beforeState: 'RELEASED',
+          afterState: 'FAILED',
+        });
+      }
+      // r.error === 'not_implemented' (telr payouts pending VERIFY): leave
+      // the payout RELEASED + untransferred — the admin SLA flow handles it.
+    })
+    .catch((e) => {
+      db.prepare(`UPDATE payouts SET processor_payout_status='FAILED' WHERE id=?`).run(payout.id);
+      writeAudit(req, {
+        action: 'PAYOUT_PROCESSOR_FAILED',
+        details: `${job.job_code}: processor payout threw: ${e.message}`,
+        entityType: 'payout',
+        entityId: payout.id,
+        beforeState: 'RELEASED',
+        afterState: 'FAILED',
+      });
+    });
+}
+
+// Fire-and-forget refund of a PAID charge (dispute REFUND_SHIPPER, or a
+// cancellation after funds were taken). Only meaningful when the processor
+// is configured AND the charge actually went through (tranref exists) —
+// otherwise there is nothing to refund.
+function refundJobAsync(job) {
+  if (!payments.isConfigured() || job.processor_payment_status !== 'PAID' || !job.processor_tranref) return;
+  const amountAed = job.processor_amount_aed ?? job.agreed_price_aed;
+  payments
+    .refundCharge({ tranref: job.processor_tranref, amountAed, paymentRef: job.processor_payment_ref })
+    .then((r) => {
+      if (r.ok) {
+        db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`).run(job.id);
+        writeAudit(null, {
+          action: 'REFUND_SHIPPER_EXECUTED',
+          details: `${job.job_code}: refund of AED ${amountAed} executed via ${payments.provider()} (${r.refundRef})`,
+          entityType: 'job',
+          entityId: job.id,
+        });
+      } else {
+        db.prepare(`UPDATE jobs SET processor_last_error=? WHERE id=?`).run(`refund_failed: ${r.error}${r.detail ? ` — ${r.detail}` : ''}`.slice(0, 500), job.id);
+        writeAudit(null, {
+          action: 'REFUND_SHIPPER_FAILED',
+          details: `${job.job_code}: refund failed: ${r.error}${r.detail ? ` — ${r.detail}` : ''}`,
+          entityType: 'job',
+          entityId: job.id,
+        });
+      }
+    })
+    .catch((e) => {
+      db.prepare(`UPDATE jobs SET processor_last_error=? WHERE id=?`).run(`refund_failed: ${e.message}`.slice(0, 500), job.id);
+      writeAudit(null, {
+        action: 'REFUND_SHIPPER_FAILED',
+        details: `${job.job_code}: refund threw: ${e.message}`,
+        entityType: 'job',
+        entityId: job.id,
+      });
+    });
+}
+
 function isParticipantOrBidder(job, user) {
   if (user.role === 'ADMIN') return true;
   if (user.id === job.shipper_id) return true;
@@ -399,7 +519,7 @@ function clearThrottle(email) {
 // =============================================================================
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'loadbyton-api', time: new Date().toISOString(), pid: String(process.pid), port: PORT });
+  res.json({ ok: true, service: 'loadbyton-api', time: new Date().toISOString(), pid: String(process.pid), port: PORT, payments: payments.providerInfo() });
 });
 
 function runAutoReleaseSweep(req) {
@@ -433,6 +553,9 @@ function runAutoReleaseSweep(req) {
       notify(job.shipper_id, 'Payout auto-released', `${job.job_code} funds were released ${auto_release_hours}h after delivery.`, job.id, 'payout');
       notify(job.carrier_id, 'Funds on the way', `Your payout for ${job.job_code} was auto-released.`, job.id, 'payout');
       db.exec('COMMIT');
+      // TODO-3: with a processor configured this moves the money; in
+      // internal mode it is a no-op and the admin SLA flow applies.
+      executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
       released++;
     } catch (e) {
       db.exec('ROLLBACK');
@@ -470,6 +593,103 @@ app.post('/api/system/auto-release', (req, res) => {
 });
 
 setInterval(() => runAutoReleaseSweep(null), 10 * 60 * 1000).unref();
+
+// =============================================================================
+// 1b. Payment processor webhook (TODO-3)
+// =============================================================================
+// The SINGLE confirmation path for processor callbacks in every mode:
+// mock (PAYMENTS_PROVIDER=mock) and telr both land here. Signature-
+// verified and idempotent: replays of an already-applied event are
+// acknowledged without double-applying, and a signature mismatch aborts
+// before any state changes. Configure the processor's callback URL to
+// https://<host>/api/webhooks/payments.
+app.post(
+  '/api/webhooks/payments',
+  // JSON callbacks arrive already-parsed by the global express.json above
+  // (whose verify hook captured req.rawBody). Form-encoded callbacks (Telr)
+  // are parsed here, with the same raw-body capture so the signature check
+  // below always sees the exact bytes as transmitted.
+  express.urlencoded({
+    extended: false,
+    limit: '1mb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf.toString('utf8');
+    },
+  }),
+  (req, res) => {
+    if (!payments.isConfigured()) return res.status(200).json({ ok: false, reason: 'not_configured' });
+
+    const contentType = req.headers['content-type'] || '';
+    const signature = req.headers['x-payments-signature'] || (req.body && req.body.sig);
+    if (!payments.verifyWebhookSignature(req.rawBody || '', signature, contentType)) {
+      writeAudit(req, {
+        action: 'PAYMENT_WEBHOOK_REJECTED',
+        details: `Webhook signature verification failed (ip ${req.ip || 'unknown'}, provider ${payments.provider()})`,
+      });
+      return sendError(res, 401, 'Signature verification failed');
+    }
+
+    const parsed = payments.parseWebhook(req.body, contentType);
+    if (!parsed.ok) {
+      writeAudit(req, {
+        action: 'PAYMENT_WEBHOOK_ERROR',
+        details: `Could not parse webhook: ${parsed.error}${parsed.detail ? ` — ${parsed.detail}` : ''}`,
+      });
+      // Ack with reason — the processor must not retry something we'll
+      // never accept (a permanent parse failure), and the audit log has it.
+      return res.status(200).json({ ok: false, reason: parsed.error });
+    }
+
+    const job = db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(parsed.ref);
+    if (!job) {
+      writeAudit(req, { action: 'PAYMENT_WEBHOOK_ERROR', details: `Webhook for unknown payment ref ${parsed.ref}` });
+      return res.status(200).json({ ok: false, reason: 'unknown_ref' });
+    }
+
+    if (parsed.event === 'AUTHORISED') {
+      if (job.processor_payment_status === 'PAID' && job.escrow_status === 'FUNDED') {
+        return res.json({ ok: true, idempotent: true });
+      }
+      const paidAmount = parsed.amountAed ?? job.agreed_price_aed;
+      // Money was taken: always record PAID + tranref, even if escrow is
+      // no longer HELD (a dispute froze it in between); only flip escrow
+      // when it is still HELD.
+      db.prepare(
+        `UPDATE jobs SET processor_payment_status='PAID', processor_tranref=?, processor_amount_aed=?, processor_last_error=NULL,
+           escrow_status = CASE WHEN escrow_status='HELD' THEN 'FUNDED' ELSE escrow_status END, updated_at=datetime('now')
+         WHERE id=?`
+      ).run(parsed.tranref || null, paidAmount, job.id);
+      const changed = db.prepare('SELECT escrow_status, processor_payment_status FROM jobs WHERE id=?').get(job.id);
+      if (changed.escrow_status === 'FUNDED') {
+        writeAudit(req, {
+          action: 'ESCROW_FUND',
+          details: `${job.job_code} paid AED ${paidAmount} via ${payments.provider()} (ref ${parsed.tranref || parsed.ref})`,
+          entityType: 'job',
+          entityId: job.id,
+          beforeState: 'HELD',
+          afterState: 'FUNDED',
+        });
+        notify(job.shipper_id, 'Payment received', `Payment for ${job.job_code} was received. Escrow is now FUNDED.`, job.id, 'status');
+        notify(job.carrier_id, 'Escrow funded', `Payment for ${job.job_code} was received — escrow FUNDED.`, job.id, 'status');
+      }
+    } else if (parsed.event === 'DECLINED' || parsed.event === 'CANCELLED') {
+      if (job.processor_payment_status === 'PAID') return res.json({ ok: true, idempotent: true });
+      db.prepare(`UPDATE jobs SET processor_payment_status='FAILED', processor_last_error=?, updated_at=datetime('now') WHERE id=?`).run(parsed.event, job.id);
+      notify(job.shipper_id, 'Payment failed', `Your payment for ${job.job_code} was ${parsed.event.toLowerCase()}. You can retry from the job page.`, job.id, 'status');
+    } else if (parsed.event === 'REFUNDED') {
+      db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`).run(job.id);
+      writeAudit(req, {
+        action: 'PAYMENT_REFUND',
+        details: `${job.job_code} refunded AED ${parsed.amountAed ?? job.agreed_price_aed} (ref ${parsed.tranref || parsed.ref})`,
+        entityType: 'job',
+        entityId: job.id,
+      });
+      notify(job.shipper_id, 'Refund processed', `The refund for ${job.job_code} was processed by the payment provider.`, job.id, 'status');
+    }
+
+    res.json({ ok: true });
+  }
+);
 
 // =============================================================================
 // 2. Auth
@@ -1336,6 +1556,13 @@ app.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), (re
       `UPDATE jobs SET status='AWARDED', awarded_bid_id=?, carrier_id=?, agreed_price_aed=?, escrow_status='HELD',
          assigned_driver_name=?, assigned_driver_phone=?, updated_at=datetime('now') WHERE id=?`
     ).run(bid.id, bid.carrier_id, gross, bid.driver_name, bid.driver_phone, jobId);
+    // TODO-3: with a processor configured, the shipper must pay before the
+    // job moves — escrow stays HELD until the webhook confirms the charge.
+    // In internal mode this line is a no-op and HELD means "bookkeeping",
+    // exactly as before.
+    if (payments.isConfigured()) {
+      db.prepare(`UPDATE jobs SET processor_payment_status='REQUIRES_PAYMENT', processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`).run(jobId);
+    }
     db.prepare(`UPDATE bids SET status='ACCEPTED', updated_at=datetime('now') WHERE id=?`).run(bid.id);
     db.prepare(`UPDATE bids SET status='REJECTED', updated_at=datetime('now') WHERE job_id=? AND id!=?`).run(jobId, bid.id);
     const payoutResult = db
@@ -1374,6 +1601,57 @@ app.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), (re
     } catch (_) {}
     sendError(res, 500, 'Award failed');
   }
+});
+
+// TODO-3: creates (or re-returns) the processor-hosted checkout for an
+// AWARDED job. The shipper's "Pay now" action; the shipper is redirected to
+// paymentUrl (null in mock mode — confirmation arrives via the webhook),
+// and the job's escrow flips HELD -> FUNDED only on a verified AUTHORISED
+// callback. Idempotent per job: re-calling returns the same checkout.
+// Internal mode: 400 with a pointer — the admin confirm-receipt route
+// remains the internal-mode funding path.
+app.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, res) => {
+  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return sendError(res, 404, 'Job not found');
+  if (job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');
+  if (job.status !== 'AWARDED') return sendError(res, 409, 'Only AWARDED jobs can be paid');
+  if (job.escrow_status !== 'HELD') return sendError(res, 409, 'Escrow is not in HELD state');
+  if (job.processor_payment_status === 'PAID') return sendError(res, 409, 'This job is already paid');
+  if (!payments.isConfigured()) return sendError(res, 400, 'Payments are not configured — escrow is internal bookkeeping (see docs/PAYMENTS.md)');
+
+  const payRef = job.processor_payment_ref || `lb_${job.job_code.toLowerCase()}_${crypto.randomUUID().slice(0, 8)}`;
+  const returnBase = `${FRONTEND_URL}/jobs/${job.id}`;
+  payments
+    .createCheckoutOrder({
+      jobCode: job.job_code,
+      amountAed: job.agreed_price_aed,
+      description: `Loadbyton escrow for ${job.job_code}`,
+      returnUrls: { auth: `${returnBase}?pay=ok`, cancel: `${returnBase}?pay=cancel`, decline: `${returnBase}?pay=declined` },
+      paymentRef: payRef,
+    })
+    .then((r) => {
+      if (!r.ok) {
+        markJobPaymentFailed(job.id, `${r.error}${r.detail ? `: ${r.detail}` : ''}`);
+        return sendError(res, 502, 'Payment provider unavailable — please try again');
+      }
+      db.prepare(
+        `UPDATE jobs SET processor_payment_ref=?, processor_payment_status='REQUIRES_PAYMENT', processor_amount_aed=?, processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`
+      ).run(payRef, job.agreed_price_aed, job.id);
+      writeAudit(req, {
+        userId: req.actorId,
+        action: 'PAYMENT_CHECKOUT',
+        details: `${job.job_code}: checkout created (${payments.provider()}, ref ${payRef})`,
+        entityType: 'job',
+        entityId: job.id,
+        beforeState: 'HELD',
+        afterState: 'REQUIRES_PAYMENT',
+      });
+      res.json({ ok: true, paymentUrl: r.url, ref: payRef, provider: payments.provider(), testMode: payments.providerInfo().testMode });
+    })
+    .catch((e) => {
+      markJobPaymentFailed(job.id, e.message);
+      sendError(res, 502, 'Payment provider unavailable — please try again');
+    });
 });
 
 const TRANSITIONS = {
@@ -1415,12 +1693,19 @@ app.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), (req, res) =
   if (next === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
     db.prepare(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`).run(job.id);
     db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
+    // TODO-3: if funds were actually taken before the cancellation, give
+    // them back. No-op unless a processor is configured AND the charge was
+    // PAID (internal mode has nothing to refund).
+    if (job.escrow_status === 'FUNDED') refundJobAsync(job);
   }
   if (next === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
     db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(job.id);
     db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
     issueInvoice(db, job.id);
     notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, job.id, 'payout');
+    // TODO-3: with a processor configured this moves the money; in
+    // internal mode it is a no-op and the admin SLA flow applies.
+    executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
   }
 
   writeAudit(req, {
@@ -1651,7 +1936,7 @@ app.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), (req, res) => {
   for (const c of candidates) {
     let matchType = null;
     let distanceKm = null;
-    if (job.delivery_lat != null && job.delivery_lng != null && c.pickup_lat != null && c.pickup_lng != null) {
+    if (job.delivery_lat !== null && job.delivery_lng !== null && c.pickup_lat !== null && c.pickup_lng !== null) {
       const d = haversineKm(job.delivery_lat, job.delivery_lng, c.pickup_lat, c.pickup_lng);
       if (d <= BACKLOAD_MAX_DISTANCE_KM) {
         matchType = 'coords';
@@ -1896,7 +2181,8 @@ app.get('/api/earnings', auth(['CARRIER']), (req, res) => {
   const rows = db
     .prepare(
       `SELECT p.id, j.id as job_id, j.job_code, j.status, j.agreed_price_aed, j.created_at as job_created,
-              p.gross_aed, p.platform_fee_aed, p.net_aed, p.status as payout_status, p.release_type, p.released_at
+              p.gross_aed, p.platform_fee_aed, p.net_aed, p.status as payout_status, p.release_type, p.released_at,
+              p.processor_payout_status, p.transfer_executed_at, p.transfer_reference
        FROM payouts p JOIN jobs j ON j.id = p.job_id
        WHERE p.carrier_id = ?
        ORDER BY p.created_at DESC`
@@ -2209,9 +2495,15 @@ app.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), (req, res) => {
 
   if (decision === 'REFUND_SHIPPER') {
     db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
+    // TODO-3: give the money back via the processor when it was taken.
+    // No-op in internal mode / when the charge never went through.
+    refundJobAsync(job);
   } else {
     db.prepare(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
     issueInvoice(db, job.id);
+    // TODO-3: with a processor configured this moves the money; in
+    // internal mode it is a no-op and the admin SLA flow applies.
+    executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
   }
   db.prepare(`UPDATE jobs SET status='COMPLETED', escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
   db.prepare(`UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now') WHERE id=?`).run(
@@ -2326,6 +2618,8 @@ const SEO_META = {
   '/blog': { title: 'Blog — Loadbyton', description: 'Notes on UAE drayage, demurrage, and building a freight marketplace that survives past the first job.', slug: 'blog' },
   '/security': { title: 'Security — Loadbyton', description: 'How Loadbyton protects account, financial, and shipment data — what is built today, and what is on the roadmap.', slug: 'security' },
   '/compliance': { title: 'Compliance — Loadbyton', description: 'How Loadbyton handles personal data under UAE PDPL, VAT invoicing, and where account data is hosted.', slug: 'compliance' },
+  '/terms': { title: 'Terms of Service — Loadbyton', description: 'Loadbyton Terms of Service — governing your use of the UAE road freight & container drayage marketplace.', slug: 'terms' },
+  '/privacy': { title: 'Privacy Policy — Loadbyton', description: 'Loadbyton Privacy Policy — how we collect, use, protect, and share your personal data under UAE PDPL.', slug: 'privacy' },
 };
 
 // gstack review F4: these previously fell through to the SPA catch-all,
@@ -2442,7 +2736,7 @@ if (fs.existsSync(DIST_DIR)) {
   );
 }
 
-app.get(['/', '/features', '/pricing', '/about', '/blog', '/security', '/compliance'], (req, res) => renderSeoPage(res, SEO_META[req.path]));
+app.get(['/', '/features', '/pricing', '/about', '/blog', '/security', '/compliance', '/terms', '/privacy'], (req, res) => renderSeoPage(res, SEO_META[req.path]));
 
 // F4 was fixed independently on both branches — the /robots.txt and
 // /sitemap.xml handlers above (registered right after SEO_META) are the
@@ -2459,9 +2753,15 @@ app.get('*', (req, res) => {
   res.sendFile(DIST_INDEX, { headers: { 'Cache-Control': 'no-cache' } });
 });
 
+// Sentry error handler — must be before the catch-all error handler
+app.use(sentryErrorHandler());
+
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error(err);
+  // Also capture to Sentry if not already handled
+  const { captureException } = require('./lib/sentry');
+  captureException(err, { requestId: req.requestId, userId: req.user?.id });
   sendError(res, 500, 'Internal server error');
 });
 

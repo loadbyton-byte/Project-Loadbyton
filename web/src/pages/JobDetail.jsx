@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { STATUS_FLOW, formatAED, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, TERMINALS, AREAS } from '../lib/constants.js';
+import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, TERMINALS, AREAS } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, StatusTracker, ChatBubble } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft, IconCompass, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -94,6 +94,18 @@ export default function JobDetail() {
   useEffect(() => { load(); }, [load]);
   usePageTitle(data?.job ? data.job.job_code : 'Job');
 
+  // Shippers return from the hosted checkout with ?pay=ok|cancel|declined —
+  // surface that once, then clean the URL so a refresh doesn't re-show it.
+  const [payNotice, setPayNotice] = useState(() => {
+    const v = new URLSearchParams(window.location.search).get('pay');
+    if (v === 'ok') return 'Payment received — escrow is now funded.';
+    if (v === 'cancel' || v === 'declined') return 'Payment was cancelled or declined. You can retry from the payment panel below.';
+    return null;
+  });
+  useEffect(() => {
+    if (payNotice) window.history.replaceState({}, '', window.location.pathname);
+  }, [payNotice]);
+
   if (error) return <div className="container-page py-10"><p className="text-status-danger">{error}</p></div>;
   if (!data) return <div className="container-page flex justify-center py-24"><Spinner size={28} /></div>;
 
@@ -162,6 +174,17 @@ export default function JobDetail() {
         </div>
       </div>
 
+      {payNotice && (
+        <div className="mb-6 flex items-start justify-between gap-3 rounded-lg border border-brand-border bg-brand-bg px-4 py-3">
+          <p className="text-sm text-ink">{payNotice}</p>
+          <button type="button" onClick={() => setPayNotice(null)} className="text-xs text-ink-muted hover:text-ink">Dismiss</button>
+        </div>
+      )}
+
+      {job.processor_payment_status && job.processor_payment_status !== 'PENDING' && (
+        <PaymentPanel job={job} load={load} />
+      )}
+
       {error && <p className="mb-6 rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>{error}</p>}
 
       <Card className="mb-6">
@@ -192,16 +215,16 @@ export default function JobDetail() {
                 <div><dt className="text-ink-muted">Free time</dt><dd className="mt-0.5 font-medium text-ink">{job.free_time_days} days</dd></div>
                 <div><dt className="text-ink-muted">Demurrage rate</dt><dd className="mt-0.5 font-medium text-ink">{formatAED(job.demurrage_rate_aed)}/day</dd></div>
                 <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Delivery address</dt><dd className="mt-0.5 font-medium text-ink">{job.delivery_address}</dd></div>
-                {(job.pickup_lat != null || job.delivery_lat != null) && (
+                {(job.pickup_lat !== null || job.delivery_lat !== null) && (
                   <div className="col-span-2 sm:col-span-3">
                     <dt className="text-ink-muted">Map pins</dt>
                     <dd className="mt-0.5 flex flex-wrap gap-x-4 gap-y-1 font-medium text-brand-secondary">
-                      {job.pickup_lat != null && (
+                      {job.pickup_lat !== null && (
                         <a href={`https://www.openstreetmap.org/?mlat=${job.pickup_lat}&mlon=${job.pickup_lng}#map=15/${job.pickup_lat}/${job.pickup_lng}`} target="_blank" rel="noreferrer" className="hover:underline">
                           View pickup on map
                         </a>
                       )}
-                      {job.delivery_lat != null && (
+                      {job.delivery_lat !== null && (
                         <a href={`https://www.openstreetmap.org/?mlat=${job.delivery_lat}&mlon=${job.delivery_lng}#map=15/${job.delivery_lat}/${job.delivery_lng}`} target="_blank" rel="noreferrer" className="hover:underline">
                           View delivery on map
                         </a>
@@ -342,6 +365,71 @@ export default function JobDetail() {
   );
 }
 
+function PaymentPanel({ job, load }) {
+  const { user } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const isShipper = user.id === job.shipper_id;
+  const amount = job.processor_amount_aed || job.agreed_price_aed;
+
+  const label = {
+    REQUIRES_PAYMENT: { color: 'warning', text: 'Awaiting payment' },
+    CREATED: { color: 'warning', text: 'Payment pending' },
+    PAID: { color: 'success', text: `Paid ${formatAED(amount)}` },
+    FAILED: { color: 'danger', text: 'Payment failed' },
+    REFUNDED: { color: 'neutral', text: `Refunded ${formatAED(amount)}` },
+  }[job.processor_payment_status] || { color: 'neutral', text: job.processor_payment_status };
+
+  async function pay() {
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api.paymentCheckout(job.id);
+      if (r.paymentUrl) {
+        window.location.href = r.paymentUrl;
+        return;
+      }
+      await load();
+      if (r.testMode && !r.paymentUrl) setError('Payment started in test mode — awaiting processor confirmation. It will auto-confirm via webhook.');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mb-6">
+      <Card.Header>
+        <Card.Title>Payment</Card.Title>
+        <Badge color={label.color}>{label.text}</Badge>
+      </Card.Header>
+      <Card.Content className="space-y-3">
+        {isShipper && job.escrow_status === 'HELD' && !['PAID', 'REFUNDED'].includes(job.processor_payment_status) && (
+          <div className="space-y-2">
+            <Button variant="accent" className="w-full" onClick={pay} loading={busy}>
+              Pay {formatAED(amount)} — secure hosted checkout
+            </Button>
+            {error && <p className="text-sm text-status-danger">{error}</p>}
+            {job.processor_payment_status === 'FAILED' && (
+              <p className="text-xs text-ink-muted">Your earlier payment attempt was declined or cancelled — you can try again.</p>
+            )}
+          </div>
+        )}
+        {job.processor_payment_status === 'PAID' && (
+          <p className="text-sm text-ink-secondary">Escrow is funded. The carrier can now proceed with pickup.</p>
+        )}
+        {!isShipper && job.processor_payment_status === 'REQUIRES_PAYMENT' && (
+          <p className="text-sm text-ink-secondary">Waiting for the shipper to complete payment before pickup.</p>
+        )}
+        {job.processor_payment_status === 'REFUNDED' && (
+          <p className="text-sm text-ink-secondary">This payment was refunded. Refunds typically arrive within 5–7 business days.</p>
+        )}
+      </Card.Content>
+    </Card>
+  );
+}
+
 function BidForm({ jobId, verified, defaultEquipment, onDone }) {
   const [form, setForm] = useState({ amountAed: '', etaMinutes: '', truckType: defaultEquipment || 'CONTAINER_CHASSIS', driverName: '', driverPhone: '', notes: '' });
   const [busy, setBusy] = useState(false);
@@ -424,8 +512,8 @@ function JobEditForm({ job, onDone, onCancel }) {
     notes: job.notes || '',
     containerCount: job.container_count,
     truckCount: job.truck_count,
-    pickupLocation: job.pickup_lat != null ? { lat: job.pickup_lat, lng: job.pickup_lng, address: job.pickup_address_detail } : null,
-    deliveryLocation: job.delivery_lat != null ? { lat: job.delivery_lat, lng: job.delivery_lng, address: job.delivery_address_detail } : null,
+    pickupLocation: job.pickup_lat !== null ? { lat: job.pickup_lat, lng: job.pickup_lng, address: job.pickup_address_detail } : null,
+    deliveryLocation: job.delivery_lat !== null ? { lat: job.delivery_lat, lng: job.delivery_lng, address: job.delivery_address_detail } : null,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

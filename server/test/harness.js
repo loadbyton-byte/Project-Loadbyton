@@ -36,7 +36,7 @@ async function waitForHealth(baseUrl, timeoutMs = 15000) {
   throw new Error(`Server did not become healthy within ${timeoutMs}ms`);
 }
 
-async function startServer() {
+async function startServer(extraEnv = {}) {
   const dbPath = path.join(os.tmpdir(), `loadbyton-test-${process.pid}-${Symbol().description || 'db'}-${Math.random().toString(36).slice(2)}.db`);
   const port = freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -50,6 +50,7 @@ async function startServer() {
       FRONTEND_URL: 'http://127.0.0.1:1', // dev-CORS branch stays a no-op in tests
       INTERNAL_KEY: 'test-internal-key',
       NODE_ENV: 'test',
+      ...extraEnv,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

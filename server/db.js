@@ -359,6 +359,33 @@ addColumn('jobs', 'delivery_lat', 'delivery_lat REAL');
 addColumn('jobs', 'delivery_lng', 'delivery_lng REAL');
 addColumn('jobs', 'delivery_address_detail', 'delivery_address_detail TEXT');
 
+// Payment processor integration (TODO-3, see server/lib/payments.js and
+// docs/PAYMENTS.md). All nullable/additive: in the default "internal" mode
+// (PAYMENTS_PROVIDER unset) none of these are ever written and escrow
+// behaves exactly as before. processor_payment_ref is OUR reference, echoed
+// to the processor as the order reference so webhook callbacks can always
+// find the job; processor_tranref is the processor's own transaction ref
+// (needed for refunds). processor_payment_status lifecycle:
+// PENDING -> REQUIRES_PAYMENT -> PAID (webhook AUTHORISED); DECLINED /
+// CANCELLED -> FAILED; refund -> REFUNDED.
+addColumn('jobs', 'processor_payment_ref', 'processor_payment_ref TEXT');
+addColumn('jobs', 'processor_tranref', 'processor_tranref TEXT');
+addColumn('jobs', 'processor_payment_status', "processor_payment_status TEXT NOT NULL DEFAULT 'PENDING'");
+addColumn('jobs', 'processor_amount_aed', 'processor_amount_aed REAL');
+addColumn('jobs', 'processor_last_error', 'processor_last_error TEXT');
+
+// Payout execution state (mirror of the manual transfer_executed_at/
+// transfer_reference pair — written automatically when a processor payout
+// executes, never when it doesn't). SENT means the processor accepted the
+// payout request; the SLA view still tracks the 48h promise.
+addColumn('payouts', 'processor_payout_status', "processor_payout_status TEXT NOT NULL DEFAULT 'PENDING'");
+addColumn('payouts', 'processor_payout_ref', 'processor_payout_ref TEXT');
+
+// Carrier's account/identifier at the payment processor (e.g. a Telr split
+// sub-merchant id) — what payout/split money is addressed to. Optional:
+// in internal mode it stays NULL and is irrelevant.
+addColumn('profiles', 'processor_account_id', 'processor_account_id TEXT');
+
 // ---------------------------------------------------------------------------
 // audit_log is append-only: DB triggers hard-abort UPDATE/DELETE. This makes
 // the audit trail tamper-evident even against a compromised app process.

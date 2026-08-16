@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api } from './api.js';
+import { setUserContext } from './sentry.js';
 
 const AuthContext = createContext(null);
 
@@ -37,6 +38,10 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('loadbyton-walkthrough-finished', String(walkthroughFinished));
   }, [walkthroughFinished]);
+
+  useEffect(() => {
+    setUserContext(user);
+  }, [user]);
 
   useEffect(() => {
     api

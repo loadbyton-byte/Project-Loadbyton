@@ -57,6 +57,13 @@ cd ../server && node index.js
 
 Now **http://localhost:4000** serves everything: the API, the built SPA, the SEO pages, and the SPA fallback for deep links. One process, one port.
 
+### 4.1 Custom domain + TLS (production)
+
+- Register the domain, then in the Render dashboard: **Settings → Custom Domains** → add it (Render provisions the TLS certificate automatically; DNS = CNAME to `claudeloadbyton.onrender.com`).
+- Update the `FRONTEND_URL` env var to `https://<your-domain>` (it is the CORS allowlist in dev, and the payment checkout return URLs in production — see `docs/PAYMENTS.md`).
+- The payment processor callback URL must be the public HTTPS endpoint: `https://<your-domain>/api/webhooks/payments`.
+- **Fixed secrets before real data:** replace `ENCRYPTION_KEY: generateValue` in `render.yaml` with a secret you generate once (`openssl rand -base64 32`) and paste into the dashboard — a regenerated key orphans every encrypted IBAN/TRN. Same for `INTERNAL_KEY` (cron/auto-release) and `ADMIN_SETUP_KEY`.
+
 ## 5. Database
 
 - Location: `server/data/loadbyton.db` (auto-created; env `DB_PATH` to relocate).
@@ -69,6 +76,18 @@ Now **http://localhost:4000** serves everything: the API, the built SPA, the SEO
   ```bash
   node -e "const db=require('./server/db'); console.log(db.prepare('SELECT * FROM users').all())"
   ```
+
+### Backups (production)
+
+- The database file (`loadbyton.db`) + WAL/SHM siblings live on the persistent disk (`/data` on Render starter, `/data` on Oracle Cloud).
+- **Automated backup script:** `scripts/backup-db.js` — uses `sqlite3 .backup` for a consistent snapshot (handles WAL correctly), gzips, and enforces retention (30 daily + 12 monthly).
+- **Schedule (cron example):**
+  ```bash
+  # Daily at 02:00 UTC — adjust timezone as needed
+  0 2 * * * /usr/bin/node /opt/render/project/src/scripts/backup-db.js /mnt/backups/loadbyton
+  ```
+- **Restore:** Stop the API, replace `loadbyton.db*` files from the `.gz`, restart API.
+- **Test restores quarterly** — a backup you haven't restored is a backup you don't have.
 
 ## 6. Verification
 
@@ -93,6 +112,11 @@ curl -s localhost:4000/api/public/lanes
 | `PLATFORM_LEGAL_NAME` | `Loadbyton` | Supplier legal name on tax invoices |
 | `ENCRYPTION_KEY` | none (required outside dev) | AES-256-GCM key for IBAN/TRN field encryption — see `server/lib/crypto.js` |
 | `WHATSAPP_ACCESS_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` | unset | Enables driver WhatsApp messaging (`server/lib/whatsapp.js`); safely no-ops and logs until both are set — see `docs/WHATSAPP_SETUP.md` (TODO-4) |
+| `PAYMENTS_PROVIDER` | `internal` | Payment processor mode: `internal` (escrow is bookkeeping only — the pre-existing admin confirm-receipt / mark-transferred flows), `mock` (simulated processor for dev/CI — full end-to-end payment flow via signature-verified webhooks), or `telr` (real charges/refunds via Telr hosted checkout) — see `docs/PAYMENTS.md` |
+| `PAYMENTS_WEBHOOK_SECRET` | unset | HMAC secret that verifies webhook callbacks in `mock` mode (and the mock side of any provider) |
+| `TELR_STORE_ID` / `TELR_AUTH_KEY` | unset | Telr merchant credentials (sandbox first: set `TELR_TEST=1`) |
+| `TELR_WEBHOOK_SECRET` | unset | Secret used to verify Telr's signed callbacks — **VERIFY the canonicalization against Telr's docs before go-live** (`server/lib/payments.js`) |
+| `TELR_TEST` | `1` (safe default) | `0` only for real-money Telr processing — never default to live |
 
 Platform settings (runtime, not env): `commission_rate_bps` (default 600) and `auto_release_hours` (default 24), editable by admin via `PATCH /api/admin/settings`.
 

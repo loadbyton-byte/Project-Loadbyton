@@ -345,6 +345,8 @@ function ShellInner({ children }) {
                   <Link to="/blog" className="hover:text-ink">Blog</Link>
                   <Link to="/security" className="hover:text-ink">Security</Link>
                   <Link to="/compliance" className="hover:text-ink">Compliance</Link>
+                  <Link to="/terms" className="hover:text-ink">Terms</Link>
+                  <Link to="/privacy" className="hover:text-ink">Privacy</Link>
                 </div>
                 <p className="text-xs text-ink-muted" dir="ltr">© {new Date().getFullYear()} Loadbyton. Demo system — payouts are simulated, not real transfers.</p>
               </div>

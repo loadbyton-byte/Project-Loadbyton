@@ -52,7 +52,7 @@ function issueInvoice(db, jobId) {
 
   const payout = db.prepare('SELECT * FROM payouts WHERE job_id=?').get(jobId);
   if (!payout) return null;
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
+  const _job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
   const carrierProfile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(payout.carrier_id);
 
   const { taxableAed, vatAed, totalAed } = vatBreakdown(payout.platform_fee_aed);

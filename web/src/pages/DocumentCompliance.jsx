@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { Card, Badge, Button } from '../components/ui.jsx';
+import { Card, Badge } from '../components/ui.jsx';
 import { IconShield, IconFile, IconCheckCircle, IconAlert } from '../components/icons.jsx';
 
 // The Stitch document_compliance mockup shows a "compliance score" +

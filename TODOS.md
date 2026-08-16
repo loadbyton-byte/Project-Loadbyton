@@ -159,3 +159,112 @@ one rewritten piece of state (walkthrough), and case/data-source corrections acr
 five page components. `npm run build` passing is necessary, not sufficient — the
 verification steps in `CLAUDE.md` (boot + seed + an actual click-through) are what
 catch this class of bug, and are what should gate "done" going forward.
+
+---
+
+## Phase A — Production Hardening (2026-08-16)
+
+### ✅ A1: ESLint + CI gate
+- Server: `npm run lint` via eslint 8.57, config in `server/.eslintrc.cjs`
+- Web: `npm run lint` via eslint + eslint-plugin-react + eslint-plugin-react-hooks, config in `web/.eslintrc.cjs`
+- CI: `.github/workflows/ci.yml` runs lint job before build-and-test
+- Both `npm run lint` pass clean (verified locally; 108 initial web issues + 5 server issues fixed — see below)
+- Note: `react/no-unescaped-entities` is disabled (the codebase widely uses raw apostrophes in JSX, and it's a stylistic rule, not a correctness one)
+
+### ✅ A2: Sentry error tracking
+- Server: `server/lib/sentry.js` — no-ops if `SENTRY_DSN` unset; captures exceptions with requestId/userId/jobId context; wraps Express error handler
+- Web: `web/src/lib/sentry.js` — no-ops if `VITE_SENTRY_DSN` unset; ErrorBoundary wrapper; `setUserContext` on auth; captures exceptions/messages
+- Vite: `web/vite.config.js` — `@sentry/vite-plugin` for sourcemap upload (requires `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`)
+
+### ✅ A3: Terms of Service & Privacy Policy
+- `/terms` (`web/src/pages/Terms.jsx`) — 15 sections covering agreement, definitions, registration, marketplace mechanics, fees, carrier/shipper obligations, IP, data/privacy, disclaimers, indemnification, termination, governing law, changes, contact
+- `/privacy` (`web/src/pages/Privacy.jsx`) — 13 sections covering data controller, PDPL legal basis, data collected (table), special category data (TRN/IBAN encryption), sharing, retention/deletion, user rights, security measures, international transfers, cookies/localStorage, children's data, changes, contact
+- Server SEO: `SEO_META` in `server/index.js` includes both routes; prerender script updated; Vercel static SEO script updated
+- Frontend: eager imports in `App.jsx`; routes added; footer links in `Shell.jsx`
+
+### ✅ A4: Backup strategy
+- Script: `scripts/backup-db.js` — uses `sqlite3 .backup` (WAL-safe), gzips, retention (30 daily + 12 monthly)
+- DEVELOPER_GUIDE.md §5 updated with backup/restore procedure and cron example
+- Render starter plan persistent disk (`/data`) confirmed in `render.yaml`
+
+### ✅ A5: Rate limiting limitation documented
+- `server/lib/rateLimit.js` header explicitly notes in-memory limits reset on restart and don't share across instances
+- Acceptable for single-process starter deployment; Redis required at scale/Postgres port
+
+### ✅ A6: Render starter plan verified
+- `render.yaml`: `plan: starter`, `region: frankfurt`, `disk: { mountPath: /data, sizeGB: 1 }`, `ENCRYPTION_KEY: generateValue: true`
+- Free/demo fallback kept as commented block
+
+### ⚠️ A7: Legal pages live (real content, not placeholders)
+- ToS and Privacy Policy use real clauses, not marketing fluff
+- PDPL-compliant rights, retention schedules, security measures listed
+- Placeholder emails (`privacy@loadbyton.ae`, `legal@loadbyton.ae`, `dpo@loadbyton.ae`) marked for replacement before launch
+
+### ✅ Lint fixes applied while wiring ESLint (2026-08-16)
+- `server/index.js:1659` — `!=` → `!==` (4 occurrences)
+- `server/lib/invoice.js:55` — unused `job` → `_job`
+- `web/src/pages/JobDetail.jsx` — `!=` → `!==` (6 occurrences); removed unused `formatDate` import
+- `web/src/pages/Admin.jsx` — removed unused `verifiedOptions`
+- `web/src/pages/DocumentCompliance.jsx` — removed unused `Button` import
+- `web/src/pages/Terms.jsx`, `web/src/pages/Privacy.jsx` — removed unused icon imports
+- `web/src/lib/auth.jsx` — wired `setUserContext` into `AuthProvider` (useEffect on `user`), so Sentry gets user context on login/register/refresh/logout
+- `web/src/lib/sentry.js` — switched `require('@sentry/react')` to dynamic `import()` (ESM-correct, also lets Vite code-split it); `fallback` param prefixed `_fallback`
+- `web/.eslintrc.cjs` — added node env for config files; `vite.config.js` (ESM) gets `sourceType: module`
+
+### ⚠️ A8: Custom domain + TLS — pending
+- Requires user to register domain and configure in Render/Vercel
+- `FRONTEND_URL` env var must be updated to production domain
+
+### ⚠️ A9: Real `ENCRYPTION_KEY` rotation policy — pending
+- Current: `generateValue: true` in render.yaml (random per deploy)
+- Need: Set `ENCRYPTION_KEY` as a fixed secret in Render env (not generated) for production; document rotation procedure
+---
+
+## Phase B + C — Payments (2026-08-17)
+
+### ✅ C1: Provider-agnostic payment layer — `server/lib/payments.js`
+- Three modes, all fail-closed: `internal` (default — escrow stays pure bookkeeping, zero behavior change), `mock` (simulated processor with in-process ledger + signature-verified webhook — the full flow is testable in dev/CI with no credentials), `telr` (real hosted-checkout charges + refunds via `https://secure.telr.com/gateway`, no new runtime deps — uses Node's built-in fetch)
+- All Telr integration points marked `VERIFY` in code — must be confirmed against the Telr sandbox before go-live (see `docs/PAYMENTS.md` §5)
+
+### ✅ C2: Schema (additive migrations in `server/db.js`)
+- `jobs`: `processor_payment_ref` (our ref, echoed to processor), `processor_tranref`, `processor_payment_status` (PENDING → REQUIRES_PAYMENT → PAID; DECLINED/CANCELLED → FAILED; REFUNDED), `processor_amount_aed`, `processor_last_error`
+- `payouts`: `processor_payout_status` (PENDING → SENT|FAILED), `processor_payout_ref`
+- `profiles`: `processor_account_id` (carrier's payout/split account at the processor)
+
+### ✅ C3: Money-movement wiring in `server/index.js`
+- Award → `processor_payment_status=REQUIRES_PAYMENT` (configured mode only)
+- New `POST /api/jobs/:id/payment-checkout` (shipper, seat OPS) — idempotent, returns hosted-checkout URL
+- New `POST /api/webhooks/payments` — raw-body HMAC verified, form+JSON, replay-safe: AUTHORISED → escrow HELD→FUNDED + PAID + tranref; DECLINED/CANCELLED → FAILED; REFUNDED → REFUNDED; every application audited
+- Release paths (COMPLETED / auto-release / dispute RELEASE_TO_CARRIER·SPLIT) → `executePayoutAsync` after commit — sets `transfer_executed_at` + `transfer_reference`, keeps SLA view correct; failures audited + stay outstanding
+- Refund paths (dispute REFUND_SHIPPER / CANCELLED after FUNDED) → `refundCharge` on the stored tranref, audited `REFUND_SHIPPER_EXECUTED`/`REFUND_SHIPPER_FAILED`
+- `GET /api/earnings` now returns `processor_payout_status`, `transfer_executed_at`, `transfer_reference`
+
+### ✅ C4: Frontend
+- `web/src/lib/api.js` — `paymentCheckout(id)`
+- `web/src/pages/JobDetail.jsx` — PaymentPanel (Pay-now button, paid/failed/refunded states, test-mode notice) shown whenever `processor_payment_status` is set; `?pay=ok|cancel|declined` return-URL banner (cleaned from the URL after display)
+
+### ✅ C5: Tests — `server/test/payments.test.js` (6 new tests, all passing)
+- Health reports mock provider; award → REQUIRES_PAYMENT + idempotent checkout + non-owner blocked
+- Bad signature rejected (401), unknown ref acked-no-op
+- AUTHORISED funds escrow exactly once, replays idempotent, late DECLINE can't un-fund
+- Full loop auto-executes the carrier payout (SLA view clean, `transfer_executed_at` set)
+- Dispute REFUND_SHIPPER refunds via processor + audit trail
+- Full suite: 21/21 pass (core loop + internal-mode flows unchanged — zero regression)
+
+### ✅ C6: Docs
+- `docs/PAYMENTS.md` — full operating manual: Phase B founders checklist (processor choice incl. why Stripe is out for UAE, KYB document checklist, aggregation-licensing legal review, sandbox credential list), Phase C integration guide, mock-mode walkthrough, Telr go-live steps, money-event reconciliation table, failure runbook, VERIFY log
+- `docs/DEVELOPER_GUIDE.md` — env var table + custom-domain/TLS and fixed-secret guidance
+- `docs/API.md` — payment-checkout + webhook endpoints
+- `render.yaml` — commented payment env block + `ENCRYPTION_KEY` fixed-secret warning
+
+### ⚠️ B1 (FOUNDER-ONLY): Merchant onboarding — see `docs/PAYMENTS.md` §2
+- Choose processor (recommended Telr), complete KYB/merchant onboarding (trade license, TRN, Emirates IDs, bank statements, UBO), MENA payments-lawyer review of the split/aggregation model, obtain sandbox credentials
+
+### ⚠️ B2 (FOUNDER-ONLY): VERIFY the four Telr integration points in `server/lib/payments.js`
+- Hosted-checkout order creation, callback signature canonicalization, callback field mapping, payouts/split API — then run the suite against the sandbox with real test cards
+
+### ✅ D1: Production-ready demo runbook — `docs/DEMO_DEPLOY.md` (2026-08-17)
+- Deploy path A: Render Blueprint (starter, frankfurt, persistent disk, health check — all pre-wired in render.yaml) + the 6 env vars to add for the demo (`SEED_DEMO_ADMIN=1`, `PAYMENTS_PROVIDER=mock`, `PAYMENTS_WEBHOOK_SECRET`, fixed `ENCRYPTION_KEY`, `INTERNAL_KEY`, optional Sentry DSNs)
+- Deploy path B: Oracle Cloud Always Free (UAE-resident) — pointer to deploy/oracle-cloud/README.md
+- 5-minute reviewer demo script (post → bid → award → mock webhook pay → payout auto-execute → admin console) incl. the exact signed-webhook curl
+- Reset procedure (delete DB files on disk → idempotent re-seed) + "must be OFF before real data" checklist
