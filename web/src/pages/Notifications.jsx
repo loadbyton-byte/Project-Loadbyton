@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
+import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
 import { Button, Card, EmptyState } from '../components/ui.jsx';
@@ -23,6 +24,7 @@ export default function Notifications() {
   const [prefs, setPrefs] = useState(null);
   const [prefsBusy, setPrefsBusy] = useState(false);
   const { addToast } = useToasts();
+  const { refresh } = useAuth();
 
   function load() {
     api.notifications().then((d) => setItems(d.notifications)).catch(() => setItems([]));
@@ -35,6 +37,7 @@ export default function Notifications() {
   async function markRead() {
     await api.markNotificationsRead();
     load();
+    refresh().catch(() => {}); // updates user.unreadNotifications so the bell dot clears
   }
 
   async function toggleType(type) {

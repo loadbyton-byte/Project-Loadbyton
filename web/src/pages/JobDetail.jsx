@@ -41,9 +41,22 @@ function Section({ title, children, action }) {
 // Industrial Trust's spec names explicitly.
 const TRACKER_STEPS = STATUS_FLOW.slice(1).map((s) => ({ key: s, label: formatLabel(s) }));
 
+// DISPUTED/CANCELLED aren't in STATUS_FLOW, so STATUS_FLOW.indexOf(job.status)
+// returns -1 for either — clamped to 0, that rendered every terminal job as
+// if it had never left OPEN, even one disputed at IN_TRANSIT. There are no
+// per-stage timestamps in the schema to reconstruct the exact prior step
+// (only delivered_at exists), so this approximates from what's actually on
+// the job payload: delivered before going terminal, awarded-or-later, or
+// still open — better than always showing zero progress.
+function inferTerminalIndex(job) {
+  if (job.delivered_at) return STATUS_FLOW.indexOf('DELIVERED') - 1;
+  if (job.carrier_id) return STATUS_FLOW.indexOf('AWARDED') - 1;
+  return 0;
+}
+
 function JobStatusTracker({ job }) {
   const terminal = job.status === 'CANCELLED' ? 'danger' : job.status === 'DISPUTED' ? 'danger' : undefined;
-  const idx = Math.max(0, STATUS_FLOW.indexOf(job.status) - 1);
+  const idx = terminal ? inferTerminalIndex(job) : Math.max(0, STATUS_FLOW.indexOf(job.status) - 1);
   return (
     <div className="overflow-x-auto scroll-fade-x pb-1">
       <StatusTracker steps={TRACKER_STEPS} currentIndex={idx} terminal={terminal} className="min-w-[560px]" />

@@ -76,6 +76,7 @@ export function AuthProvider({ children }) {
   const endImpersonation = useCallback(async () => {
     const d = await api.endImpersonation();
     setUser(d.user);
+    setActingAs(null);
     return d.user;
   }, []);
 

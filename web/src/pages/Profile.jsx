@@ -128,6 +128,8 @@ export default function Profile() {
     coverageZones: user.profile?.coverage_zones || '',
     fleetSize: user.profile?.fleet_size ?? '',
     ownedChassis: user.profile?.owned_chassis ?? '',
+    iban: user.profile?.iban || '',
+    insuranceUploaded: !!user.profile?.insurance_uploaded,
   });
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -238,6 +240,17 @@ export default function Profile() {
                 <div>
                   <Label>Owned chassis</Label>
                   <Input type="number" min="0" value={form.ownedChassis} onChange={(e) => setForm({ ...form, ownedChassis: e.target.value })} />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Payout IBAN</Label>
+                  <Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="AE070331234567890123456" />
+                  <p className="mt-1 text-xs text-ink-muted">Required before an admin can approve verification. Stored encrypted.</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm text-ink-secondary">
+                    <input type="checkbox" checked={form.insuranceUploaded} onChange={(e) => setForm({ ...form, insuranceUploaded: e.target.checked })} />
+                    Fleet/cargo insurance confirmed
+                  </label>
                 </div>
               </>
             )}

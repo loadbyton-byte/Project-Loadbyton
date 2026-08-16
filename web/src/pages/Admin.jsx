@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../lib/auth.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState } from '../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -94,22 +94,28 @@ function HealthTab() {
   );
 }
 
+const ESCROW_PAGE_SIZE = 20;
+
 // POST /api/admin/confirm-receipt moves escrow HELD -> FUNDED. Built and
 // tested server-side but had no caller anywhere in the app before this
 // redesign pass — there was literally no way, through the UI, to advance
-// escrow past HELD. Reuses GET /api/jobs (unfiltered for ADMIN) rather than
-// a new endpoint, since that already returns escrow_status on every row.
+// escrow past HELD. Filters server-side via escrowStatus=HELD (rather than
+// over-fetching a fixed-size page of AWARDED+ jobs and filtering
+// client-side, which silently hid any HELD job past the first page) so
+// `total` and the Pagination control below are accurate at any scale.
 function EscrowConfirmationPanel() {
   const { addToast } = useToasts();
   const [jobs, setJobs] = useState(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [busyId, setBusyId] = useState(null);
 
   function load() {
-    api.listJobs({ status: 'AWARDED,PICKED_UP,IN_TRANSIT,DELIVERED', limit: 100 })
-      .then((d) => setJobs(d.jobs.filter((j) => j.escrow_status === 'HELD')))
-      .catch(() => setJobs([]));
+    api.listJobs({ status: 'AWARDED,PICKED_UP,IN_TRANSIT,DELIVERED', escrowStatus: 'HELD', limit: ESCROW_PAGE_SIZE, offset })
+      .then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); })
+      .catch(() => { setJobs([]); setTotal(0); });
   }
-  useEffect(load, []);
+  useEffect(load, [offset]);
 
   async function confirm(job) {
     setBusyId(job.id);
@@ -129,22 +135,25 @@ function EscrowConfirmationPanel() {
   return (
     <div className="mt-6">
       <p className="mb-3 flex items-center gap-2 text-sm font-medium text-ink-secondary">
-        <IconWallet size={16} /> Escrow awaiting fund confirmation ({jobs.length})
+        <IconWallet size={16} /> Escrow awaiting fund confirmation ({total})
       </p>
       {jobs.length === 0 ? (
         <p className="text-sm text-ink-muted">Nothing HELD right now — every awarded job's funds have been confirmed as received.</p>
       ) : (
-        <div className="space-y-2">
-          {jobs.map((j) => (
-            <Card key={j.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div>
-                <p className="font-mono text-xs text-ink-muted">{j.job_code}</p>
-                <p className="tabular font-semibold text-ink">{formatAED(j.agreed_price_aed)}</p>
-              </div>
-              <Button size="sm" variant="accent" loading={busyId === j.id} onClick={() => confirm(j)}>Confirm receipt</Button>
-            </Card>
-          ))}
-        </div>
+        <>
+          <div className="space-y-2">
+            {jobs.map((j) => (
+              <Card key={j.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <p className="font-mono text-xs text-ink-muted">{j.job_code}</p>
+                  <p className="tabular font-semibold text-ink">{formatAED(j.agreed_price_aed)}</p>
+                </div>
+                <Button size="sm" variant="accent" loading={busyId === j.id} onClick={() => confirm(j)}>Confirm receipt</Button>
+              </Card>
+            ))}
+          </div>
+          <Pagination total={total} limit={ESCROW_PAGE_SIZE} offset={offset} onChange={setOffset} />
+        </>
       )}
     </div>
   );
@@ -327,7 +336,7 @@ function DisputesTab() {
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge color={d.status === 'RESOLVED' ? 'success' : 'warning'}>{d.status}</Badge>
-                  <Button size="sm" variant="ghost" onClick={() => setEvidenceFor(evidenceFor === d.id ? null : d)}>
+                  <Button size="sm" variant="ghost" onClick={() => setEvidenceFor(evidenceFor?.id === d.id ? null : d)}>
                     <IconFile size={13} /> {evidenceFor?.id === d.id ? 'Hide evidence' : 'View evidence'}
                   </Button>
                 </div>

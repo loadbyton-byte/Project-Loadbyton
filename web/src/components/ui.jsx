@@ -303,7 +303,7 @@ export function StatusTracker({ steps, currentIndex, terminal, className }) {
               </span>
             </div>
             {i < steps.length - 1 && (
-              <span className="mx-1 h-0.5 flex-1" style={{ background: i < currentIndex || terminal ? color : 'var(--outline-variant)' }} />
+              <span className="mx-1 h-0.5 flex-1" style={{ background: i < currentIndex || (terminal && i <= currentIndex) ? color : 'var(--outline-variant)' }} />
             )}
           </React.Fragment>
         );

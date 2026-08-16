@@ -243,6 +243,13 @@ function writeAudit(req, { userId = null, action, details = null, entityType = n
 // not mutable — account-level notices shouldn't be silenceable.
 const NOTIFICATION_TYPES = ['bid', 'award', 'status', 'payout', 'dispute', 'verification', 'message'];
 
+// Backs Shell.jsx's notification-bell red dot — that indicator reads
+// user.unreadNotifications, which no route ever populated before this, so
+// it could never render regardless of actual unread count.
+function unreadNotificationCount(userId) {
+  return db.prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0').get(userId).c;
+}
+
 function notify(userId, title, body, jobId = null, type = 'system') {
   if (!userId) return;
   if (type !== 'system') {
@@ -269,6 +276,18 @@ function isParticipantOrBidder(job, user) {
     const hasBid = db.prepare('SELECT 1 FROM bids WHERE job_id=? AND carrier_id=?').get(job.id, user.id);
     if (hasBid) return true;
   }
+  return false;
+}
+
+// Stricter than isParticipantOrBidder — no bidder fallback. Used for the
+// messages thread once a job is DISPUTED, since that thread doubles as the
+// dispute correspondence (see GET /api/jobs/:id/dispute); a losing bidder
+// should never read the shipper/carrier/admin dispute conversation just
+// because they placed a bid before losing the award.
+function isPartyOnJob(job, user) {
+  if (user.role === 'ADMIN') return true;
+  if (user.id === job.shipper_id) return true;
+  if (user.id === job.carrier_id) return true;
   return false;
 }
 
@@ -665,7 +684,7 @@ app.post(
     createSession(req, res, rootId, { actingSeatId: isSeat ? user.id : null });
     writeAudit(req, { userId: user.id, action: 'LOGIN', details: `${user.email} logged in`, entityType: 'user', entityId: user.id });
     res.json({
-      user: toPublicUser(rootUser),
+      user: { ...toPublicUser(rootUser), unreadNotifications: unreadNotificationCount(rootUser.id) },
       actingAs: isSeat ? { id: user.id, email: user.email, displayName: user.display_name, seatRole: user.seat_role } : null,
     });
   })
@@ -679,7 +698,7 @@ app.get('/api/auth/me', auth(), (req, res) => {
   const actingSeatId = req.session.acting_seat_id;
   const actingSeat = actingSeatId ? db.prepare('SELECT id, email, display_name, seat_role FROM users WHERE id=?').get(actingSeatId) : null;
   res.json({
-    user: { ...toPublicUser(req.user), impersonating: !!impersonatedBy, impersonatedBy },
+    user: { ...toPublicUser(req.user), impersonating: !!impersonatedBy, impersonatedBy, unreadNotifications: unreadNotificationCount(req.user.id) },
     actingAs: actingSeat ? { id: actingSeat.id, email: actingSeat.email, displayName: actingSeat.display_name, seatRole: actingSeat.seat_role } : null,
   });
 });
@@ -914,8 +933,13 @@ const JOB_SORT_COLUMNS = {
   deadline_desc: 'jobs.deadline DESC',
 };
 
+// Only the values this codebase actually ever writes to jobs.escrow_status
+// (no CHECK constraint on the column, so this filter whitelists explicitly
+// rather than trusting the query param straight into SQL).
+const ESCROW_STATUSES = ['PENDING', 'HELD', 'FUNDED', 'RELEASED', 'DISPUTED'];
+
 app.get('/api/jobs', auth(), (req, res) => {
-  const { status, limit, offset, mine, sort, q, equipmentType } = req.query;
+  const { status, limit, offset, mine, sort, q, equipmentType, escrowStatus } = req.query;
   // gstack review F12: negative limit passed through to SQLite's LIMIT
   // clause unclamped (LIMIT -1 means "no limit" in SQLite) — main's `mine`
   // param (F19, a different/better fix than the client-side limit:200 bump
@@ -949,6 +973,10 @@ app.get('/api/jobs', auth(), (req, res) => {
   if (equipmentType && EQUIPMENT_TYPES.includes(equipmentType)) {
     where += ' AND equipment_type = ?';
     params.push(equipmentType);
+  }
+  if (escrowStatus && ESCROW_STATUSES.includes(escrowStatus)) {
+    where += ' AND escrow_status = ?';
+    params.push(escrowStatus);
   }
   // Search — job code, delivery address, notes, terminal/area. LIKE against
   // a handful of TEXT columns is plenty at this table size; a real search
@@ -1726,7 +1754,12 @@ app.post('/api/jobs/:id/rating', auth(), (req, res) => {
 app.get('/api/jobs/:id/messages', auth(), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  if (!isParticipantOrBidder(job, req.user)) return sendError(res, 403, 'Not permitted');
+  // Once a job is DISPUTED this thread doubles as the dispute correspondence
+  // (see GET /api/jobs/:id/dispute) — a losing bidder who never won the
+  // award has no business reading it, so drop the bidder-visibility
+  // fallback specifically for disputed jobs.
+  const permitted = job.status === 'DISPUTED' ? isPartyOnJob(job, req.user) : isParticipantOrBidder(job, req.user);
+  if (!permitted) return sendError(res, 403, 'Not permitted');
   // sender_role is additive (existing consumers only ever read
   // sender_id/content) — lets the party-facing dispute view (JobDispute.jsx)
   // render an admin's reply as a distinct "Admin" bubble instead of looking
@@ -1740,12 +1773,22 @@ app.get('/api/jobs/:id/messages', auth(), (req, res) => {
 app.post('/api/jobs/:id/messages', auth(), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  if (!isParticipantOrBidder(job, req.user)) return sendError(res, 403, 'Not permitted');
+  const permitted = job.status === 'DISPUTED' ? isPartyOnJob(job, req.user) : isParticipantOrBidder(job, req.user);
+  if (!permitted) return sendError(res, 403, 'Not permitted');
   const { content } = req.body || {};
   if (!content || !content.trim()) return sendError(res, 400, 'content is required');
   const result = db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?)').run(job.id, req.actorId, content.trim());
-  const other = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
-  notify(other, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+  // Sender may be neither party (an admin replying in a dispute thread) —
+  // notify both shipper and carrier in that case rather than defaulting to
+  // the shipper, which previously left the carrier silently un-notified.
+  if (req.user.id === job.shipper_id) {
+    notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+  } else if (req.user.id === job.carrier_id) {
+    notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+  } else {
+    notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+  }
   const message = db.prepare('SELECT * FROM messages WHERE id=?').get(Number(result.lastInsertRowid));
   res.status(201).json({ message });
 });

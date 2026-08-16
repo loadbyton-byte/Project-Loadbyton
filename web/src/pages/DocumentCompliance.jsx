@@ -76,7 +76,7 @@ export default function DocumentCompliance() {
         <IconShield size={20} className="shrink-0 text-brand-accent" />
         <p className="text-sm text-ink-secondary">Missing something? Update it from your profile — the scan-to-autofill tool can read it straight off a photo.</p>
       </div>
-      <Link to="/profile"><Button className="mt-4 w-full">Update profile</Button></Link>
+      <Link to="/profile" className="btn-accent mt-4 w-full justify-center">Update profile</Link>
     </div>
   );
 }

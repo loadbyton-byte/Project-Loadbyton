@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../lib/auth.jsx';
+import { useAuth, roleHome } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
 import {
@@ -14,14 +14,19 @@ function cx(...parts) {
   return parts.filter(Boolean).join(' ');
 }
 
-export function Logo({ dark = false, className = '' }) {
+// `to` defaults to "/" — the sidebar/drawer/footer/guest-top-bar call sites
+// have always gone to the marketing landing page, even pre-rebrand. The
+// mobile TopAppBar overrides it with a role-aware destination, since that
+// spot's logo behaves as a "go home" gesture, not a "go to marketing site"
+// link, matching its pre-logo-fix behavior.
+export function Logo({ dark = false, className = '', to = '/' }) {
   const { theme } = useAuth();
   // The light-surface wordmark is navy-on-transparent — on the app's dark
   // theme, --bg-surface resolves to the same navy, so it must swap to the
   // white-on-navy variant rather than going invisible.
   const isDarkSurface = dark || theme === 'dark';
   return (
-    <Link to="/" className={`flex shrink-0 items-center ${className}`} aria-label="Loadbyton home">
+    <Link to={to} className={`flex shrink-0 items-center ${className}`} aria-label="Loadbyton home">
       <img src={isDarkSurface ? '/brand/logo-full-on-dark.svg' : '/brand/logo-full.svg'} alt="Loadbyton" className="h-8 w-auto" />
     </Link>
   );
@@ -142,7 +147,7 @@ function ShellInner({ children }) {
             <IconMenu size={22} />
           </button>
 
-          <Logo />
+          <Logo to={user ? roleHome(user.role) : '/'} />
 
           {user ? (
             <Link to="/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label="Notifications">

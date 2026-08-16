@@ -17,7 +17,7 @@
 # target for a customer's real data.
 services:
   - type: web
-    name: loadbyton
+    name: claudeloadbyton
     runtime: node
     plan: starter
     region: frankfurt
@@ -29,7 +29,7 @@ services:
       - key: NODE_VERSION
         value: 22.22.2
       - key: FRONTEND_URL
-        value: https://loadbyton.onrender.com
+        value: https://claudeloadbyton.onrender.com
       - key: DB_PATH
         value: /data/loadbyton.db
       - key: ENCRYPTION_KEY
