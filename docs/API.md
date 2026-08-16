@@ -79,6 +79,10 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 - **Auth:** session
 - **200** `{ "ok": true }` — clears `mfa_enabled`/`mfa_secret`.
 
+### `POST /api/auth/resend-verification`
+- **Auth:** session
+- **200** `{ "ok": true }` — regenerates the email-verify token (24h expiry) and re-sends the verification link. **400** if the account is already verified.
+
 ### `PATCH /api/profile`
 - **Auth:** session (any role)
 - **Body:** any subset of `{ companyName, trnNumber, tradeLicenseNumber, phone, iban, coverageZones, fleetSize, ownedChassis, insuranceUploaded }`
@@ -178,6 +182,11 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 - **Body:** `{ status: "PICKED_UP" | "IN_TRANSIT" | "DELIVERED" | "COMPLETED" | "CANCELLED" }`
 - **200** `{ job }` — enforces forward-only progression per role; audits every transition.
 
+### `PATCH /api/jobs/:id/driver`
+- **Auth:** `CARRIER`, own award, seat `OPS`, job status one of `AWARDED`\|`PICKED_UP`\|`IN_TRANSIT`
+- **Body:** `{ driverName, driverPhone }` — `driverPhone` must normalize to a valid UAE mobile number.
+- **200** `{ job }` — corrects the driver on file if the actual driver changes before delivery (driver name/phone were previously only ever set once, at bid time, with no way to fix a mistake or a last-minute swap). **403** once the job reaches `DELIVERED`.
+
 ### `POST /api/jobs/:id/pod`
 - **Auth:** `CARRIER` (awarded), job `IN_TRANSIT`
 - **Body:** `{ document?: { docType, title, fileUrl } | { docType, title, fileBase64, mimeType } }` — either an external `fileUrl`, or a real upload as base64 (`fileBase64`) with `mimeType` one of `image/jpeg`\|`image/png`\|`image/webp`\|`application/pdf`, up to 5MB.
@@ -206,14 +215,23 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 - **Body:** `{ score: 1–5, comment? }`
 - **201** `{ ok: true }` — writes `ratings`; updates `profiles.rating_avg` and `completed_jobs` for the ratee. **409** if the rater already rated this job.
 
+### `POST /api/jobs/:id/dispute`
+- **Auth:** `SHIPPER`\|`CARRIER`, own job, seat `OPS`, job status one of `AWARDED`\|`PICKED_UP`\|`IN_TRANSIT`\|`DELIVERED`\|`COMPLETED`
+- **Body:** `{ reason }`
+- **201** `{ dispute }` — self-serve dispute filing (job + escrow → `DISPUTED`, frozen). Previously only an admin could open a dispute (`POST /api/admin/disputes` in §6) — a party with an actual problem had no in-app way to raise it. Notifies the counterparty and all admins.
+
+### `GET /api/jobs/:id/dispute`
+- **Auth:** session (job's shipper/carrier, or admin)
+- **200** `{ dispute, job: { id, job_code, status, escrow_status } }` — party-facing view of the job's most recent dispute (status/determination/decision). **404** if the job has no dispute. Replies go through the job's existing messages thread below — once a job is `DISPUTED`, that thread is restricted to the shipper/carrier/admin only (no bidder fallback), since it doubles as the dispute correspondence.
+
 ### `GET /api/jobs/:id/messages`
-- **Auth:** participant
-- **200** `{ messages: [...] }`
+- **Auth:** participant (or bidder, pre-award) — once the job is `DISPUTED`, restricted to the shipper/carrier/admin only
+- **200** `{ messages: [{ ...message, sender_role }] }` — `sender_role` (`SHIPPER`\|`CARRIER`\|`ADMIN`) lets the client render an admin's reply as a distinct bubble.
 
 ### `POST /api/jobs/:id/messages`
-- **Auth:** participant
+- **Auth:** participant (or bidder, pre-award) — once the job is `DISPUTED`, restricted to the shipper/carrier/admin only
 - **Body:** `{ content }`
-- **201** `{ message }` — in-app thread; the only place parties talk before award (contact gating keeps phone numbers hidden until then).
+- **201** `{ message }` — in-app thread; the only place parties talk before award (contact gating keeps phone numbers hidden until then). Notifies the other party; if the sender is an admin (neither the job's shipper nor carrier), notifies both.
 
 ---
 
@@ -248,6 +266,32 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 ### `POST /api/notifications/read`
 - **Auth:** session
 - **200** `{ ok: true }` — marks **all** of the current user's notifications read (bulk, no id).
+
+### `GET /api/notifications/preferences` · `PATCH /api/notifications/preferences`
+- **Auth:** session
+- **200 (GET)** `{ types: [...all notification types], disabled: [...] }`
+- **Body (PATCH):** `{ disabled: string[] }` — must be a subset of `types`.
+- **200 (PATCH)** `{ types, disabled }` — opts the current user out of specific notification types (e.g. `message`). System-critical types still fire regardless (see `notify()`'s `type !== 'system'` gate in `server/index.js`).
+
+### `GET /api/org/members` · `POST /api/org/members` · `PATCH /api/org/members/:id`
+- **Auth:** `SHIPPER`\|`CARRIER`. `POST`/`PATCH` require the org **root** — no seat role can add, re-role, or deactivate another seat.
+- **200 (GET)** `{ root: { id, email, displayName }, seats: [{ id, email, display_name, seat_role, is_active, created_at }] }`
+- **Body (POST):** `{ email, password, seatRole: "OPS"|"FINANCE"|"VIEWER", displayName }` — creates a seat (own `users` row, `org_owner_id` pointing at the caller) sharing the org's role/tier/verification status.
+- **201 (POST)** `{ seat }`.
+- **Body (PATCH):** any subset of `{ seatRole, isActive }` — deactivating a seat (`isActive: false`) also kills any of its live sessions immediately.
+- **200 (PATCH)** `{ seat }`.
+
+### `GET /api/invoices`
+- **Auth:** `CARRIER`\|`ADMIN`
+- **200** `{ invoices: [...] }` — CARRIER sees their own; ADMIN sees all (max 200, newest first).
+
+### `GET /api/invoices/:id`
+- **Auth:** `CARRIER` (own invoice only) \| `ADMIN`
+- **200** an HTML invoice (add `?format=json` for `{ invoice, job }` instead). **403** if it isn't the caller's own invoice.
+
+### `GET /api/invoices/print.js`
+- **Auth:** none
+- Same-origin JS for the invoice page's print button (works under the strict `script-src 'self'` CSP, which would silently block an inline `onclick`).
 
 ---
 
@@ -304,6 +348,13 @@ All routes below require `auth(['ADMIN'])`.
 
 ### `GET /api/admin/revenue`
 - **200** `{ revenue: { gmvAED, platformFeesAED, escrowHeldAED, avgTakeRate } }` (`avgTakeRate` is a `%` string).
+
+### `GET /api/admin/payouts-sla`
+- **200** `{ pending: [{ id, job_id, job_code, carrier_id, net_aed, release_type, released_at, sla_deadline, transfer_executed_at, transfer_reference, overdue }], overdueCount }` — every `RELEASED` payout whose actual bank transfer hasn't been confirmed yet, `overdue` flagging any past `sla_deadline`.
+
+### `POST /api/admin/payouts/:id/mark-transferred`
+- **Body:** `{ reference? }` — optional bank transfer reference.
+- **200** `{ payout }` — confirms the real off-platform transfer happened (`transfer_executed_at`), closing out the SLA row above. **400** if the payout isn't `RELEASED` yet; **409** if already confirmed.
 
 ### `GET /api/admin/settings` · `PATCH /api/admin/settings`
 - **Body (PATCH):** `{ commission_rate_bps?: 0–10000, auto_release_hours?: 1–168 }`

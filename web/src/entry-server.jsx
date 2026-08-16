@@ -9,7 +9,9 @@
 // server/index.js, which only serves it on a session-less request).
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
+// React Router v7 moved StaticRouter out of the react-router-dom/server
+// subpath (removed entirely) and into the base react-router package.
+import { StaticRouter } from 'react-router';
 import App from './App.jsx';
 import { AuthProvider } from './lib/auth.jsx';
 import { LocaleProvider } from './lib/i18n.jsx';
