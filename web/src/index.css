@@ -507,7 +507,9 @@ html[dir="rtl"] .animate-drawer-in {
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-bold
+    /* py-3 (was py-2.5) puts the default button at ~44px total height —
+       py-2.5 sat exactly at the 40px touch-target floor with no margin. */
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-bold
       transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out
       active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap;
   }
@@ -557,7 +559,10 @@ html[dir="rtl"] .animate-drawer-in {
   .btn-link:hover { text-decoration: underline; }
 
   .btn-sm {
-    @apply px-3 py-1.5 text-xs;
+    /* py-2.5 (was py-1.5) brings this to ~36px total — was ~28px, well
+       under the ~40px touch-target floor (Pagination prev/next, table row
+       actions). Still visibly smaller than the default .btn, on purpose. */
+    @apply px-3 py-2.5 text-xs;
   }
   .btn-lg {
     @apply px-6 py-3 text-base rounded-lg;

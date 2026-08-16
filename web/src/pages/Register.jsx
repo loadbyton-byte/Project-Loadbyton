@@ -105,7 +105,7 @@ export default function Register() {
               <Label htmlFor="companyName">{t('auth.companyName')}</Label>
               <Input id="companyName" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} placeholder="Al-Majid Global Freight" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="phone">Phone</Label>
                 <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+971 4 000 0000" />
@@ -145,7 +145,7 @@ export default function Register() {
         {/* Step 2 — account credentials + submit */}
         {step === 2 && (
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="email">{t('auth.email')}</Label>
                 <Input id="email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@company.ae" />

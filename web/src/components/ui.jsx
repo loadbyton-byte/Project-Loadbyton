@@ -37,7 +37,11 @@ export function Card({ className, children, ...props }) {
 }
 Card.Header = function CardHeader({ className, children, ...props }) {
   return (
-    <div className={cx('flex items-start justify-between gap-3 border-b px-5 py-4', className)} style={{ borderColor: 'var(--border-default)' }} {...props}>
+    // flex-col + items-stretch stacks title above an action and stretches
+    // the action to full width below `sm:` — no per-caller w-full needed,
+    // `items-stretch` sizes any flex child (inline-flex buttons included)
+    // to fill the column's cross-axis automatically.
+    <div className={cx('flex flex-col items-stretch gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between', className)} style={{ borderColor: 'var(--border-default)' }} {...props}>
       {children}
     </div>
   );
@@ -58,7 +62,12 @@ Card.Content = function CardContent({ className, children, ...props }) {
 };
 Card.Footer = function CardFooter({ className, children, ...props }) {
   return (
-    <div className={cx('flex items-center justify-end gap-2 border-t px-5 py-4', className)} style={{ borderColor: 'var(--border-default)' }} {...props}>
+    // flex-col-reverse + items-stretch: buttons stack full-width on mobile
+    // (primary action on top, via reverse — callers put Cancel first,
+    // Submit last in JSX, matching the row order sm: already renders) with
+    // no per-caller w-full needed; becomes the original right-aligned row
+    // at sm: and up.
+    <div className={cx('flex flex-col-reverse items-stretch gap-2 border-t px-5 py-4 sm:flex-row sm:items-center sm:justify-end', className)} style={{ borderColor: 'var(--border-default)' }} {...props}>
       {children}
     </div>
   );
@@ -126,9 +135,9 @@ export function Pagination({ total, limit, offset, onChange }) {
   const from = total === 0 ? 0 : offset + 1;
   const to = Math.min(total, offset + limit);
   return (
-    <div className="mt-4 flex items-center justify-between text-sm text-ink-muted">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-muted">
       <span>Showing {from}–{to} of {total}</span>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => onChange(Math.max(0, offset - limit))}>Previous</Button>
         <span className="tabular text-xs">Page {page} of {pageCount}</span>
         <Button variant="ghost" size="sm" disabled={page >= pageCount} onClick={() => onChange(offset + limit)}>Next</Button>
@@ -205,11 +214,11 @@ export function BentoStat({ label, value, icon, tone = 'default', span, classNam
       className={cx('flex flex-col gap-1 rounded-lg p-4', span === 2 && 'col-span-2 flex-row items-center justify-between', className)}
       style={{ background: tone === 'accent' ? 'var(--surface-container-high)' : 'var(--surface-container-low)', border: '1px solid var(--border-subtle)' }}
     >
-      <div className={cx(span === 2 && 'flex flex-col gap-1')}>
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{label}</span>
-        <p className="tabular font-display text-2xl font-extrabold text-ink">{value}</p>
+      <div className={cx('min-w-0', span === 2 && 'flex flex-col gap-1')}>
+        <span className="block truncate font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{label}</span>
+        <p className="tabular truncate font-display text-2xl font-extrabold text-ink">{value}</p>
       </div>
-      {icon && <span className="text-brand-accent">{icon}</span>}
+      {icon && <span className="shrink-0 text-brand-accent">{icon}</span>}
     </div>
   );
 }
@@ -227,15 +236,15 @@ export function JobCard({ jobCode, topRight, priceLabel, origin, destination, ch
       onClick={onClick}
       type={onClick ? 'button' : undefined}
       className={cx(
-        'card w-full overflow-hidden text-left transition-shadow duration-200',
-        onClick && 'cursor-pointer hover:shadow-elevated hover:-translate-y-0.5',
+        'card w-full overflow-hidden text-left transition-[transform,box-shadow] duration-200',
+        onClick && 'cursor-pointer hover:shadow-elevated hover:-translate-y-0.5 active:scale-[0.98]',
         className
       )}
     >
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-3">
-          <span className="font-mono text-xs font-semibold text-ink-muted">{jobCode}</span>
-          <div className="flex items-center gap-2">
+          <span className="min-w-0 truncate font-mono text-xs font-semibold text-ink-muted">{jobCode}</span>
+          <div className="flex shrink-0 items-center gap-2">
             {priceLabel && <span className="font-mono text-sm font-bold text-ink">{priceLabel}</span>}
             {topRight}
           </div>
@@ -243,19 +252,19 @@ export function JobCard({ jobCode, topRight, priceLabel, origin, destination, ch
 
         {(origin || destination) && (
           <div className="flex items-start gap-3 py-1">
-            <div className="flex flex-col items-center pt-1">
+            <div className="flex shrink-0 flex-col items-center pt-1">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--brand-accent)' }} />
               <span className="my-0.5 h-6 w-px" style={{ background: 'var(--border-strong)' }} />
               <IconMapPin size={12} className="text-ink-muted" />
             </div>
-            <div className="flex flex-1 flex-col gap-3">
-              <div>
+            <div className="flex min-w-0 flex-1 flex-col gap-3">
+              <div className="min-w-0">
                 <p className="font-mono text-[10px] uppercase tracking-wider text-ink-muted">Origin</p>
-                <p className="text-sm font-semibold text-ink">{origin}</p>
+                <p className="truncate text-sm font-semibold text-ink">{origin}</p>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-mono text-[10px] uppercase tracking-wider text-ink-muted">Destination</p>
-                <p className="text-sm font-semibold text-ink">{destination}</p>
+                <p className="truncate text-sm font-semibold text-ink">{destination}</p>
               </div>
             </div>
           </div>

@@ -113,9 +113,9 @@ function ShellInner({ children }) {
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
       {user?.impersonating && (
-        <div className="flex items-center justify-center gap-3 px-4 py-2 text-center text-xs font-medium text-white" style={{ background: 'var(--status-danger)' }}>
+        <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-center text-xs font-medium text-white" style={{ background: 'var(--status-danger)' }}>
           <span>Impersonating {user.profile?.company_name || user.email} — logged to the audit trail.</span>
-          <button onClick={handleEndImpersonation} disabled={endingImpersonation} className="shrink-0 rounded-full border border-white/40 px-2.5 py-1 text-xs font-semibold hover:bg-white/10">
+          <button onClick={handleEndImpersonation} disabled={endingImpersonation} className="shrink-0 rounded-full border border-white/40 px-3 py-2 text-xs font-semibold hover:bg-white/10">
             {endingImpersonation ? 'Returning…' : 'Return to admin'}
           </button>
         </div>
@@ -124,7 +124,7 @@ function ShellInner({ children }) {
       {user && !user.email_verified && !user.impersonating && (
         <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-center text-xs" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
           <span>Verify your email to keep full access to your account.</span>
-          <button onClick={handleResendVerification} disabled={resendingVerification} className="font-semibold underline underline-offset-2 disabled:opacity-60">
+          <button onClick={handleResendVerification} disabled={resendingVerification} className="rounded-md px-2 py-2 font-semibold underline underline-offset-2 disabled:opacity-60">
             {resendingVerification ? 'Sending…' : 'Resend verification email'}
           </button>
         </div>
@@ -170,15 +170,20 @@ function ShellInner({ children }) {
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
           <button aria-label="Close menu" className="absolute inset-0 bg-black/50" onClick={closeDrawer} />
-          <div className="animate-drawer-in relative flex h-full w-[84%] max-w-xs flex-col overflow-y-auto bg-surface p-5" style={{ boxShadow: 'var(--lb-shadow-lg)' }}>
-            <div className="flex items-center justify-between">
+          <div className="animate-drawer-in relative flex h-full w-[84%] max-w-xs flex-col bg-surface" style={{ boxShadow: 'var(--lb-shadow-lg)' }}>
+            {/* Sticky header — a short phone's drawer content (5 nav items +
+                toggles + account block + logout) can exceed the visible
+                viewport height; pinning this keeps the close button reachable
+                without scrolling back to the top. */}
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-surface px-5 pb-3 pt-5">
               <Logo />
-              <button onClick={closeDrawer} className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface-container" aria-label="Close menu">
+              <button onClick={closeDrawer} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container" aria-label="Close menu">
                 <IconClose size={18} />
               </button>
             </div>
 
-            <nav className="mt-6 flex flex-col gap-1">
+            <div className="flex-1 overflow-y-auto px-5 pb-5">
+            <nav className="flex flex-col gap-1.5">
               {(user ? navItems : guestLinks).map((item) => (
                 <NavLink
                   key={item.to}
@@ -193,7 +198,7 @@ function ShellInner({ children }) {
 
             <div className="my-4 border-t" style={{ borderColor: 'var(--border-subtle)' }} />
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-secondary hover:bg-surface-container">
                 {theme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />}
                 {theme === 'dark' ? 'Light mode' : 'Dark mode'}
@@ -203,14 +208,14 @@ function ShellInner({ children }) {
               </button>
             </div>
 
-            <div className="mt-auto pt-4">
+            <div className="mt-4 pt-4">
               {user ? (
                 <>
                   <div className="mb-3 rounded-lg px-3 py-2.5" style={{ background: 'var(--surface-container)' }}>
                     <p className="truncate text-sm font-semibold text-ink">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
                     <p className="text-xs text-ink-muted">{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
                   </div>
-                  <Link to="/profile" onClick={closeDrawer} className="mb-1 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink-secondary hover:bg-surface-container">
+                  <Link to="/profile" onClick={closeDrawer} className="mb-1.5 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink-secondary hover:bg-surface-container">
                     <IconUser size={16} /> Profile &amp; settings
                   </Link>
                   <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-surface-container" style={{ color: 'var(--status-danger)' }}>
@@ -223,6 +228,7 @@ function ShellInner({ children }) {
                   <Link to="/login" onClick={closeDrawer} className="btn-secondary w-full justify-center">{t('nav.login', 'Log in')}</Link>
                 </div>
               )}
+            </div>
             </div>
           </div>
         </div>
@@ -362,7 +368,7 @@ function WalkthroughModal({ step, onStep, onFinish }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" role="dialog" aria-modal="true" aria-label="Welcome walkthrough">
-      <div className="w-full max-w-md rounded-lg border bg-surface p-8 shadow-2xl" style={{ borderColor: 'var(--border-default)' }}>
+      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-lg border bg-surface p-5 shadow-2xl sm:p-8" style={{ borderColor: 'var(--border-default)' }}>
         <h2 className="font-display text-xl font-bold text-ink">Welcome to Loadbyton</h2>
         <p className="mt-1 mb-6 text-sm text-ink-muted">Step {step + 1} of {WALKTHROUGH_STEPS.length}</p>
 

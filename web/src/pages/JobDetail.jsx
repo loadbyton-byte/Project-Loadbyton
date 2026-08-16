@@ -220,17 +220,17 @@ export default function JobDetail() {
             ) : (
               <div className="space-y-3">
                 {bids.map((b) => (
-                  <div key={b.id} className="flex items-center justify-between rounded-md border px-4 py-3" style={{ borderColor: b.status === 'ACCEPTED' ? 'var(--status-success)' : 'var(--border-default)' }}>
-                    <div>
+                  <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3" style={{ borderColor: b.status === 'ACCEPTED' ? 'var(--status-success)' : 'var(--border-default)' }}>
+                    <div className="min-w-0">
                       <p className="tabular font-display text-base font-semibold text-ink">{b.masked ? 'Hidden until award' : formatAED(b.amount_aed)}</p>
                       <p className="text-xs text-ink-muted">{b.masked ? 'Competing bid' : `${b.eta_minutes} min ETA · ${b.truck_type ? equipmentLabel(b.truck_type) : 'equipment n/a'}`}</p>
                       {!b.masked && b.carrier_company && (
                         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-secondary">
-                          {b.carrier_company} <RatingPill rating={b.carrier_rating} />
+                          <span className="truncate">{b.carrier_company}</span> <RatingPill rating={b.carrier_rating} />
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-3">
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>
                       {isShipper && job.status === 'OPEN' && b.status === 'PENDING' && (
                         <Button variant="accent" onClick={() => act(() => api.awardJob(job.id, b.id))} loading={busy}>Award</Button>

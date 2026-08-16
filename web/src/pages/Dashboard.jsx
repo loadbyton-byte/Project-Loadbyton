@@ -120,22 +120,25 @@ export default function Dashboard() {
 
   return (
     <div className="container-page py-6" dir="ltr">
-      {/* Profile banner — the Stitch shipper-dashboard header pattern. */}
-      <section className="card flex items-center justify-between gap-4 p-5">
-        <div className="flex items-center gap-4">
+      {/* Profile banner — the Stitch shipper-dashboard header pattern.
+          Stacks on mobile: identity row, then a full-width action row —
+          the previous single flex row squeezed a long company name against
+          two buttons on a 360-390px screen, wrapping the name onto 3 lines. */}
+      <section className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-ink-inverse" style={{ background: 'var(--brand-primary)' }}>
             {user?.profile?.company_name?.[0]?.toUpperCase() || '?'}
           </span>
-          <div>
-            <h1 className="font-display text-lg font-bold text-ink">{user?.profile?.company_name}</h1>
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-lg font-bold text-ink">{user?.profile?.company_name}</h1>
             <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">Tier {user?.tier} · {analytics?.jobsPosted ?? 0} jobs posted</p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowImport((v) => !v)}>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <Button variant="ghost" size="sm" className="flex-1 sm:flex-none" onClick={() => setShowImport((v) => !v)}>
             <IconUpload size={15} /> Import CSV
           </Button>
-          <Button size="sm" onClick={() => setShowForm(true)}>
+          <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setShowForm(true)}>
             <IconPlus size={15} /> Post a job
           </Button>
         </div>
@@ -240,7 +243,7 @@ export default function Dashboard() {
                 <Label>Max budget (AED, optional)</Label>
                 <Input type="number" min="0" value={form.maxBudgetAed} onChange={(e) => setForm({ ...form, maxBudgetAed: e.target.value })} placeholder="600" />
               </div>
-              <div className="flex items-end gap-4 pb-2">
+              <div className="flex flex-wrap items-end gap-4 pb-2">
                 <label className="flex items-center gap-2 text-sm text-ink-secondary">
                   <input type="checkbox" checked={form.requiresReefer} onChange={(e) => setForm({ ...form, requiresReefer: e.target.checked })} /> Requires reefer
                 </label>
@@ -292,25 +295,31 @@ export default function Dashboard() {
         ) : (
           <div className="mt-3">
             <div className="flex flex-wrap items-end gap-3">
-              <div>
+              <div className="min-w-[140px]">
                 <Label>Filter by status</Label>
-                <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-auto">
+                <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full">
                   <option value="all">All statuses</option>
                   {STATUS_FLOW.map((s) => <option key={s} value={s}>{formatLabel(s)}</option>)}
                   <option value="CANCELLED">Cancelled</option>
                   <option value="DISPUTED">Disputed</option>
                 </Select>
               </div>
-              <div>
+              <div className="min-w-[140px]">
                 <Label>Sort</Label>
-                <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-auto">
+                <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-full">
                   {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
               </div>
-              <div className="relative flex-1 sm:max-w-xs">
+              <div className="min-w-[200px] flex-1 sm:max-w-xs">
                 <Label>Search</Label>
-                <IconSearch size={15} className="pointer-events-none absolute left-3 top-[38px] text-ink-muted" />
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Job code, address, notes…" className="pl-9" />
+                {/* Icon lives in its own relative wrapper around just the
+                    Input (not the Label), so top-1/2 centers against the
+                    input's own box instead of a hardcoded pixel guess at
+                    label+input combined height. */}
+                <div className="relative">
+                  <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Job code, address, notes…" className="pl-9" />
+                </div>
               </div>
             </div>
             {jobs.length === 0 ? (
@@ -409,15 +418,15 @@ function CsvImportPanel({ onDone, onCancel }) {
         {rows && !results && (
           <div>
             <p className="text-sm text-ink-secondary">{fileName} — {rows.length} row(s) parsed. Review before importing:</p>
-            <div className="mt-2 max-h-56 overflow-y-auto rounded-md border text-xs" style={{ borderColor: 'var(--border-default)' }}>
+            <div className="mt-2 max-h-56 overflow-auto rounded-md border text-xs" style={{ borderColor: 'var(--border-default)' }}>
               <table className="w-full text-left">
-                <thead><tr className="border-b text-ink-muted" style={{ borderColor: 'var(--border-subtle)' }}><th className="px-3 py-1.5">#</th><th className="px-3 py-1.5">Lane</th><th className="px-3 py-1.5">Ready → Deadline</th></tr></thead>
+                <thead><tr className="border-b text-ink-muted" style={{ borderColor: 'var(--border-subtle)' }}><th className="whitespace-nowrap px-3 py-1.5">#</th><th className="whitespace-nowrap px-3 py-1.5">Lane</th><th className="whitespace-nowrap px-3 py-1.5">Ready → Deadline</th></tr></thead>
                 <tbody>
                   {rows.map((r, i) => (
                     <tr key={i} className="border-b last:border-0" style={{ borderColor: 'var(--border-subtle)' }}>
-                      <td className="px-3 py-1.5">{i + 1}</td>
-                      <td className="px-3 py-1.5">{r.pickupTerminal || '—'} → {r.deliveryArea || '—'}</td>
-                      <td className="px-3 py-1.5">{r.readyAt || '—'} → {r.deadline || '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5">{i + 1}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5">{r.pickupTerminal || '—'} → {r.deliveryArea || '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-1.5">{r.readyAt || '—'} → {r.deadline || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -430,10 +439,10 @@ function CsvImportPanel({ onDone, onCancel }) {
             <p className="text-sm text-ink-secondary">{results.filter((r) => r.ok).length} of {results.length} imported.</p>
             <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-xs">
               {results.map((r) => (
-                <li key={r.row} className="flex items-center gap-2">
-                  {r.ok ? <IconCheck size={13} className="text-status-success" /> : <IconX size={13} className="text-status-danger" />}
-                  <span className="text-ink-muted">Row {r.row}:</span>
-                  {r.ok ? <span className="text-ink">{r.jobCode} posted</span> : <span className="text-status-danger">{r.error}</span>}
+                <li key={r.row} className="flex items-start gap-2">
+                  {r.ok ? <IconCheck size={13} className="mt-0.5 shrink-0 text-status-success" /> : <IconX size={13} className="mt-0.5 shrink-0 text-status-danger" />}
+                  <span className="shrink-0 text-ink-muted">Row {r.row}:</span>
+                  {r.ok ? <span className="min-w-0 break-words text-ink">{r.jobCode} posted</span> : <span className="min-w-0 break-words text-status-danger">{r.error}</span>}
                 </li>
               ))}
             </ul>
