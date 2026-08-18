@@ -85,8 +85,9 @@ The core entity.
 | `pickup_terminal` | TEXT NOT NULL | e.g. `JEBEL_ALI_T2` |
 | `delivery_area` | TEXT NOT NULL | e.g. `JAFZA_SOUTH` |
 | `delivery_address` | TEXT NOT NULL | |
-| `pickup_lat` / `pickup_lng` / `pickup_address_detail` | REAL / REAL / TEXT | Optional precise pin from the free OpenStreetMap+Nominatim picker, on top of `pickup_terminal` (which still drives lane rate lookups) |
+| `pickup_lat` / `pickup_lng` / `pickup_address_detail` | REAL / REAL / TEXT | Optional precise coordinates (the UI no longer offers a map picker — programmatic callers only), on top of `pickup_terminal` (which still drives lane rate lookups) |
 | `delivery_lat` / `delivery_lng` / `delivery_address_detail` | REAL / REAL / TEXT | Same, for the delivery point, on top of `delivery_address` |
+| `cargo_weight_tons` | REAL | Optional gross cargo weight in metric tons (positive, ≤ 500) — sent/edited as `cargoWeightTons` |
 | `ready_at` | TEXT NOT NULL | ready-for-pickup time |
 | `deadline` | TEXT NOT NULL | |
 | `max_budget_aed` | REAL | shipper ceiling — exposed in the API/UI as `targetPriceAed` (per-trip target price) |

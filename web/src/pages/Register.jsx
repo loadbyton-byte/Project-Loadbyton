@@ -28,23 +28,69 @@ export default function Register() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  function scrollTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function validateField(name) {
+    if (name === 'phone') {
+      const phone = form.phone.trim().replace(/\s+/g, '');
+      if (!phone) return 'Phone number is required.';
+      if (!UAE_MOBILE_RE.test(phone)) return 'Enter a valid UAE mobile number — 05XXXXXXXX or +9715XXXXXXXX. Landlines and international numbers aren\u2019t accepted.';
+    }
+    if (name === 'trnNumber') {
+      const trn = form.trnNumber.trim();
+      if (!trn) return 'TRN is required.';
+      if (!UAE_TRN_RE.test(trn)) return 'TRN must be exactly 15 digits — the UAE Tax Registration Number on your VAT certificate.';
+    }
+    if (name === 'tradeLicenseNumber') {
+      const licence = form.tradeLicenseNumber.trim().toUpperCase();
+      if (!licence) return 'Trade licence number is required.';
+      if (!UAE_LICENCE_RE.test(licence)) return 'Trade licence must be 5\u201315 letters, digits, or dashes and contain at least one digit.';
+    }
+    if (name === 'companyName' && !form.companyName.trim()) return 'Company name is required.';
+    return null;
+  }
 
   function validateBusinessFields() {
-    const phone = form.phone.trim().replace(/\s+/g, '');
-    if (!UAE_MOBILE_RE.test(phone)) return 'Phone must be a valid UAE mobile number (05XXXXXXXX or +9715XXXXXXXX).';
-    if (!UAE_TRN_RE.test(form.trnNumber.trim())) return 'TRN must be exactly 15 digits — the UAE Tax Registration Number.';
-    const licence = form.tradeLicenseNumber.trim().toUpperCase();
-    if (!UAE_LICENCE_RE.test(licence)) return 'Trade licence must be 5-15 uppercase letters/digits/dashes with at least one digit.';
-    return null;
+    const errors = {};
+    for (const f of ['companyName', 'phone', 'trnNumber', 'tradeLicenseNumber']) {
+      const msg = validateField(f);
+      if (msg) errors[f] = msg;
+    }
+    return errors;
+  }
+
+  function handleBlur(e) {
+    const msg = validateField(e.target.name);
+    setFieldErrors((prev) => ({ ...prev, [e.target.name]: msg || undefined }));
+  }
+
+  function handleContinue() {
+    const errors = validateBusinessFields();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
+    setError('');
+    setStep(2);
+    scrollTop();
+  }
+
+  function FieldError({ name }) {
+    return fieldErrors[name] ? (
+      <p className="mt-1 text-xs font-medium" style={{ color: 'var(--status-danger)' }} role="alert">{fieldErrors[name]}</p>
+    ) : null;
   }
 
   async function onSubmit(e) {
     e.preventDefault();
     setError('');
-    const invalid = validateBusinessFields();
-    if (invalid) {
-      setError(invalid);
+    const errors = validateBusinessFields();
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors);
       setStep(1);
+      scrollTop();
       return;
     }
     setLoading(true);
@@ -61,6 +107,7 @@ export default function Register() {
   function chooseRole(r) {
     setRole(r);
     setStep(1);
+    scrollTop();
   }
 
   return (
@@ -119,24 +166,28 @@ export default function Register() {
           <div className="mt-6 space-y-4">
             <div>
               <Label htmlFor="companyName">{t('auth.companyName')}</Label>
-              <Input id="companyName" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} placeholder="Al-Majid Global Freight" />
+              <Input id="companyName" name="companyName" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} onBlur={handleBlur} placeholder="Al-Majid Global Freight" />
+              <FieldError name="companyName" />
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="05XXXXXXXX or +9715XXXXXXXX" />
+                <Input id="phone" name="phone" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} onBlur={handleBlur} placeholder="05XXXXXXXX or +9715XXXXXXXX" />
                 <p className="mt-1 text-xs text-ink-muted">UAE mobile number — no landlines</p>
+                <FieldError name="phone" />
               </div>
               <div>
                 <Label htmlFor="trn">TRN number</Label>
-                <Input id="trn" required value={form.trnNumber} onChange={(e) => setForm({ ...form, trnNumber: e.target.value })} placeholder="100000000000000" inputMode="numeric" maxLength={15} />
+                <Input id="trn" name="trnNumber" required value={form.trnNumber} onChange={(e) => setForm({ ...form, trnNumber: e.target.value })} onBlur={handleBlur} placeholder="100000000000000" inputMode="numeric" maxLength={15} />
                 <p className="mt-1 text-xs text-ink-muted">UAE Tax Registration Number — exactly 15 digits</p>
+                <FieldError name="trnNumber" />
               </div>
             </div>
             <div>
               <Label htmlFor="license">Trade licence number</Label>
-              <Input id="license" required value={form.tradeLicenseNumber} onChange={(e) => setForm({ ...form, tradeLicenseNumber: e.target.value.toUpperCase() })} placeholder="CN-1122334" maxLength={15} />
+              <Input id="license" name="tradeLicenseNumber" required value={form.tradeLicenseNumber} onChange={(e) => setForm({ ...form, tradeLicenseNumber: e.target.value.toUpperCase() })} onBlur={handleBlur} placeholder="CN-1122334" maxLength={15} />
               <p className="mt-1 text-xs text-ink-muted">5-15 letters/digits/dashes, at least one digit</p>
+              <FieldError name="tradeLicenseNumber" />
             </div>
             {role === 'CARRIER' && (
               <p className="rounded-md px-3 py-2 text-xs" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
@@ -144,8 +195,8 @@ export default function Register() {
               </p>
             )}
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => setStep(0)}><IconArrowLeft size={15} /> Back</Button>
-              <Button type="button" className="flex-1" disabled={!form.companyName} onClick={() => { const invalid = validateBusinessFields(); if (invalid) { setError(invalid); return; } setError(''); setStep(2); }}>Continue</Button>
+              <Button type="button" variant="ghost" onClick={() => { setStep(0); scrollTop(); }}><IconArrowLeft size={15} /> Back</Button>
+              <Button type="button" className="flex-1" disabled={!form.companyName} onClick={handleContinue}>Continue</Button>
             </div>
           </div>
         )}
@@ -174,7 +225,7 @@ export default function Register() {
               </p>
             )}
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => setStep(1)}><IconArrowLeft size={15} /> Back</Button>
+              <Button type="button" variant="ghost" onClick={() => { setStep(1); scrollTop(); }}><IconArrowLeft size={15} /> Back</Button>
               <Button type="submit" className="flex-1" loading={loading}>{t('auth.register')}</Button>
             </div>
           </form>

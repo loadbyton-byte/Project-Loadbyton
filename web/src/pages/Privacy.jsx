@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
+import { IconUser, IconLayers, IconInventory, IconLock, IconHandshake, IconClock, IconCheck, IconShield, IconSend, IconTag, IconAccountCircle, IconSync, IconMail } from '../components/icons.jsx';
 
 const LAST_UPDATED = '2026-08-16';
 
@@ -19,10 +20,36 @@ export default function Privacy() {
           </Reveal>
         </div>
       </section>
+      <section className="py-12 md:py-16">
+        <div className="container-page max-w-3xl">
+          <Reveal className="card p-6">
+            <p className="font-display text-base font-semibold text-ink">Contents</p>
+            <p className="mt-1 text-sm text-ink-muted">Jump straight to the section you need.</p>
+            <div className="mt-4 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+              <a href="#sec-1" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">01</span>Data Controller</a>
+              <a href="#sec-2" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">02</span>Legal Basis (UAE PDPL)</a>
+              <a href="#sec-3" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">03</span>Data We Collect</a>
+              <a href="#sec-4" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">04</span>Special Category Data</a>
+              <a href="#sec-5" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">05</span>Data Sharing & Recipients</a>
+              <a href="#sec-6" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">06</span>Retention & Deletion</a>
+              <a href="#sec-7" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">07</span>Your Rights (PDPL)</a>
+              <a href="#sec-8" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">08</span>Security Measures</a>
+              <a href="#sec-9" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">09</span>International Transfers</a>
+              <a href="#sec-10" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">10</span>Cookies & Local Storage</a>
+              <a href="#sec-11" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">11</span>Children's Data</a>
+              <a href="#sec-12" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">12</span>Changes to This Policy</a>
+              <a href="#sec-13" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">13</span>Contact</a>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
 
       <section className="py-16 md:py-20">
         <div className="container-page max-w-3xl space-y-10">
           <Reveal>
+            <span id="sec-1" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconUser size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">1. Data Controller</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               Loadbyton ("Company", "we", "us", "our") is the data controller for personal data processed through the Platform.
@@ -31,6 +58,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={60}>
+            <span id="sec-2" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconLayers size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">2. Legal Basis (UAE PDPL)</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               We process personal data under the UAE Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data (PDPL).
@@ -40,11 +69,13 @@ export default function Privacy() {
               <li><strong>Contract performance:</strong> Operating the marketplace, escrow, and payouts (Sections 3–5).</li>
               <li><strong>Legal obligation:</strong> VAT invoicing, anti-money laundering, record retention (Section 6).</li>
               <li><strong>Legitimate interest:</strong> Fraud prevention, security, analytics, platform improvement.</li>
-              <li><strong>Consent:</strong> Optional marketing communications, AI document extraction (Section 7).</li>
+              <li><strong>Consent:</strong> Optional marketing communications.</li>
             </ul>
           </Reveal>
 
           <Reveal delay={120}>
+            <span id="sec-3" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconInventory size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">3. Data We Collect</h2>
             <table className="mt-3 w-full text-left text-sm" style={{ borderCollapse: 'collapse' }}>
               <thead>
@@ -65,19 +96,19 @@ export default function Privacy() {
                 <tr className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                   <td className="px-3 py-2 font-semibold text-ink">Profile</td>
                   <td className="px-3 py-2 text-ink-secondary">Company name, phone, TRN, trade licence, IBAN, coverage zones, fleet size, owned chassis, insurance flag</td>
-                  <td className="px-3 py-2 text-ink-secondary">User input, AI scan (optional)</td>
+                  <td className="px-3 py-2 text-ink-secondary">User input</td>
                   <td className="px-3 py-2 text-ink-secondary">Verification, payouts, compliance, marketplace matching</td>
                 </tr>
                 <tr className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                   <td className="px-3 py-2 font-semibold text-ink">Job Data</td>
-                  <td className="px-3 py-2 text-ink-secondary">Equipment, route, schedule, budget, documents, messages, POD, ratings, GPS pins (optional)</td>
+                  <td className="px-3 py-2 text-ink-secondary">Equipment, route, schedule, budget, documents, messages, POD, ratings, cargo weight</td>
                   <td className="px-3 py-2 text-ink-secondary">Shipper/Carrier input</td>
                   <td className="px-3 py-2 text-ink-secondary">Marketplace execution, escrow, dispute resolution, analytics</td>
                 </tr>
                 <tr className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                   <td className="px-3 py-2 font-semibold text-ink">Driver Data</td>
                   <td className="px-3 py-2 text-ink-secondary">Name, UAE mobile number</td>
-                  <td className="px-3 py-2 text-ink-secondary">Carrier at bid / reassignment</td>
+                  <td className="px-3 py-2 text-ink-secondary">Carrier after award / reassignment</td>
                   <td className="px-3 py-2 text-ink-secondary">Pickup/delivery coordination, WhatsApp/SMS notifications</td>
                 </tr>
                 <tr className="border-b" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -97,6 +128,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={180}>
+            <span id="sec-4" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconLock size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">4. Special Category Data</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li><strong>TRN (Tax Registration Number):</strong> Encrypted at rest (AES-256-GCM, <code className="px-1 rounded bg-surface-container-high font-mono text-xs">enc:v1:</code> prefix). Used for carrier verification and VAT invoicing.</li>
@@ -107,6 +140,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={240}>
+            <span id="sec-5" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconHandshake size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">5. Data Sharing & Recipients</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li><strong>Counterparty (on award):</strong> Shipper sees Carrier company name, rating, fleet; Carrier sees Shipper company name, rating. Phone, email, TRN, driver details revealed only after award.</li>
@@ -119,6 +154,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={300}>
+            <span id="sec-6" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconClock size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">6. Retention & Deletion</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li><strong>Account & Profile:</strong> Retained while account is active. On deletion request: anonymized within 30 days per PDPL; financial records (invoices, payouts, audit log) retained for 5 years per UAE VAT/commercial law.</li>
@@ -130,6 +167,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={360}>
+            <span id="sec-7" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconCheck size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">7. Your Rights (PDPL)</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li><strong>Access:</strong> Request a copy of your personal data.</li>
@@ -146,6 +185,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={420}>
+            <span id="sec-8" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconShield size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">8. Security Measures</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li>Passwords: bcrypt (cost 10), never logged.</li>
@@ -160,6 +201,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={480}>
+            <span id="sec-9" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconSend size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">9. International Transfers</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               Primary hosting: Render (Frankfurt, EU) or Oracle Cloud (Abu Dhabi, UAE) per deployment config.
@@ -170,6 +213,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={540}>
+            <span id="sec-10" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconTag size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">10. Cookies & Local Storage</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li><code className="px-1 rounded bg-surface-container-high font-mono text-xs">lb_session</code> (HttpOnly, Secure, SameSite=Lax) — session authentication.</li>
@@ -180,6 +225,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={600}>
+            <span id="sec-11" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconAccountCircle size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">11. Children's Data</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               The Platform is not directed to individuals under 18. We do not knowingly collect data from minors.
@@ -188,6 +235,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={660}>
+            <span id="sec-12" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconSync size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">12. Changes to This Policy</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               Material changes will be communicated via the Platform and/or email at least 30 days before taking effect.
@@ -196,6 +245,8 @@ export default function Privacy() {
           </Reveal>
 
           <Reveal delay={720}>
+            <span id="sec-13" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconMail size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">13. Contact</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               Data Protection Officer (placeholder): <span className="font-mono">dpo@loadbyton.ae</span><br />

@@ -274,6 +274,7 @@ addColumn('jobs', 'payout_released_at', 'payout_released_at TEXT');
 addColumn('jobs', 'container_count', 'container_count INTEGER NOT NULL DEFAULT 1');
 addColumn('jobs', 'truck_count', 'truck_count INTEGER NOT NULL DEFAULT 1');
 addColumn('jobs', 'equipment_type', "equipment_type TEXT NOT NULL DEFAULT 'CONTAINER_CHASSIS'");
+addColumn('jobs', 'cargo_weight_tons', 'cargo_weight_tons REAL');
 
 addColumn('sessions', 'impersonating_admin_id', 'impersonating_admin_id INTEGER');
 // A seat logs in with their own credentials, but the session still keys

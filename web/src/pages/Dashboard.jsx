@@ -10,7 +10,6 @@ import {
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
-import LocationPicker from '../components/LocationPicker.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 
 const PAGE_SIZE = 20;
@@ -25,8 +24,8 @@ const SORT_OPTIONS = [
 const emptyJob = {
   equipmentType: 'CONTAINER_CHASSIS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
-  deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', customRequirement: '', requiresReefer: false, requiresHazmat: false, notes: '',
-  containerCount: 1, truckCount: 1, pickupLocation: null, deliveryLocation: null,
+  deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', requiresReefer: false, requiresHazmat: false, notes: '',
+  containerCount: 1, truckCount: 1,
 };
 
 export default function Dashboard() {
@@ -84,14 +83,9 @@ export default function Dashboard() {
       const created = await api.createJob({
         ...form,
         targetPriceAed: form.targetPriceAed ? Number(form.targetPriceAed) : undefined,
+        cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
         containerCount: Number(form.containerCount) || 1,
         truckCount: Number(form.truckCount) || 1,
-        pickupLat: form.pickupLocation?.lat,
-        pickupLng: form.pickupLocation?.lng,
-        pickupAddressDetail: form.pickupLocation?.address,
-        deliveryLat: form.deliveryLocation?.lat,
-        deliveryLng: form.deliveryLocation?.lng,
-        deliveryAddressDetail: form.deliveryLocation?.address,
       });
       setForm(emptyJob);
       setShowForm(false);
@@ -216,18 +210,11 @@ export default function Dashboard() {
                 <Label>Delivery address</Label>
                 <Input required value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} placeholder="Street, warehouse, city" />
               </div>
-              <LocationPicker
-                label="Pickup location (optional pin)"
-                value={form.pickupLocation}
-                onChange={(loc) => setForm({ ...form, pickupLocation: loc })}
-                hint="Pins the exact pickup point on top of the terminal above — useful when it's a yard or client site, not the port gate itself."
-              />
-              <LocationPicker
-                label="Delivery location (optional pin)"
-                value={form.deliveryLocation}
-                onChange={(loc) => setForm({ ...form, deliveryLocation: loc })}
-                hint="Pins the exact drop-off point for the driver, on top of the delivery address above."
-              />
+              <div>
+                <Label>Cargo weight (tons)</Label>
+                <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
+                <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
+              </div>
               <div>
                 <Label>Ready at</Label>
                 <Input type="datetime-local" required value={form.readyAt} onChange={(e) => setForm({ ...form, readyAt: e.target.value })} />

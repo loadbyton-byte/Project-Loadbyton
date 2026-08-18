@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
+import { IconCheck, IconLayers, IconFile, IconPackage, IconWallet, IconTruck, IconWarehouse, IconLock, IconShield, IconAlert, IconGavel, IconClose, IconCompass, IconSync, IconMail } from '../components/icons.jsx';
 
 const LAST_UPDATED = '2026-08-16';
 
@@ -19,10 +20,38 @@ export default function Terms() {
           </Reveal>
         </div>
       </section>
+      <section className="py-12 md:py-16">
+        <div className="container-page max-w-3xl">
+          <Reveal className="card p-6">
+            <p className="font-display text-base font-semibold text-ink">Contents</p>
+            <p className="mt-1 text-sm text-ink-muted">Jump straight to the section you need.</p>
+            <div className="mt-4 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+              <a href="#sec-1" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">01</span>Agreement to Terms</a>
+              <a href="#sec-2" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">02</span>Definitions</a>
+              <a href="#sec-3" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">03</span>Account Registration & Eligibility</a>
+              <a href="#sec-4" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">04</span>Marketplace Mechanics</a>
+              <a href="#sec-5" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">05</span>Fees & Payments</a>
+              <a href="#sec-6" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">06</span>Carrier Verification & Obligations</a>
+              <a href="#sec-7" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">07</span>Shipper Obligations</a>
+              <a href="#sec-8" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">08</span>Intellectual Property</a>
+              <a href="#sec-9" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">09</span>Data & Privacy</a>
+              <a href="#sec-10" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">10</span>Disclaimers & Limitation of Liability</a>
+              <a href="#sec-11" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">11</span>Indemnification</a>
+              <a href="#sec-12" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">12</span>Termination</a>
+              <a href="#sec-13" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">13</span>Governing Law & Dispute Resolution</a>
+              <a href="#sec-14" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">14</span>Changes to Terms</a>
+              <a href="#sec-15" className="flex items-center gap-2 rounded-md px-2 py-1.5 text-ink-secondary transition-colors hover:bg-surface-container hover:text-ink"><span className="font-mono text-xs text-ink-muted">15</span>Contact</a>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
 
       <section className="py-16 md:py-20">
         <div className="container-page max-w-3xl space-y-10">
           <Reveal>
+            <span id="sec-1" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconCheck size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">1. Agreement to Terms</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               By accessing or using Loadbyton (the "Platform"), you agree to be bound by these Terms of Service ("Terms").
@@ -32,6 +61,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={60}>
+            <span id="sec-2" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconLayers size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">2. Definitions</h2>
             <dl className="mt-3 space-y-2 text-sm text-ink-secondary">
               <div><dt className="font-semibold text-ink">"Platform"</dt><dd>The Loadbyton web application, API, and associated services.</dd></div>
@@ -44,6 +75,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={120}>
+            <span id="sec-3" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconFile size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">3. Account Registration & Eligibility</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li>You must be at least 18 years old and have the legal capacity to enter into contracts.</li>
@@ -55,9 +88,11 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={180}>
+            <span id="sec-4" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconPackage size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">4. Marketplace Mechanics</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
-              <li><strong>Job Posting:</strong> Shippers post Jobs with equipment, route, schedule, and budget. Jobs enter <code className="px-1 rounded bg-surface-container-high font-mono text-xs">OPEN</code> status.</li>
+              <li><strong>Job Posting:</strong> Shippers post Jobs with equipment, route, schedule, target price, and cargo weight. Jobs enter <code className="px-1 rounded bg-surface-container-high font-mono text-xs">OPEN</code> status.</li>
               <li><strong>Bidding:</strong> Verified Carriers bid with price (AED) and ETA. Competitor bid amounts are masked until award.</li>
               <li><strong>Award:</strong> Shipper awards one bid. This creates a binding agreement: Job → <code className="px-1 rounded bg-surface-container-high font-mono text-xs">AWARDED</code>, Escrow → <code className="px-1 rounded bg-surface-container-high font-mono text-xs">HELD</code>, Payout row created with platform fee.</li>
               <li><strong>Status Progression:</strong> Carrier advances Job through <code className="px-1 rounded bg-surface-container-high font-mono text-xs">PICKED_UP</code> → <code className="px-1 rounded bg-surface-container-high font-mono text-xs">IN_TRANSIT</code> → <code className="px-1 rounded bg-surface-container-high font-mono text-xs">DELIVERED</code>. Each step is forward-only and audited.</li>
@@ -68,6 +103,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={240}>
+            <span id="sec-5" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconWallet size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">5. Fees & Payments</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li>The Platform charges a commission (take rate) on the agreed price at award. Default: 6% (600 basis points), adjustable by Admin (0–10000 bps).</li>
@@ -79,17 +116,21 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={300}>
+            <span id="sec-6" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconTruck size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">6. Carrier Verification & Obligations</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li>Carriers must provide valid UAE TRN, trade licence, and insurance confirmation.</li>
               <li>Admin approval is required before a Carrier can bid. Approval includes IBAN capture for payout destination.</li>
               <li>Carriers warrant they hold all necessary permits, licenses, and insurance for the Jobs they perform.</li>
-              <li>Driver identity: the assigned driver name and UAE mobile number are captured at bid and may be updated via audited reassignment before delivery.</li>
+              <li>Driver identity: the assigned driver name and UAE mobile number are captured after award (shared with the Shipper for pickup coordination) and may be updated via audited reassignment before delivery.</li>
               <li>Carriers are responsible for cargo safety, timeliness, and compliance with UAE transport regulations.</li>
             </ul>
           </Reveal>
 
           <Reveal delay={360}>
+            <span id="sec-7" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconWarehouse size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">7. Shipper Obligations</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li>Shippers warrant Job details are accurate and they have authority to post the Job.</li>
@@ -100,6 +141,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={420}>
+            <span id="sec-8" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconLock size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">8. Intellectual Property</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               The Platform, its design, code, branding (Loadbyton name, logo, mark), and content are owned by the Company.
@@ -109,6 +152,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={480}>
+            <span id="sec-9" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconShield size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">9. Data & Privacy</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               Personal data (company contacts, TRN, IBAN, driver details) is processed per the UAE Federal Decree-Law No. 45
@@ -118,6 +163,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={540}>
+            <span id="sec-10" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconAlert size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">10. Disclaimers & Limitation of Liability</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li>The Platform is provided "as is" and "as available" without warranties of any kind.</li>
@@ -129,6 +176,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={600}>
+            <span id="sec-11" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconGavel size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">11. Indemnification</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               You agree to indemnify and hold the Company harmless from any claims, damages, or expenses arising from your
@@ -137,6 +186,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={660}>
+            <span id="sec-12" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconClose size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">12. Termination</h2>
             <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
               <li>You may close your account at any time. Active Jobs must be resolved first.</li>
@@ -146,6 +197,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={720}>
+            <span id="sec-13" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconCompass size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">13. Governing Law & Dispute Resolution</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               These Terms are governed by the laws of the United Arab Emirates. Disputes arising from these Terms shall be
@@ -155,6 +208,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={780}>
+            <span id="sec-14" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconSync size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">14. Changes to Terms</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               The Company may update these Terms at any time. Material changes will be communicated via the Platform and/or
@@ -163,6 +218,8 @@ export default function Terms() {
           </Reveal>
 
           <Reveal delay={840}>
+            <span id="sec-15" className="block scroll-mt-24" aria-hidden="true" />
+            <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconMail size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">15. Contact</h2>
             <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
               Questions about these Terms: <span className="font-mono">legal@loadbyton.ae</span> (placeholder — replace with monitored inbox before launch).

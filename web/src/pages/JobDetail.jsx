@@ -8,7 +8,6 @@ import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, Escro
 import { IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
-import LocationPicker from '../components/LocationPicker.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
 
@@ -199,6 +198,9 @@ export default function JobDetail() {
             ) : (
               <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
                 <div><dt className="text-ink-muted">Equipment</dt><dd className="mt-0.5 font-medium text-ink">{equipmentLabel(job.equipment_type)}</dd></div>
+                {job.cargo_weight_tons != null && (
+                  <div><dt className="text-ink-muted">Cargo weight</dt><dd className="mt-0.5 font-medium text-ink">{job.cargo_weight_tons} t</dd></div>
+                )}
                 {CONTAINER_EQUIPMENT.includes(job.equipment_type) && (
                   <div><dt className="text-ink-muted">Container #</dt><dd className="mt-0.5 font-medium text-ink">{job.container_number || '—'}</dd></div>
                 )}
@@ -210,23 +212,6 @@ export default function JobDetail() {
                 <div><dt className="text-ink-muted">Free time</dt><dd className="mt-0.5 font-medium text-ink">{job.free_time_days} days</dd></div>
                 <div><dt className="text-ink-muted">Demurrage rate</dt><dd className="mt-0.5 font-medium text-ink">{formatAED(job.demurrage_rate_aed)}/day</dd></div>
                 <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Delivery address</dt><dd className="mt-0.5 font-medium text-ink">{job.delivery_address}</dd></div>
-                {(job.pickup_lat !== null || job.delivery_lat !== null) && (
-                  <div className="col-span-2 sm:col-span-3">
-                    <dt className="text-ink-muted">Map pins</dt>
-                    <dd className="mt-0.5 flex flex-wrap gap-x-4 gap-y-1 font-medium text-brand-secondary">
-                      {job.pickup_lat !== null && (
-                        <a href={`https://www.openstreetmap.org/?mlat=${job.pickup_lat}&mlon=${job.pickup_lng}#map=15/${job.pickup_lat}/${job.pickup_lng}`} target="_blank" rel="noreferrer" className="hover:underline">
-                          View pickup on map
-                        </a>
-                      )}
-                      {job.delivery_lat !== null && (
-                        <a href={`https://www.openstreetmap.org/?mlat=${job.delivery_lat}&mlon=${job.delivery_lng}#map=15/${job.delivery_lat}/${job.delivery_lng}`} target="_blank" rel="noreferrer" className="hover:underline">
-                          View delivery on map
-                        </a>
-                      )}
-                    </dd>
-                  </div>
-                )}
                 {job.notes && <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Notes</dt><dd className="mt-0.5 text-ink-secondary">{job.notes}</dd></div>}
               </dl>
             )}
@@ -488,6 +473,7 @@ function JobEditForm({ job, onDone, onCancel }) {
     readyAt: toDatetimeLocal(job.ready_at),
     deadline: toDatetimeLocal(job.deadline),
     targetPriceAed: job.max_budget_aed ?? '',
+    cargoWeightTons: job.cargo_weight_tons ?? '',
     requiresReefer: !!job.requires_reefer,
     requiresHazmat: !!job.requires_hazmat,
     freeTimeDays: job.free_time_days,
@@ -495,8 +481,6 @@ function JobEditForm({ job, onDone, onCancel }) {
     notes: job.notes || '',
     containerCount: job.container_count,
     truckCount: job.truck_count,
-    pickupLocation: job.pickup_lat !== null ? { lat: job.pickup_lat, lng: job.pickup_lng, address: job.pickup_address_detail } : null,
-    deliveryLocation: job.delivery_lat !== null ? { lat: job.delivery_lat, lng: job.delivery_lng, address: job.delivery_address_detail } : null,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -509,12 +493,7 @@ function JobEditForm({ job, onDone, onCancel }) {
       await api.editJob(job.id, {
         ...form,
         targetPriceAed: form.targetPriceAed === '' ? undefined : Number(form.targetPriceAed),
-        pickupLat: form.pickupLocation?.lat,
-        pickupLng: form.pickupLocation?.lng,
-        pickupAddressDetail: form.pickupLocation?.address,
-        deliveryLat: form.deliveryLocation?.lat,
-        deliveryLng: form.deliveryLocation?.lng,
-        deliveryAddressDetail: form.deliveryLocation?.address,
+        cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
       });
       onDone();
     } catch (err) {
@@ -542,16 +521,10 @@ function JobEditForm({ job, onDone, onCancel }) {
         <Label>Delivery address</Label>
         <Input required value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} />
       </div>
-      <LocationPicker
-        label="Pickup location (optional pin)"
-        value={form.pickupLocation}
-        onChange={(loc) => setForm({ ...form, pickupLocation: loc })}
-      />
-      <LocationPicker
-        label="Delivery location (optional pin)"
-        value={form.deliveryLocation}
-        onChange={(loc) => setForm({ ...form, deliveryLocation: loc })}
-      />
+      <div>
+        <Label>Cargo weight (tons)</Label>
+        <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
+      </div>
       {CONTAINER_EQUIPMENT.includes(job.equipment_type) && (
         <div>
           <Label>Container #</Label>

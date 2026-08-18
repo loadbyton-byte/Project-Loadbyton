@@ -1325,6 +1325,12 @@ function createJobFromBody(b, req) {
   const containerCount = Math.max(1, Number(b.containerCount) || 1);
   const truckCount = Math.max(1, Number(b.truckCount) || 1);
 
+  // Optional cargo weight (metric tons) — drives carrier equipment choice.
+  const cargoWeightTons = b.cargoWeightTons === undefined || b.cargoWeightTons === null || b.cargoWeightTons === '' ? null : Number(b.cargoWeightTons);
+  if (cargoWeightTons !== null && (!Number.isFinite(cargoWeightTons) || cargoWeightTons <= 0 || cargoWeightTons > 500)) {
+    throw { status: 400, message: 'cargoWeightTons must be a positive number up to 500' };
+  }
+
   // Optional map pin (see LocationPicker.jsx) — reject silently-wrong values
   // rather than trusting whatever the client sends, same as any other field.
   const pickupLat = b.pickupLat !== undefined ? Number(b.pickupLat) : null;
@@ -1346,8 +1352,9 @@ function createJobFromBody(b, req) {
       `INSERT INTO jobs (job_code, shipper_id, contract_lane_id, template_id, container_size, container_type, container_number,
          pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, status, escrow_status,
          requires_reefer, requires_hazmat, free_time_days, demurrage_rate_aed, notes, equipment_type, container_count, truck_count,
+         cargo_weight_tons,
          pickup_lat, pickup_lng, pickup_address_detail, delivery_lat, delivery_lng, delivery_address_detail)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       code,
@@ -1371,6 +1378,7 @@ function createJobFromBody(b, req) {
       equipmentType,
       containerCount,
       truckCount,
+      cargoWeightTons,
       pickupLat,
       pickupLng,
       b.pickupAddressDetail || null,
@@ -1440,6 +1448,7 @@ const JOB_EDITABLE_FIELDS = {
   notes: 'notes',
   containerCount: 'container_count',
   truckCount: 'truck_count',
+  cargoWeightTons: 'cargo_weight_tons',
   pickupLat: 'pickup_lat',
   pickupLng: 'pickup_lng',
   pickupAddressDetail: 'pickup_address_detail',

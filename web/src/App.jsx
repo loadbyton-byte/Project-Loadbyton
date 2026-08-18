@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth, roleHome } from './lib/auth.jsx';
 import { Shell } from './components/Shell.jsx';
@@ -44,6 +44,18 @@ const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const DocumentCompliance = lazy(() => import('./pages/DocumentCompliance.jsx'));
 
+// Every navigation lands at the top of the new page — a long page left
+// scrolled midway (a job list, a document thread) must never hand off
+// mid-viewport when the route changes. Keyed on pathname only, so an
+// in-page interaction (tabs, modals) never jars the scroll position.
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [pathname]);
+  return null;
+}
+
 function FullScreenSpinner() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas">
@@ -71,6 +83,7 @@ function GuestOnly({ children }) {
 export default function App() {
   return (
     <Shell>
+      <ScrollToTop />
       <Suspense fallback={<FullScreenSpinner />}>
         <Routes>
           <Route path="/" element={<Landing />} />

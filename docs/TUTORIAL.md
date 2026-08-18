@@ -36,7 +36,7 @@ Open job `LBT-DXB-2608-4921` (the 40HC dry to JAFZA South). You see the containe
 ## Step 4 — Post a fresh job (recurrence in one tap)
 
 Two options:
-- **From scratch:** Dashboard → Post a job. Pick `40FT`, DRY, terminal `JEBEL_ALI_T4`, delivery `DUBAI_SOUTH`, set a target price (per trip), a deadline, notes, submit. You get a `LBT-DXB-….` job code, status `OPEN`.
+- **From scratch:** Dashboard → Post a job. Pick `40FT`, DRY, terminal `JEBEL_ALI_T4`, delivery `DUBAI_SOUTH`, set a target price (per trip), cargo weight (optional), a deadline, notes, submit. You get a `LBT-DXB-….` job code, status `OPEN`.
 - **From a template:** Templates page → "Weekly JAFZA South run" → **Re-run**. One call (`POST /api/templates/:id/rerun`) clones the saved lane into a fresh open job. That's the anti-"one-and-done" mechanic — the second shipment is one tap, not a re-negotiation.
 
 Run the template so you have a job that's actually biddable for the next steps.

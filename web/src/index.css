@@ -369,13 +369,14 @@ html[dir="rtl"] .animate-drawer-in {
 }
 
 /* Hero visual (components/FreightMotionScene.jsx) — an animated
-   "how Loadbyton works" pipeline: four stages light up in sequence along a
-   track with a traveling pulse. Deliberately more vivid than the rest of
-   the page (dusk gradient, glow) — contained entirely inside its own dark
-   card so it reads as one intentional vivid moment, not a break from the
-   page's restraint elsewhere. All keyframe-driven, so the global
-   prefers-reduced-motion block above collapses every one of these to a
-   single static frame for free. */
+   "how Loadbyton works" pipeline: a truck drives a route left-to-right
+   while four workflow stages light up in sequence along a progress rail
+   that fills as the cycle advances. Deliberately more vivid than the rest
+   of the page (dusk gradient, drifting glow, moving road) — contained
+   entirely inside its own dark card so it reads as one intentional vivid
+   moment, not a break from the page's restraint elsewhere. All
+   keyframe-driven, so the global prefers-reduced-motion block above
+   collapses every one of these to a single static frame for free. */
 .freight-scene {
   position: relative;
   width: 100%;
@@ -386,34 +387,138 @@ html[dir="rtl"] .animate-drawer-in {
     radial-gradient(120% 120% at 85% -10%, rgba(255, 176, 103, 0.28), transparent 55%),
     linear-gradient(180deg, #15111f 0%, #2a1a22 55%, #1a1418 100%);
 }
-.freight-scene-sky { position: absolute; inset: 0; }
-.freight-scene-horizon {
+.freight-sky { position: absolute; inset: 0; }
+.freight-glow {
+  position: absolute;
+  width: 45%;
+  height: 55%;
+  border-radius: var(--lb-radius-full);
+  filter: blur(46px);
+  opacity: 0.5;
+  animation: freight-glow-drift 12s ease-in-out infinite alternate;
+}
+.freight-glow-a {
+  top: -12%;
+  left: -8%;
+  background: radial-gradient(closest-side, rgba(229, 57, 53, 0.4), transparent 70%);
+}
+.freight-glow-b {
+  right: -10%;
+  bottom: -18%;
+  background: radial-gradient(closest-side, rgba(255, 176, 103, 0.32), transparent 70%);
+  animation-delay: -6s;
+}
+@keyframes freight-glow-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6%, -4%, 0) scale(1.12); }
+}
+
+.freight-horizon {
   position: absolute;
   left: 0; right: 0; bottom: 0;
   height: 34%;
-  background: linear-gradient(180deg, rgba(229, 57, 53, 0.16), rgba(10, 10, 11, 0.55));
+  background:
+    repeating-linear-gradient(90deg,
+      rgba(229, 57, 53, 0.10) 0 3px, transparent 3px 6px,
+      rgba(255, 176, 103, 0.06) 6px 9px, transparent 9px 13px),
+    linear-gradient(180deg, rgba(229, 57, 53, 0.12), rgba(10, 10, 11, 0.55));
+  -webkit-mask-image: linear-gradient(180deg, transparent, black 45%);
+  mask-image: linear-gradient(180deg, transparent, black 45%);
 }
 
-/* The pipeline: a track across the card with four workflow stages that
-   light up in sequence (one 2s slot each on an 8s loop) while a pulse
-   dot travels left-to-right along the track. Same timing pattern the old
-   status chips used — each step is dimmed outside its own window. */
+/* The road the truck drives — a dark band with an animated dashed
+   centerline; the dash scroll gives the truck its sense of motion. */
+.freight-road {
+  position: absolute;
+  left: 5%; right: 5%; bottom: 8%;
+  height: 16%;
+  border-radius: var(--lb-radius-md);
+  background: linear-gradient(180deg, rgba(15, 15, 17, 0.9), rgba(10, 10, 11, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.freight-road-dashes {
+  position: absolute;
+  left: 8%; right: 8%; top: 50%;
+  height: 2px;
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.5) 0 14px, transparent 14px 30px);
+  background-size: 30px 2px;
+  background-repeat: repeat-x;
+  animation: freight-road-scroll 0.9s linear infinite;
+}
+@keyframes freight-road-scroll {
+  from { background-position: 0 0; }
+  to { background-position: 30px 0; }
+}
+
+/* The truck itself — drives the same stops as the pulse, with a small
+   suspension bob layered on top. */
+.freight-truck {
+  position: absolute;
+  bottom: 12%;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 22px;
+  border-radius: 6px;
+  color: #ffffff;
+  background: linear-gradient(180deg, #26222e, #17151d);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  animation: freight-truck-drive 8s linear infinite, freight-truck-bob 0.5s ease-in-out infinite alternate;
+}
+@keyframes freight-truck-drive {
+  0%, 5% { left: 0%; opacity: 0; }
+  10%, 22% { left: 12.5%; opacity: 1; }
+  35%, 47% { left: 37.5%; }
+  60%, 72% { left: 62.5%; }
+  85%, 95% { left: 87.5%; }
+  100% { left: 100%; opacity: 0; }
+}
+@keyframes freight-truck-bob {
+  from { transform: translateY(0); }
+  to { transform: translateY(-2px); }
+}
+
+/* The pipeline rail: base line + a fill that advances in four 2s slots on
+   an 8s loop (same rhythm as the stage cycle), with the glow pulse
+   traveling between stages. */
 .freight-pipeline { position: absolute; inset: 0; }
-.freight-track { position: absolute; top: 46%; left: 7%; right: 7%; height: 2px; }
-.freight-track-line {
-  position: absolute; inset: 0;
+.freight-rail {
+  position: absolute;
+  top: 42%; left: 7%; right: 7%;
+  height: 3px;
   border-radius: var(--lb-radius-full);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.28));
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+.freight-rail-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--lb-radius-full);
+  background: linear-gradient(90deg, rgba(229, 57, 53, 0.55), var(--brand-accent));
+  box-shadow: 0 0 10px rgba(229, 57, 53, 0.5);
+  transform-origin: left center;
+  animation: freight-rail-fill 8s linear infinite;
+}
+@keyframes freight-rail-fill {
+  0%, 5% { transform: scaleX(0); }
+  10%, 22% { transform: scaleX(0.25); }
+  35%, 47% { transform: scaleX(0.5); }
+  60%, 72% { transform: scaleX(0.75); }
+  85%, 95% { transform: scaleX(1); }
+  100% { transform: scaleX(1); }
 }
 .freight-pulse {
   position: absolute;
-  top: -4px;
+  top: 40%;
   left: 0;
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border-radius: var(--lb-radius-full);
   background: var(--brand-accent);
-  box-shadow: 0 0 10px 2px rgba(229, 57, 53, 0.55);
+  box-shadow: 0 0 12px 3px rgba(229, 57, 53, 0.6);
   animation: freight-pulse-travel 8s linear infinite;
 }
 @keyframes freight-pulse-travel {
@@ -427,40 +532,67 @@ html[dir="rtl"] .animate-drawer-in {
 
 .freight-step {
   position: absolute;
-  top: 40%;
+  top: 34%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   animation-name: freight-step-cycle;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
 }
 .freight-step-node {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: var(--lb-radius-full);
-  background: rgba(17, 17, 19, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(17, 17, 19, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
-.freight-step-label {
-  white-space: nowrap;
-  padding: 4px 10px;
+.freight-step-num {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
   border-radius: var(--lb-radius-full);
-  background: rgba(17, 17, 19, 0.85);
+  background: var(--brand-accent);
+  color: var(--text-on-accent);
+  font-size: 9px;
+  font-weight: 700;
+}
+.freight-step-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+  padding: 5px 11px 4px;
+  border-radius: var(--lb-radius-full);
+  background: rgba(17, 17, 19, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.14);
   color: #ffffff;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1.2;
+}
+.freight-step-sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.62);
 }
 @keyframes freight-step-cycle {
-  0%, 3%, 25%, 100% { opacity: 0.35; }
-  8%, 20% { opacity: 1; }
+  0%, 3%, 25%, 100% { opacity: 0.35; transform: translateX(-50%) scale(0.96); }
+  8%, 20% { opacity: 1; transform: translateX(-50%) scale(1); }
   8% { filter: drop-shadow(0 0 8px rgba(229, 57, 53, 0.6)); }
   20% { filter: drop-shadow(0 0 12px rgba(229, 57, 53, 0.8)); }
 }

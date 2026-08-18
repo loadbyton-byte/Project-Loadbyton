@@ -334,6 +334,9 @@ function ShellInner({ children }) {
               </Link>
             ) : (
               <div className="flex items-center gap-2">
+                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                  {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+                </button>
                 <Link to="/login" className="rounded-md px-3.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
                   {t('nav.login', 'Log in')}
                 </Link>
@@ -358,7 +361,11 @@ function ShellInner({ children }) {
                   <Link to="/terms" className="hover:text-ink">Terms</Link>
                   <Link to="/privacy" className="hover:text-ink">Privacy</Link>
                 </div>
-                <p className="text-xs text-ink-muted" dir="ltr">© {new Date().getFullYear()} Loadbyton. Demo system — payouts are simulated, not real transfers.</p>
+                <div className="text-xs leading-relaxed text-ink-muted" dir="ltr">
+                  <p>© {new Date().getFullYear()} Loadbyton Freight Technologies FZ-LLC. All rights reserved.</p>
+                  <p className="mt-1">Road freight marketplace software for the UAE — Dubai, Abu Dhabi, Sharjah &amp; Fujairah.</p>
+                  <p className="mt-1">Registered in Dubai, United Arab Emirates · <a href="mailto:support@loadbyton.ae" className="hover:text-ink">support@loadbyton.ae</a></p>
+                </div>
               </div>
             </footer>
           )}

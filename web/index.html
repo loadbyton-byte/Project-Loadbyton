@@ -1,10 +1,21 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Loadbyton — UAE Road Freight & Container Drayage Marketplace</title>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Theme is light by default; a visitor's saved dark preference (set via
+       the in-app toggle) is applied before first paint so there is never a
+       light/dark flash. Absent a saved choice the page always renders light,
+       regardless of OS preference. -->
+  <script>
+    try {
+      var t = localStorage.getItem('loadbyton-theme');
+      document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  </script>
+  <title>Loadbyton — UAE Road Freight & Container Drayage Marketplace</title>
     <meta name="description" content="Post a freight job — container, flatbed, tripper, or a multi-truck volume inquiry — get verified-carrier bids across Dubai, Abu Dhabi, Sharjah and Fujairah, and move it under escrow with live tracking and payout on delivery." />
     <meta property="og:title" content="Loadbyton — UAE Road Freight & Container Drayage Marketplace" />
     <meta property="og:description" content="Post a freight job, get verified-carrier bids from across the UAE, and move it under escrow — with live tracking, a demurrage clock, and payout on delivery." />

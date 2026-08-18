@@ -115,8 +115,8 @@ module.exports = function seed() {
            pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, agreed_price_aed,
            status, awarded_bid_id, requires_reefer, requires_hazmat, notes, free_time_days, demurrage_rate_aed,
            escrow_status, delivered_at, auto_release_processed, payout_released_at, created_at, updated_at,
-           equipment_type, container_count, truck_count)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+           equipment_type, container_count, truck_count, cargo_weight_tons)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         j.code, shipperId, j.carrierId || null, j.size, j.type, j.number || null,
@@ -124,7 +124,8 @@ module.exports = function seed() {
         j.status, null, j.reefer ? 1 : 0, j.hazmat ? 1 : 0, j.notes || null, j.freeDays ?? 5, j.demurrageRate ?? 400,
         j.escrow, j.deliveredAt || null, j.autoReleased ? 1 : 0, j.payoutReleasedAt || null,
         j.createdAt || sqliteTime(-10 * DAY), sqliteTime(-1 * DAY),
-        j.equipment || 'CONTAINER_CHASSIS', j.containerCount ?? 1, j.truckCount ?? 1
+        j.equipment || 'CONTAINER_CHASSIS', j.containerCount ?? 1, j.truckCount ?? 1,
+        j.weight ?? null
       );
     return Number(r.lastInsertRowid);
   }
@@ -144,7 +145,7 @@ module.exports = function seed() {
     code: 'LBT-DXB-2608-4921', size: '40HC', type: 'DRY', number: 'MSKU9281745',
     pickup: 'JEBEL_ALI_T2', area: 'JAFZA_SOUTH', address: 'Street 14, Warehouse 8B, JAFZA South, Dubai',
     readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(4 * DAY), budget: 600, status: 'OPEN', escrow: 'PENDING',
-    notes: 'Gate pass required — see message thread for customs contact.',
+    notes: 'Gate pass required — see message thread for customs contact.', weight: 24,
   });
   insertBid(job1, falconId, 500, 30, 'PENDING', '3-axle flatbed');
   insertBid(job1, gulfheavyId, 480, 28, 'PENDING', '3-axle flatbed');
@@ -165,7 +166,7 @@ module.exports = function seed() {
     code: 'LBT-DXB-2608-4933', size: '40FT', type: 'HAZMAT', number: 'TCLU5512309',
     pickup: 'JEBEL_ALI_T4', area: 'DUBAI_SOUTH', address: 'Plot 22, Dubai South Logistics District',
     readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(3 * DAY), budget: 800, status: 'OPEN', escrow: 'PENDING',
-    hazmat: true, notes: 'Class 3 flammable liquid — placarding required.',
+    hazmat: true, notes: 'Class 3 flammable liquid — placarding required.', weight: 22,
   });
   insertBid(job2, emiratesId, 750, 40, 'PENDING', 'Hazmat-certified flatbed');
 
@@ -190,7 +191,7 @@ module.exports = function seed() {
     readyAt: sqliteTime(-2 * DAY), deadline: sqliteTime(1 * DAY), price: 1600, carrierId: gulfheavyId,
     status: 'IN_TRANSIT', escrow: 'FUNDED', reefer: true, freeDays: 3, demurrageRate: 600,
     equipment: 'TRAILER_WITH_GENSET', containerCount: 1, truckCount: 1,
-    notes: 'Maintain -18C chain of custody throughout.',
+    notes: 'Maintain -18C chain of custody throughout.', weight: 26,
   });
   const job4Bid = insertBid(job4, gulfheavyId, 1600, 65, 'ACCEPTED', 'Reefer trailer');
   db.prepare('UPDATE jobs SET awarded_bid_id=? WHERE id=?').run(job4Bid, job4);
@@ -241,7 +242,7 @@ module.exports = function seed() {
     pickup: 'PORT_KHALID', area: 'SHARJAH_INDUSTRIAL', address: 'Sharjah Industrial Area 12, Site Gate 4',
     readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(2 * DAY), budget: 3200, status: 'OPEN', escrow: 'PENDING',
     notes: 'Aggregate haul from Port Khalid stockyard to site — 4 tripper loads across the day, same address.',
-    equipment: 'TRIPPER', truckCount: 4,
+    equipment: 'TRIPPER', truckCount: 4, weight: 44,
   });
   insertBid(job7, gulfheavyId, 3000, 35, 'PENDING', 'TRIPPER');
   insertBid(job7, desertlineId, 2850, 45, 'PENDING', 'TRIPPER');
@@ -254,7 +255,7 @@ module.exports = function seed() {
     pickup: 'FUJAIRAH_PORT', area: 'FUJAIRAH_FREEZONE', address: 'Fujairah Free Zone, Warehouse Cluster C',
     readyAt: sqliteTime(2 * DAY), deadline: sqliteTime(6 * DAY), budget: 4200, status: 'OPEN', escrow: 'PENDING',
     notes: 'Weekly restock — 6× 40FT dry containers, same lane, one award covers the full batch.',
-    equipment: 'CONTAINER_CHASSIS', containerCount: 6,
+    equipment: 'CONTAINER_CHASSIS', containerCount: 6, weight: 96,
   });
   insertBid(job8, emiratesId, 3900, 55, 'PENDING', 'CONTAINER_CHASSIS');
 

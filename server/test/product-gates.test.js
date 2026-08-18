@@ -105,9 +105,13 @@ test('equipment: TRAILER_WITH_GENSET is container-carrying; REEFER_TRUCK is gone
     readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
   };
 
-  const genset = await shipper.post('/api/jobs', { ...base, equipmentType: 'TRAILER_WITH_GENSET', containerSize: 'REEFER', containerType: 'REEFER', requiresReefer: true });
+  const genset = await shipper.post('/api/jobs', { ...base, equipmentType: 'TRAILER_WITH_GENSET', containerSize: 'REEFER', containerType: 'REEFER', requiresReefer: true, cargoWeightTons: 26.5 });
   assert.equal(genset.status, 201, genset.raw);
   assert.equal(genset.body.job.equipment_type, 'TRAILER_WITH_GENSET');
+  assert.equal(genset.body.job.cargo_weight_tons, 26.5, 'cargoWeightTons must be stored');
+
+  const badWeight = await shipper.post('/api/jobs', { ...base, equipmentType: 'CUSTOM', customRequirement: 'x', cargoWeightTons: -3 });
+  assert.equal(badWeight.status, 400, 'a non-positive cargo weight must be rejected');
 
   const oldType = await shipper.post('/api/jobs', {
     ...base, equipmentType: 'REEFER_TRUCK', containerSize: '40FT', containerType: 'DRY', notes: 'x',

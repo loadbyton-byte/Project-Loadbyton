@@ -45,7 +45,7 @@ export function parseCsv(text) {
 }
 
 const BOOLEAN_TRUE = new Set(['true', '1', 'yes', 'y']);
-const NUMERIC_FIELDS = new Set(['targetPriceAed', 'containerCount', 'truckCount', 'freeTimeDays', 'demurrageRateAed']);
+const NUMERIC_FIELDS = new Set(['targetPriceAed', 'cargoWeightTons', 'containerCount', 'truckCount', 'freeTimeDays', 'demurrageRateAed']);
 const BOOLEAN_FIELDS = new Set(['requiresReefer', 'requiresHazmat']);
 
 // Header row + data rows -> array of job-shaped objects (same field names
@@ -70,12 +70,12 @@ export function csvRowsToJobs(rows) {
 export const JOB_IMPORT_TEMPLATE_HEADERS = [
   'pickupTerminal', 'deliveryArea', 'deliveryAddress', 'readyAt', 'deadline',
   'equipmentType', 'containerSize', 'containerType', 'containerNumber',
-  'targetPriceAed', 'requiresReefer', 'requiresHazmat', 'notes', 'containerCount', 'truckCount',
+  'targetPriceAed', 'cargoWeightTons', 'requiresReefer', 'requiresHazmat', 'notes', 'containerCount', 'truckCount',
 ];
 
 export const JOB_IMPORT_TEMPLATE_EXAMPLE_ROW = [
   'JEBEL_ALI_T1', 'AL_QUOZ', 'Street 14, Warehouse 8B, Al Quoz 3, Dubai', '2026-09-01T09:00', '2026-09-02T18:00',
-  'CONTAINER_CHASSIS', '40HC', 'DRY', '', '900', 'false', 'false', '', '1', '1',
+  'CONTAINER_CHASSIS', '40HC', 'DRY', '', '900', '24', 'false', 'false', '', '1', '1',
 ];
 
 export function downloadJobImportTemplate() {

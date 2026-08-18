@@ -127,7 +127,7 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
     "deliveryAddress": "Street 14, Warehouse 8B, JAFZA South, Dubai",
     "readyAt": "<iso>", "deadline": "<iso>", "targetPriceAed": 1400,
     "requiresReefer": false, "requiresHazmat": false,
-    "containerCount": 1, "truckCount": 1,
+    "containerCount": 1, "truckCount": 1, "cargoWeightTons": 24.5,
     "freeTimeDays": 5, "demurrageRateAed": 400,
     "templateId": null, "contractLaneId": null, "notes": "...",
     "pickupLat": 25.0092, "pickupLng": 55.0617, "pickupAddressDetail": "Jebel Ali Port Gate 4",
@@ -135,7 +135,7 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
   }
   ```
   `equipmentType` defaults to `CONTAINER_CHASSIS` if omitted/invalid — one of the 13 values in `DATA_MODEL.md`'s `jobs.equipment_type` (incl. `CUSTOM`). `containerSize`/`containerType` are only validated (and required) when `equipmentType` is a container-carrying type (`CONTAINER_CHASSIS` or `TRAILER_WITH_GENSET`); for every other equipment type the server stores `'N/A'`/`'GENERAL'` regardless of what's sent, and `notes` becomes the required cargo description instead. `CUSTOM` requires `customRequirement` (or `notes`) — a written truck/requirement, merged into `notes` server-side. `targetPriceAed` maps to `max_budget_aed` (the legacy field name `maxBudgetAed` is still accepted). `containerCount`/`truckCount` default to `1` — raise either for a volume inquiry (one job, one award, covering the stated batch).
-  `pickupLat`/`pickupLng`/`deliveryLat`/`deliveryLng` are an optional precise pin from the free OpenStreetMap+Nominatim picker (`web/src/components/LocationPicker.jsx`) on top of the required `pickupTerminal`/`deliveryArea` enums, which still drive lane rate lookups — **400** if only one of a lat/lng pair is sent, or the pair falls outside a loose UAE bounding box.
+  `pickupLat`/`pickupLng`/`deliveryLat`/`deliveryLng` are optional precise coordinates stored on top of the required `pickupTerminal`/`deliveryArea` enums (which drive lane rate lookups). The client UI no longer offers a map picker, so these arrive only from programmatic callers — **400** if only one of a lat/lng pair is sent, or the pair falls outside a loose UAE bounding box. `cargoWeightTons` is an optional positive number (max 500) recording the cargo's gross weight in metric tons.
 - **201** `{ job }` with generated `job_code` (e.g. `LBT-DXB-2608-4921`), status `OPEN`.
 
 ### `POST /api/jobs/import`
