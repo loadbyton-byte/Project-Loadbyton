@@ -34,58 +34,6 @@ export default function Landing() {
   const [lanes, setLanes] = useState([]);
   const [heroAnim] = useState(() => {
   // eslint-disable no-unused-vars
-  const heroSlides = [
-    {
-      Icon: IconLayers,
-      title: t('landing.slides.works.title') || 'How it works',
-      intro: t('landing.slides.works.intro') || 'One sequence for every load — from posting to payout.',
-      steps: t('landing.slides.works.steps') || [
-        ['Post the job', 'Equipment, route, target price'],
-        ['Carriers bid', 'Verified fleet, priced live'],
-        ['Award & escrow', 'Price locks, funds secured'],
-        ['Deliver & paid', 'POD up, payout within 48h'],
-      ],
-    },
-    {
-      Icon: IconUser,
-      title: t('landing.slides.register.title') || 'Register in minutes',
-      intro: t('landing.slides.register.intro') || 'Create an account, get verified, start moving freight.',
-      steps: t('landing.slides.register.steps') || [
-        ['Create your account', 'Email and company details'],
-        ['Get verified', 'TRN, licence, insurance — checked by us'],
-        ['Start', 'Bid on loads or post jobs, escrow-backed'],
-      ],
-    },
-    {
-      Icon: IconEdit,
-      title: t('landing.slides.post.title') || 'Post a job',
-      intro: t('landing.slides.post.intro') || 'One structured form — no back-and-forth to reach carriers.',
-      steps: t('landing.slides.post.steps') || [
-        ['Equipment & route', 'Truck class, terminal, delivery area'],
-        ['Price & cargo', 'Target price per trip, cargo weight'],
-        ['Submit', 'Goes live as OPEN — bids arrive within minutes'],
-      ],
-    },
-    {
-      Icon: IconWallet,
-      title: t('landing.slides.pay.title') || 'Get paid fast',
-      intro: t('landing.slides.pay.intro') || 'Escrow holds the funds; release is automatic.',
-      steps: t('landing.slides.pay.steps') || [
-        ['Deliver', 'Hand off and collect the POD'],
-        ['Confirm', 'Shipper confirms, or 24h auto-release'],
-        ['Payout', 'In your account within 48 hours'],
-      ],
-    },
-  ];
-
-    if (skipHeroAnimOnce) {
-      skipHeroAnimOnce = false;
-      return '';
-    }
-    return 'animate-hero-in';
-  });
-
-  useEffect(() => {
     api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 4))).catch(() => {});
     api.publicMarket().then((d) => setMarket(d.market)).catch(() => {});
     // GET /api/public/lanes — the unified lane index was built server-side
@@ -139,7 +87,7 @@ export default function Landing() {
               </div>
 
   // eslint-ignore no-undef
-              <FreightMotionScene slides={heroSlides} />
+              <FreightMotionScene />
 
               <div className="grid grid-cols-3 gap-px px-5 py-4" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 {[
