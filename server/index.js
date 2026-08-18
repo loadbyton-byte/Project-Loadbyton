@@ -31,6 +31,13 @@ const { init: initSentry, requestHandler: sentryRequestHandler, expressErrorHand
 
 const PORT = Number(process.env.PORT) || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+// Additional origins allowed for cross-origin authentication (e.g., Vercel preview/production)
+const ADDITIONAL_ORIGINS = (process.env.ADDITIONAL_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (origin === FRONTEND_URL) return true;
+  return ADDITIONAL_ORIGINS.includes(origin);
+}
 const INTERNAL_KEY = process.env.INTERNAL_KEY || randomToken(16);
 // gstack review F22: a hash to compare against when no user row exists, so
 // a login attempt for an unregistered email pays the same bcrypt cost as
@@ -72,8 +79,9 @@ const writeLimiter = rateLimiter({ windowMs: 60 * 1000, max: 30, keyFn: byIp, me
 
 // Dev CORS — a no-op in production, where the SPA is same-origin.
 app.use((req, res, next) => {
-  if (req.headers.origin === FRONTEND_URL) {
-    res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+  const origin = req.headers.origin;
+  if (isAllowedOrigin(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-request-id, x-internal-key');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
@@ -486,8 +494,6 @@ function canViewJob(job, user) {
 function createSession(req, res, userId, { impersonatingAdminId = null, actingSeatId = null, maxAgeSeconds = 7 * 24 * 60 * 60 } = {}) {
   const token = randomToken(32);
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
-  // Sessions are stored as SHA-256 hashes of the cookie token — a leaked
-  // DB dump must not be a working set of session cookies.
   db.prepare('INSERT INTO sessions (session_token, user_id, expires_at, impersonating_admin_id, acting_seat_id) VALUES (?,?,?,?,?)').run(
     hashToken(token),
     userId,
@@ -495,12 +501,19 @@ function createSession(req, res, userId, { impersonatingAdminId = null, actingSe
     impersonatingAdminId,
     actingSeatId
   );
-  const secure = req.protocol === 'https' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `lb_session=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`);
+  // Cross-origin cookie settings: SameSite=None; Secure for cross-origin (Vercel -> Render)
+  const isHttps = req.protocol === 'https';
+  const isCrossOrigin = isAllowedOrigin(req.headers.origin);
+  const sameSite = isCrossOrigin ? 'None' : 'Lax';
+  const secure = isHttps ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `lb_session=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSeconds}; SameSite=${sameSite}${secure}`);
 }
 
-function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', 'lb_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
+function clearSessionCookie(req, res) {
+  const isCrossOrigin = isAllowedOrigin(req.headers.origin);
+  const sameSite = isCrossOrigin ? 'None' : 'Lax';
+  const secure = req.protocol === 'https' ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `lb_session=; HttpOnly; Path=/; Max-Age=0; SameSite=${sameSite}${secure}`);
 }
 
 // Multi-seat accounts: a seat authenticates with their own email/password,

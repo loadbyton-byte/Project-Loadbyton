@@ -6,6 +6,8 @@
 //  - an expired session came back as a 401 the page usually treated like
 //    "no data", leaving the user staring at an empty screen while their
 //    session silently died.
+//
+// API base URL: uses VITE_API_URL env var (defaults to relative /api for same-origin dev)
 
 const REQUEST_TIMEOUT_MS = 25000;
 
@@ -19,10 +21,13 @@ export class ApiError extends Error {
 
 const AUTH_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me', '/auth/verify-email', '/auth/resend-verification']);
 
+// Get API base URL from env (for cross-origin Vercel -> Render)
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
 async function request(method, path, body) {
   let res;
   try {
-    res = await fetch(`/api${path}`, {
+    res = await fetch(`${API_BASE_URL}/api${path}`, {
       method,
       credentials: 'include',
       headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
