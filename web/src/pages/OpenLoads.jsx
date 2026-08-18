@@ -110,7 +110,7 @@ export default function OpenLoads() {
                   destination={formatLabel(j.delivery_area)}
                   chips={[
                     CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
-                    ...(j.cargo_weight_tons != null ? [`${j.cargo_weight_tons} t`] : []),
+                    ...(j.cargo_weight_tons !== null ? [`${j.cargo_weight_tons} t`] : []),
                     ...(j.container_count > 1 ? [`×${j.container_count} containers`] : []),
                     ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
                   ]}

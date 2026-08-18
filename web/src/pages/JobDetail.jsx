@@ -198,7 +198,7 @@ export default function JobDetail() {
             ) : (
               <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
                 <div><dt className="text-ink-muted">Equipment</dt><dd className="mt-0.5 font-medium text-ink">{equipmentLabel(job.equipment_type)}</dd></div>
-                {job.cargo_weight_tons != null && (
+                {job.cargo_weight_tons !== null && (
                   <div><dt className="text-ink-muted">Cargo weight</dt><dd className="mt-0.5 font-medium text-ink">{job.cargo_weight_tons} t</dd></div>
                 )}
                 {CONTAINER_EQUIPMENT.includes(job.equipment_type) && (
