@@ -63,6 +63,7 @@ export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { addToast } = useToasts();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -132,6 +133,61 @@ export default function JobDetail() {
       await load();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function awardBid(b) {
+    const amountText = b.amount_aed ? ` of ${formatAED(b.amount_aed)}` : '';
+    if (!window.confirm(`Award this bid${amountText} to this carrier? Awarding commits you to paying — once the carrier accepts, the amount is charged to you and held in escrow.`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.awardJob(job.id, b.id);
+      addToast({ type: 'award', title: 'Bid awarded', body: `${b.carrier_company || 'The carrier'} won the job — payment will be charged once they accept.` });
+      await load();
+    } catch (err) {
+      setError(err.message);
+      addToast({ type: 'system_message', title: 'Could not award bid', body: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelJob() {
+    const open = job.status === 'OPEN';
+    if (!window.confirm(
+      open
+        ? 'Cancel this job? It is still OPEN — no money has moved and no one has been charged.'
+        : 'Cancel this AWARDED job? Escrow rules apply: the payout to the carrier is cancelled and the held amount is handled per the escrow terms.'
+    )) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.setStatus(job.id, 'CANCELLED');
+      addToast({ type: 'system_message', title: 'Job cancelled', body: open ? 'The job was cancelled — no money moved.' : 'The job was cancelled and the payout to the carrier is cancelled.' });
+      await load();
+    } catch (err) {
+      setError(err.message);
+      addToast({ type: 'system_message', title: 'Could not cancel job', body: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function completeJob() {
+    const amount = job.agreed_price_aed || job.max_budget_aed;
+    if (!window.confirm(`Confirm delivery and release escrow? ${formatAED(amount)} will be paid out to the carrier from escrow — this cannot be undone.`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.setStatus(job.id, 'COMPLETED');
+      addToast({ type: 'payout_released', title: 'Delivery confirmed', body: `Escrow released — ${formatAED(amount)} paid to the carrier.` });
+      await load();
+    } catch (err) {
+      setError(err.message);
+      addToast({ type: 'system_message', title: 'Could not confirm delivery', body: err.message });
     } finally {
       setBusy(false);
     }
@@ -236,7 +292,7 @@ export default function JobDetail() {
                     <div className="flex shrink-0 items-center gap-3">
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>
                       {isShipper && job.status === 'OPEN' && b.status === 'PENDING' && (
-                        <Button variant="accent" onClick={() => act(() => api.awardJob(job.id, b.id))} loading={busy}>Award</Button>
+                        <Button variant="accent" onClick={() => awardBid(b)} loading={busy}>Award</Button>
                       )}
                     </div>
                   </div>
@@ -315,13 +371,13 @@ export default function JobDetail() {
                 <PodForm jobId={job.id} onDone={load} busy={busy} setBusy={setBusy} setError={setError} />
               )}
               {isShipper && job.status === 'DELIVERED' && (
-                <Button className="w-full" variant="accent" onClick={() => act(() => api.setStatus(job.id, 'COMPLETED'))} loading={busy}>Confirm delivery & release escrow</Button>
+                <Button className="w-full" variant="accent" onClick={completeJob} loading={busy}>Confirm delivery & release escrow</Button>
               )}
               {isShipper && ['OPEN', 'AWARDED', 'DRAFT'].includes(job.status) && (
-                <Button className="w-full" variant="danger" onClick={() => act(() => api.setStatus(job.id, 'CANCELLED'))} loading={busy}>Cancel job</Button>
+                <Button className="w-full" variant="danger" onClick={cancelJob} loading={busy}>Cancel job</Button>
               )}
               {isAwardedCarrier && job.status === 'AWARDED' && (
-                <Button className="w-full" variant="ghost" onClick={() => act(() => api.setStatus(job.id, 'CANCELLED'))} loading={busy}>Cancel before pickup</Button>
+                <Button className="w-full" variant="ghost" onClick={cancelJob} loading={busy}>Cancel before pickup</Button>
               )}
               {!isAwardedCarrier && !isShipper && !myBid && job.status !== 'OPEN' && (
                 <p className="text-xs text-ink-muted">No actions available.</p>
@@ -357,6 +413,7 @@ function PaymentPanel({ job, load }) {
   }[job.processor_payment_status] || { color: 'neutral', text: job.processor_payment_status };
 
   async function pay() {
+    if (!window.confirm(`Proceed to pay ${formatAED(amount)}? Your payment is held in escrow for this job until delivery is confirmed.`)) return;
     setBusy(true);
     setError('');
     try {

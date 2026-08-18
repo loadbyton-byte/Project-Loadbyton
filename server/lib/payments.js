@@ -130,6 +130,9 @@ async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', descr
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
+        // A hung processor must fail closed (and surface via the audit log)
+        // rather than leaving a checkout/payout/refund silently in flight.
+        signal: AbortSignal.timeout(15000),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data || !data.order || !data.order.ref) {
@@ -263,6 +266,7 @@ async function refundCharge({ tranref, amountAed, paymentRef }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
+        signal: AbortSignal.timeout(15000),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data || data.status !== 'OK') {

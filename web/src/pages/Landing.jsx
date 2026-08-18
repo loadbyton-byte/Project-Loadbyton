@@ -6,7 +6,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import FreightMotionScene from '../components/FreightMotionScene.jsx';
-import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
+import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass, IconUser, IconEdit, IconWallet } from '../components/icons.jsx';
 
 const EQUIPMENT_ICONS = {
   CONTAINER_CHASSIS: IconPackage, TRAILER_WITH_GENSET: IconPackage, LOWBED_TRAILER: IconTrailer, FLATBED_TRAILER: IconTrailer,
@@ -33,6 +33,51 @@ export default function Landing() {
   const [market, setMarket] = useState(null);
   const [lanes, setLanes] = useState([]);
   const [heroAnim] = useState(() => {
+  // eslint-disable no-unused-vars
+  const heroSlides = [
+    {
+      Icon: IconLayers,
+      title: t('landing.slides.works.title') || 'How it works',
+      intro: t('landing.slides.works.intro') || 'One sequence for every load — from posting to payout.',
+      steps: t('landing.slides.works.steps') || [
+        ['Post the job', 'Equipment, route, target price'],
+        ['Carriers bid', 'Verified fleet, priced live'],
+        ['Award & escrow', 'Price locks, funds secured'],
+        ['Deliver & paid', 'POD up, payout within 48h'],
+      ],
+    },
+    {
+      Icon: IconUser,
+      title: t('landing.slides.register.title') || 'Register in minutes',
+      intro: t('landing.slides.register.intro') || 'Create an account, get verified, start moving freight.',
+      steps: t('landing.slides.register.steps') || [
+        ['Create your account', 'Email and company details'],
+        ['Get verified', 'TRN, licence, insurance — checked by us'],
+        ['Start', 'Bid on loads or post jobs, escrow-backed'],
+      ],
+    },
+    {
+      Icon: IconEdit,
+      title: t('landing.slides.post.title') || 'Post a job',
+      intro: t('landing.slides.post.intro') || 'One structured form — no back-and-forth to reach carriers.',
+      steps: t('landing.slides.post.steps') || [
+        ['Equipment & route', 'Truck class, terminal, delivery area'],
+        ['Price & cargo', 'Target price per trip, cargo weight'],
+        ['Submit', 'Goes live as OPEN — bids arrive within minutes'],
+      ],
+    },
+    {
+      Icon: IconWallet,
+      title: t('landing.slides.pay.title') || 'Get paid fast',
+      intro: t('landing.slides.pay.intro') || 'Escrow holds the funds; release is automatic.',
+      steps: t('landing.slides.pay.steps') || [
+        ['Deliver', 'Hand off and collect the POD'],
+        ['Confirm', 'Shipper confirms, or 24h auto-release'],
+        ['Payout', 'In your account within 48 hours'],
+      ],
+    },
+  ];
+
     if (skipHeroAnimOnce) {
       skipHeroAnimOnce = false;
       return '';
@@ -93,7 +138,8 @@ export default function Landing() {
                 <span className="badge" style={{ background: 'rgba(242,96,12,0.2)', color: 'var(--lb-orange-500)' }}>Escrow-backed</span>
               </div>
 
-              <FreightMotionScene />
+  // eslint-ignore no-undef
+              <FreightMotionScene slides={heroSlides} />
 
               <div className="grid grid-cols-3 gap-px px-5 py-4" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 {[

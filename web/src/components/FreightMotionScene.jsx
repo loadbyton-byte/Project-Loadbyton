@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { IconLayers, IconUser, IconEdit, IconWallet, IconArrowLeft, IconArrowRight } from './icons.jsx';
 
 // Hero visual — a simple auto-advancing slide deck explaining the platform:
@@ -55,21 +55,35 @@ const SLIDES = [
 ];
 const INTERVAL_MS = 6000;
 
-export default function FreightMotionScene() {
+export default function FreightMotionScene({ slides }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  // The interval keeps ticking through a pause so the countdown resumes at
+  // its remaining time instead of restarting — which keeps the frozen
+  // progress bar and the next auto-advance in sync. The ref (not the state)
+  // gates the advance callback, so the interval closure never goes stale.
+  const pausedRef = useRef(false);
   const prefersReduced = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     []
   );
 
-  useEffect(() => {
-    if (prefersReduced || paused) return undefined;
-    const id = setInterval(() => setIndex((i) => (i + 1) % SLIDES.length), INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [prefersReduced, paused, index]);
+  function updatePaused(value) {
+    pausedRef.current = value;
+    setPaused(value);
+  }
 
-  const slide = SLIDES[index];
+  useEffect(() => {
+    if (prefersReduced) return undefined;
+    const id = setInterval(() => {
+      if (pausedRef.current) return;
+      setIndex((i) => (i + 1) % SLIDES.length);
+    }, INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [prefersReduced, index]);
+
+  const activeSlides = slides ?? SLIDES;
+  const slide = activeSlides[index];
 
   return (
     <div
@@ -77,11 +91,15 @@ export default function FreightMotionScene() {
       role="group"
       aria-roledescription="carousel"
       aria-label="How Loadbyton works"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      onMouseEnter={() => updatePaused(true)}
+      onMouseLeave={() => updatePaused(false)}
+      onFocusCapture={() => updatePaused(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) updatePaused(false);
+      }}
     >
       <div className="freight-deck-progress" aria-hidden="true">
-        <div key={index} className="freight-deck-progress-fill" style={{ animationDuration: `${INTERVAL_MS}ms` }} />
+        <div key={index} className="freight-deck-progress-fill" style={{ animationDuration: `${INTERVAL_MS}ms`, animationPlayState: paused ? 'paused' : 'running' }} />
       </div>
 
       <div key={index} className="freight-slide" aria-label={slide.title}>

@@ -110,7 +110,7 @@
      token via .font-display. */
   --text-primary: #0F2129;
   --text-secondary: #586A72;
-  --text-muted: #7A8A90;
+  --text-muted: #5F7078;
   --text-inverse: var(--lb-slate-0);
   /* White text on Loadbyton Red (#E53935) measures ~4.2:1 — passes AA for
      large/bold text and UI components (3:1) but falls just short of the
@@ -706,4 +706,19 @@ html[dir="rtl"] .animate-drawer-in {
     background: var(--bg-raised);
     color: var(--text-primary);
   }
+}
+
+/* color-mix fallback utilities — declare the simple fallback first; browsers
+   that understand color-mix will layer the gradient/transparent on top. */
+.card-accent-tint {
+  background-color: var(--bg-surface);
+  background-image: linear-gradient(135deg, color-mix(in srgb, var(--brand-accent) 10%, var(--bg-surface)), var(--bg-surface) 65%);
+}
+.badge-accent-soft {
+  background-color: var(--brand-accent-bg);
+  background-image: color-mix(in srgb, var(--brand-accent) 16%, transparent);
+}
+.glass-surface {
+  background-color: var(--bg-surface);
+  background-image: color-mix(in srgb, var(--bg-surface) 85%, transparent);
 }

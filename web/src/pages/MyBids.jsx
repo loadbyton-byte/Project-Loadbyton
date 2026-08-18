@@ -25,6 +25,7 @@ export default function MyBids() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
+  const [error, setError] = useState('');
   const { addToast } = useToasts();
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function MyBids() {
   function load() {
     const params = { sort, limit: PAGE_SIZE, offset };
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.myBids(params).then((d) => { setBids(d.bids); setTotal(d.total ?? d.bids.length); }).catch(() => { setBids([]); setTotal(0); });
+    api.myBids(params).then((d) => { setError(''); setBids(d.bids); setTotal(d.total ?? d.bids.length); }).catch((err) => { setError(err.message); setBids([]); setTotal(0); });
   }
   useEffect(load, [sort, debouncedSearch, offset]);
 
@@ -69,7 +70,12 @@ export default function MyBids() {
       </div>
 
       <div className="mt-5">
-        {bids === null ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+            <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load your bids — {error}</p>
+            <Button onClick={load}>Retry</Button>
+          </div>
+        ) : bids === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
         ) : bids.length === 0 ? (
           <EmptyState

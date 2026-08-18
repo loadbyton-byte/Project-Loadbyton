@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel } from '../lib/constants.js';
-import { EmptyState, Badge, Select, Input, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
+import { Button, EmptyState, Badge, Select, Input, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconAlert, IconPackage, IconSearch } from '../components/icons.jsx';
 
 const PAGE_SIZE = 20;
@@ -28,6 +28,7 @@ export default function OpenLoads() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
+  const [error, setError] = useState('');
 
   useEffect(() => { api.analytics().then((d) => setAnalytics(d.analytics)).catch(() => {}); }, []);
 
@@ -40,13 +41,15 @@ export default function OpenLoads() {
 
   useEffect(() => { setOffset(0); }, [equipmentFilter, sort, debouncedSearch]);
 
-  useEffect(() => {
+  function load() {
+    setError('');
     setJobs(null);
     const params = { status: 'OPEN', sort, limit: PAGE_SIZE, offset };
     if (equipmentFilter !== 'all') params.equipmentType = equipmentFilter;
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch(() => { setJobs([]); setTotal(0); });
-  }, [equipmentFilter, sort, debouncedSearch, offset]);
+    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch((err) => { setError(err.message); setJobs([]); setTotal(0); });
+  }
+  useEffect(load, [equipmentFilter, sort, debouncedSearch, offset]);
 
   return (
     <div className="container-page py-6" dir="ltr">
@@ -83,7 +86,12 @@ export default function OpenLoads() {
       </div>
 
       <div className="mt-6">
-        {jobs === null ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+            <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load open loads — {error}</p>
+            <Button onClick={load}>Retry</Button>
+          </div>
+        ) : jobs === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
         ) : jobs.length === 0 ? (
           <EmptyState

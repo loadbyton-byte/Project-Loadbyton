@@ -7,6 +7,9 @@
 // link, so verification/reset are still fully testable without a live
 // provider) — nothing in the auth flow depends on delivery succeeding.
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 function isConfigured() {
   return !!(process.env.EMAIL_API_KEY && process.env.EMAIL_FROM);
 }
@@ -16,6 +19,20 @@ async function sendEmail({ to, subject, html }) {
   if (!isConfigured()) {
     // eslint-disable-next-line no-console
     console.log(`[email:dark] would send "${subject}" to ${to} — EMAIL_API_KEY not set:\n${html}`);
+    // Test-only capture: EMAIL_DARK_LOG_DIR makes the dark-mode payload
+    // (which contains the real verification/reset link) retrievable from a
+    // file, so tests can complete the verify-email flow end-to-end without
+    // a live provider.
+    const logDir = process.env.EMAIL_DARK_LOG_DIR;
+    if (logDir) {
+      try {
+        fs.mkdirSync(logDir, { recursive: true });
+        fs.appendFileSync(path.join(logDir, 'emails.log'), JSON.stringify({ to, subject, html, at: new Date().toISOString() }) + '\n');
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error(`[email:dark] could not write ${logDir}: ${e.message}`);
+      }
+    }
     return { sent: false, reason: 'not_configured' };
   }
 

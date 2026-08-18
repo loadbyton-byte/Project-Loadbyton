@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { EmptyState, StatusBadge, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
+import { Button, EmptyState, StatusBadge, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
 import { IconPackage, IconSearch } from '../components/icons.jsx';
 import { formatLabel, CONTAINER_EQUIPMENT, STATUS_FLOW, equipmentLabel } from '../lib/constants.js';
 
@@ -25,6 +25,7 @@ export default function WonJobs() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -32,14 +33,17 @@ export default function WonJobs() {
   }, [search]);
   useEffect(() => { setOffset(0); }, [sort, debouncedSearch]);
 
-  useEffect(() => {
+  function load() {
+    setError('');
+    setJobs(null);
     // F19, fixed independently on both branches, now with real server-side
     // pagination (the status:"a,b,c" list support this needed) instead of
     // over-fetching 200 rows and filtering client-side.
     const params = { mine: 1, status: ACTIVE_STATUSES.join(','), sort, limit: PAGE_SIZE, offset };
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch(() => { setJobs([]); setTotal(0); });
-  }, [user.id, sort, debouncedSearch, offset]);
+    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch((err) => { setError(err.message); setJobs([]); setTotal(0); });
+  }
+  useEffect(load, [user.id, sort, debouncedSearch, offset]);
 
   return (
     <div className="container-page py-6" dir="ltr">
@@ -57,7 +61,12 @@ export default function WonJobs() {
       </div>
 
       <div className="mt-5">
-        {jobs === null ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+            <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load won jobs — {error}</p>
+            <Button onClick={load}>Retry</Button>
+          </div>
+        ) : jobs === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
         ) : jobs.length === 0 ? (
           <EmptyState

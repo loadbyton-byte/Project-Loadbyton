@@ -207,6 +207,11 @@ CREATE TABLE IF NOT EXISTS disputes (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_disputes_job ON disputes(job_id);
+-- gstack/audit F4: at most one *open* dispute per job — a resolved dispute
+-- stays as history, but a second dispute can never be opened (and resolved
+-- a second time, double-refunding the shipper) while one is still live.
+-- Partial index so historical RESOLVED rows are unaffected.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_disputes_one_open_per_job ON disputes(job_id) WHERE status = 'OPEN';
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,6 +272,13 @@ function addColumn(table, column, ddl) {
 }
 
 addColumn('users', 'mfa_secret', 'mfa_secret TEXT');
+// M4: two-step MFA enrollment — setup stores the proposed secret as
+// mfa_pending_secret and does NOT enable anything; /api/auth/mfa/confirm
+// requires a valid TOTP code from that secret before mfa_secret/mfa_enabled
+// flip. mfa_backup_codes is a CSV of SHA-256 hashes of one-time recovery
+// codes, usable at login when the authenticator is unavailable.
+addColumn('users', 'mfa_pending_secret', 'mfa_pending_secret TEXT');
+addColumn('users', 'mfa_backup_codes', 'mfa_backup_codes TEXT');
 
 addColumn('jobs', 'delivered_at', 'delivered_at TEXT');
 addColumn('jobs', 'auto_release_processed', 'auto_release_processed INTEGER NOT NULL DEFAULT 0');

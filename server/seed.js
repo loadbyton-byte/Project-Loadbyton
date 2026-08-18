@@ -16,6 +16,17 @@ module.exports = function seed() {
   const userCount = db.prepare('SELECT COUNT(*) c FROM users').get().c;
   if (userCount > 0) return; // idempotent
 
+  // M3: demo data (including the demo1234 password every seeded account
+  // shares) must never appear on a real deployment by default. Production
+  // seeding is an explicit opt-in (SEED_DEMO_DATA=1) — the public demo on
+  // Render sets it deliberately; a real production deployment without it
+  // starts empty.
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && process.env.SEED_DEMO_DATA !== '1') {
+    console.log('Loadbyton: skipping demo data seed in production (set SEED_DEMO_DATA=1 to seed demo accounts).');
+    return;
+  }
+
   const PASSWORD_HASH = bcrypt.hashSync('demo1234', 10);
 
   function insertUser({ email, role, tier, referral_code, is_verified }) {
@@ -295,5 +306,7 @@ module.exports = function seed() {
   auditRow.run(null, 'ESCROW_RELEASE', 'Auto-released LBT-DXB-2607-9042 after 24h (silent assent).', 'job', job5, 'HELD', 'RELEASED');
   auditRow.run(shipperId, 'STATUS', 'LBT-DXB-2607-7715: DELIVERED -> COMPLETED', 'job', job6, 'DELIVERED', 'COMPLETED');
 
-  console.log(`Loadbyton: seeded demo data (${seedAdmin ? 6 : 5} users, 6 jobs, 7 bids, templates, contract lanes).`);
+  const jobCount = db.prepare('SELECT COUNT(*) c FROM jobs').get().c;
+  const bidCount = db.prepare('SELECT COUNT(*) c FROM bids').get().c;
+  console.log(`Loadbyton: seeded demo data (${seedAdmin ? 6 : 5} users, ${jobCount} jobs, ${bidCount} bids, templates, contract lanes).`);
 };

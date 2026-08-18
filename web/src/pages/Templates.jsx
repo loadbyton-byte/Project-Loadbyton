@@ -14,9 +14,10 @@ export default function Templates() {
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [rerunning, setRerunning] = useState(null);
+  const [error, setError] = useState('');
 
   function load() {
-    api.listTemplates().then((d) => setTemplates(d.templates)).catch(() => {});
+    api.listTemplates().then((d) => { setError(''); setTemplates(d.templates); }).catch((err) => { setError(err.message); });
   }
   useEffect(load, []);
 
@@ -111,7 +112,12 @@ export default function Templates() {
       )}
 
       <div className="mt-8">
-        {templates.length === 0 ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+            <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load templates — {error}</p>
+            <Button onClick={load}>Retry</Button>
+          </div>
+        ) : templates.length === 0 ? (
           <EmptyState icon={<IconPackage size={28} />} title="No templates yet" description="Save your first recurring lane to skip re-entering the same job details." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

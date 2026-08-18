@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [form, setForm] = useState(emptyJob);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('date_desc');
   const [search, setSearch] = useState('');
@@ -63,7 +64,7 @@ export default function Dashboard() {
     const params = { sort, limit: PAGE_SIZE, offset };
     if (filter !== 'all') params.status = filter;
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.listJobs(params).then((d) => { setJobs(d.jobs); setJobsTotal(d.total ?? d.jobs.length); }).catch(() => { setJobs([]); setJobsTotal(0); });
+    api.listJobs(params).then((d) => { setLoadError(''); setJobs(d.jobs); setJobsTotal(d.total ?? d.jobs.length); }).catch((err) => { setLoadError(err.message); setJobs([]); setJobsTotal(0); });
   }
   function load() {
     loadStats();
@@ -289,6 +290,11 @@ export default function Dashboard() {
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">Your jobs</h2>
         {jobs === null ? (
           <p className="mt-3 text-sm text-ink-muted">Loading…</p>
+        ) : loadError ? (
+          <div className="mt-3 flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+            <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load your jobs — {loadError}</p>
+            <Button onClick={loadJobs}>Retry</Button>
+          </div>
         ) : jobs.length === 0 && filter === 'all' && !debouncedSearch ? (
           <EmptyState className="mt-3" title="No jobs yet" description="Post your first drayage job to start getting carrier bids." action={<Button onClick={() => setShowForm(true)}>Post a job</Button>} />
         ) : (

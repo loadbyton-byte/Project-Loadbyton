@@ -38,6 +38,7 @@ async function waitForHealth(baseUrl, timeoutMs = 15000) {
 
 async function startServer(extraEnv = {}) {
   const dbPath = path.join(os.tmpdir(), `loadbyton-test-${process.pid}-${Symbol().description || 'db'}-${Math.random().toString(36).slice(2)}.db`);
+  const emailLogDir = path.join(os.tmpdir(), `loadbyton-emails-${process.pid}-${Math.random().toString(36).slice(2)}`);
   const port = freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
 
@@ -50,6 +51,7 @@ async function startServer(extraEnv = {}) {
       FRONTEND_URL: 'http://127.0.0.1:1', // dev-CORS branch stays a no-op in tests
       INTERNAL_KEY: 'test-internal-key',
       NODE_ENV: 'test',
+      EMAIL_DARK_LOG_DIR: emailLogDir,
       ...extraEnv,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -72,9 +74,29 @@ async function startServer(extraEnv = {}) {
     for (const suffix of ['', '-wal', '-shm']) {
       fs.rmSync(dbPath + suffix, { force: true });
     }
+    fs.rmSync(emailLogDir, { recursive: true, force: true });
   }
 
-  return { baseUrl, dbPath, stop };
+  return { baseUrl, dbPath, emailsLogPath: path.join(emailLogDir, 'emails.log'), stop };
+}
+
+// Completes the email-verification step for the most recent verification
+// email sent to `recipientEmail` — the M2 write-gate requires a verified
+// email, and the only way to get the token is the (dark-mode) email.
+async function verifyLatestEmail(client, emailsLogPath, recipientEmail) {
+  const content = fs.readFileSync(emailsLogPath, 'utf8');
+  const lines = content.trim().split('\n').reverse();
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry.to !== recipientEmail) continue;
+      const m = entry.html.match(/verify-email\?token=([a-f0-9]+)/);
+      if (m) return client.get(`/api/auth/verify-email?token=${m[1]}`);
+    } catch {
+      // malformed line — keep scanning
+    }
+  }
+  throw new Error(`no verification email found for ${recipientEmail} in ${emailsLogPath}`);
 }
 
 // Minimal per-actor cookie jar — fetch doesn't persist Set-Cookie across
@@ -111,4 +133,4 @@ function makeClient(baseUrl) {
   };
 }
 
-module.exports = { startServer, makeClient };
+module.exports = { startServer, makeClient, verifyLatestEmail };

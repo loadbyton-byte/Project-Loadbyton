@@ -7,12 +7,16 @@ const assert = require('node:assert/strict');
 const { byIp } = require('../lib/rateLimit');
 const { startServer } = require('./harness');
 
-test('byIp prefers cf-connecting-ip (Cloudflare-resolved, unspoofable) over req.ip', () => {
-  const withCf = { headers: { 'cf-connecting-ip': '203.0.113.9' }, ip: '10.0.0.1' };
-  assert.equal(byIp(withCf), '203.0.113.9');
+test('byIp resolves from req.ip only — client-supplied proxy headers are ignored (M1)', () => {
+  // A direct-to-origin attacker can set ANY header — cf-connecting-ip must
+  // not be trusted (it was: a fake header per request gave an unlimited
+  // key-space and zero rate limiting). req.ip comes from X-Forwarded-For
+  // through the trusted-hop count, which Render sets at its edge.
+  const withSpoofedCf = { headers: { 'cf-connecting-ip': '203.0.113.9' }, ip: '10.0.0.1' };
+  assert.equal(byIp(withSpoofedCf), '10.0.0.1', 'the spoofed cf-connecting-ip header must be ignored');
 
   const withoutCf = { headers: {}, ip: '10.0.0.1' };
-  assert.equal(byIp(withoutCf), '10.0.0.1', 'falls back to req.ip when not behind Cloudflare (local dev)');
+  assert.equal(byIp(withoutCf), '10.0.0.1', 'resolves to req.ip');
 });
 
 test('HSTS is gated on req.secure — a plain-HTTP response never sends it', async () => {

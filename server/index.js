@@ -44,7 +44,9 @@ app.disable('x-powered-by');
 // Required for req.ip to reflect the real client behind Render/Cloudflare —
 // without this, every request behind a proxy shares one IP and the rate
 // limiter below would throttle all users as if they were one.
-app.set('trust proxy', 1);
+// M1: two trusted hops = Render's edge + Cloudflare (see rateLimit.js for
+// why the previous cf-connecting-ip approach was spoofable and removed).
+app.set('trust proxy', 2);
 // 8mb covers a 5MB (MAX_UPLOAD_BYTES) file at its ~33% base64 inflation plus
 // JSON overhead; every other route's body is a few KB at most. The verify
 // hook is a side-channel capture of the raw bytes as transmitted — only the
@@ -87,7 +89,7 @@ app.use((req, res, next) => {
 const CONTAINER_SIZES = ['20FT', '40FT', '40HC', 'REEFER'];
 const CONTAINER_TYPES = ['DRY', 'REEFER', 'HAZMAT', 'OPEN_TOP', 'FLAT_RACK'];
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
-const STATUS_ORDER = ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
+const STATUS_ORDER = ['OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
 
 // Real file upload for job documents/POD photos. Sent as base64 in the JSON
 // body (not multipart) so this needs no new dependency — express.json()
@@ -184,6 +186,11 @@ const MIN_PASSWORD_LENGTH = 8;
 function isPasswordValid(password) {
   return typeof password === 'string' && password.length >= MIN_PASSWORD_LENGTH;
 }
+
+// M2: pragmatic RFC-ish shape check — one @, non-empty local and domain,
+// dot in the domain. Rejects the obviously-broken values that previously
+// sailed through ("not a string" was a valid registration email).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 // gstack review F9: raw `===` on a secret is a timing oracle in principle.
 // SHA-256 both sides first — fixes the comparison to a constant 32 bytes so
@@ -319,6 +326,21 @@ function markJobPaymentFailed(jobId, error) {
 // /api/admin/payouts-sla, exactly like the manual flow it replaces.
 function executePayoutAsync(job, payout, req) {
   if (!payments.isConfigured() || !payout || payout.transfer_executed_at) return;
+  // F5: the transfer_executed_at check alone is racy — two concurrent
+  // releases (admin resolve + the 10-minute sweep, or a double-submit)
+  // could both read NULL and both pay. Claim the payout atomically before
+  // any network call: only PENDING/FAILED rows are claimable, and a row
+  // stuck in SENDING for over 15 minutes (processor hung, process died
+  // mid-flight) is reclaimable. Exactly one caller wins the UPDATE.
+  const claim = db
+    .prepare(
+      `UPDATE payouts SET processor_payout_status='SENDING'
+       WHERE id=? AND transfer_executed_at IS NULL
+         AND (processor_payout_status IN ('PENDING','FAILED')
+              OR (processor_payout_status='SENDING' AND released_at <= datetime('now','-15 minutes')))`
+    )
+    .run(payout.id);
+  if (claim.changes !== 1) return; // already claimed/executed — someone else pays
   const profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(payout.carrier_id);
   const reference = `LB-${job.job_code}-${payout.id}`;
   payments
@@ -327,7 +349,9 @@ function executePayoutAsync(job, payout, req) {
       jobCode: job.job_code,
       amountAed: payout.net_aed,
       carrierAccountId: profile ? profile.processor_account_id : null,
-      carrierIban: profile ? profile.iban : null,
+      // F2: profiles.iban is stored AES-256-GCM-encrypted (enc:v1: prefix) —
+      // the processor must receive the plaintext IBAN, never the ciphertext.
+      carrierIban: profile ? decryptField(profile.iban) : null,
       reference,
     })
     .then((r) => {
@@ -372,15 +396,18 @@ function executePayoutAsync(job, payout, req) {
     });
 }
 
-// Fire-and-forget refund of a PAID charge (dispute REFUND_SHIPPER, or a
-// cancellation after funds were taken). Only meaningful when the processor
-// is configured AND the charge actually went through (tranref exists) —
-// otherwise there is nothing to refund.
-function refundJobAsync(job) {
+// Fire-and-forget refund of a PAID charge (dispute REFUND_SHIPPER, a
+// SPLIT's shipper half, or a cancellation after funds were taken). Only
+// meaningful when the processor is configured AND the charge actually went
+// through (tranref exists) — otherwise there is nothing to refund.
+// amountAed defaults to the full charged amount; a SPLIT resolution passes
+// half. Never refunds a charge already marked REFUNDED (F4).
+function refundJobAsync(job, amountAed = null) {
   if (!payments.isConfigured() || job.processor_payment_status !== 'PAID' || !job.processor_tranref) return;
-  const amountAed = job.processor_amount_aed ?? job.agreed_price_aed;
+  if (amountAed !== null && (!Number.isFinite(amountAed) || amountAed <= 0)) return;
+  const amount = amountAed ?? job.processor_amount_aed ?? job.agreed_price_aed;
   payments
-    .refundCharge({ tranref: job.processor_tranref, amountAed, paymentRef: job.processor_payment_ref })
+    .refundCharge({ tranref: job.processor_tranref, amountAed: amount, paymentRef: job.processor_payment_ref })
     .then((r) => {
       if (r.ok) {
         db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`).run(job.id);
@@ -416,7 +443,11 @@ function isParticipantOrBidder(job, user) {
   if (user.id === job.shipper_id) return true;
   if (user.id === job.carrier_id) return true;
   if (user.role === 'CARRIER') {
-    const hasBid = db.prepare('SELECT 1 FROM bids WHERE job_id=? AND carrier_id=?').get(job.id, user.id);
+    // F6: only a *live* bid (PENDING — still competing) or the winning bid
+    // (ACCEPTED) grants access. A WITHDRAWN or REJECTED bid previously kept
+    // full job/message/driver-PII access forever — a losing bidder must not
+    // keep reading the winner's messages, documents, or driver details.
+    const hasBid = db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND carrier_id=? AND status IN ('PENDING','ACCEPTED')`).get(job.id, user.id);
     if (hasBid) return true;
   }
   return false;
@@ -436,7 +467,15 @@ function isPartyOnJob(job, user) {
 
 function canViewJob(job, user) {
   if (isParticipantOrBidder(job, user)) return true;
-  if (user.role === 'CARRIER' && job.status === 'OPEN') return true;
+  if (user.role === 'CARRIER') {
+    // F6: a revoked bidder (WITHDRAWN/REJECTED) keeps the right to see the
+    // job they bid on — their own bid history and the outcome — but the
+    // detail route gates messages, documents, other bids and driver PII
+    // behind isPartyOnJob/isParticipantOrBidder, so visibility ≠ access.
+    const everBid = db.prepare('SELECT 1 FROM bids WHERE job_id=? AND carrier_id=?').get(job.id, user.id);
+    if (everBid) return true;
+    if (job.status === 'OPEN') return true;
+  }
   return false;
 }
 
@@ -447,8 +486,10 @@ function canViewJob(job, user) {
 function createSession(req, res, userId, { impersonatingAdminId = null, actingSeatId = null, maxAgeSeconds = 7 * 24 * 60 * 60 } = {}) {
   const token = randomToken(32);
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
+  // Sessions are stored as SHA-256 hashes of the cookie token — a leaked
+  // DB dump must not be a working set of session cookies.
   db.prepare('INSERT INTO sessions (session_token, user_id, expires_at, impersonating_admin_id, acting_seat_id) VALUES (?,?,?,?,?)').run(
-    token,
+    hashToken(token),
     userId,
     expiresAt,
     impersonatingAdminId,
@@ -494,10 +535,17 @@ function auth(roles) {
   return (req, res, next) => {
     const token = req.cookies.lb_session;
     if (!token) return sendError(res, 401, 'Not authenticated');
-    const session = db.prepare('SELECT * FROM sessions WHERE session_token=?').get(token);
+    const session = db.prepare('SELECT * FROM sessions WHERE session_token=?').get(hashToken(token));
     if (!session || new Date(session.expires_at) < new Date()) return sendError(res, 401, 'Session expired');
     const user = db.prepare('SELECT * FROM users WHERE id=?').get(session.user_id);
     if (!user) return sendError(res, 401, 'Not authenticated');
+    // A deactivated account's *existing* sessions must die too — login
+    // already checks is_active, but that alone left an already-logged-in
+    // user fully active until their cookie expired.
+    if (!user.is_active) {
+      db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
+      return sendError(res, 401, 'This account has been deactivated');
+    }
     const profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(user.id);
     req.user = { ...user, profile };
     req.session = session;
@@ -525,6 +573,14 @@ function auth(roles) {
         403,
         'Your account is pending admin approval — you can browse, but this action is unavailable until an admin approves your account.'
       );
+    }
+    // M2: unverified emails are read-only too — an account registered with
+    // an email the registrant doesn't own must not post jobs, bid, or move
+    // money until the verification link proves ownership. Seeded demo
+    // accounts and setup-admin accounts are email_verified_at-stamped at
+    // creation, so nothing legitimately registered is blocked.
+    if (isWrite && user.role !== 'ADMIN' && !user.email_verified_at && !isApprovalExempt(req.path)) {
+      return sendError(res, 403, 'Verify your email address before performing this action — check your inbox for the verification link.');
     }
     next();
   };
@@ -573,15 +629,24 @@ function clearThrottle(email) {
 // =============================================================================
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'loadbyton-api', time: new Date().toISOString(), pid: String(process.pid), port: PORT, payments: payments.providerInfo() });
+  res.json({ ok: true, service: 'loadbyton-api', time: new Date().toISOString(), port: PORT, payments: payments.providerInfo() });
 });
 
 function runAutoReleaseSweep(req) {
   const { auto_release_hours } = getSettings();
+  // Money moves only when money is actually in escrow (FUNDED = the webhook
+  // confirmed the charge in processor mode, or the admin confirm-receipt
+  // route in internal mode) AND proof of delivery is on file — a silent
+  // 24h release of shipper funds with no POD is exactly the failure the
+  // audit flagged (F1). Jobs still HELD/PENDING stay parked until a human
+  // confirms the funds; the disputed filter below is belt-and-braces on
+  // top of the FUNDED gate.
   const due = db
     .prepare(
       `SELECT * FROM jobs
        WHERE status='DELIVERED' AND auto_release_processed=0 AND delivered_at IS NOT NULL
+         AND escrow_status='FUNDED'
+         AND EXISTS (SELECT 1 FROM job_documents d WHERE d.job_id = jobs.id AND d.doc_type='POD')
          AND datetime(delivered_at, '+' || ? || ' hours') <= datetime('now')`
     )
     .all(auto_release_hours);
@@ -601,7 +666,7 @@ function runAutoReleaseSweep(req) {
         details: `Auto-released ${job.job_code} after ${auto_release_hours}h (silent assent).`,
         entityType: 'job',
         entityId: job.id,
-        beforeState: 'HELD',
+        beforeState: job.escrow_status,
         afterState: 'RELEASED',
       });
       notify(job.shipper_id, 'Payout auto-released', `${job.job_code} funds were released ${auto_release_hours}h after delivery.`, job.id, 'payout');
@@ -637,7 +702,7 @@ app.post('/api/system/auto-release', (req, res) => {
   let authorized = typeof key === 'string' && timingSafeEqualStr(key, INTERNAL_KEY);
   if (!authorized) {
     const token = req.cookies.lb_session;
-    const session = token && db.prepare('SELECT * FROM sessions WHERE session_token=?').get(token);
+    const session = token && db.prepare('SELECT * FROM sessions WHERE session_token=?').get(hashToken(token));
     const user = session && db.prepare('SELECT * FROM users WHERE id=?').get(session.user_id);
     if (user && user.role === 'ADMIN') authorized = true;
   }
@@ -647,6 +712,12 @@ app.post('/api/system/auto-release', (req, res) => {
 });
 
 setInterval(() => runAutoReleaseSweep(null), 10 * 60 * 1000).unref();
+
+// Expired sessions were only purged at boot (server/db.js) — between
+// restarts they accumulated forever. Hourly sweep keeps the table bounded.
+setInterval(() => {
+  db.prepare(`DELETE FROM sessions WHERE expires_at < datetime('now')`).run();
+}, 60 * 60 * 1000).unref();
 
 // =============================================================================
 // 1b. Payment processor webhook (TODO-3)
@@ -705,6 +776,26 @@ app.post(
         return res.json({ ok: true, idempotent: true });
       }
       const paidAmount = parsed.amountAed ?? job.agreed_price_aed;
+      // M11: an AUTHORISED callback for less than the escrow price must not
+      // fund the escrow — releasing the full payout against a partial
+      // charge would overpay the carrier by the shortfall. Fail closed:
+      // record the amount + a loud audit entry and leave escrow HELD for a
+      // human decision (retry, top-up, or a revised price).
+      if (Number.isFinite(paidAmount) && Number.isFinite(job.agreed_price_aed) && paidAmount < job.agreed_price_aed - 0.005) {
+        db.prepare(
+          `UPDATE jobs SET processor_payment_status='FAILED', processor_last_error=?, processor_amount_aed=?, updated_at=datetime('now') WHERE id=?`
+        ).run(`underpaid: received AED ${paidAmount}, expected AED ${job.agreed_price_aed}`.slice(0, 500), paidAmount, job.id);
+        writeAudit(req, {
+          action: 'PAYMENT_WEBHOOK_UNDERPAID',
+          details: `${job.job_code}: AUTHORISED for AED ${paidAmount} but escrow requires AED ${job.agreed_price_aed} — escrow NOT funded`,
+          entityType: 'job',
+          entityId: job.id,
+          beforeState: 'HELD',
+          afterState: 'HELD',
+        });
+        notify(job.shipper_id, 'Payment shortfall', `Your payment for ${job.job_code} (AED ${paidAmount}) is less than the escrow price (AED ${job.agreed_price_aed}). Please contact support.`, job.id, 'status');
+        return res.json({ ok: true, reason: 'underpaid' });
+      }
       // Money was taken: always record PAID + tranref, even if escrow is
       // no longer HELD (a dispute froze it in between); only flip escrow
       // when it is still HELD.
@@ -769,12 +860,14 @@ app.post(
     const adminExists = db.prepare(`SELECT 1 FROM users WHERE role='ADMIN' LIMIT 1`).get();
     if (adminExists) return sendError(res, 403, 'An admin account already exists — this route only ever provisions the first one');
 
-    const { email, password, companyName } = req.body || {};
-    if (!email || !password) return sendError(res, 400, 'email and password are required');
+    const { email: rawEmail, password, companyName } = req.body || {};
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+    if (!EMAIL_RE.test(email)) return sendError(res, 400, 'email must be a valid email address');
+    if (!password) return sendError(res, 400, 'email and password are required');
     if (!isPasswordValid(password)) return sendError(res, 400, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) return sendError(res, 400, 'An account with that email already exists');
 
-    const passwordHash = bcrypt.hashSync(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     const userResult = db
       .prepare(
         `INSERT INTO users (email, password_hash, role, is_verified, tier, referral_code, email_verified_at)
@@ -792,8 +885,15 @@ app.post(
 app.post(
   '/api/auth/register',
   asyncHandler(async (req, res) => {
-    const { email, password, role, companyName, phone, trnNumber, tradeLicenseNumber, referralCode: incomingReferral } = req.body || {};
-    if (!email || !password || !companyName) return sendError(res, 400, 'email, password and companyName are required');
+    const { email: rawEmail, password, role, companyName, phone, trnNumber, tradeLicenseNumber, referralCode: incomingReferral } = req.body || {};
+    // M2: email was previously accepted in any shape ("not a string" was
+    // valid). Format-check and normalize before it ever touches the DB —
+    // the UNIQUE index would still catch dupes, but an invalid address
+    // would otherwise create an account that can never receive a
+    // verification link.
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+    if (!EMAIL_RE.test(email)) return sendError(res, 400, 'email must be a valid email address');
+    if (!password || !companyName) return sendError(res, 400, 'email, password and companyName are required');
     if (!isPasswordValid(password)) return sendError(res, 400, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     if (!['SHIPPER', 'CARRIER'].includes(role)) return sendError(res, 422, 'role must be SHIPPER or CARRIER');
     const existing = db.prepare('SELECT id FROM users WHERE email=?').get(email);
@@ -813,7 +913,10 @@ app.post(
       if (referrer) referredBy = referrer.referral_code;
     }
 
-    const passwordHash = bcrypt.hashSync(password, 10);
+    // M6: async bcrypt at cost 12 (was sync cost 10) — the sync call
+    // blocked the event loop on every registration, and cost 10 is the
+    // 2014-era default; cost 12 is the current recommended floor.
+    const passwordHash = await bcrypt.hash(password, 12);
     const prefix = role === 'SHIPPER' ? 'SHP' : 'CAR';
     let code = referralCode(prefix, companyName);
     while (db.prepare('SELECT 1 FROM users WHERE referral_code=?').get(code)) {
@@ -917,7 +1020,7 @@ app.post(
       .get(hashToken(token));
     if (!user) return sendError(res, 400, 'This reset link is invalid or has expired');
 
-    const passwordHash = bcrypt.hashSync(password, 10);
+    const passwordHash = await bcrypt.hash(password, 12);
     db.prepare('UPDATE users SET password_hash=?, password_reset_token_hash=NULL, password_reset_expires=NULL WHERE id=?').run(passwordHash, user.id);
     // A password reset is exactly the moment every existing session (on
     // every device, including whoever the attacker was if this reset was
@@ -941,7 +1044,7 @@ app.post(
     // nonexistent-email response returns measurably faster than a
     // wrong-password one — a timing oracle for enumerating registered
     // emails. Always pay the bcrypt cost against *some* hash.
-    const passwordOk = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_PASSWORD_HASH);
+    const passwordOk = await bcrypt.compare(password, user ? user.password_hash : DUMMY_PASSWORD_HASH);
     if (!user || !passwordOk) {
       recordFailure(email);
       return sendError(res, 403, 'Invalid email or password');
@@ -951,7 +1054,11 @@ app.post(
       return sendError(res, 403, 'This account has been deactivated');
     }
     if (user.mfa_enabled) {
-      if (!totp.verifyCode(user.mfa_secret, totpCode)) {
+      const validTotp = totp.verifyCode(user.mfa_secret, totpCode);
+      // M4: a one-time backup code is accepted when the authenticator is
+      // unavailable — and consumed on use.
+      const validBackup = !validTotp ? consumeMfaBackupCode(user, totpCode) : false;
+      if (!validTotp && !validBackup) {
         recordFailure(email);
         return sendError(res, 403, 'Invalid or missing authentication code');
       }
@@ -988,8 +1095,18 @@ app.get('/api/auth/me', auth(), (req, res) => {
 
 app.post('/api/auth/logout', auth(), (req, res) => {
   const token = req.cookies.lb_session;
-  if (token) db.prepare('DELETE FROM sessions WHERE session_token=?').run(token);
+  if (token) db.prepare('DELETE FROM sessions WHERE session_token=?').run(hashToken(token));
   clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+// Kill every session for this account (all devices, including seat
+// sessions that operate as the org root) — the "I lost my phone / this
+// device was stolen" button.
+app.post('/api/auth/logout-all', auth(), (req, res) => {
+  db.prepare('DELETE FROM sessions WHERE user_id=?').run(req.user.id);
+  clearSessionCookie(res);
+  writeAudit(req, { userId: req.actorId, action: 'LOGOUT_ALL', details: 'All sessions terminated', entityType: 'user', entityId: req.user.id });
   res.json({ ok: true });
 });
 
@@ -997,15 +1114,70 @@ app.post('/api/auth/logout', auth(), (req, res) => {
 // (the seat's own row, if a seat is acting), not req.user.id (the org
 // root). Keying this off the root would silently no-op for a seat: login
 // checks MFA on the row found by email, which for a seat is their own row.
+//
+// M4: enrollment is TWO-STEP. Step 1 (setup) only stages a pending secret
+// and issues one-time backup codes — mfa_enabled stays off. Step 2
+// (confirm) requires a valid TOTP code from the staged secret before MFA
+// actually turns on. Before this, one POST to setup enabled MFA
+// immediately: a hijacked session could lock the legitimate owner out of
+// their own account, and there was no recovery path if the authenticator
+// was lost (only a password reset).
+const MFA_BACKUP_CODE_COUNT = 10;
+function mfaBackupCodesHashed() {
+  const codes = [];
+  for (let i = 0; i < MFA_BACKUP_CODE_COUNT; i++) codes.push(crypto.randomBytes(4).toString('hex'));
+  return { codes, hashed: codes.map(hashToken).join(',') };
+}
+
+// One-time recovery codes are consumed on use: matched against SHA-256
+// hashes, removed from the stored CSV the moment they're accepted, and
+// audited. Reuse of an already-consumed code is a strong signal the
+// account is compromised — record it, don't silently fail.
+function consumeMfaBackupCode(user, code) {
+  if (!code || !user.mfa_backup_codes) return false;
+  const hashed = hashToken(code);
+  const stored = user.mfa_backup_codes.split(',').filter(Boolean);
+  if (!stored.includes(hashed)) return false;
+  const remaining = stored.filter((h) => h !== hashed).join(',');
+  db.prepare('UPDATE users SET mfa_backup_codes=? WHERE id=?').run(remaining || null, user.id);
+  writeAudit(null, { userId: user.id, action: 'MFA_BACKUP_CODE_USED', entityType: 'user', entityId: user.id, afterState: `${MFA_BACKUP_CODE_COUNT - remaining.length} of ${MFA_BACKUP_CODE_COUNT} used` });
+  return true;
+}
+
 app.post('/api/auth/mfa/setup', auth(), (req, res) => {
+  if (req.user.mfa_enabled) return sendError(res, 400, 'MFA is already enabled — disable it first to re-enroll');
   const secret = totp.randomBase32Secret();
-  db.prepare('UPDATE users SET mfa_secret=?, mfa_enabled=1 WHERE id=?').run(secret, req.actorId);
+  const { codes, hashed } = mfaBackupCodesHashed();
+  // Staged only — nothing is enabled until /api/auth/mfa/confirm succeeds.
+  db.prepare('UPDATE users SET mfa_pending_secret=?, mfa_backup_codes=? WHERE id=?').run(secret, hashed, req.actorId);
+  writeAudit(req, { userId: req.actorId, action: 'MFA_SETUP_STARTED', entityType: 'user', entityId: req.actorId });
+  res.json({ ok: true, secret, otpauthUrl: totp.provisioningUrl(secret, req.actorLabel), backupCodes: codes });
+});
+
+app.post('/api/auth/mfa/confirm', auth(), (req, res) => {
+  const { totpCode } = req.body || {};
+  const row = db.prepare('SELECT mfa_pending_secret FROM users WHERE id=?').get(req.actorId);
+  if (!row || !row.mfa_pending_secret) return sendError(res, 400, 'No pending MFA setup — start with /api/auth/mfa/setup');
+  if (!totp.verifyCode(row.mfa_pending_secret, totpCode)) {
+    return sendError(res, 403, 'Invalid authentication code — scan the QR code and try again');
+  }
+  // Only now does MFA actually turn on.
+  db.prepare('UPDATE users SET mfa_secret=?, mfa_pending_secret=NULL, mfa_enabled=1 WHERE id=?').run(row.mfa_pending_secret, req.actorId);
   writeAudit(req, { userId: req.actorId, action: 'MFA_ENABLE', entityType: 'user', entityId: req.actorId });
-  res.json({ ok: true, secret, otpauthUrl: totp.provisioningUrl(secret, req.actorLabel) });
+  res.json({ ok: true, message: 'MFA enabled. Store your backup codes somewhere safe — they are shown only once.' });
 });
 
 app.post('/api/auth/mfa/disable', auth(), (req, res) => {
-  db.prepare('UPDATE users SET mfa_secret=NULL, mfa_enabled=0 WHERE id=?').run(req.actorId);
+  const { totpCode } = req.body || {};
+  const row = db.prepare('SELECT * FROM users WHERE id=?').get(req.actorId);
+  if (!row.mfa_enabled) return sendError(res, 400, 'MFA is not enabled');
+  // Require proof of the authenticator (or a backup code) before turning
+  // MFA off — a session-only attacker must not be able to strip the one
+  // thing protecting the account from them.
+  const validTotp = totp.verifyCode(row.mfa_secret, totpCode);
+  const validBackup = !validTotp ? consumeMfaBackupCode(row, totpCode) : false;
+  if (!validTotp && !validBackup) return sendError(res, 403, 'A valid authentication or backup code is required to disable MFA');
+  db.prepare('UPDATE users SET mfa_secret=NULL, mfa_pending_secret=NULL, mfa_backup_codes=NULL, mfa_enabled=0 WHERE id=?').run(req.actorId);
   writeAudit(req, { userId: req.actorId, action: 'MFA_DISABLE', entityType: 'user', entityId: req.actorId });
   res.json({ ok: true });
 });
@@ -1060,21 +1232,29 @@ app.get('/api/org/members', auth(['SHIPPER', 'CARRIER']), (req, res) => {
   });
 });
 
-app.post('/api/org/members', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]), (req, res) => {
-  const { email, password, seatRole, displayName } = req.body || {};
-  if (!email || !password) return sendError(res, 400, 'email and password are required');
+app.post('/api/org/members', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]), asyncHandler(async (req, res) => {
+  const { email: rawEmail, password, seatRole, displayName } = req.body || {};
+  const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+  if (!EMAIL_RE.test(email)) return sendError(res, 400, 'email must be a valid email address');
+  // L6: seats previously had no password-strength check at all — any
+  // string passed, so "1" was a valid seat login. Same bar as registration.
+  if (!password) return sendError(res, 400, 'email and password are required');
+  if (!isPasswordValid(password)) return sendError(res, 400, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
   if (!SEAT_ROLES.includes(seatRole)) return sendError(res, 422, `seatRole must be one of ${SEAT_ROLES.join(', ')}`);
   if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) return sendError(res, 400, 'An account with that email already exists');
 
-  const passwordHash = bcrypt.hashSync(password, 10);
+  const passwordHash = await bcrypt.hash(password, 12);
+  // Seats are created by the org root (a verified account) — stamp
+  // email_verified_at so the M2 write-gate doesn't freeze a seat that has
+  // no verification email flow.
   const result = db
-    .prepare('INSERT INTO users (email, password_hash, role, tier, org_owner_id, seat_role, display_name, is_verified) VALUES (?,?,?,?,?,?,?,?)')
+    .prepare('INSERT INTO users (email, password_hash, role, tier, org_owner_id, seat_role, display_name, is_verified, email_verified_at) VALUES (?,?,?,?,?,?,?,?,datetime(\'now\'))')
     .run(email, passwordHash, req.user.role, 'BRONZE', req.user.id, seatRole, displayName || null, req.user.is_verified ? 1 : 0);
   const seatId = Number(result.lastInsertRowid);
   writeAudit(req, { userId: req.actorId, action: 'ORG_MEMBER_ADD', details: `Added seat ${email} (${seatRole})`, entityType: 'user', entityId: seatId });
   const seat = db.prepare('SELECT id, email, display_name, seat_role, is_active, created_at FROM users WHERE id=?').get(seatId);
   res.status(201).json({ seat });
-});
+}));
 
 app.patch('/api/org/members/:id', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]), (req, res) => {
   const seat = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
@@ -1204,6 +1384,24 @@ app.post('/api/bids/:id/withdraw', auth(['CARRIER']), (req, res) => {
   res.json({ ok: true, bid: updated });
 });
 
+// Shipper-side bid rejection — previously a shipper could only thin out the
+// bidding pool by awarding (which rejects everyone else) or cancelling the
+// whole job; there was no way to decline one bid and keep the rest. Also
+// unblocks PATCH /api/jobs/:id for a job whose only pending bid is unwanted.
+app.post('/api/bids/:id/reject', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, res) => {
+  const bid = db.prepare('SELECT * FROM bids WHERE id=?').get(req.params.id);
+  if (!bid) return sendError(res, 404, 'Bid not found');
+  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(bid.job_id);
+  if (!job || job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');
+  if (job.status !== 'OPEN') return sendError(res, 403, 'This job is no longer open for bidding');
+  if (bid.status !== 'PENDING') return sendError(res, 400, 'Only a pending bid can be rejected');
+  db.prepare(`UPDATE bids SET status='REJECTED', updated_at=datetime('now') WHERE id=?`).run(bid.id);
+  writeAudit(req, { userId: req.actorId, action: 'BID_REJECT', details: `Rejected bid #${bid.id} on ${job.job_code}`, entityType: 'bid', entityId: bid.id, beforeState: 'PENDING', afterState: 'REJECTED' });
+  notify(bid.carrier_id, 'Bid declined', `Your bid on ${job.job_code} was declined by the shipper.`, job.id, 'bid');
+  const updated = db.prepare('SELECT * FROM bids WHERE id=?').get(bid.id);
+  res.json({ ok: true, bid: updated });
+});
+
 // Sort whitelist — never interpolate the client's `sort` string directly
 // into ORDER BY (that's a SQL-injection surface even with prepared
 // statements, since placeholders can't parameterize identifiers/direction).
@@ -1295,6 +1493,58 @@ app.get('/api/jobs', auth(), (req, res) => {
   res.json({ jobs, total, limit: lim, offset: off });
 });
 
+// Shared validation for job payloads (create, CSV-import rows, and the
+// edit route's change-set). Throws { status, message } on failure. The
+// future-dates rule is skipped for the edit route via `allowPastDates` —
+// a shipper may legitimately adjust an OPEN job whose original ready_at
+// has already passed without resubmitting every field.
+const JOB_TEXT_LIMITS = {
+  pickupTerminal: 100,
+  deliveryArea: 100,
+  deliveryAddress: 300,
+  containerNumber: 20,
+  notes: 2000,
+  customRequirement: 2000,
+  pickupAddressDetail: 200,
+  deliveryAddressDetail: 200,
+};
+const JOB_NUMBER_RANGES = {
+  containerCount: [1, 100],
+  truckCount: [1, 100],
+  freeTimeDays: [0, 90],
+  demurrageRateAed: [0, 100000],
+  maxBudgetAed: [0, 10000000],
+  targetPriceAed: [0, 10000000],
+};
+function validateJobPayload(b, { allowPastDates = false } = {}) {
+  for (const [field, max] of Object.entries(JOB_TEXT_LIMITS)) {
+    const v = b[field];
+    if (v !== undefined && v !== null && String(v).trim().length > max) {
+      throw { status: 400, message: `${field} must be ${max} characters or fewer` };
+    }
+  }
+  for (const [field, [min, max]] of Object.entries(JOB_NUMBER_RANGES)) {
+    if (b[field] === undefined || b[field] === null || b[field] === '') continue;
+    const n = Number(b[field]);
+    if (!Number.isFinite(n) || n < min || n > max) {
+      throw { status: 400, message: `${field} must be a number between ${min} and ${max}` };
+    }
+  }
+  if (b.readyAt !== undefined && b.readyAt !== null && b.readyAt !== '') {
+    const t = Date.parse(b.readyAt);
+    if (!Number.isFinite(t)) throw { status: 400, message: 'readyAt must be a valid date' };
+    if (!allowPastDates && t < Date.now() - 60000) throw { status: 400, message: 'readyAt must be in the future' };
+  }
+  if (b.deadline !== undefined && b.deadline !== null && b.deadline !== '') {
+    const t = Date.parse(b.deadline);
+    if (!Number.isFinite(t)) throw { status: 400, message: 'deadline must be a valid date' };
+    if (!allowPastDates && t < Date.now() - 60000) throw { status: 400, message: 'deadline must be in the future' };
+  }
+  if (b.readyAt && b.deadline && Date.parse(b.deadline) <= Date.parse(b.readyAt)) {
+    throw { status: 400, message: 'deadline must be after readyAt' };
+  }
+}
+
 // Shared by POST /api/jobs and the CSV-import loop in POST /api/jobs/import
 // below, so both paths validate and insert identically — throws
 // { status, message } (matching sendError's shape) on any validation
@@ -1303,6 +1553,7 @@ app.get('/api/jobs', auth(), (req, res) => {
 function createJobFromBody(b, req) {
   const required = ['pickupTerminal', 'deliveryArea', 'deliveryAddress', 'readyAt', 'deadline'];
   for (const f of required) if (!b[f]) throw { status: 400, message: `${f} is required` };
+  validateJobPayload(b);
 
   const equipmentType = EQUIPMENT_TYPES.includes(b.equipmentType) ? b.equipmentType : 'CONTAINER_CHASSIS';
   const needsContainer = CONTAINER_EQUIPMENT.includes(equipmentType);
@@ -1468,6 +1719,7 @@ app.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, re
   if (hasPendingBid) return sendError(res, 403, 'Cannot edit a job that already has a pending bid — withdraw/reject bids first, or cancel and repost');
 
   const b = req.body || {};
+  validateJobPayload(b, { allowPastDates: true });
   if ((b.pickupLat !== undefined || b.pickupLng !== undefined) && !isValidUaeLatLng(Number(b.pickupLat), Number(b.pickupLng))) {
     return sendError(res, 400, 'pickupLat/pickupLng must be valid UAE coordinates');
   }
@@ -1517,17 +1769,28 @@ app.get('/api/jobs/:id', auth(), (req, res) => {
     )
     .all(job.id);
   const isOwnerShipper = req.user.id === job.shipper_id;
+  const isAwardedCarrier = req.user.id === job.carrier_id;
   const isAdmin = req.user.role === 'ADMIN';
-  if (job.status === 'OPEN' && !isOwnerShipper && !isAdmin) {
+  const isParty = isOwnerShipper || isAwardedCarrier;
+  // F6: competitor bids were previously only masked while the job was OPEN —
+  // on an AWARDED/DELIVERED job a losing bidder could still read the
+  // winner's amount and driver details from the bid list. Mask other
+  // carriers' bids for every non-party in every status.
+  if (!isParty && !isAdmin) {
     bids = bids.map((b) =>
       b.carrier_id === req.user.id
         ? b
-        : { ...b, amount_aed: null, eta_minutes: null, driver_name: null, notes: null, carrier_company: null, masked: true }
+        : { ...b, amount_aed: null, eta_minutes: null, driver_name: null, driver_phone: null, notes: null, carrier_company: null, masked: true }
     );
   }
 
   const shipperProfile = db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
-  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null };
+  let jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null };
+  // F6: the assigned driver's name/phone on the job row is PII — visible
+  // only to the shipper, the awarded carrier, and admins.
+  if (!isParty && !isAdmin) {
+    jobWithRating = { ...jobWithRating, assigned_driver_name: null, assigned_driver_phone: null };
+  }
 
   const allDocs = isParticipantOrBidder(job, req.user) ? db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   // Visibility is per-document (uploader sees own docs pre-award; the
@@ -1535,7 +1798,8 @@ app.get('/api/jobs/:id', auth(), (req, res) => {
   // filtered array — not metadata of hidden docs — so the UI can't infer
   // anything about documents it can't read.
   const documents = allDocs.filter((d) => canSeeDocument(job, d, req.user));
-  const payout = db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id) || null;
+  // Payout figures (net amounts, release state) are party/admin-only.
+  const payout = isParty || isAdmin ? (db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id) || null) : null;
   res.json({ job: jobWithRating, bids, documents, payout });
 });
 
@@ -1551,6 +1815,9 @@ app.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, requireSeatRole(
   const eta = Number(b.etaMinutes);
   if (!amount || amount <= 0) return sendError(res, 400, 'amountAed must be a positive number');
   if (!eta || eta < 1 || eta > 600) return sendError(res, 400, 'etaMinutes must be between 1 and 600');
+  if (b.notes !== undefined && b.notes !== null && String(b.notes).trim().length > 500) {
+    return sendError(res, 400, 'notes must be 500 characters or fewer');
+  }
 
   // gstack review F5: without this a carrier could script unlimited bids on
   // the same job (notification spam, price signaling). Checked proactively
@@ -1702,7 +1969,7 @@ app.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole(['
 });
 
 const TRANSITIONS = {
-  SHIPPER: { OPEN: ['CANCELLED'], DRAFT: ['CANCELLED'], AWARDED: ['CANCELLED'], DELIVERED: ['COMPLETED'] },
+  SHIPPER: { OPEN: ['CANCELLED'], AWARDED: ['CANCELLED'], DELIVERED: ['COMPLETED'] },
   CARRIER: { AWARDED: ['PICKED_UP', 'CANCELLED'], PICKED_UP: ['IN_TRANSIT'], IN_TRANSIT: ['DELIVERED'] },
 };
 
@@ -1745,23 +2012,40 @@ app.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), (req, res) =
 
   db.prepare(`UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?`).run(next, job.id);
 
-  if (next === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
-    db.prepare(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`).run(job.id);
-    db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
-    // TODO-3: if funds were actually taken before the cancellation, give
-    // them back. No-op unless a processor is configured AND the charge was
-    // PAID (internal mode has nothing to refund).
-    if (job.escrow_status === 'FUNDED') refundJobAsync(job);
+  const moneyTransition =
+    (next === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) ||
+    (next === 'COMPLETED' && job.escrow_status !== 'RELEASED');
+  let payoutToExecute = null;
+  if (moneyTransition) db.exec('BEGIN');
+  try {
+    if (next === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
+      db.prepare(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`).run(job.id);
+      db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
+      // TODO-3: if funds were actually taken before the cancellation, give
+      // them back. No-op unless a processor is configured AND the charge was
+      // PAID (internal mode has nothing to refund).
+      if (job.escrow_status === 'FUNDED') refundJobAsync(job);
+    }
+    if (next === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
+      db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(job.id);
+      db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
+      issueInvoice(db, job.id);
+      notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, job.id, 'payout');
+      // TODO-3: with a processor configured this moves the money; in
+      // internal mode it is a no-op and the admin SLA flow applies. The
+      // network call runs AFTER the transaction commits — never inside it.
+      payoutToExecute = db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id);
+    }
+    if (moneyTransition) db.exec('COMMIT');
+  } catch (e) {
+    if (moneyTransition) {
+      try {
+        db.exec('ROLLBACK');
+      } catch (_) {}
+    }
+    throw e;
   }
-  if (next === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
-    db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(job.id);
-    db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
-    issueInvoice(db, job.id);
-    notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, job.id, 'payout');
-    // TODO-3: with a processor configured this moves the money; in
-    // internal mode it is a no-op and the admin SLA flow applies.
-    executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
-  }
+  if (payoutToExecute) executePayoutAsync(job, payoutToExecute, req);
 
   writeAudit(req, {
     userId: req.actorId,
@@ -1884,10 +2168,22 @@ app.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRole(
   const isCarrierOwner = req.user.role === 'CARRIER' && job.carrier_id === req.user.id;
   if (!isShipperOwner && !isCarrierOwner) return sendError(res, 403, 'Not a participant on this job');
   if (!DISPUTABLE_STATUSES.includes(job.status)) return sendError(res, 403, `Cannot dispute a job in ${job.status} status`);
+  const openDispute = db.prepare(`SELECT 1 FROM disputes WHERE job_id=? AND status='OPEN'`).get(job.id);
+  if (openDispute) return sendError(res, 409, 'A dispute is already open on this job');
   const { reason } = req.body || {};
   if (!reason || !reason.trim()) return sendError(res, 400, 'reason is required');
 
-  const result = db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\')').run(job.id, req.user.id, reason.trim());
+  // F4: the route-level check above gives a clean 409, but the schema is
+  // the real guarantee against two concurrent files racing past it.
+  let result;
+  try {
+    result = db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\')').run(job.id, req.user.id, reason.trim());
+  } catch (e) {
+    if (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message)) {
+      return sendError(res, 409, 'A dispute is already open on this job');
+    }
+    throw e;
+  }
   db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
   writeAudit(req, {
     userId: req.actorId,
@@ -2042,6 +2338,7 @@ app.post('/api/jobs/:id/documents', auth(), (req, res) => {
   if (!isPartyOnJob(job, req.user)) return sendError(res, 403, 'Only the shipper and the awarded carrier can attach documents');
   const b = req.body || {};
   if (!b.title || !(b.fileUrl || b.fileBase64)) return sendError(res, 400, 'title and (fileUrl or fileBase64+mimeType) are required');
+  if (b.title.trim().length > 200) return sendError(res, 400, 'title must be 200 characters or fewer');
   let storagePath = null;
   let mimeType = null;
   if (b.fileBase64) {
@@ -2074,7 +2371,27 @@ app.get('/api/jobs/:id/documents/:docId/file', auth(), (req, res) => {
   const doc = db.prepare('SELECT * FROM job_documents WHERE id=? AND job_id=?').get(req.params.docId, job.id);
   if (!doc) return sendError(res, 404, 'Document not found');
   if (!canSeeDocument(job, doc, req.user)) return sendError(res, 403, 'Not permitted — documents are shared once the bid is confirmed');
-  if (!doc.storage_path) return res.redirect(doc.file_url);
+  if (!doc.storage_path) {
+    // Open-redirect guard: file_url is user-supplied metadata — redirecting
+    // to it blindly lets a party mint a link that bounces an admin/browser
+    // to an arbitrary external site. Only same-origin relative paths and
+    // https hosts explicitly allowlisted (FILE_URL_ALLOW_HOSTS, comma
+    // separated — the demo seed links live on files.loadbyton.demo) are
+    // served; everything else is refused with a 400.
+    const url = doc.file_url || '';
+    if (url.startsWith('/')) return res.redirect(url);
+    const allowedHosts = (process.env.FILE_URL_ALLOW_HOSTS || 'files.loadbyton.demo')
+      .split(',')
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean);
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol === 'https:' && allowedHosts.includes(parsed.hostname)) return res.redirect(url);
+    } catch {
+      // not a parseable absolute URL — fall through to the refusal
+    }
+    return sendError(res, 400, 'This document has no uploaded file — only stored uploads and allowlisted file links can be served');
+  }
   const filePath = path.join(UPLOADS_DIR, doc.storage_path);
   if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) return sendError(res, 404, 'File not found');
   res.set('Content-Type', doc.mime_type || 'application/octet-stream');
@@ -2141,6 +2458,7 @@ app.post('/api/jobs/:id/messages', auth(), (req, res) => {
   if (!permitted) return sendError(res, 403, 'Not permitted');
   const { content } = req.body || {};
   if (!content || !content.trim()) return sendError(res, 400, 'content is required');
+  if (content.trim().length > 2000) return sendError(res, 400, 'content must be 2000 characters or fewer');
   const result = db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?)').run(job.id, req.actorId, content.trim());
   // Sender may be neither party (an admin replying in a dispute thread) —
   // notify both shipper and carrier in that case rather than defaulting to
@@ -2449,6 +2767,7 @@ app.post('/api/admin/approve/:id', auth(['ADMIN']), (req, res) => {
 function verifyCarrier(req, carrierId, action, iban) {
   const carrier = db.prepare('SELECT * FROM users WHERE id=?').get(carrierId);
   if (!carrier) throw { status: 404, message: 'Carrier not found' };
+  if (carrier.role !== 'CARRIER') throw { status: 400, message: 'Only CARRIER accounts can be verification-approved' };
   if (!['approve', 'reject'].includes(action)) throw { status: 400, message: 'action must be approve or reject' };
 
   if (action === 'approve') {
@@ -2579,6 +2898,7 @@ app.post('/api/admin/impersonate/:userId', auth(['ADMIN']), (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.userId);
   if (!target) return sendError(res, 404, 'User not found');
   if (target.role === 'ADMIN') return sendError(res, 400, 'Cannot impersonate another admin');
+  if (!target.is_active) return sendError(res, 400, 'Cannot impersonate a deactivated account');
   createSession(req, res, target.id, { impersonatingAdminId: req.user.id, maxAgeSeconds: 30 * 60 });
   writeAudit(req, {
     userId: req.actorId,
@@ -2617,6 +2937,16 @@ app.post('/api/admin/disputes', auth(['ADMIN']), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
   if (!job) return sendError(res, 404, 'Job not found');
   if (!reason) return sendError(res, 400, 'reason is required');
+  // F4: an OPEN dispute on a job with no award yet (no counterparty
+  // commitment, no escrow) previously set status=DISPUTED and bricked the
+  // job — it could never leave DISPUTED because the transition table has no
+  // exit and the resolve flow assumes an award/payout exists. Only open
+  // disputes on jobs where something can actually be disputed.
+  if (!DISPUTABLE_STATUSES.includes(job.status)) {
+    return sendError(res, 403, `Cannot dispute a job in ${job.status} status`);
+  }
+  const openDispute = db.prepare(`SELECT 1 FROM disputes WHERE job_id=? AND status='OPEN'`).get(job.id);
+  if (openDispute) return sendError(res, 409, 'A dispute is already open on this job');
 
   const result = db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\')').run(job.id, req.user.id, reason);
   db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
@@ -2634,30 +2964,78 @@ app.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), (req, res) => {
   const { determination, decision } = req.body || {};
   if (!['RELEASE_TO_CARRIER', 'REFUND_SHIPPER', 'SPLIT'].includes(decision)) return sendError(res, 400, 'Invalid decision');
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(dispute.job_id);
-
-  if (decision === 'REFUND_SHIPPER') {
-    db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
-    // TODO-3: give the money back via the processor when it was taken.
-    // No-op in internal mode / when the charge never went through.
-    refundJobAsync(job);
-  } else {
-    db.prepare(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
-    issueInvoice(db, job.id);
-    // TODO-3: with a processor configured this moves the money; in
-    // internal mode it is a no-op and the admin SLA flow applies.
-    executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
+  if (!job) return sendError(res, 404, 'Job not found');
+  // F4: money was already given back for this job — a second resolve (via a
+  // re-opened dispute) must not refund or re-release a second time.
+  if (decision === 'REFUND_SHIPPER' && job.processor_payment_status === 'REFUNDED') {
+    return sendError(res, 409, 'This charge has already been refunded');
   }
-  db.prepare(`UPDATE jobs SET status='COMPLETED', escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
-  db.prepare(`UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now') WHERE id=?`).run(
-    determination || null,
-    decision,
-    req.user.id,
-    dispute.id
-  );
-  writeAudit(req, { userId: req.actorId, action: 'DISPUTE_RESOLVE', details: `${decision}: ${determination || ''}`, entityType: 'dispute', entityId: dispute.id, beforeState: 'OPEN', afterState: 'RESOLVED' });
-  notify(job.shipper_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
-  notify(job.carrier_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
-  res.json({ ok: true });
+  if (decision === 'SPLIT' && job.processor_payment_status === 'REFUNDED') {
+    return sendError(res, 409, 'This charge has already been fully refunded');
+  }
+  // A resolve on a job whose escrow never contained real money (still HELD /
+  // never funded) must not create a RELEASED payout out of nothing.
+  if (job.escrow_status === 'PENDING' || job.escrow_status === 'HELD') {
+    return sendError(res, 409, 'Escrow is not funded — nothing to release or refund');
+  }
+
+  try {
+    db.exec('BEGIN');
+    if (decision === 'REFUND_SHIPPER') {
+      db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
+      // TODO-3: give the money back via the processor when it was taken.
+      // No-op in internal mode / when the charge never went through.
+      refundJobAsync(job);
+    } else if (decision === 'SPLIT') {
+      // F3: a real split — the carrier gets half the net payout, the
+      // shipper gets the other half of the charged amount refunded. This
+      // was previously an identical branch to RELEASE_TO_CARRIER that paid
+      // the carrier 100% despite its name.
+      const payout = db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id);
+      if (!payout) {
+        db.exec('ROLLBACK');
+        return sendError(res, 409, 'No payout exists for this job — cannot split');
+      }
+      const splitNet = Math.floor((payout.net_aed * 100) / 2) / 100;
+      db.prepare(
+        `UPDATE payouts SET net_aed=?, status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE id=?`
+      ).run(splitNet, payout.id);
+      issueInvoice(db, job.id);
+      // With a processor configured this moves the carrier's half; in
+      // internal mode it is a no-op and the admin SLA flow applies.
+      executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE id=?').get(payout.id), req);
+      // Give the shipper the other half back, if their charge went through.
+      if (job.processor_payment_status === 'PAID' && job.processor_tranref) {
+        const charged = job.processor_amount_aed ?? job.agreed_price_aed;
+        const splitRefund = Math.floor((charged * 100) / 2) / 100;
+        refundJobAsync(job, splitRefund);
+      }
+    } else {
+      db.prepare(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
+      issueInvoice(db, job.id);
+      // TODO-3: with a processor configured this moves the money; in
+      // internal mode it is a no-op and the admin SLA flow applies.
+      executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
+    }
+    db.prepare(`UPDATE jobs SET status='COMPLETED', escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
+    db.prepare(`UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now') WHERE id=?`).run(
+      determination || null,
+      decision,
+      req.user.id,
+      dispute.id
+    );
+    writeAudit(req, { userId: req.actorId, action: 'DISPUTE_RESOLVE', details: `${decision}: ${determination || ''}`, entityType: 'dispute', entityId: dispute.id, beforeState: 'OPEN', afterState: 'RESOLVED' });
+    notify(job.shipper_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
+    notify(job.carrier_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
+    db.exec('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    try {
+      db.exec('ROLLBACK');
+    } catch (_) {}
+    if (e.status) return sendError(res, e.status, e.message);
+    throw e;
+  }
 });
 
 function buildEvidence(jobId) {
@@ -2728,6 +3106,24 @@ app.post('/api/admin/payouts/:id/mark-transferred', auth(['ADMIN']), (req, res) 
   res.json({ payout: updated });
 });
 
+// A failed refund (processor down, bad tranref) previously left the job
+// stuck: money taken, dispute resolved, and no path to retry. This re-runs
+// the refund for jobs that are still PAID with a recorded refund_failed
+// error — the audit trail then shows the retry outcome like any other.
+app.post('/api/admin/jobs/:id/retry-refund', auth(['ADMIN']), (req, res) => {
+  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return sendError(res, 404, 'Job not found');
+  if (job.processor_payment_status !== 'PAID' || !job.processor_tranref) {
+    return sendError(res, 409, 'Nothing to refund — the charge is not PAID with a processor reference');
+  }
+  if (!job.processor_last_error || !String(job.processor_last_error).startsWith('refund_failed')) {
+    return sendError(res, 409, 'No failed refund recorded for this job');
+  }
+  refundJobAsync(job);
+  writeAudit(req, { userId: req.actorId, action: 'REFUND_RETRY', details: `${job.job_code}: refund retried`, entityType: 'job', entityId: job.id });
+  res.json({ ok: true, message: 'Refund retry submitted — check the audit trail for the outcome' });
+});
+
 app.get('/api/admin/settings', auth(['ADMIN']), (req, res) => {
   res.json({ settings: getSettings() });
 });
@@ -2766,10 +3162,16 @@ const SEO_META = {
 
 // gstack review F4: these previously fell through to the SPA catch-all,
 // so a crawler requesting either got a 200 of app-shell HTML instead of
-// directives/a URL list. Built from the request's own host rather than a
-// hardcoded domain, so this stays correct across environments (local,
-// staging, a future custom domain) without a config knob.
+// directives/a URL list.
+//
+// gstack review L4: the URLs were built from the request Host header — a
+// hostile Host (evil.com) made the sitemap/robots advertise attacker URLs.
+// The origin now comes from APP_HOST (set in render.yaml), which a
+// fronting proxy cannot influence; the Host header is only used in dev,
+// where the server is not publicly routable.
+const APP_HOST = process.env.APP_HOST || null;
 function siteOrigin(req) {
+  if (APP_HOST) return `https://${APP_HOST}`;
   return `${req.protocol}://${req.get('host')}`;
 }
 
@@ -2900,6 +3302,12 @@ app.use(sentryErrorHandler());
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
+  // Body-parser failures are client errors, not 500s — malformed JSON used
+  // to fall through to the generic handler and come back as "Internal
+  // server error" with a stack in the logs.
+  if (err.type === 'entity.parse.failed') return sendError(res, 400, 'Invalid JSON body');
+  if (err.type === 'entity.too.large') return sendError(res, 413, 'Request body too large');
+  if (err.status && err.status >= 400 && err.status < 500) return sendError(res, err.status, err.message);
   console.error(err);
   // Also capture to Sentry if not already handled
   const { captureException } = require('./lib/sentry');

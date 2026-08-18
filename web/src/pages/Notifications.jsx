@@ -23,11 +23,12 @@ export default function Notifications() {
   const [items, setItems] = useState(null);
   const [prefs, setPrefs] = useState(null);
   const [prefsBusy, setPrefsBusy] = useState(false);
+  const [error, setError] = useState('');
   const { addToast } = useToasts();
   const { refresh } = useAuth();
 
   function load() {
-    api.notifications().then((d) => setItems(d.notifications)).catch(() => setItems([]));
+    api.notifications().then((d) => { setError(''); setItems(d.notifications); }).catch((err) => { setError(err.message); setItems([]); });
   }
   useEffect(load, []);
   useEffect(() => {
@@ -85,7 +86,12 @@ export default function Notifications() {
       )}
 
       <div className="mt-5">
-        {items === null ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+            <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load notifications — {error}</p>
+            <Button onClick={load}>Retry</Button>
+          </div>
+        ) : items === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
         ) : items.length === 0 ? (
           <EmptyState icon={<IconBell size={26} />} title="No notifications" description="Bids, awards, status changes and payouts will show up here." />

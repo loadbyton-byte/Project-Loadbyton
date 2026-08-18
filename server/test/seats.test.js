@@ -6,7 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, verifyLatestEmail } = require('./harness');
 
 let server;
 
@@ -27,6 +27,10 @@ test('seats: OPS can operate the org, VIEWER cannot, deactivation is immediate',
   });
   assert.equal(registered.status, 201, registered.raw);
   const rootId = registered.body.user.id;
+  // M2 write-gate: a fresh registration is email-unverified — complete the
+  // verification step via the dark-mode email capture before doing anything.
+  const emailVerified = await verifyLatestEmail(root, server.emailsLogPath, rootEmail);
+  assert.equal(emailVerified.status, 200, emailVerified.raw);
   // New accounts are approval-gated (read-only until an admin approves) —
   // the seats flow operates after approval, so approve before continuing.
   const admin = makeClient(server.baseUrl);

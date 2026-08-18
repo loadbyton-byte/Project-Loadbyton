@@ -1,5 +1,13 @@
 // Thin fetch wrapper: credentials included (session cookie), JSON in/out,
 // throws ApiError with the backend's { error } message on any non-2xx.
+//
+// Two failure modes that used to surface as confusing empty states:
+//  - a hung request (processor webhook down, server restart) waited forever
+//  - an expired session came back as a 401 the page usually treated like
+//    "no data", leaving the user staring at an empty screen while their
+//    session silently died.
+
+const REQUEST_TIMEOUT_MS = 25000;
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -9,16 +17,31 @@ export class ApiError extends Error {
   }
 }
 
+const AUTH_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me', '/auth/verify-email', '/auth/resend-verification']);
+
 async function request(method, path, body) {
-  const res = await fetch(`/api${path}`, {
-    method,
-    credentials: 'include',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      credentials: 'include',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err && err.name === 'TimeoutError') {
+      throw new ApiError('The request timed out — please try again.', 408);
+    }
+    throw new ApiError('Network error — check your connection and try again.', 0);
+  }
   const isJson = res.headers.get('content-type')?.includes('application/json');
   const data = isJson ? await res.json().catch(() => ({})) : null;
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== 'undefined' && !AUTH_PATHS.has(path.split('?')[0])) {
+      const { redirect } = window.location;
+      window.location.assign(`/login${redirect ? `?next=${encodeURIComponent(redirect)}` : ''}`);
+    }
     throw new ApiError(data?.error || `Request failed (${res.status})`, res.status);
   }
   return data;

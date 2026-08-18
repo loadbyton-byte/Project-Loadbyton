@@ -16,6 +16,7 @@ export default function Login() {
   const [needsMfa, setNeedsMfa] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const showDemo = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDS === '1';
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -76,6 +77,11 @@ export default function Login() {
               never one of the publicly-invited demo logins (see server/seed.js). */}
           <p>shipper@jebelalilogistics.ae · carrier@dubaidrayage.com</p>
         </div>
+      {showDemo && (
+        <p className="mt-2 text-xs text-ink-muted">
+          <small>Demo accounts are only visible in development.</small>
+        </p>
+      )}
       </Card>
     </div>
   );

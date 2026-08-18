@@ -3,7 +3,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED } from '../lib/constants.js';
-import { BentoStat, Spinner } from '../components/ui.jsx';
+import { BentoStat, Button, Spinner } from '../components/ui.jsx';
 import { IconTrendUp, IconStar } from '../components/icons.jsx';
 
 // Promoted from the stats strip every dashboard already showed inline
@@ -16,8 +16,25 @@ export default function Analytics() {
   usePageTitle('Analytics');
   const { user } = useAuth();
   const [analytics, setAnalytics] = useState(null);
+  const [error, setError] = useState('');
 
-  useEffect(() => { api.analytics().then((d) => setAnalytics(d.analytics)).catch(() => {}); }, []);
+  function load() {
+    setError('');
+    setAnalytics(null);
+    api.analytics().then((d) => { setAnalytics(d.analytics); }).catch((err) => { setError(err.message); });
+  }
+  useEffect(load, []);
+
+  if (error) {
+    return (
+      <div className="container-page py-10">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+          <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load your performance — {error}</p>
+          <Button onClick={load}>Retry</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!analytics) {
     return <div className="container-page flex justify-center py-24"><Spinner size={28} /></div>;

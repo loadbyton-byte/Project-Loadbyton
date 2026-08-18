@@ -9,7 +9,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, verifyLatestEmail } = require('./harness');
 
 let server;
 let admin;
@@ -56,6 +56,12 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   });
   assert.equal(registered.status, 201, registered.raw);
   assert.equal(registered.body.user.account_approval_status, 'PENDING', 'a fresh registration must be PENDING, not auto-approved');
+
+  // M2: a fresh registration also starts email-unverified — complete the
+  // verification step via the dark-mode email capture before the approval
+  // flow (the M2 write-gate blocks workflow actions until then).
+  const emailVerified = await verifyLatestEmail(client, server.emailsLogPath, email);
+  assert.equal(emailVerified.status, 200, emailVerified.raw);
 
   // Browse is fine (read-only mode)…
   const jobs = await client.get('/api/jobs?status=OPEN');

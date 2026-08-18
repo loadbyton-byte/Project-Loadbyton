@@ -50,17 +50,20 @@ function rateLimiter({ windowMs, max, keyFn, message }) {
 // yet at this point — matches how the existing login throttle keys by
 // email/IP rather than a not-yet-known user id.
 //
-// cf-connecting-ip first: the production deployment sits behind Cloudflare
-// AND Render's own edge proxy — two hops before this process ever sees a
-// request. Express's `trust proxy` setting counts hops off
-// X-Forwarded-For, and getting that count wrong (it's not consistently
-// documented how many Render adds) silently collapses every visitor onto
-// one bucket instead of failing loudly. Cloudflare's cf-connecting-ip is
-// set by Cloudflare itself, at the edge, and can't be spoofed by a client
-// (Cloudflare overwrites any client-supplied copy of it) — trusting it
-// when present sidesteps the hop-counting problem entirely. req.ip (via
-// trust proxy) is the fallback for local dev and any deployment not behind
-// Cloudflare.
-const byIp = (req) => req.headers['cf-connecting-ip'] || req.ip;
+// M1: this previously preferred the cf-connecting-ip header when present.
+// That is fine *when the request actually came through Cloudflare* (CF
+// overwrites any client-supplied copy at the edge) — but the production
+// origin (Render) is reachable directly by its own URL, and against a
+// direct request every header is client-controlled: an attacker who knew
+// the origin address could send a fresh fake cf-connecting-ip per request
+// and get an unlimited key-space — i.e. no rate limiting at all.
+//
+// req.ip is not spoofable the same way: it is derived from X-Forwarded-For
+// only through the trusted-hop count (app.set('trust proxy', 2) — Render's
+// edge + Cloudflare), and Render sets X-Forwarded-For to the client's real
+// address at its edge, overwriting anything a client sent. In every
+// topology (direct, Render-only, Cloudflare+Render) req.ip ends up being
+// the true client address — see server/index.js for the trust setting.
+const byIp = (req) => req.ip;
 
 module.exports = { rateLimiter, byIp };

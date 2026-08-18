@@ -30,6 +30,11 @@ services:
         value: 22.22.2
       - key: FRONTEND_URL
         value: https://claudeloadbyton.onrender.com
+      # Canonical origin for /sitemap.xml and /robots.txt — a hostile Host
+      # header must not be able to make the sitemap advertise attacker URLs
+      # (server index.js siteOrigin()).
+      - key: APP_HOST
+        value: claudeloadbyton.onrender.com
       - key: DB_PATH
         value: /data/loadbyton.db
       # Before real data: replace generateValue with a FIXED secret you

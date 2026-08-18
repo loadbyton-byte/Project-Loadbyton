@@ -13,9 +13,10 @@ export default function Contracts() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   function load() {
-    api.listContracts().then((d) => setContracts(d.contracts)).catch(() => {});
+    api.listContracts().then((d) => { setError(''); setContracts(d.contracts); }).catch((err) => { setError(err.message); });
   }
   useEffect(load, []);
 
@@ -82,7 +83,12 @@ export default function Contracts() {
       )}
 
       <div className="mt-8">
-        {contracts.length === 0 ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--border-strong)' }}>
+            <p className="font-display text-base font-semibold" style={{ color: 'var(--status-danger)' }}>Couldn't load contract lanes — {error}</p>
+            <Button onClick={load}>Retry</Button>
+          </div>
+        ) : contracts.length === 0 ? (
           <EmptyState icon={<IconShield size={28} />} title="No contract lanes yet" description="Commit to a monthly volume to get priority visibility from carriers and a lower take rate." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

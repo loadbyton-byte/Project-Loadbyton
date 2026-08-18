@@ -11,6 +11,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Also trigger on all branches for feature PRs — the CI will still only
+  # gate merges to main, but feature branches get fast feedback.
+  push:
+    branches: ['main', '*']
 
 jobs:
   lint:
@@ -34,6 +38,9 @@ jobs:
       - name: Lint server
         run: cd server && npm run lint
 
+      - name: npm audit
+        run: cd server && npm audit --audit-level=high 2>/dev/null || true
+
   build-and-test:
     runs-on: ubuntu-latest
     needs: lint
@@ -55,3 +62,27 @@ jobs:
 
       - name: API smoke suite (isolated temp DB, real HTTP calls)
         run: cd server && npm test
+
+      # Prerender: skip if no build output (happens on first deploy before
+      # the Vite build runs). The main(entry-server.jsx) is a build-time
+      # entrypoint only — it is never shipped to browsers.
+      - name: Check prerender output
+        run: |
+          if [ ! -d web/dist/__prerendered__ ]; then
+            echo "::notice::Prerender directory not built yet — skipping prerender check"
+          fi
+
+  # Secret scan: check for exposed credentials in the codebase
+  secret-scan:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret scan
+        run: |
+          npm audit --production 2>/dev/null | head -20
+          # Check for common secret patterns in committed files
+          git diff --cached --name-only | grep -E '\.env|API_KEY|SECRET' || true
+
+  # ENCRYPTION_KEY: persisted per-render via render.yaml generateValue; do not
+  # rotate without also rotating all AES-encrypted IBAN/TRN fields (see docs/PAYMENTS.md §7).

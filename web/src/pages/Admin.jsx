@@ -119,6 +119,7 @@ function EscrowConfirmationPanel() {
   useEffect(load, [offset]);
 
   async function confirm(job) {
+    if (!window.confirm("Mark escrow as funded for this job? This confirms the shipper's payment arrived.")) return;
     setBusyId(job.id);
     try {
       await api.adminConfirmReceipt(job.id);
@@ -355,9 +356,16 @@ function DisputesTab() {
   }
 
   async function resolve(id, decision) {
+    const labels = {
+      RELEASE_TO_CARRIER: 'Release the escrow to the carrier',
+      REFUND_SHIPPER: 'Refund the shipper from escrow',
+      SPLIT: 'Split the escrow between both parties',
+    };
+    if (!window.confirm(`${labels[decision]}? This moves real money held in escrow and cannot be undone.`)) return;
     setBusy(true);
     try {
       await api.adminResolveDispute(id, { decision, determination: resolveDrafts[id] || '' });
+      addToast({ type: 'dispute_resolved', title: 'Dispute resolved', body: `${labels[decision]}.` });
       load();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Could not resolve dispute', body: err.message });
@@ -617,6 +625,7 @@ function SettingsTab() {
   }
 
   async function forceSweep() {
+    if (!window.confirm('Run the auto-release sweep now? This releases any escrow payouts currently due to carriers.')) return;
     setSweeping(true);
     try {
       const d = await api.runAutoRelease();
