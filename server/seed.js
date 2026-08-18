@@ -21,11 +21,15 @@ module.exports = function seed() {
   function insertUser({ email, role, tier, referral_code, is_verified }) {
     // email_verified_at is set for every seeded account (demo data doesn't
     // need the F3 verification flow) so the "verify your email" banner
-    // never shows for a freshly-logged-in demo user.
+    // never shows for a freshly-logged-in demo user. account_approval_status
+    // is 'APPROVED' for every demo account (the approval gate is a real
+    // registration flow, not a demo concern) — a brand-new registration via
+    // /api/auth/register starts PENDING and is read-only until an admin
+    // approves it.
     const r = db
       .prepare(
-        `INSERT INTO users (email, password_hash, role, is_verified, tier, referral_code, email_verified_at)
-         VALUES (?,?,?,?,?,?,datetime('now'))`
+        `INSERT INTO users (email, password_hash, role, is_verified, tier, referral_code, email_verified_at, account_approval_status, account_approved_at)
+         VALUES (?,?,?,?,?,?,datetime('now'),'APPROVED',datetime('now'))`
       )
       .run(email, PASSWORD_HASH, role, is_verified ? 1 : 0, tier, referral_code);
     return Number(r.lastInsertRowid);
@@ -124,10 +128,14 @@ module.exports = function seed() {
       );
     return Number(r.lastInsertRowid);
   }
-  function insertBid(jobId, carrierId, amount, eta, status, driverName, truckType, driverPhone) {
+  // Bids no longer carry a driver (driver details are shared only after the
+  // shipper confirms the bid — see server/index.js bids/award/driver routes);
+  // awarded jobs below get their assigned_driver_* via the post-award PATCH
+  // flow instead, mirroring production behavior.
+  function insertBid(jobId, carrierId, amount, eta, status, truckType) {
     const r = db
-      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, driver_name, driver_phone, status) VALUES (?,?,?,?,?,?,?,?)')
-      .run(jobId, carrierId, amount, eta, truckType, driverName, driverPhone || '+971501234567', status);
+      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, status) VALUES (?,?,?,?,?,?)')
+      .run(jobId, carrierId, amount, eta, truckType, status);
     return Number(r.lastInsertRowid);
   }
 
@@ -138,8 +146,8 @@ module.exports = function seed() {
     readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(4 * DAY), budget: 600, status: 'OPEN', escrow: 'PENDING',
     notes: 'Gate pass required — see message thread for customs contact.',
   });
-  insertBid(job1, falconId, 500, 30, 'PENDING', 'Rashid Al Falasi', '3-axle flatbed');
-  insertBid(job1, gulfheavyId, 480, 28, 'PENDING', 'Imran Sheikh', '3-axle flatbed');
+  insertBid(job1, falconId, 500, 30, 'PENDING', '3-axle flatbed');
+  insertBid(job1, gulfheavyId, 480, 28, 'PENDING', '3-axle flatbed');
   db.prepare("INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url) VALUES (?,?,?,?,?)").run(job1, shipperId, 'CUSTOMS', 'Customs release form', 'https://files.loadbyton.demo/customs-4921.pdf');
   db.prepare("INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url) VALUES (?,?,?,?,?)").run(job1, shipperId, 'RECEIPT', 'Terminal handling receipt', 'https://files.loadbyton.demo/receipt-4921.pdf');
   const gatePassThread = [
@@ -159,7 +167,7 @@ module.exports = function seed() {
     readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(3 * DAY), budget: 800, status: 'OPEN', escrow: 'PENDING',
     hazmat: true, notes: 'Class 3 flammable liquid — placarding required.',
   });
-  insertBid(job2, emiratesId, 750, 40, 'PENDING', 'Hamdan Youssef', 'Hazmat-certified flatbed');
+  insertBid(job2, emiratesId, 750, 40, 'PENDING', 'Hazmat-certified flatbed');
 
   // Job 3 — PICKED_UP, awarded to Emirates.
   const job3 = insertJob({
@@ -168,20 +176,23 @@ module.exports = function seed() {
     readyAt: sqliteTime(-1 * DAY), deadline: sqliteTime(2 * DAY), price: 900, carrierId: emiratesId,
     status: 'PICKED_UP', escrow: 'HELD',
   });
-  const job3Bid = insertBid(job3, emiratesId, 900, 50, 'ACCEPTED', 'Hamdan Youssef', '3-axle flatbed');
+  const job3Bid = insertBid(job3, emiratesId, 900, 50, 'ACCEPTED', '3-axle flatbed');
   db.prepare('UPDATE jobs SET awarded_bid_id=? WHERE id=?').run(job3Bid, job3);
   db.prepare("UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone='+971501234567' WHERE id=?").run('Hamdan Youssef', job3);
   db.prepare('INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status, release_type) VALUES (?,?,?,?,?,\'PENDING\',\'MANUAL\')').run(job3, emiratesId, 900, 54, 846);
 
   // Job 4 — IN_TRANSIT, reefer, awarded to Gulf Heavy (the ACCEPTED reefer bid).
+  // Equipment is TRAILER_WITH_GENSET — the REEFER_TRUCK type no longer
+  // exists; reefer is expressed as container size/type + requires_reefer.
   const job4 = insertJob({
     code: 'LBT-DXB-2608-2277', size: 'REEFER', type: 'REEFER', number: 'CMAU8827761',
     pickup: 'JEBEL_ALI_T2', area: 'AL_QUOZ', address: 'Al Quoz Cold Chain Hub, Bay 6',
     readyAt: sqliteTime(-2 * DAY), deadline: sqliteTime(1 * DAY), price: 1600, carrierId: gulfheavyId,
     status: 'IN_TRANSIT', escrow: 'FUNDED', reefer: true, freeDays: 3, demurrageRate: 600,
+    equipment: 'TRAILER_WITH_GENSET', containerCount: 1, truckCount: 1,
     notes: 'Maintain -18C chain of custody throughout.',
   });
-  const job4Bid = insertBid(job4, gulfheavyId, 1600, 65, 'ACCEPTED', 'Imran Sheikh', 'Reefer trailer');
+  const job4Bid = insertBid(job4, gulfheavyId, 1600, 65, 'ACCEPTED', 'Reefer trailer');
   db.prepare('UPDATE jobs SET awarded_bid_id=? WHERE id=?').run(job4Bid, job4);
   db.prepare("UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone='+971501234567' WHERE id=?").run('Imran Sheikh', job4);
   db.prepare('INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status, release_type) VALUES (?,?,?,?,?,\'PENDING\',\'MANUAL\')').run(job4, gulfheavyId, 1600, 96, 1504);
@@ -197,7 +208,7 @@ module.exports = function seed() {
     status: 'DELIVERED', escrow: 'RELEASED', deliveredAt: sqliteTime(-30 * HOUR), autoReleased: true,
     payoutReleasedAt: sqliteTime(-6 * HOUR),
   });
-  const job5Bid = insertBid(job5, falconId, 520, 28, 'ACCEPTED', 'Rashid Al Falasi', '3-axle flatbed');
+  const job5Bid = insertBid(job5, falconId, 520, 28, 'ACCEPTED', '3-axle flatbed');
   db.prepare('UPDATE jobs SET awarded_bid_id=? WHERE id=?').run(job5Bid, job5);
   db.prepare("UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone='+971501234567' WHERE id=?").run('Rashid Al Falasi', job5);
   db.prepare("INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url) VALUES (?,?,?,?,?)").run(job5, falconId, 'POD', 'Proof of delivery — signed', 'https://files.loadbyton.demo/pod-9042.pdf');
@@ -213,7 +224,7 @@ module.exports = function seed() {
     status: 'COMPLETED', escrow: 'RELEASED', deliveredAt: sqliteTime(-6 * DAY), autoReleased: false,
     payoutReleasedAt: sqliteTime(-6 * DAY),
   });
-  const job6Bid = insertBid(job6, emiratesId, 1200, 60, 'ACCEPTED', 'Hamdan Youssef', '3-axle flatbed');
+  const job6Bid = insertBid(job6, emiratesId, 1200, 60, 'ACCEPTED', '3-axle flatbed');
   db.prepare('UPDATE jobs SET awarded_bid_id=? WHERE id=?').run(job6Bid, job6);
   db.prepare("UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone='+971501234567' WHERE id=?").run('Hamdan Youssef', job6);
   db.prepare(
@@ -232,8 +243,8 @@ module.exports = function seed() {
     notes: 'Aggregate haul from Port Khalid stockyard to site — 4 tripper loads across the day, same address.',
     equipment: 'TRIPPER', truckCount: 4,
   });
-  insertBid(job7, gulfheavyId, 3000, 35, 'PENDING', 'Imran Sheikh', 'TRIPPER');
-  insertBid(job7, desertlineId, 2850, 45, 'PENDING', 'Yusuf Al Naqbi', 'TRIPPER');
+  insertBid(job7, gulfheavyId, 3000, 35, 'PENDING', 'TRIPPER');
+  insertBid(job7, desertlineId, 2850, 45, 'PENDING', 'TRIPPER');
 
   // Job 8 — OPEN, container drayage bulk inquiry, Fujairah — 6 containers,
   // one carrier to cover the full volume. Demonstrates volume-by-containers
@@ -245,7 +256,7 @@ module.exports = function seed() {
     notes: 'Weekly restock — 6× 40FT dry containers, same lane, one award covers the full batch.',
     equipment: 'CONTAINER_CHASSIS', containerCount: 6,
   });
-  insertBid(job8, emiratesId, 3900, 55, 'PENDING', 'Hamdan Youssef', 'CONTAINER_CHASSIS');
+  insertBid(job8, emiratesId, 3900, 55, 'PENDING', 'CONTAINER_CHASSIS');
 
   // --- Templates & contract lanes -----------------------------------------
   db.prepare(

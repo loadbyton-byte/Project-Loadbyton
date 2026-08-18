@@ -17,16 +17,19 @@ export const TERMINAL_INFO = {
 
 // Equipment/vehicle types a job can require and a carrier can bid with. The
 // two container-carrying types are the only ones where container size/type
-// apply — everything else is general UAE road freight.
+// apply — everything else is general UAE road freight. Reefer is expressed
+// as container size/type + requires_reefer, NOT a dedicated truck type;
+// TRAILER_WITH_GENSET is a reefer-capable container trailer, and CUSTOM is
+// a written truck/requirement in the notes field.
 export const EQUIPMENT_TYPES = [
-  'CONTAINER_CHASSIS', 'REEFER_TRUCK', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'BOX_TRUCK',
+  'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'BOX_TRUCK',
   'CURTAIN_TRUCK', 'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T',
-  'SIDE_LOADER_TRAILER', 'TRIPPER',
+  'SIDE_LOADER_TRAILER', 'TRIPPER', 'CUSTOM',
 ];
-export const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'REEFER_TRUCK'];
+export const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET'];
 export const EQUIPMENT_TYPE_LABELS = {
   CONTAINER_CHASSIS: 'Container chassis',
-  REEFER_TRUCK: 'Reefer truck',
+  TRAILER_WITH_GENSET: 'Trailer with genset',
   LOWBED_TRAILER: 'Lowbed trailer',
   FLATBED_TRAILER: 'Flatbed trailer',
   BOX_TRUCK: 'Box truck',
@@ -37,6 +40,7 @@ export const EQUIPMENT_TYPE_LABELS = {
   PICKUP_10T: 'Pickup — 10 tonne',
   SIDE_LOADER_TRAILER: 'Side loader trailer',
   TRIPPER: 'Tripper',
+  CUSTOM: 'Custom truck / requirement',
 };
 export function equipmentLabel(value) {
   return EQUIPMENT_TYPE_LABELS[value] || formatLabel(value);

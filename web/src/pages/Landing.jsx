@@ -9,9 +9,9 @@ import FreightMotionScene from '../components/FreightMotionScene.jsx';
 import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
 
 const EQUIPMENT_ICONS = {
-  CONTAINER_CHASSIS: IconPackage, REEFER_TRUCK: IconPackage, LOWBED_TRAILER: IconTrailer, FLATBED_TRAILER: IconTrailer,
+  CONTAINER_CHASSIS: IconPackage, TRAILER_WITH_GENSET: IconPackage, LOWBED_TRAILER: IconTrailer, FLATBED_TRAILER: IconTrailer,
   BOX_TRUCK: IconTruck, CURTAIN_TRUCK: IconTruck, PICKUP_3T: IconTruck, PICKUP_5T: IconTruck, PICKUP_7T: IconTruck,
-  PICKUP_10T: IconTruck, SIDE_LOADER_TRAILER: IconLayers, TRIPPER: IconLayers,
+  PICKUP_10T: IconTruck, SIDE_LOADER_TRAILER: IconLayers, TRIPPER: IconLayers, CUSTOM: IconTruck,
 };
 
 // Module scope, evaluated once when this chunk first loads — before React
@@ -124,7 +124,7 @@ export default function Landing() {
           <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Post, bid, award, deliver — the same sequence every time, whether it's one container or a fifty-truck contract lane.</Reveal>
           <div className="mt-10 grid gap-8 md:grid-cols-4">
             {[
-              { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, budget — one form, structured instantly. No back-and-forth to get a job in front of carriers.', icon: <IconPackage size={20} /> },
+              { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, target price — one form, structured instantly. No back-and-forth to get a job in front of carriers.', icon: <IconPackage size={20} /> },
               { n: '02', title: 'Carriers bid', body: 'Verified carriers only — TRN, trade licence, and insurance checked before they ever see a load. Every bid is priced against the live Lane Index.', icon: <IconTruck size={20} /> },
               { n: '03', title: 'Award & escrow', body: 'Accept a bid and the price locks. Funds move into escrow automatically — no invoice to chase, no transfer to confirm by phone.', icon: <IconShield size={20} /> },
               { n: '04', title: 'Deliver & release', body: "POD goes up, escrow releases — confirm it yourself or let the 24-hour auto-release handle it. Either way, you're not calling anyone to get paid.", icon: <IconClock size={20} /> },

@@ -114,7 +114,6 @@ export default function Privacy() {
               <li><strong>Payment Processor:</strong> IBAN, company name, payout amount — only when initiating transfers.</li>
               <li><strong>WhatsApp (Meta):</strong> Driver name, job code, pickup terminal — only if WhatsApp integration is configured and user consents via notification prefs.</li>
               <li><strong>Email Provider (Resend):</strong> Email address, notification content — only for transactional emails.</li>
-              <li><strong>AI Extraction (Puter.js):</strong> Document image bytes — processed client-side in the browser; Loadbyton never receives the image, only the extracted text you choose to submit.</li>
               <li><strong>Legal/Regulatory:</strong> Data disclosed only when required by UAE law or court order.</li>
             </ul>
           </Reveal>

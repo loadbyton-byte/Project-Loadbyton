@@ -11,8 +11,8 @@ const PAGE_SIZE = 20;
 const SORT_OPTIONS = [
   { value: 'date_desc', label: 'Newest first' },
   { value: 'date_asc', label: 'Oldest first' },
-  { value: 'price_desc', label: 'Budget: high to low' },
-  { value: 'price_asc', label: 'Budget: low to high' },
+  { value: 'price_desc', label: 'Target price: high to low' },
+  { value: 'price_asc', label: 'Target price: low to high' },
   { value: 'deadline_asc', label: 'Deadline: soonest' },
 ];
 
@@ -105,7 +105,7 @@ export default function OpenLoads() {
                       {!!j.requires_reefer && <Badge color="warning">Reefer</Badge>}
                     </div>
                   }
-                  priceLabel={`Up to ${formatAED(j.max_budget_aed)}`}
+                  priceLabel={`Target ${formatAED(j.max_budget_aed)}`}
                   origin={formatLabel(j.pickup_terminal)}
                   destination={formatLabel(j.delivery_area)}
                   chips={[

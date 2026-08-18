@@ -10,7 +10,7 @@ const bcrypt = require('bcryptjs');
 
 const db = require('./db');
 const totp = require('./lib/totp');
-const { unifiedLanes, estimateRate, optimizeRoute } = require('./lib/lanes');
+const { unifiedLanes } = require('./lib/lanes');
 const { issueInvoice, renderInvoiceHtml } = require('./lib/invoice');
 const { rateLimiter, byIp } = require('./lib/rateLimit');
 const { encryptField, decryptField } = require('./lib/crypto');
@@ -130,6 +130,23 @@ function normalizeUaeMobile(raw) {
   return UAE_MOBILE_RE.test(digits) ? digits : null;
 }
 
+// UAE Tax Registration Number: exactly 15 digits (FTA format, e.g.
+// 100123456700003). Rejects anything shorter/longer or non-numeric — the
+// signup gate that makes a random string unusable for creating an account.
+const UAE_TRN_RE = /^\d{15}$/;
+function isValidUaeTrn(raw) {
+  return UAE_TRN_RE.test(String(raw || '').trim());
+}
+
+// UAE trade licence: 5-15 chars of uppercase letters, digits and dashes,
+// with at least one digit. Covers the real formats in circulation — Dubai
+// DED 7-digit, Abu Dhabi 10-digit, Sharjah "NNNNNN.NN", freezone prefixes
+// (JAFZA/IFZA/DMCC-XXXXXX) — while rejecting gibberish and pure prose.
+const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
+function isValidUaeTradeLicence(raw) {
+  return UAE_LICENCE_RE.test(String(raw || '').toUpperCase());
+}
+
 // Loose UAE-region bounding box (with margin) for the optional map pin —
 // just enough to reject an obviously wrong value (e.g. lat/lng swapped),
 // not a precise border check.
@@ -185,15 +202,19 @@ function hashToken(token) {
 }
 
 // Equipment/vehicle types a job can require and a carrier can bid with. The
-// two container-carrying types are the only ones where container_size/
+// container-carrying types are the only ones where container_size/
 // container_type mean anything — every other type is general UAE road
 // freight (construction plant, palletised/boxed cargo, small-load pickups).
+// REEFER_TRUCK was replaced product-wide by TRAILER_WITH_GENSET (a chassis
+// with an attached genset powers a reefer container on a standard trailer);
+// CUSTOM is the catch-all for anything the fixed list doesn't cover — it
+// requires a written requirement (cargoDescription/notes).
 const EQUIPMENT_TYPES = [
-  'CONTAINER_CHASSIS', 'REEFER_TRUCK', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'BOX_TRUCK',
+  'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'BOX_TRUCK',
   'CURTAIN_TRUCK', 'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T',
-  'SIDE_LOADER_TRAILER', 'TRIPPER',
+  'SIDE_LOADER_TRAILER', 'TRIPPER', 'CUSTOM',
 ];
-const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'REEFER_TRUCK'];
+const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET'];
 
 function getSettings() {
   const rows = db.prepare('SELECT key, value FROM settings').all();
@@ -219,6 +240,8 @@ function toPublicUser(row) {
     referral_code: row.referral_code,
     referred_by: row.referred_by,
     created_at: row.created_at,
+    account_approval_status: row.account_approval_status || 'APPROVED',
+    account_approved_at: row.account_approved_at || null,
     profile: profile
       ? {
           company_name: profile.company_name,
@@ -448,6 +471,25 @@ function clearSessionCookie(res) {
 // duration of the request. req.actorId / req.seatRole / req.actorLabel
 // carry who's actually driving, for audit attribution and permission
 // gating only (see requireSeatRole below) — never for data ownership.
+// Account approval gate: until an admin approves a newly registered
+// shipper/carrier account, the user may browse (all GET endpoints) but
+// cannot perform ANY workflow action — the read-only demo mode. Enforced
+// here, inside auth(), the single choke-point every authenticated route
+// passes through, so no future route can silently skip it. Housekeeping
+// routes a pending account still needs are exempt (auth flows, profile
+// fixes, notification prefs). Admins are always exempt; the UI mirrors this
+// with a banner, but the enforcement is server-side.
+const APPROVAL_EXEMPT_PREFIXES = ['/api/auth/', '/api/system/'];
+const APPROVAL_EXEMPT_EXACT = new Set([
+  '/api/profile',
+  '/api/notifications/read',
+  '/api/notifications/preferences',
+]);
+function isApprovalExempt(path) {
+  if (APPROVAL_EXEMPT_PREFIXES.some((p) => path.startsWith(p))) return true;
+  return APPROVAL_EXEMPT_EXACT.has(path);
+}
+
 function auth(roles) {
   return (req, res, next) => {
     const token = req.cookies.lb_session;
@@ -472,6 +514,18 @@ function auth(roles) {
     }
 
     if (roles && roles.length && !roles.includes(user.role)) return sendError(res, 403, 'Not permitted for this role');
+
+    // Pending-approval accounts are read-only: browse works, nothing that
+    // changes state does. (GETs on protected routes are fine — listing and
+    // viewing is exactly what "just view everything" means.)
+    const isWrite = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+    if (isWrite && user.role !== 'ADMIN' && (user.account_approval_status || 'PENDING') !== 'APPROVED' && !isApprovalExempt(req.path)) {
+      return sendError(
+        res,
+        403,
+        'Your account is pending admin approval — you can browse, but this action is unavailable until an admin approves your account.'
+      );
+    }
     next();
   };
 }
@@ -745,6 +799,14 @@ app.post(
     const existing = db.prepare('SELECT id FROM users WHERE email=?').get(email);
     if (existing) return sendError(res, 400, 'An account with that email already exists');
 
+    // UAE-format business identifiers — the signup gate that makes a random
+    // string unusable for creating an account (see the regexes above).
+    if (!normalizeUaeMobile(phone)) return sendError(res, 400, 'phone must be a valid UAE mobile number (05XXXXXXXX or +9715XXXXXXXX)');
+    if (!isValidUaeTrn(trnNumber)) return sendError(res, 400, 'trnNumber must be a valid UAE TRN — exactly 15 digits');
+    if (!isValidUaeTradeLicence(tradeLicenseNumber)) {
+      return sendError(res, 400, 'tradeLicenseNumber must be a valid UAE trade licence number (5-15 uppercase letters/digits/dashes, at least one digit)');
+    }
+
     let referredBy = null;
     if (incomingReferral) {
       const referrer = db.prepare('SELECT referral_code FROM users WHERE referral_code=?').get(incomingReferral);
@@ -767,13 +829,14 @@ app.post(
 
     const userResult = db
       .prepare(
-        'INSERT INTO users (email, password_hash, role, tier, referral_code, referred_by, email_verify_token_hash, email_verify_expires) VALUES (?,?,?,?,?,?,?,?)'
+        `INSERT INTO users (email, password_hash, role, tier, referral_code, referred_by, email_verify_token_hash, email_verify_expires, account_approval_status)
+         VALUES (?,?,?,?,?,?,?,?, 'PENDING')`
       )
       .run(email, passwordHash, role, 'BRONZE', code, referredBy, hashToken(verifyToken), verifyExpires);
     const userId = Number(userResult.lastInsertRowid);
     db.prepare(
       'INSERT INTO profiles (user_id, company_name, trn_number, trade_license_number, phone) VALUES (?,?,?,?,?)'
-    ).run(userId, companyName, encryptField(trnNumber), tradeLicenseNumber || null, phone || null);
+    ).run(userId, companyName, encryptField(trnNumber.trim()), tradeLicenseNumber.toUpperCase(), normalizeUaeMobile(phone));
 
     writeAudit(req, { userId, action: 'REGISTER', details: `${role} registered: ${email}`, entityType: 'user', entityId: userId });
     sendEmailAsync({
@@ -1251,9 +1314,13 @@ function createJobFromBody(b, req) {
     if (!b.containerType || !CONTAINER_TYPES.includes(b.containerType)) throw { status: 400, message: 'Invalid containerType' };
     containerSize = b.containerSize;
     containerType = b.containerType;
-  } else if (!b.notes) {
+  } else if (!b.notes && !b.customRequirement) {
     throw { status: 400, message: 'cargoDescription (notes) is required for non-container equipment' };
   }
+  // CUSTOM equipment carries a written requirement — merged into notes so
+  // downstream consumers (backload matching, messages, notifications) all
+  // keep working without knowing about the field.
+  const notes = b.customRequirement && !b.notes ? b.customRequirement : b.notes;
 
   const containerCount = Math.max(1, Number(b.containerCount) || 1);
   const truckCount = Math.max(1, Number(b.truckCount) || 1);
@@ -1295,12 +1362,12 @@ function createJobFromBody(b, req) {
       b.deliveryAddress,
       b.readyAt,
       b.deadline,
-      b.maxBudgetAed || null,
+      b.maxBudgetAed ?? b.targetPriceAed ?? null,
       b.requiresReefer ? 1 : 0,
       b.requiresHazmat ? 1 : 0,
       b.freeTimeDays ?? 5,
       b.demurrageRateAed ?? 400,
-      b.notes || null,
+      notes || null,
       equipmentType,
       containerCount,
       truckCount,
@@ -1365,7 +1432,7 @@ const JOB_EDITABLE_FIELDS = {
   containerNumber: 'container_number',
   readyAt: 'ready_at',
   deadline: 'deadline',
-  maxBudgetAed: 'max_budget_aed',
+  targetPriceAed: 'max_budget_aed',
   requiresReefer: 'requires_reefer',
   requiresHazmat: 'requires_hazmat',
   freeTimeDays: 'free_time_days',
@@ -1453,7 +1520,12 @@ app.get('/api/jobs/:id', auth(), (req, res) => {
   const shipperProfile = db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
   const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null };
 
-  const documents = isParticipantOrBidder(job, req.user) ? db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
+  const allDocs = isParticipantOrBidder(job, req.user) ? db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
+  // Visibility is per-document (uploader sees own docs pre-award; the
+  // counterparty sees them only once the bid is confirmed). Returning a
+  // filtered array — not metadata of hidden docs — so the UI can't infer
+  // anything about documents it can't read.
+  const documents = allDocs.filter((d) => canSeeDocument(job, d, req.user));
   const payout = db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id) || null;
   res.json({ job: jobWithRating, bids, documents, payout });
 });
@@ -1470,9 +1542,6 @@ app.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, requireSeatRole(
   const eta = Number(b.etaMinutes);
   if (!amount || amount <= 0) return sendError(res, 400, 'amountAed must be a positive number');
   if (!eta || eta < 1 || eta > 600) return sendError(res, 400, 'etaMinutes must be between 1 and 600');
-  if (!b.driverName) return sendError(res, 400, 'driverName is required');
-  const driverPhone = normalizeUaeMobile(b.driverPhone);
-  if (!driverPhone) return sendError(res, 400, 'driverPhone is required and must be a valid UAE mobile number');
 
   // gstack review F5: without this a carrier could script unlimited bids on
   // the same job (notification spam, price signaling). Checked proactively
@@ -1481,11 +1550,16 @@ app.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, requireSeatRole(
   const alreadyBidding = db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND carrier_id=? AND status='PENDING'`).get(job.id, req.user.id);
   if (alreadyBidding) return sendError(res, 409, 'You already have a pending bid on this job — withdraw it before placing another.');
 
+  // Driver identity is deliberately NOT collected at bid time anymore:
+  // driver name/phone are shared only after the shipper confirms the bid
+  // (award), via PATCH /api/jobs/:id/driver. Bidding without a driver keeps
+  // carrier capacity flexible and stops driver details from leaking to
+  // losing bids' competitors.
   let result;
   try {
     result = db
-      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, driver_name, driver_phone, notes) VALUES (?,?,?,?,?,?,?,?)')
-      .run(job.id, req.user.id, amount, eta, b.truckType || null, b.driverName, driverPhone, b.notes || null);
+      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, notes) VALUES (?,?,?,?,?,?)')
+      .run(job.id, req.user.id, amount, eta, b.truckType || null, b.notes || null);
   } catch (e) {
     if (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message)) {
       return sendError(res, 409, 'You already have a pending bid on this job — withdraw it before placing another.');
@@ -1497,35 +1571,6 @@ app.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, requireSeatRole(
   notify(job.shipper_id, 'New bid received', `${req.user.profile.company_name} bid AED ${amount} on ${job.job_code}.`, job.id, 'bid');
   const bid = db.prepare('SELECT * FROM bids WHERE id=?').get(bidId);
   res.status(201).json({ bid });
-});
-
-app.post('/api/jobs/:id/rate', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
-  if (!canViewJob(job, req.user)) return sendError(res, 403, 'Not permitted');
-  const b = req.body || {};
-  const result = estimateRate({
-    terminal: job.pickup_terminal,
-    area: job.delivery_area,
-    weightTons: b.weightTons,
-    urgency: b.urgency,
-    quantity: Math.max(job.container_count || 1, job.truck_count || 1),
-  });
-  res.json(result);
-});
-
-app.post('/api/jobs/:id/optimize-route', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
-  if (!canViewJob(job, req.user)) return sendError(res, 403, 'Not permitted');
-  const b = req.body || {};
-  const result = optimizeRoute({
-    terminal: job.pickup_terminal,
-    area: job.delivery_area,
-    waypoints: b.waypoints || [],
-    priority: b.priority || 'balanced',
-  });
-  res.json(result);
 });
 
 app.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, res) => {
@@ -1553,9 +1598,8 @@ app.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), (re
     const net = gross - fee;
 
     db.prepare(
-      `UPDATE jobs SET status='AWARDED', awarded_bid_id=?, carrier_id=?, agreed_price_aed=?, escrow_status='HELD',
-         assigned_driver_name=?, assigned_driver_phone=?, updated_at=datetime('now') WHERE id=?`
-    ).run(bid.id, bid.carrier_id, gross, bid.driver_name, bid.driver_phone, jobId);
+      `UPDATE jobs SET status='AWARDED', awarded_bid_id=?, carrier_id=?, agreed_price_aed=?, escrow_status='HELD', updated_at=datetime('now') WHERE id=?`
+    ).run(bid.id, bid.carrier_id, gross, jobId);
     // TODO-3: with a processor configured, the shipper must pay before the
     // job moves — escrow stays HELD until the webhook confirms the charge.
     // In internal mode this line is a no-op and HELD means "bookkeeping",
@@ -1584,16 +1628,10 @@ app.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), (re
     void payoutResult;
     db.exec('COMMIT');
     const job2 = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
-    // Driver messaging order per docs/STRATEGY.md is WhatsApp -> SMS -> in-app;
-    // in-app already fired above via notify() regardless of whether this
-    // sends. Fire-and-forget, after commit, never inside the transaction —
-    // see server/lib/whatsapp.js for why this safely no-ops until Meta
-    // approval lands (TODO-4).
-    notifyDriverAsync({
-      to: job2.assigned_driver_phone,
-      template: 'job_awarded_pickup_details',
-      params: [job2.assigned_driver_name || 'Driver', job2.job_code, job2.pickup_terminal],
-    });
+    // The driver is NOT known at award time anymore (driver details are
+    // shared only after the shipper confirms the bid — the carrier submits
+    // them via PATCH /api/jobs/:id/driver, which fires the WhatsApp/SMS
+    // pickup message when it first runs). Nothing to notify here yet.
     res.json({ ok: true, job: job2 });
   } catch (e) {
     try {
@@ -1688,6 +1726,14 @@ app.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), (req, res) =
   const allowedNext = allowedFor[job.status] || [];
   if (!allowedNext.includes(next)) return sendError(res, 403, `Illegal state transition: ${job.status} -> ${next}`);
 
+  // Driver identity is shared only AFTER the bid is confirmed (award) — and
+  // the driver must actually be on file before the trip starts. A carrier
+  // who picks up without registering the assigned driver breaks the
+  // contact/tracking chain this platform is built on.
+  if (next === 'PICKED_UP' && !job.assigned_driver_name) {
+    return sendError(res, 400, 'Add the assigned driver first — driver details are shared after bid confirmation (PATCH /api/jobs/:id/driver).');
+  }
+
   db.prepare(`UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?`).run(next, job.id);
 
   if (next === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
@@ -1756,6 +1802,15 @@ app.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS']), (
     afterState: normalizedPhone,
   });
   notify(job.shipper_id, 'Driver reassigned', `${job.job_code}: the assigned driver was changed to ${driverName}.`, job.id, 'status');
+  // Driver details are shared with the shipper only from this point on (the
+  // award no longer copies a bid-time driver). Fire the pickup-details
+  // WhatsApp/SMS only when the driver is actually on file — first assignment
+  // on a freshly awarded job, or any later reassignment.
+  notifyDriverAsync({
+    to: normalizedPhone,
+    template: 'job_awarded_pickup_details',
+    params: [driverName, job.job_code, job.pickup_terminal],
+  });
   const updated = db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
   res.json({ job: updated });
 });
@@ -1957,10 +2012,25 @@ app.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), (req, res) => {
   res.json({ matches: matches.slice(0, 10) });
 });
 
+// Job-document visibility: a document is only readable by its uploader and
+// admins until the job is awarded (bid confirmed). From award on, the
+// counterparty sees it too — the shipper's requirements to the carrier, and
+// the carrier's compliance docs to the shipper ("after the carrier confirms
+// the bid, the shipper shares his required documents, and vice versa").
+// Bidders who didn't win never see either side's documents.
+function canSeeDocument(job, doc, user) {
+  if (user.role === 'ADMIN') return true;
+  if (doc.uploader_id === user.id) return true;
+  if (job.status === 'OPEN') return false;
+  return user.id === job.shipper_id || user.id === job.carrier_id;
+}
+
 app.post('/api/jobs/:id/documents', auth(), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  if (!isParticipantOrBidder(job, req.user)) return sendError(res, 403, 'Not permitted');
+  // Uploads are for the job's parties (shipper or awarded carrier) — a
+  // bidding carrier has no business attaching files to a job they may lose.
+  if (!isPartyOnJob(job, req.user)) return sendError(res, 403, 'Only the shipper and the awarded carrier can attach documents');
   const b = req.body || {};
   if (!b.title || !(b.fileUrl || b.fileBase64)) return sendError(res, 400, 'title and (fileUrl or fileBase64+mimeType) are required');
   let storagePath = null;
@@ -1985,16 +2055,16 @@ app.post('/api/jobs/:id/documents', auth(), (req, res) => {
   res.status(201).json({ ok: true });
 });
 
-// Access-controlled file serving: reuses the exact isParticipantOrBidder
-// check every other job-scoped route uses, so an uploaded POD/customs doc
-// is only readable by the job's shipper, carrier, or a bidding carrier (or
-// admin) — never a bare guessable URL.
+// Access-controlled file serving: reuses the exact canSeeDocument rule so
+// an uploaded POD/customs doc is only readable by its uploader (or the
+// counterparty once the bid is confirmed, or admin) — never a bare
+// guessable URL, and never by a competing bidder.
 app.get('/api/jobs/:id/documents/:docId/file', auth(), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  if (!isParticipantOrBidder(job, req.user)) return sendError(res, 403, 'Not permitted');
   const doc = db.prepare('SELECT * FROM job_documents WHERE id=? AND job_id=?').get(req.params.docId, job.id);
   if (!doc) return sendError(res, 404, 'Document not found');
+  if (!canSeeDocument(job, doc, req.user)) return sendError(res, 403, 'Not permitted — documents are shared once the bid is confirmed');
   if (!doc.storage_path) return res.redirect(doc.file_url);
   const filePath = path.join(UPLOADS_DIR, doc.storage_path);
   if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) return sendError(res, 404, 'File not found');
@@ -2299,6 +2369,69 @@ app.get('/api/admin/verification', auth(['ADMIN']), (req, res) => {
       },
     })),
   });
+});
+
+// Account approval queue (separate from carrier document verification):
+// every new SHIPPER/CARRIER registration sits PENDING here until an admin
+// approves it — until then the account is read-only (see auth()). The
+// carrier verification flow below remains a second, deeper gate for
+// carriers' documents/IBAN.
+app.get('/api/admin/approvals', auth(['ADMIN']), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT u.*, p.company_name, p.trn_number, p.trade_license_number, p.phone, p.fleet_size, p.owned_chassis, p.insurance_uploaded, p.coverage_zones
+       FROM users u JOIN profiles p ON p.user_id = u.id
+       WHERE u.role IN ('SHIPPER','CARRIER') AND u.account_approval_status='PENDING'
+       ORDER BY u.created_at ASC`
+    )
+    .all();
+  res.json({
+    queue: rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      role: r.role,
+      tier: r.tier,
+      created_at: r.created_at,
+      profile: {
+        company_name: r.company_name,
+        trn_number: decryptField(r.trn_number),
+        trade_license_number: r.trade_license_number,
+        phone: r.phone,
+        fleet_size: r.fleet_size,
+        owned_chassis: r.owned_chassis,
+        insurance_uploaded: !!r.insurance_uploaded,
+        coverage_zones: r.coverage_zones,
+      },
+    })),
+  });
+});
+
+function approveAccount(req, userId, action) {
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+  if (!user) throw { status: 404, message: 'User not found' };
+  if (!['approve', 'reject'].includes(action)) throw { status: 400, message: 'action must be approve or reject' };
+  if (user.role === 'ADMIN') throw { status: 400, message: 'Admin accounts are not approval-gated' };
+  if (action === 'approve') {
+    db.prepare(`UPDATE users SET account_approval_status='APPROVED', account_approved_at=datetime('now') WHERE id=?`).run(user.id);
+    writeAudit(req, { userId: req.actorId, action: 'ACCOUNT_APPROVE', details: `Approved ${user.role} account ${user.email}`, entityType: 'user', entityId: user.id, afterState: 'APPROVED' });
+    notify(user.id, 'Account approved', 'Your account is approved — you can now post jobs, bid, and use the full workflow.', null, 'verification');
+  } else {
+    db.prepare(`UPDATE users SET account_approval_status='REJECTED', account_approved_at=NULL WHERE id=?`).run(user.id);
+    writeAudit(req, { userId: req.actorId, action: 'ACCOUNT_REJECT', details: `Rejected ${user.role} account ${user.email}`, entityType: 'user', entityId: user.id, afterState: 'REJECTED' });
+    notify(user.id, 'Account not approved', 'Your account was not approved. Contact support for details.', null, 'verification');
+  }
+  return toPublicUser(db.prepare('SELECT * FROM users WHERE id=?').get(user.id));
+}
+
+app.post('/api/admin/approve/:id', auth(['ADMIN']), (req, res) => {
+  const { action } = req.body || {};
+  try {
+    const user = approveAccount(req, Number(req.params.id), action);
+    res.json({ ok: true, user });
+  } catch (e) {
+    if (e.status) return sendError(res, e.status, e.message);
+    throw e;
+  }
 });
 
 // Shared by the single-carrier route and the bulk route below. Throws

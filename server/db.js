@@ -339,6 +339,16 @@ addColumn('users', 'password_reset_expires', 'password_reset_expires TEXT');
 addColumn('notifications', 'type', "type TEXT NOT NULL DEFAULT 'system'");
 addColumn('users', 'notification_prefs_disabled', "notification_prefs_disabled TEXT NOT NULL DEFAULT ''");
 
+// Account approval gate: a newly registered shipper/carrier cannot use any
+// workflow (post jobs, bid, message, upload) until an admin approves the
+// account — browse/marketplace views stay available, writes are blocked
+// server-side (see requireApproved in server/index.js). Default 'APPROVED'
+// deliberately grandfathers every pre-existing row: only accounts created
+// by the register route (which passes 'PENDING' explicitly) ever sit in the
+// queue. Statuses: PENDING -> APPROVED | REJECTED.
+addColumn('users', 'account_approval_status', "account_approval_status TEXT NOT NULL DEFAULT 'APPROVED'");
+addColumn('users', 'account_approved_at', 'account_approved_at TEXT');
+
 // Real file upload for job documents/POD. storage_path is set when the file
 // was uploaded through the app (base64 JSON body, decoded and written under
 // UPLOADS_DIR in server/index.js) and served back via an access-controlled

@@ -5,14 +5,15 @@ import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { IconTruck, IconPackage, IconArrowLeft, IconArrowRight, IconCheckCircle } from '../components/icons.jsx';
-import ScanWithAi from '../components/ScanWithAi.jsx';
-
-const TRN_LICENCE_SCAN_FIELDS = [
-  { key: 'trnNumber', description: 'The UAE Tax Registration Number (TRN) — a 15-digit number, sometimes labelled "TRN" or "Tax Registration Number"' },
-  { key: 'tradeLicenseNumber', description: 'The trade licence / commercial licence number' },
-];
 
 const STEPS = ['Role', 'Business', 'Account'];
+
+// Client-side mirror of the server's UAE-format validators (server/index.js)
+// so a wrong format is caught before submit, not after a round trip. The
+// server enforces the same rules regardless — this only improves UX.
+const UAE_MOBILE_RE = /^(\+9715|05)\d{8}$/;
+const UAE_TRN_RE = /^\d{15}$/;
+const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
 
 export default function Register() {
   usePageTitle('Create your account');
@@ -28,9 +29,24 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  function validateBusinessFields() {
+    const phone = form.phone.trim().replace(/\s+/g, '');
+    if (!UAE_MOBILE_RE.test(phone)) return 'Phone must be a valid UAE mobile number (05XXXXXXXX or +9715XXXXXXXX).';
+    if (!UAE_TRN_RE.test(form.trnNumber.trim())) return 'TRN must be exactly 15 digits — the UAE Tax Registration Number.';
+    const licence = form.tradeLicenseNumber.trim().toUpperCase();
+    if (!UAE_LICENCE_RE.test(licence)) return 'Trade licence must be 5-15 uppercase letters/digits/dashes with at least one digit.';
+    return null;
+  }
+
   async function onSubmit(e) {
     e.preventDefault();
     setError('');
+    const invalid = validateBusinessFields();
+    if (invalid) {
+      setError(invalid);
+      setStep(1);
+      return;
+    }
     setLoading(true);
     try {
       const user = await register({ ...form, role });
@@ -108,36 +124,28 @@ export default function Register() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+971 4 000 0000" />
+                <Input id="phone" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="05XXXXXXXX or +9715XXXXXXXX" />
+                <p className="mt-1 text-xs text-ink-muted">UAE mobile number — no landlines</p>
               </div>
               <div>
                 <Label htmlFor="trn">TRN number</Label>
-                <Input id="trn" value={form.trnNumber} onChange={(e) => setForm({ ...form, trnNumber: e.target.value })} placeholder="100XXXXXXXXXXX" />
+                <Input id="trn" required value={form.trnNumber} onChange={(e) => setForm({ ...form, trnNumber: e.target.value })} placeholder="100000000000000" inputMode="numeric" maxLength={15} />
+                <p className="mt-1 text-xs text-ink-muted">UAE Tax Registration Number — exactly 15 digits</p>
               </div>
             </div>
             <div>
               <Label htmlFor="license">Trade licence number</Label>
-              <Input id="license" value={form.tradeLicenseNumber} onChange={(e) => setForm({ ...form, tradeLicenseNumber: e.target.value })} placeholder="CN-XXXXXXX" />
+              <Input id="license" required value={form.tradeLicenseNumber} onChange={(e) => setForm({ ...form, tradeLicenseNumber: e.target.value.toUpperCase() })} placeholder="CN-1122334" maxLength={15} />
+              <p className="mt-1 text-xs text-ink-muted">5-15 letters/digits/dashes, at least one digit</p>
             </div>
-            <ScanWithAi
-              label="Scan TRN / trade licence photo to autofill"
-              fields={TRN_LICENCE_SCAN_FIELDS}
-              onExtract={(extracted) => {
-                setForm((f) => ({
-                  ...f,
-                  trnNumber: extracted.trnNumber || f.trnNumber,
-                  tradeLicenseNumber: extracted.tradeLicenseNumber || f.tradeLicenseNumber,
-                }));
-              }}
-            />
             {role === 'CARRIER' && (
               <p className="rounded-md px-3 py-2 text-xs" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
-                New carrier accounts need admin verification (TRN, trade licence, insurance) before bidding — usually reviewed within a day.
+                New accounts are read-only until an admin approves them; carrier verification (TRN, trade licence, insurance) happens separately before bidding — usually within a day.
               </p>
             )}
             <div className="flex gap-2">
               <Button type="button" variant="ghost" onClick={() => setStep(0)}><IconArrowLeft size={15} /> Back</Button>
-              <Button type="button" className="flex-1" disabled={!form.companyName} onClick={() => setStep(2)}>Continue</Button>
+              <Button type="button" className="flex-1" disabled={!form.companyName} onClick={() => { const invalid = validateBusinessFields(); if (invalid) { setError(invalid); return; } setError(''); setStep(2); }}>Continue</Button>
             </div>
           </div>
         )}

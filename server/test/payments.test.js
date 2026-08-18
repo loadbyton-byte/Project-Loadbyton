@@ -43,19 +43,22 @@ async function createAwardedJob(shipper, carrier, overrides = {}) {
     deliveryAddress: 'Test Warehouse 1',
     readyAt: new Date(Date.now() + 86400000).toISOString(),
     deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
-    maxBudgetAed: 700,
+    maxBudgetAed: 700, // legacy field name — accepted, mapped to max_budget_aed
     ...overrides,
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
 
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, {
-    amountAed: 650, etaMinutes: 40, truckType: '3-axle flatbed', driverName: 'Hamdan Youssef', driverPhone: '+971501112233',
+    amountAed: 650, etaMinutes: 40, truckType: '3-axle flatbed',
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
 
   const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id });
   assert.equal(award.status, 200, award.raw);
+  // The driver is not bound at bid/award time anymore — the carrier submits
+  // them post-award (PATCH /api/jobs/:id/driver), required before PICKED_UP.
+  assert.equal(award.body.job.assigned_driver_name, null);
   return { jobId, award };
 }
 
@@ -183,7 +186,9 @@ test('full loop: paid -> delivered -> completed auto-executes the carrier payout
   const ref = (await shipper.post(`/api/jobs/${jobId}/payment-checkout`, {})).body.ref;
   await sendWebhook(server.baseUrl, { event: 'AUTHORISED', ref, tranref: 'mcktran-2', amount_aed: 650 });
 
-  await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
+  await carrier.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Hamdan Youssef', driverPhone: '+971501112233' });
+  const pickedUp = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
+  assert.equal(pickedUp.status, 200, 'PICKED_UP requires the post-award driver to be on file');
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });
   await carrier.post(`/api/jobs/${jobId}/pod`, {});
   const completed = await shipper.patch(`/api/jobs/${jobId}/status`, { status: 'COMPLETED' });

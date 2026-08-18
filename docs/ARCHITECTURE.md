@@ -63,6 +63,9 @@ auth(['ADMIN'])
 auth(['SHIPPER', 'CARRIER'])
 ```
 
+### Account approval gate (new registrations are read-only)
+Registration validates UAE identity data (phone must normalize to a UAE mobile/landline, TRN exactly 15 digits, trade licence 5–15 chars with ≥1 digit) and inserts the account with `account_approval_status = 'PENDING'`. The `auth()` middleware then enforces the **approval gate**: a `PENDING` account may browse (`GET`/`HEAD`/`OPTIONS`) and reach `/api/auth/*`, `/api/system/*`, `/api/profile`, `/api/notifications/*` — but **every workflow action 403s** until an admin approves the account in the queue (`GET /api/admin/approvals` → `POST /api/admin/approve/:id`, audited `ACCOUNT_APPROVE`). Admins and `APPROVED` accounts are unaffected; seeded demo accounts are pre-approved. This is the single choke point — new routes get the gate for free by using `auth()`.
+
 ### Login throttling
 Per-email failed-login accounting in memory: after **8 failed attempts in 15 minutes** the email is locked out (429). This is in-process state (resets on restart) — a real deployment puts this in Redis/DB and adds IP-based limits.
 
@@ -77,12 +80,12 @@ Per-email failed-login accounting in memory: after **8 failed attempts in 15 min
 ## 3. The core loop: a load moves
 
 ### 3.1 Job posting (SHIPPER)
-`POST /api/jobs` creates a job in `DRAFT`… actually `OPEN`. Payload: `containerSize` (20FT/40FT/40HC/REEFER), `containerType` (DRY/REEFER/HAZMAT/OPEN_TOP/FLAT_RACK), `pickupTerminal`, `deliveryArea`, `deliveryAddress`, `readyAt`, `deadline`, `maxBudgetAed`, flags (`requiresReefer`, `requiresHazmat`), demurrage knobs (`freeTimeDays` default 5, `demurrageRateAed` default 400), and `notes`. A unique human-readable `job_code` (e.g. `LBT-DXB-2608-4921`) is generated. Optionally it can carry `templateId`/`contractLaneId` to link a recurrence.
+`POST /api/jobs` creates a job in `DRAFT`… actually `OPEN`. Payload: `containerSize` (20FT/40FT/40HC/REEFER), `containerType` (DRY/REEFER/HAZMAT/OPEN_TOP/FLAT_RACK), `pickupTerminal`, `deliveryArea`, `deliveryAddress`, `readyAt`, `deadline`, `targetPriceAed` (per-trip target price; the DB column stays `max_budget_aed`), `equipmentType` (13 values incl. `CUSTOM` — a written `customRequirement` is required for `CUSTOM`; `REEFER_TRUCK` is gone, unknown values fall back to `CONTAINER_CHASSIS`), flags (`requiresReefer`, `requiresHazmat`), demurrage knobs (`freeTimeDays` default 5, `demurrageRateAed` default 400), and `notes`. A unique human-readable `job_code` (e.g. `LBT-DXB-2608-4921`) is generated. Optionally it can carry `templateId`/`contractLaneId` to link a recurrence.
 
 ### 3.2 Bidding (CARRIER, verified only)
 `POST /api/jobs/:id/bids`:
-- **Guard:** `auth(['CARRIER'])` **and** `profile.isVerified` must be truthy and the job must be `OPEN`. Otherwise 403 with an explicit message ("Carrier verification required to bid.").
-- **Body:** `amountAed` (a number), `etaMinutes` (1–600), `truckType`, `driverName`, `notes`. Creates a `bids` row in `PENDING`.
+- **Guard:** `auth(['CARRIER'])` **and** `profile.isVerified` must be truthy and the job must be `OPEN`. Otherwise 403 with an explicit message ("Carrier verification required to bid."). (Both this and every other workflow action sit behind the account-approval gate — see §2.1.)
+- **Body:** `amountAed` (a number), `etaMinutes` (1–600), `truckType`, `notes`. Creates a `bids` row in `PENDING`. **Driver name/phone are not collected here** — driver contact is shared only post-award, via `PATCH /api/jobs/:id/driver` (which fires the `job_awarded_pickup_details` notification).
 
 ### 3.3 Award (SHIPPER, idempotent + transactional)
 `POST /api/jobs/:id/award` with `{ bidId }`:
@@ -161,7 +164,7 @@ The strategy doc (`docs/STRATEGY.md`) identifies "one-and-done" as the killer; t
 
 ## 5. Public data product & SEO
 
-- `GET /api/public/lanes` — the **unified lane index** (6 canonical lanes built from `unifiedLanes` in `server/index.js`: terminal ↔ area, base price, per-km rate, distance, base minutes, on-time percentage). Feeds the landing page "Lane Index", the rate estimator, and route optimizer. Aggregated only — never a single shipper's rate.
+- `GET /api/public/lanes` — the **unified lane index** (6 canonical lanes built from `unifiedLanes` in `server/index.js`: terminal ↔ area, base price, per-km rate, distance, base minutes, on-time percentage). Feeds the landing page "Lane Index" table (the old rate estimator and route optimizer were removed in the same pass). Aggregated only — never a single shipper's rate.
 - `GET /api/public/carriers` — verified-carrier directory: name, rating, completed jobs, fleet size, licence status badge, coverage zones. **No phone/email/TRN/driver names** (contact gating).
 - `GET /api/public/market` — market pulse stats (live loads, open loads, carriers online, escrow held).
 - **SEO pages**: `/features`, `/pricing`, `/about`, `/blog` are rendered by Express via `renderSeoPage` — it injects title/description/Open Graph/Twitter meta into `web/dist/index.html` and serves it, so marketing pages are crawlable without the SPA. All other non-`/api` GETs fall back to `index.html` (deep links work).

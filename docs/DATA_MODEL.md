@@ -39,6 +39,8 @@ Identity + account attributes.
 | `password_hash` | TEXT NOT NULL | bcrypt (bcryptjs, cost 10) |
 | `role` | TEXT NOT NULL | `SHIPPER` \| `CARRIER` \| `ADMIN` \| `DRIVER`(unused) |
 | `is_verified` | INTEGER | 0/1; carrier verification gate |
+| `account_approval_status` | TEXT | `APPROVED` (default) \| `PENDING` \| `REJECTED` (migration-added) — new registrations start `PENDING` and are read-only until an admin approves them (`GET /api/admin/approvals`); seeded demo accounts are `APPROVED` |
+| `account_approved_at` | TEXT | set when an admin approves (migration-added) |
 | `mfa_enabled` | INTEGER | 0/1 |
 | `mfa_secret` | TEXT | TOTP secret (migration-added column) |
 | `tier` | TEXT NOT NULL | loyalty: `BRONZE` \| `SILVER` \| `GOLD` |
@@ -87,10 +89,11 @@ The core entity.
 | `delivery_lat` / `delivery_lng` / `delivery_address_detail` | REAL / REAL / TEXT | Same, for the delivery point, on top of `delivery_address` |
 | `ready_at` | TEXT NOT NULL | ready-for-pickup time |
 | `deadline` | TEXT NOT NULL | |
-| `max_budget_aed` | REAL | shipper ceiling |
+| `max_budget_aed` | REAL | shipper ceiling — exposed in the API/UI as `targetPriceAed` (per-trip target price) |
 | `agreed_price_aed` | REAL | winning bid amount, set at award |
 | `status` | TEXT NOT NULL | `DRAFT`\|`OPEN`\|`AWARDED`\|`PICKED_UP`\|`IN_TRANSIT`\|`DELIVERED`\|`COMPLETED`\|`CANCELLED`\|`DISPUTED` |
 | `awarded_bid_id` | INTEGER | single-writer award reference |
+| `assigned_driver_name` / `assigned_driver_phone` | TEXT / TEXT | set post-award via `PATCH /api/jobs/:id/driver` (the only driver-capture path); required before `PICKED_UP` |
 | `requires_reefer` | INTEGER | 0/1 |
 | `requires_hazmat` | INTEGER | 0/1 |
 | `notes` | TEXT | |
@@ -102,7 +105,7 @@ The core entity.
 | `payout_released_at` | TEXT | |
 | `container_count` | INTEGER | default 1 (migration-added) — "no. of containers" for a volume inquiry |
 | `truck_count` | INTEGER | default 1 (migration-added) — "no. of trucks" for a volume inquiry |
-| `equipment_type` | TEXT | default `CONTAINER_CHASSIS` (migration-added) — one of `CONTAINER_CHASSIS`, `REEFER_TRUCK`, `LOWBED_TRAILER`, `FLATBED_TRAILER`, `BOX_TRUCK`, `CURTAIN_TRUCK`, `PICKUP_3T`, `PICKUP_5T`, `PICKUP_7T`, `PICKUP_10T`, `SIDE_LOADER_TRAILER`, `TRIPPER`. `container_size`/`container_type` only apply when this is `CONTAINER_CHASSIS` or `REEFER_TRUCK` — otherwise the server sets them to `'N/A'`/`'GENERAL'` and the cargo is described in `notes` instead. |
+| `equipment_type` | TEXT | default `CONTAINER_CHASSIS` (migration-added) — one of `CONTAINER_CHASSIS`, `TRAILER_WITH_GENSET`, `LOWBED_TRAILER`, `FLATBED_TRAILER`, `BOX_TRUCK`, `CURTAIN_TRUCK`, `PICKUP_3T`, `PICKUP_5T`, `PICKUP_7T`, `PICKUP_10T`, `SIDE_LOADER_TRAILER`, `TRIPPER`, `CUSTOM`. (`REEFER_TRUCK` was replaced by `TRAILER_WITH_GENSET`; unknown values fall back to `CONTAINER_CHASSIS`.) `container_size`/`container_type` only apply when this is `CONTAINER_CHASSIS` or `TRAILER_WITH_GENSET` — otherwise the server sets them to `'N/A'`/`'GENERAL'` and the cargo is described in `notes` instead. `CUSTOM` additionally requires a written requirement (`customRequirement`, merged into `notes`). |
 | `created_at` / `updated_at` | TEXT | |
 
 ### `bids`
@@ -116,7 +119,8 @@ Carrier offers on a job.
 | `amount_aed` | REAL NOT NULL | |
 | `eta_minutes` | INTEGER NOT NULL | 1–600 enforced in the route |
 | `truck_type` | TEXT | free text |
-| `driver_name` | TEXT | free text (TODO-2 wants a bound `driver_phone`) |
+| `driver_name` | TEXT | always NULL in current flow — driver details are captured post-award via `PATCH /api/jobs/:id/driver` (which stores them on the job row), never at bid time |
+| `driver_phone` | TEXT | always NULL — same as above |
 | `notes` | TEXT | |
 | `status` | TEXT NOT NULL | `PENDING`\|`ACCEPTED`\|`REJECTED`\|`EXPIRED` |
 | `created_at` / `updated_at` | TEXT | |

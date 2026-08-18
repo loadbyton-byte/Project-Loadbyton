@@ -25,7 +25,7 @@ const SORT_OPTIONS = [
 const emptyJob = {
   equipmentType: 'CONTAINER_CHASSIS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
-  deliveryAddress: '', readyAt: '', deadline: '', maxBudgetAed: '', requiresReefer: false, requiresHazmat: false, notes: '',
+  deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', customRequirement: '', requiresReefer: false, requiresHazmat: false, notes: '',
   containerCount: 1, truckCount: 1, pickupLocation: null, deliveryLocation: null,
 };
 
@@ -83,7 +83,7 @@ export default function Dashboard() {
       // so the toast always fell back to a placeholder before this).
       const created = await api.createJob({
         ...form,
-        maxBudgetAed: form.maxBudgetAed ? Number(form.maxBudgetAed) : undefined,
+        targetPriceAed: form.targetPriceAed ? Number(form.targetPriceAed) : undefined,
         containerCount: Number(form.containerCount) || 1,
         truckCount: Number(form.truckCount) || 1,
         pickupLat: form.pickupLocation?.lat,
@@ -138,7 +138,7 @@ export default function Dashboard() {
           <Button variant="ghost" size="sm" className="flex-1 sm:flex-none" onClick={() => setShowImport((v) => !v)}>
             <IconUpload size={15} /> Import CSV
           </Button>
-          <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setShowForm(true)}>
+          <Button size="sm" className="flex-1 sm:flex-none" disabled={user?.account_approval_status && user.account_approval_status !== 'APPROVED'} onClick={() => setShowForm(true)}>
             <IconPlus size={15} /> Post a job
           </Button>
         </div>
@@ -188,6 +188,17 @@ export default function Dashboard() {
                     </Select>
                   </div>
                 </>
+              ) : form.equipmentType === 'CUSTOM' ? (
+                <div className="sm:col-span-2">
+                  <Label>Truck / requirement (required for custom)</Label>
+                  <Input
+                    required
+                    value={form.customRequirement}
+                    onChange={(e) => setForm({ ...form, customRequirement: e.target.value })}
+                    placeholder='e.g. "Double-deck trailer with 20 ft deck, load securement harness included"'
+                  />
+                  <p className="mt-1 text-xs text-ink-muted">Carriers see this as the job's requirement and bid with their own matching equipment.</p>
+                </div>
               ) : null}
               <div>
                 <Label>Pickup terminal</Label>
@@ -240,8 +251,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div>
-                <Label>Max budget (AED, optional)</Label>
-                <Input type="number" min="0" value={form.maxBudgetAed} onChange={(e) => setForm({ ...form, maxBudgetAed: e.target.value })} placeholder="600" />
+                <Label>Target price (AED, per trip)</Label>
+                <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
+                <p className="mt-1 text-xs text-ink-muted">The price you're targeting for this trip — not a hard cap; higher bids still arrive, flagged.</p>
               </div>
               <div className="flex flex-wrap items-end gap-4 pb-2">
                 <label className="flex items-center gap-2 text-sm text-ink-secondary">

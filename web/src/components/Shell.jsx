@@ -130,6 +130,16 @@ function ShellInner({ children }) {
         </div>
       )}
 
+      {user && user.account_approval_status && user.account_approval_status !== 'APPROVED' && !user.impersonating && (
+        <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-2 text-center text-xs font-medium" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
+          <span>
+            {user.account_approval_status === 'REJECTED'
+              ? 'Your account was not approved — contact support if you believe this is a mistake.'
+              : 'Your account is pending admin approval — you can browse, but posting, bidding, and other actions are disabled until an admin approves it.'}
+          </span>
+        </div>
+      )}
+
       {/* TopAppBar — mobile only (md:hidden). Desktop replaces this with a
           persistent sidebar + slim top bar below, per the enterprise-layout
           restructure; this stays the nav for narrow widths since it already

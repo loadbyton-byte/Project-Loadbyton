@@ -39,7 +39,7 @@ test('unverified carrier is blocked from bidding, server-side', async () => {
   const job = jobs.body.jobs.find((j) => j.status === 'OPEN');
   assert.ok(job, 'expected at least one OPEN job in seed data');
 
-  const bid = await carrier.post(`/api/jobs/${job.id}/bids`, { amountAed: 500, etaMinutes: 30, truckType: 'flatbed', driverName: 'Test Driver' });
+  const bid = await carrier.post(`/api/jobs/${job.id}/bids`, { amountAed: 500, etaMinutes: 30, truckType: 'flatbed' });
   assert.equal(bid.status, 403, 'unverified carrier must be rejected server-side, not just hidden in the UI');
 });
 
@@ -55,7 +55,7 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
     deliveryAddress: 'Test Warehouse 1',
     readyAt: new Date(Date.now() + 86400000).toISOString(),
     deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
-    maxBudgetAed: 700,
+    maxBudgetAed: 700, // legacy field name — accepted, mapped to the same max_budget_aed column
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
@@ -63,10 +63,14 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234'); // seeded verified GOLD carrier
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, {
-    amountAed: 650, etaMinutes: 40, truckType: '3-axle flatbed', driverName: 'Hamdan Youssef', driverPhone: '+971501112233',
+    amountAed: 650, etaMinutes: 40, truckType: '3-axle flatbed',
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
   const bidId = bidRes.body.bid.id;
+  // Driver details are NOT collected at bid time anymore — they're shared
+  // only after the shipper confirms the bid (PATCH /api/jobs/:id/driver).
+  assert.equal(bidRes.body.bid.driver_name, null);
+  assert.equal(bidRes.body.bid.driver_phone, null);
 
   const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId });
   assert.equal(award.status, 200, award.raw);
@@ -80,9 +84,12 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   const doubleAward = await shipper.post(`/api/jobs/${jobId}/award`, { bidId });
   assert.equal(doubleAward.status, 409, 'a job already AWARDED must reject a second award attempt');
 
-  // TODO-2: the driver bound at award must come from the winning bid, not
-  // be left null, and reassigning it must be an audited action.
-  assert.equal(award.body.job.assigned_driver_phone, '+971501112233');
+  // TODO-2: the driver is deliberately NOT bound at award time anymore —
+  // the winning carrier submits the driver afterwards via the audited
+  // PATCH /api/jobs/:id/driver route (the reassign flow below is that
+  // route), so driver identity never exists while the bid is still open.
+  assert.equal(award.body.job.assigned_driver_phone, null, 'award must not leak a bid-time driver');
+  assert.equal(award.body.job.assigned_driver_name, null);
 
   const badReassign = await carrier.patch(`/api/jobs/${jobId}/driver`, { driverName: 'New Driver', driverPhone: 'not-a-phone' });
   assert.equal(badReassign.status, 400, 'an invalid phone must be rejected, not silently accepted');

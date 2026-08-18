@@ -5,17 +5,12 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, TERMINALS, AREAS } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, StatusTracker, ChatBubble } from '../components/ui.jsx';
-import { IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft, IconCompass, IconGavel } from '../components/icons.jsx';
+import { IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
 import LocationPicker from '../components/LocationPicker.jsx';
-import ScanWithAi from '../components/ScanWithAi.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
-const DOC_SCAN_FIELDS = [
-  { key: 'title', description: 'A short descriptive title for this document, e.g. "Customs release form" or "Insurance certificate — Al Falah Insurance"' },
-  { key: 'docType', description: `Best guess at exactly one of: ${DOC_TYPES.join(', ')}` },
-];
 
 // Must match server/index.js's DISPUTABLE_STATUSES exactly — the server is
 // the authority (this is only so the button doesn't appear when the server
@@ -169,7 +164,7 @@ export default function JobDetail() {
           </div>
         </div>
         <div className="text-right">
-          <p className="text-xs text-ink-muted">Agreed price</p>
+          <p className="text-xs text-ink-muted">{job.status === 'OPEN' ? 'Target price (per trip)' : 'Agreed price'}</p>
           <p className="tabular font-display text-2xl font-semibold text-ink">{formatAED(job.agreed_price_aed || job.max_budget_aed)}</p>
         </div>
       </div>
@@ -322,8 +317,6 @@ export default function JobDetail() {
             </Link>
           )}
 
-          <RouteOptimizer jobId={job.id} />
-
           <Card className="mb-6">
             <Card.Header><Card.Title>Actions</Card.Title></Card.Header>
             <Card.Content className="space-y-2">
@@ -357,8 +350,6 @@ export default function JobDetail() {
           {isAwardedCarrier && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status) && (
             <DriverUpdateForm job={job} onDone={load} />
           )}
-
-          <RateTool jobId={job.id} />
         </div>
       </div>
     </div>
@@ -431,7 +422,7 @@ function PaymentPanel({ job, load }) {
 }
 
 function BidForm({ jobId, verified, defaultEquipment, onDone }) {
-  const [form, setForm] = useState({ amountAed: '', etaMinutes: '', truckType: defaultEquipment || 'CONTAINER_CHASSIS', driverName: '', driverPhone: '', notes: '' });
+  const [form, setForm] = useState({ amountAed: '', etaMinutes: '', truckType: defaultEquipment || 'CONTAINER_CHASSIS', notes: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -467,20 +458,12 @@ function BidForm({ jobId, verified, defaultEquipment, onDone }) {
         <Label>ETA (minutes)</Label>
         <Input type="number" required min="1" max="600" value={form.etaMinutes} onChange={(e) => setForm({ ...form, etaMinutes: e.target.value })} />
       </div>
-      <div>
+      <div className="sm:col-span-2">
         <Label>Equipment you're bidding with</Label>
         <Select value={form.truckType} onChange={(e) => setForm({ ...form, truckType: e.target.value })}>
           {EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
         </Select>
-      </div>
-      <div>
-        <Label>Driver name</Label>
-        <Input required value={form.driverName} onChange={(e) => setForm({ ...form, driverName: e.target.value })} />
-      </div>
-      <div>
-        <Label>Driver mobile (UAE)</Label>
-        <Input required placeholder="05XXXXXXXX" value={form.driverPhone} onChange={(e) => setForm({ ...form, driverPhone: e.target.value })} />
-        <p className="mt-1 text-xs text-ink-muted">Bound to this job on award — the shipper's pickup/delivery messages reach this number only.</p>
+        <p className="mt-1 text-xs text-ink-muted">Driver name and mobile are added only after the shipper confirms your bid — they're shared with the shipper at that point, never before.</p>
       </div>
       {error && <p className="sm:col-span-2 text-sm text-status-danger">{error}</p>}
       <Button type="submit" className="sm:col-span-2" loading={busy}>Place bid</Button>
@@ -504,7 +487,7 @@ function JobEditForm({ job, onDone, onCancel }) {
     containerNumber: job.container_number || '',
     readyAt: toDatetimeLocal(job.ready_at),
     deadline: toDatetimeLocal(job.deadline),
-    maxBudgetAed: job.max_budget_aed ?? '',
+    targetPriceAed: job.max_budget_aed ?? '',
     requiresReefer: !!job.requires_reefer,
     requiresHazmat: !!job.requires_hazmat,
     freeTimeDays: job.free_time_days,
@@ -525,7 +508,7 @@ function JobEditForm({ job, onDone, onCancel }) {
     try {
       await api.editJob(job.id, {
         ...form,
-        maxBudgetAed: form.maxBudgetAed === '' ? undefined : Number(form.maxBudgetAed),
+        targetPriceAed: form.targetPriceAed === '' ? undefined : Number(form.targetPriceAed),
         pickupLat: form.pickupLocation?.lat,
         pickupLng: form.pickupLocation?.lng,
         pickupAddressDetail: form.pickupLocation?.address,
@@ -584,8 +567,9 @@ function JobEditForm({ job, onDone, onCancel }) {
         <Input type="datetime-local" required value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
       </div>
       <div>
-        <Label>Max budget (AED)</Label>
-        <Input type="number" min="0" value={form.maxBudgetAed} onChange={(e) => setForm({ ...form, maxBudgetAed: e.target.value })} />
+        <Label>Target price (AED, per trip)</Label>
+        <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} />
+        <p className="mt-1 text-xs text-ink-muted">What you're willing to pay for this trip — bids above it still appear, just flagged.</p>
       </div>
       <div>
         <Label>Free time (days)</Label>
@@ -657,7 +641,7 @@ function BackloadMatches({ jobId }) {
               </div>
               <p className="mt-1 font-medium text-ink">{formatLabel(m.pickup_terminal)} → {formatLabel(m.delivery_area)}</p>
               <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-secondary">
-                {m.shipper_company} <RatingPill rating={m.shipper_rating} /> · {formatAED(m.max_budget_aed)} budget
+                {m.shipper_company} <RatingPill rating={m.shipper_rating} /> · {formatAED(m.max_budget_aed)} target
               </p>
             </Link>
           ))
@@ -667,51 +651,11 @@ function BackloadMatches({ jobId }) {
   );
 }
 
-// POST /api/jobs/:id/optimize-route — built server-side (server/lib/lanes.js)
-// but had no caller anywhere in the app before this redesign pass.
-function RouteOptimizer({ jobId }) {
-  const [priority, setPriority] = useState('balanced');
-  const [result, setResult] = useState(null);
-  const [busy, setBusy] = useState(false);
-  async function run() {
-    setBusy(true);
-    try {
-      const r = await api.optimizeRoute(jobId, { priority });
-      setResult(r.optimized);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Card className="mb-6">
-      <Card.Header><Card.Title>Route optimizer</Card.Title></Card.Header>
-      <Card.Content className="space-y-3">
-        <div className="flex items-center gap-2">
-          <IconCompass size={16} className="text-brand-accent" />
-          <Select value={priority} onChange={(e) => setPriority(e.target.value)} className="flex-1">
-            <option value="balanced">Balanced</option>
-            <option value="fastest">Fastest</option>
-            <option value="cheapest">Cheapest</option>
-          </Select>
-          <Button variant="secondary" onClick={run} loading={busy}>Optimize</Button>
-        </div>
-        {result && (
-          <dl className="grid grid-cols-2 gap-3 rounded-md p-3 text-sm" style={{ background: 'var(--surface-container-low)' }}>
-            <div><dt className="text-xs text-ink-muted">Distance</dt><dd className="tabular font-semibold text-ink">{result.distance_km} km</dd></div>
-            <div><dt className="text-xs text-ink-muted">Est. time</dt><dd className="tabular font-semibold text-ink">{result.estimated_time_min} min</dd></div>
-            <div><dt className="text-xs text-ink-muted">Fuel cost</dt><dd className="tabular font-semibold text-ink">{formatAED(result.fuel_cost_aed)}</dd></div>
-            <div><dt className="text-xs text-ink-muted">vs. standard</dt><dd className="tabular font-semibold text-status-success">{result.savings_vs_standard}% saved</dd></div>
-          </dl>
-        )}
-      </Card.Content>
-    </Card>
-  );
-}
-
-// PATCH /api/jobs/:id/driver — built server-side, no caller anywhere in the
-// app before this redesign pass. Lets the awarded carrier correct the
-// driver on record if it changes before pickup, instead of the driver name
-// being fixed forever at bid time.
+// PATCH /api/jobs/:id/driver — the ONLY place driver details are captured,
+// and only after the bid is confirmed. The awarded carrier enters the
+// driver here; the shipper then sees the driver on the job. Before award
+// (job OPEN) there is no driver anywhere — that's the point of the privacy
+// rule. Also the audited reassignment path (anti-theft trail).
 function DriverUpdateForm({ job, onDone }) {
   const { addToast } = useToasts();
   const [open, setOpen] = useState(false);
@@ -724,7 +668,7 @@ function DriverUpdateForm({ job, onDone }) {
     setBusy(true);
     try {
       await api.updateDriver(job.id, { driverName, driverPhone });
-      addToast({ type: 'status_change', title: 'Driver updated', body: `${driverName} is now the assigned driver.` });
+      addToast({ type: 'status_change', title: job.assigned_driver_name ? 'Driver updated' : 'Driver added', body: `${driverName} is now the assigned driver — the shipper can see it on this job.` });
       setOpen(false);
       onDone();
     } catch (err) {
@@ -740,9 +684,9 @@ function DriverUpdateForm({ job, onDone }) {
         <Card.Content className="flex items-center justify-between">
           <div>
             <p className="text-xs text-ink-muted">Assigned driver</p>
-            <p className="font-medium text-ink">{job.assigned_driver_name || 'Not set'}</p>
+            <p className="font-medium text-ink">{job.assigned_driver_name || (job.status === 'AWARDED' ? 'Add the driver — required before pickup' : 'Not set')}</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>Update</Button>
+          <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>{job.assigned_driver_name ? 'Update' : 'Add driver'}</Button>
         </Card.Content>
       </Card>
     );
@@ -839,6 +783,7 @@ function DocumentList({ documents, jobId, onAdd }) {
           ))}
         </ul>
       )}
+      <p className="mt-2 text-xs text-ink-muted">Private between shipper and carrier — your own uploads are visible to you; the other side's uploads appear here only after the bid is confirmed.</p>
       <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
         <details className="mb-3 text-xs text-ink-muted">
           <summary className="cursor-pointer select-none font-medium text-ink-secondary">What should I upload?</summary>
@@ -851,16 +796,6 @@ function DocumentList({ documents, jobId, onAdd }) {
             <li><strong>OTHER</strong> — anything else worth keeping on the job record.</li>
           </ul>
         </details>
-        <ScanWithAi
-          label="Scan document to autofill title/type"
-          fields={DOC_SCAN_FIELDS}
-          onExtract={(extracted) => {
-            if (extracted.title) setTitle(extracted.title);
-            if (extracted.docType && DOC_TYPES.includes(extracted.docType.toUpperCase())) {
-              setDocType(extracted.docType.toUpperCase());
-            }
-          }}
-        />
         <form onSubmit={submit} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[110px,1fr,1fr,auto]">
           <select className="input" value={docType} onChange={(e) => setDocType(e.target.value)}>
             {DOC_TYPES.map((t) => <option key={t}>{t}</option>)}
@@ -998,44 +933,3 @@ function DisputeForm({ jobId, onDone }) {
   );
 }
 
-function RateTool({ jobId }) {
-  const [weightTons, setWeightTons] = useState('');
-  const [urgency, setUrgency] = useState('standard');
-  const [result, setResult] = useState(null);
-  const [busy, setBusy] = useState(false);
-  async function run() {
-    setBusy(true);
-    try {
-      const r = await api.rateEstimate(jobId, { weightTons: weightTons ? Number(weightTons) : undefined, urgency });
-      setResult(r);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Card>
-      <Card.Header><Card.Title>Rate estimator</Card.Title></Card.Header>
-      <Card.Content className="space-y-3">
-        <div>
-          <Label>Weight (tons)</Label>
-          <Input type="number" min="0" value={weightTons} onChange={(e) => setWeightTons(e.target.value)} placeholder="12" />
-        </div>
-        <div>
-          <Label>Urgency</Label>
-          <select className="input" value={urgency} onChange={(e) => setUrgency(e.target.value)}>
-            <option value="standard">Standard</option>
-            <option value="urgent">Urgent (+15%)</option>
-            <option value="express">Express (+30%)</option>
-          </select>
-        </div>
-        <Button variant="secondary" className="w-full" onClick={run} loading={busy}>Estimate</Button>
-        {result && (
-          <div className="rounded-md px-3 py-2.5 text-sm" style={{ background: 'var(--bg-raised)' }}>
-            <p className="tabular font-display text-lg font-semibold text-ink">{formatAED(result.estimatedAED)}</p>
-            <p className="mt-1 text-xs text-ink-muted">{result.methodology}</p>
-          </div>
-        )}
-      </Card.Content>
-    </Card>
-  );
-}

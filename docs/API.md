@@ -33,14 +33,14 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
     "password": "secret",
     "role": "SHIPPER",              // SHIPPER | CARRIER
     "companyName": "Company LLC",
-    "phone": "+971 4 000 0000",
-    "trnNumber": "TRN-...",
-    "tradeLicenseNumber": "CN-...",
+    "phone": "+971 4 000 0000",     // UAE mobile: +971 5x xxx xxxx (or landline +971 4/6/9)
+    "trnNumber": "100234567800003", // exactly 15 digits
+    "tradeLicenseNumber": "CN-12345", // 5–15 chars, at least one digit
     "referralCode": "CAR-EMIRATES"  // optional
   }
   ```
-- **201** `{ user: {...} }` — creates `users` + `profiles` rows (bcrypt hash, role enforced to shipper/carrier), applies the referral link if valid, logs the user in (session cookie set).
-- **400** missing/duplicate email; **422** invalid role.
+- **201** `{ user: {...} }` — creates `users` + `profiles` rows (bcrypt hash, role enforced to shipper/carrier), applies the referral link if valid, logs the user in (session cookie set). The account starts with `account_approval_status = 'PENDING'` and is **read-only until an admin approves it** — see §6 `GET /api/admin/approvals` (seeded demo accounts are pre-approved).
+- **400** missing/duplicate email, or non-UAE phone / malformed TRN / malformed trade licence; **422** invalid role.
 
 ### `POST /api/auth/login`
 - **Auth:** none
@@ -125,7 +125,7 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
     "containerSize": "40HC", "containerType": "DRY", "containerNumber": "MSKU9281745",
     "pickupTerminal": "JEBEL_ALI_T2", "deliveryArea": "JAFZA_SOUTH",
     "deliveryAddress": "Street 14, Warehouse 8B, JAFZA South, Dubai",
-    "readyAt": "<iso>", "deadline": "<iso>", "maxBudgetAed": 1400,
+    "readyAt": "<iso>", "deadline": "<iso>", "targetPriceAed": 1400,
     "requiresReefer": false, "requiresHazmat": false,
     "containerCount": 1, "truckCount": 1,
     "freeTimeDays": 5, "demurrageRateAed": 400,
@@ -134,7 +134,7 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
     "deliveryLat": 25.1288, "deliveryLng": 55.2115, "deliveryAddressDetail": "Al Quoz Industrial 3, Warehouse 12"
   }
   ```
-  `equipmentType` defaults to `CONTAINER_CHASSIS` if omitted/invalid — one of the 12 values in `DATA_MODEL.md`'s `jobs.equipment_type`. `containerSize`/`containerType` are only validated (and required) when `equipmentType` is `CONTAINER_CHASSIS` or `REEFER_TRUCK`; for every other equipment type the server stores `'N/A'`/`'GENERAL'` regardless of what's sent, and `notes` becomes the required cargo description instead. `containerCount`/`truckCount` default to `1` — raise either for a volume inquiry (one job, one award, covering the stated batch).
+  `equipmentType` defaults to `CONTAINER_CHASSIS` if omitted/invalid — one of the 13 values in `DATA_MODEL.md`'s `jobs.equipment_type` (incl. `CUSTOM`). `containerSize`/`containerType` are only validated (and required) when `equipmentType` is a container-carrying type (`CONTAINER_CHASSIS` or `TRAILER_WITH_GENSET`); for every other equipment type the server stores `'N/A'`/`'GENERAL'` regardless of what's sent, and `notes` becomes the required cargo description instead. `CUSTOM` requires `customRequirement` (or `notes`) — a written truck/requirement, merged into `notes` server-side. `targetPriceAed` maps to `max_budget_aed` (the legacy field name `maxBudgetAed` is still accepted). `containerCount`/`truckCount` default to `1` — raise either for a volume inquiry (one job, one award, covering the stated batch).
   `pickupLat`/`pickupLng`/`deliveryLat`/`deliveryLng` are an optional precise pin from the free OpenStreetMap+Nominatim picker (`web/src/components/LocationPicker.jsx`) on top of the required `pickupTerminal`/`deliveryArea` enums, which still drive lane rate lookups — **400** if only one of a lat/lng pair is sent, or the pair falls outside a loose UAE bounding box.
 - **201** `{ job }` with generated `job_code` (e.g. `LBT-DXB-2608-4921`), status `OPEN`.
 
@@ -149,7 +149,7 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 
 ### `POST /api/jobs/:id/bids`
 - **Auth:** `CARRIER` **+ verified profile** + job `OPEN`
-- **Body:** `{ amountAed, etaMinutes (1–600), truckType, driverName, notes }` — `truckType` is free text (stored as-is); the client UI offers the 12 `equipment_type` values as a picklist defaulting to the job's own requirement, but the field isn't server-validated against that enum.
+- **Body:** `{ amountAed, etaMinutes (1–600), truckType, notes }` — `truckType` is free text (stored as-is); the client UI offers the equipment values as a picklist defaulting to the job's own requirement, but the field isn't server-validated against that enum. Driver name/phone are **not** collected at bid time — they're only ever captured post-award via `PATCH /api/jobs/:id/driver` (contact-sharing follows the confirmed business relationship).
 - **201** `{ bid }`
 - **403** unverified carrier or job not open (`{ "error": "Carrier verification required to bid." }`).
 
@@ -160,16 +160,6 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 ### `POST /api/bids/:id/withdraw`
 - **Auth:** `CARRIER`, own bid, bid `status = PENDING`
 - **200** `{ ok: true, bid }` — sets `bids.status = 'WITHDRAWN'`. **400** if the bid isn't pending (already accepted/rejected). **403** if it isn't the caller's bid.
-
-### `POST /api/jobs/:id/rate`
-- **Auth:** session (job participant or admin)
-- **Body:** `{ origin?, destination?, weightTons?, urgency?: "express"|"urgent"|"standard" }`
-- **200** `{ estimatedAED, base, weightTons, urgencyMod, quantity, methodology }` — lane-index base price adjusted by weight (>10 t → ×1.1, >20 t → ×1.2), urgency (express ×1.3, urgent ×1.15), and `quantity` (`max(container_count, truck_count)` on the job — a ×6 volume inquiry estimates ×6 the single-unit rate).
-
-### `POST /api/jobs/:id/optimize-route`
-- **Auth:** session (job participant or admin)
-- **Body:** `{ origin?, destination?, waypoints?: [...], priority? }`
-- **200** `{ optimized: { route, distance_km, estimated_time_min, fuel_cost_aed, waypoints, savings_vs_standard, priority, created_at } }` — lane-derived route estimate with optional waypoint savings.
 
 ### `POST /api/jobs/:id/award`
 - **Auth:** `SHIPPER`, job owner, job `OPEN`
@@ -190,12 +180,12 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 ### `PATCH /api/jobs/:id/status`
 - **Auth:** job participant (role rules) — see state machine in `ARCHITECTURE.md` §3.4
 - **Body:** `{ status: "PICKED_UP" | "IN_TRANSIT" | "DELIVERED" | "COMPLETED" | "CANCELLED" }`
-- **200** `{ job }` — enforces forward-only progression per role; audits every transition.
+- **200** `{ job }` — enforces forward-only progression per role; audits every transition. **400** if `PICKED_UP` is attempted before the carrier has filed the driver via `PATCH /api/jobs/:id/driver` (driver contact is a hard prerequisite for pickup).
 
 ### `PATCH /api/jobs/:id/driver`
 - **Auth:** `CARRIER`, own award, seat `OPS`, job status one of `AWARDED`\|`PICKED_UP`\|`IN_TRANSIT`
 - **Body:** `{ driverName, driverPhone }` — `driverPhone` must normalize to a valid UAE mobile number.
-- **200** `{ job }` — corrects the driver on file if the actual driver changes before delivery (driver name/phone were previously only ever set once, at bid time, with no way to fix a mistake or a last-minute swap). **403** once the job reaches `DELIVERED`.
+- **200** `{ job }` — the sole driver-capture path: the driver's details are shared with the shipper only after the bid is confirmed (award), never before. Fires the `job_awarded_pickup_details` notification to the shipper. Corrects the driver on file if the actual driver changes before delivery. **403** once the job reaches `DELIVERED`.
 
 ### `POST /api/jobs/:id/pod`
 - **Auth:** `CARRIER` (awarded), job `IN_TRANSIT`
@@ -214,11 +204,13 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 ### `POST /api/jobs/:id/documents`
 - **Auth:** participant
 - **Body:** `{ docType: "CUSTOMS"|"RECEIPT"|"POD"|"LICENCE"|"INSURANCE"|"OTHER", title, fileUrl }` or `{ docType, title, fileBase64, mimeType }` for a real upload (same constraints as `/pod` above).
-- **201** `{ ok: true }` — appended to `job_documents` (the persistent per-job document/customs thread).
+- **201** `{ ok: true }` — appended to `job_documents` (the persistent per-job document/customs thread). **403** unless the caller is the job's shipper, the awarded carrier, or an admin — a bidding (non-awarded) carrier cannot upload.
 
 ### `GET /api/jobs/:id/documents/:docId/file`
 - **Auth:** participant or bidder (`isParticipantOrBidder`)
 - **200** the file bytes (`Content-Type` from the stored `mime_type`) for an uploaded document, or a `302` redirect to `file_url` for a legacy external link.
+
+> **Document privacy:** documents are shared only after the business relationship is confirmed. While a job is `OPEN`, the documents list is empty for every carrier — the shipper's customs docs stay private until the award. After the award, the shipper and the awarded carrier see each other's documents; losing bidders still see nothing. The file-serve route enforces the same rule (files themselves are gated, not just metadata).
 
 ### `POST /api/jobs/:id/rating`
 - **Auth:** participant, terminal job
@@ -312,6 +304,13 @@ All routes below require `auth(['ADMIN'])`.
 ### `GET /api/admin/health`
 - **200** `{ health: { openJobs, totalBids, avgBidsPerJob, completionRate, escrowHeld, disputesOpen, lanes } }` — ops dashboard with live lane health.
 
+### `GET /api/admin/approvals`
+- **200** `{ queue: [pending-approval accounts with profile] }` — every account with `account_approval_status = 'PENDING'`, including the decrypted TRN for review. This is the queue behind the first business-day onboarding step: **a newly registered account is read-only (browse only) until an admin approves it here.**
+
+### `POST /api/admin/approve/:id`
+- **Body:** `{ action: "approve" | "reject" }`
+- **200** `{ ok, user }` — sets `account_approval_status` to `APPROVED` (account fully unlocked) or `REJECTED`; audited (`ACCOUNT_APPROVE` / `ACCOUNT_REJECT`) and notifies the account owner by email.
+
 ### `GET /api/admin/verification`
 - **200** `{ queue: [unverified carriers with profile] }`
 
@@ -400,10 +399,7 @@ curl -c /tmp/jar -X POST $BASE/auth/login \
 # 2. List my jobs
 curl -b /tmp/jar $BASE/jobs
 
-# 3. Rate estimator for a job
-curl -b /tmp/jar $BASE/jobs/1/rate
-
-# 4. Live tracking for an awarded job
+# 3. Live tracking for an awarded job
 curl -b /tmp/jar $BASE/jobs/2/track
 ```
 
@@ -416,6 +412,8 @@ See `TUTORIAL.md` for the full demo walkthrough.
 Several routes exist beyond this document's original scope; the notable ones the
 Industrial Trust redesign pass newly wired into the UI (they were built and
 tested server-side but had no caller anywhere in the app before that):
-`POST /api/jobs/:id/optimize-route`, `PATCH /api/jobs/:id/driver`,
+`PATCH /api/jobs/:id/driver`,
 `POST /api/admin/confirm-receipt`, `GET /api/admin/evidence/:jobId`, and
-`GET /api/public/lanes`.
+`GET /api/public/lanes`. (The rate estimator `POST /api/jobs/:id/rate` and
+route optimizer `POST /api/jobs/:id/optimize-route` were removed entirely in
+the same pass — the landing page replaced them with a live lane-index table.)

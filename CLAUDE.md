@@ -112,12 +112,23 @@ crawlability fix for that page specifically.
 ## Product scope: equipment, volume, UAE-wide
 
 - Loadbyton is **not** container-only or Jebel-Ali-only. `jobs.equipment_type`
-  (12 values, `server/index.js` `EQUIPMENT_TYPES`, mirrored in
+  (13 values, `server/index.js` `EQUIPMENT_TYPES`, mirrored in
   `web/src/lib/constants.js`) covers general UAE road freight — lowbed, flatbed,
-  tripper, side loader, curtain/box trucks, 3–10T pickups — alongside the original
-  container-chassis/reefer flow. `container_size`/`container_type` only mean
-  something for `CONTAINER_CHASSIS`/`REEFER_TRUCK`; keep that branch (in
-  `POST /api/jobs`) in sync if you add an equipment type.
+  tripper, side loader, curtain/box trucks, 3–10T pickups, and `CUSTOM` —
+  alongside the original container-chassis/reefer flow. `REEFER_TRUCK` was
+  replaced by `TRAILER_WITH_GENSET`; unknown values fall back to
+  `CONTAINER_CHASSIS`. `container_size`/`container_type` only mean
+  something for `CONTAINER_CHASSIS`/`TRAILER_WITH_GENSET`; keep that branch (in
+  `POST /api/jobs`) in sync if you add an equipment type. `CUSTOM` requires a
+  written `customRequirement` (merged into `notes`).
+- **Approval gate:** new registrations land as `account_approval_status =
+  'PENDING'` and every non-read-only route 403s until an admin approves them
+  (`GET /api/admin/approvals` → `POST /api/admin/approve/:id`). The gate lives
+  in `auth()` — do not bypass it; new routes get it for free by using `auth()`.
+- **Driver details** are captured only post-award via `PATCH
+  /api/jobs/:id/driver` (job row `assigned_driver_*`); bids never carry
+  driver name/phone, and `PICKED_UP` requires a filed driver. Job documents
+  are invisible to bidders until the award (`canSeeDocument` in `server/index.js`).
 - `jobs.container_count`/`jobs.truck_count` implement the "volume inquiry" — a
   single job can request N containers or N trucks; one carrier bid/award covers
   the whole batch. `estimateRate()` in `server/lib/lanes.js` multiplies by

@@ -23,9 +23,16 @@ test('seats: OPS can operate the org, VIEWER cannot, deactivation is immediate',
   const rootEmail = `seat-root-${Date.now()}@example.ae`;
   const registered = await root.post('/api/auth/register', {
     email: rootEmail, password: 'demo1234', role: 'SHIPPER', companyName: 'Seat Test Shipping',
+    phone: '+971501112233', trnNumber: '100234567800003', tradeLicenseNumber: 'CN-1122334',
   });
   assert.equal(registered.status, 201, registered.raw);
   const rootId = registered.body.user.id;
+  // New accounts are approval-gated (read-only until an admin approves) —
+  // the seats flow operates after approval, so approve before continuing.
+  const admin = makeClient(server.baseUrl);
+  await admin.login('admin@loadbyton.ae', 'demo1234');
+  const approved = await admin.post(`/api/admin/approve/${rootId}`, { action: 'approve' });
+  assert.equal(approved.status, 200, approved.raw);
 
   const opsAdd = await root.post('/api/org/members', {
     email: `seat-ops-${Date.now()}@example.ae`, password: 'demo1234', seatRole: 'OPS', displayName: 'Ops Person',

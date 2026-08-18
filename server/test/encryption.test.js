@@ -28,7 +28,9 @@ test('IBAN and TRN are stored encrypted, and decrypt correctly through the API',
     password: 'demo1234',
     role: 'SHIPPER',
     companyName: 'Encryption Test Co',
+    phone: '+971502223344',
     trnNumber: plaintextTrn,
+    tradeLicenseNumber: 'CN-8877665',
   });
   assert.equal(registered.status, 201, registered.raw);
 

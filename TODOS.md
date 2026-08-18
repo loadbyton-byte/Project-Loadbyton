@@ -2,6 +2,31 @@
 
 Deferred / tracked follow-up work.
 
+## ✅ Resolved — 2026-08-18 Industrial Trust pass (C5 product-change batch)
+
+Closed in this pass (see `docs/API.md`, `docs/DATA_MODEL.md`,
+`docs/ARCHITECTURE.md`, `docs/TUTORIAL.md` for the current shape):
+
+- **Approval gate** — new registrations validate UAE identity data (UAE
+  phone, 15-digit TRN, trade licence) and start `account_approval_status =
+  PENDING`, read-only until an admin approves them (`GET
+  /api/admin/approvals` → `POST /api/admin/approve/:id`, audited).
+- **Equipment** — `REEFER_TRUCK` replaced by `TRAILER_WITH_GENSET`; `CUSTOM`
+  added (requires a written requirement); unknown values fall back to
+  `CONTAINER_CHASSIS` instead of erroring.
+- **Target price** — `max_budget_aed` surfaced as `targetPriceAed` (per-trip
+  target price) end to end.
+- **Contact sharing** — driver name/phone no longer collected at bid time;
+  `PATCH /api/jobs/:id/driver` is the sole post-award capture path
+  (notifies the shipper; `PICKED_UP` requires it). Job documents are
+  invisible to bidders until the award (upload, listing, and file serving all
+  gated).
+- **Removed** — rate estimator + route optimizer endpoints and UI, OCR /
+  "Scan with AI" (Puter.js) script, components, CSP carve-outs, and Privacy
+  page entry; hero animation rewritten as a CSS freight pipeline.
+- **Tests** — `server/test/product-gates.test.js` covers the approval gate,
+  UAE validation, equipment, and document privacy (suite is now 26 tests).
+
 ## ✅ Resolved — 2026-08-14 corporate-readiness pass
 
 TODO-1 through TODO-4 below are closed as of this date (see git log for the
@@ -11,9 +36,11 @@ accurate background even though the "what" is now shipped.
 
 - **TODO-1** — `server/test/` (harness.js + core-loop.test.js + others),
   isolated temp-DB-per-run, `npm test`, gated in CI (`.github/workflows/ci.yml`).
-- **TODO-2** — `bids.driver_phone` + `jobs.assigned_driver_name/_phone`,
-  bound at award, reassignment is its own audited action
-  (`PATCH /api/jobs/:id/driver`).
+- **TODO-2** — `jobs.assigned_driver_name/_phone` + `PATCH /api/jobs/:id/driver`
+  as the audited reassignment action. Final shape (2026-08-18 pass): driver
+  details are captured **only after award** via that PATCH (bids never carry
+  driver fields; `bids.driver_name`/`driver_phone` stay NULL), and `PICKED_UP`
+  requires a filed driver.
 - **TODO-3** — `payouts.sla_deadline` + `transfer_executed_at`, admin view
   at `GET /api/admin/payouts-sla`, confirm via
   `POST /api/admin/payouts/:id/mark-transferred`.

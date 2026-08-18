@@ -45,7 +45,7 @@ export function parseCsv(text) {
 }
 
 const BOOLEAN_TRUE = new Set(['true', '1', 'yes', 'y']);
-const NUMERIC_FIELDS = new Set(['maxBudgetAed', 'containerCount', 'truckCount', 'freeTimeDays', 'demurrageRateAed']);
+const NUMERIC_FIELDS = new Set(['targetPriceAed', 'containerCount', 'truckCount', 'freeTimeDays', 'demurrageRateAed']);
 const BOOLEAN_FIELDS = new Set(['requiresReefer', 'requiresHazmat']);
 
 // Header row + data rows -> array of job-shaped objects (same field names
@@ -70,7 +70,7 @@ export function csvRowsToJobs(rows) {
 export const JOB_IMPORT_TEMPLATE_HEADERS = [
   'pickupTerminal', 'deliveryArea', 'deliveryAddress', 'readyAt', 'deadline',
   'equipmentType', 'containerSize', 'containerType', 'containerNumber',
-  'maxBudgetAed', 'requiresReefer', 'requiresHazmat', 'notes', 'containerCount', 'truckCount',
+  'targetPriceAed', 'requiresReefer', 'requiresHazmat', 'notes', 'containerCount', 'truckCount',
 ];
 
 export const JOB_IMPORT_TEMPLATE_EXAMPLE_ROW = [

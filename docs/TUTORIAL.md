@@ -36,7 +36,7 @@ Open job `LBT-DXB-2608-4921` (the 40HC dry to JAFZA South). You see the containe
 ## Step 4 — Post a fresh job (recurrence in one tap)
 
 Two options:
-- **From scratch:** Dashboard → Post a job. Pick `40FT`, DRY, terminal `JEBEL_ALI_T4`, delivery `DUBAI_SOUTH`, set a budget, a deadline, notes, submit. You get a `LBT-DXB-….` job code, status `OPEN`.
+- **From scratch:** Dashboard → Post a job. Pick `40FT`, DRY, terminal `JEBEL_ALI_T4`, delivery `DUBAI_SOUTH`, set a target price (per trip), a deadline, notes, submit. You get a `LBT-DXB-….` job code, status `OPEN`.
 - **From a template:** Templates page → "Weekly JAFZA South run" → **Re-run**. One call (`POST /api/templates/:id/rerun`) clones the saved lane into a fresh open job. That's the anti-"one-and-done" mechanic — the second shipment is one tap, not a re-negotiation.
 
 Run the template so you have a job that's actually biddable for the next steps.
@@ -47,8 +47,7 @@ Log out, log in as `carrier@dubaidrayage.com` (Emirates Overland, GOLD, verified
 
 - **Open Loads** shows the jobs still open. The 40HC (4921) and the hazmat 40FT both have existing bids. Open one.
 - As a carrier on an unawarded job you do **not** see other carriers' amounts — contact gating masks competitor pricing until award.
-- Place a bid: price + ETA (1–600 min) + truck type + driver name. `POST /api/jobs/:id/bids` → your bid is `PENDING`.
-- Check the **Rate estimator** on the job page — `GET /api/jobs/:id/rate` gives the lane-index estimate, so you can bid competitively against a published benchmark.
+- Place a bid: price + ETA (1–600 min) + truck type. `POST /api/jobs/:id/bids` → your bid is `PENDING`. (No driver details at bid time — driver name/phone are shared only after the award, when you file them via the job page's **Driver** action; the shipper gets a pickup-details notification.)
 
 Repeat with `gulfheavy@fleet.ae` so the job has multiple bids.
 
@@ -100,6 +99,7 @@ Once the job reaches `COMPLETED`, leave a rating on it (`POST /api/jobs/:id/rati
 
 Log in as `admin@loadbyton.ae`.
 
+- **Account approvals** tab — register a brand-new account (see below), it appears here as `PENDING` with its TRN for review; approve it to unlock the account. New registrations are **read-only until approved** (they can browse but every action 403s).
 - **Verification** tab — approve `desertline@drayage.ae` (supply an IBAN — required, it's the payout destination). Now go back and try their bid again: it works. The gate we proved in Step 2 is now open.
 - **Health** tab — open/total jobs, bids, completion rate, escrow held, open disputes, plus live lane health.
 - **Audit log** tab — every transition from Step 6/7 is here with `before_state`/`after_state`. Try to modify the table directly (a stray `UPDATE audit_log …` from sqlite) → the append-only trigger aborts it.
@@ -116,7 +116,7 @@ Resolve it with decision `RELEASE_TO_CARRIER` (payout releases, `release_type=DI
 
 ## Where the numbers come from
 
-- **Lane prices/ETAs** — `unifiedLanes` in `server/lib/lanes.js`; used by `/rate`, `/optimize-route`, `/api/public/lanes`.
+- **Lane prices/ETAs** — `unifiedLanes` in `server/lib/lanes.js`; used by `GET /api/public/lanes` (the landing page Lane Index table).
 - **Platform fee** — `commission_rate_bps` setting (default 600 bps = 6%).
 - **Auto-release window** — `auto_release_hours` setting (default 24 h), anchored to `jobs.delivered_at`.
 - **Demurrage** — `freeTimeDays`/`demurrageRateAed` per job, surfaced by `/track`.
@@ -124,6 +124,6 @@ Resolve it with decision `RELEASE_TO_CARRIER` (payout releases, `release_type=DI
 
 ## You've now seen
 
-registration → verification gate → posting → templates → bidding (masked pricing) → award transaction → escrow → forward-only status machine → tracking/demurrage → POD → silent-assent release → earnings ledger → ratings → admin queue/health/audit/revenue/settings → disputes with evidence → resolution.
+registration (UAE identity validation, approval gate) → verification gate → posting → templates → bidding (masked pricing) → award transaction → escrow → forward-only status machine → tracking/demurrage → POD → silent-assent release → earnings ledger → ratings → admin queue (account approvals + carrier verification) / health / audit / revenue / settings → disputes with evidence → resolution.
 
 That is the whole product. `ARCHITECTURE.md`, `API.md`, and `DATA_MODEL.md` are the references for everything touched along the way.
