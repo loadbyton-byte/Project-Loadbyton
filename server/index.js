@@ -31,6 +31,16 @@ const { init: initSentry, requestHandler: sentryRequestHandler, expressErrorHand
 
 const PORT = Number(process.env.PORT) || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+// Extra browser origins allowed to call the API with credentials (e.g. the
+// Vercel deployment when it calls Render cross-origin instead of through a
+// same-origin proxy). Comma-separated list of exact origins.
+const ADDITIONAL_ORIGINS = (process.env.ADDITIONAL_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+function isAllowedOrigin(origin) {
+  return Boolean(origin) && (origin === FRONTEND_URL || ADDITIONAL_ORIGINS.includes(origin));
+}
 const INTERNAL_KEY = process.env.INTERNAL_KEY || randomToken(16);
 // gstack review F22: a hash to compare against when no user row exists, so
 // a login attempt for an unregistered email pays the same bcrypt cost as
@@ -68,10 +78,15 @@ const authLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20, keyFn: byIp, mes
 app.use('/api/auth', authLimiter);
 const writeLimiter = rateLimiter({ windowMs: 60 * 1000, max: 30, keyFn: byIp, message: 'Too many requests. Slow down and try again.' });
 
-// Dev CORS — a no-op in production, where the SPA is same-origin.
+// CORS for browser origins other than the API's own host. When the SPA is
+// served by this same Express process (or proxied behind one domain, e.g.
+// Vercel rewriting /api to Render) the browser sees a same-origin request
+// and none of this matters. It only kicks in when a page on an allowed
+// origin calls this API directly cross-origin.
 app.use((req, res, next) => {
-  if (req.headers.origin === FRONTEND_URL) {
-    res.setHeader('Access-Control-Allow-Origin', FRONTEND_URL);
+  const origin = req.headers.origin;
+  if (isAllowedOrigin(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-request-id, x-internal-key');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
@@ -444,6 +459,18 @@ function canViewJob(job, user) {
 // Auth: sessions, not JWTs. lb_session HttpOnly cookie -> sessions table.
 // ---------------------------------------------------------------------------
 
+// Session cookie flags: SameSite=Lax is right for the normal same-origin
+// (or same-site proxy) setup. When the request comes from an explicitly
+// allowed cross-origin browser origin (ADDITIONAL_ORIGINS, e.g. the Vercel
+// frontend calling Render directly), the cookie must be SameSite=None or
+// the browser drops it on the cross-site XHR — None additionally requires
+// Secure, which req.protocol already reflects behind `trust proxy`.
+function sessionCookieAttributes(req) {
+  const secure = req.protocol === 'https' ? '; Secure' : '';
+  const sameSite = isAllowedOrigin(req.headers.origin) && secure ? 'None' : 'Lax';
+  return `${secure}; SameSite=${sameSite}`;
+}
+
 function createSession(req, res, userId, { impersonatingAdminId = null, actingSeatId = null, maxAgeSeconds = 7 * 24 * 60 * 60 } = {}) {
   const token = randomToken(32);
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
@@ -454,12 +481,11 @@ function createSession(req, res, userId, { impersonatingAdminId = null, actingSe
     impersonatingAdminId,
     actingSeatId
   );
-  const secure = req.protocol === 'https' ? '; Secure' : '';
-  res.setHeader('Set-Cookie', `lb_session=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`);
+  res.setHeader('Set-Cookie', `lb_session=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSeconds}${sessionCookieAttributes(req)}`);
 }
 
-function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', 'lb_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
+function clearSessionCookie(req, res) {
+  res.setHeader('Set-Cookie', `lb_session=; HttpOnly; Path=/; Max-Age=0${sessionCookieAttributes(req)}`);
 }
 
 // Multi-seat accounts: a seat authenticates with their own email/password,
@@ -989,7 +1015,7 @@ app.get('/api/auth/me', auth(), (req, res) => {
 app.post('/api/auth/logout', auth(), (req, res) => {
   const token = req.cookies.lb_session;
   if (token) db.prepare('DELETE FROM sessions WHERE session_token=?').run(token);
-  clearSessionCookie(res);
+  clearSessionCookie(req, res);
   res.json({ ok: true });
 });
 
@@ -2925,6 +2951,10 @@ app.listen(PORT, () => {
     console.log('INTERNAL_KEY is set from the environment.');
   }
   require('./seed')();
+  // Top-up for databases that predate the current demo roster (seed() skips
+  // when any user exists, which left the documented demo logins dead on the
+  // Render production disk). Opt-in via env so real deployments are unaffected.
+  if (process.env.SEED_DEMO_ACCOUNTS === '1') require('./seed').ensureDemoLogins();
 });
 
 module.exports = app;

@@ -1,5 +1,11 @@
 // Thin fetch wrapper: credentials included (session cookie), JSON in/out,
 // throws ApiError with the backend's { error } message on any non-2xx.
+//
+// API base: relative /api by default (same-origin dev, or a proxy like the
+// Vercel rewrite). Set VITE_API_URL (e.g. https://claudeloadbyton.onrender.com)
+// to call the backend cross-origin directly — requires the origin to be
+// allowed by the server's FRONTEND_URL/ADDITIONAL_ORIGINS CORS list.
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -10,7 +16,7 @@ export class ApiError extends Error {
 }
 
 async function request(method, path, body) {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE_URL}/api${path}`, {
     method,
     credentials: 'include',
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,

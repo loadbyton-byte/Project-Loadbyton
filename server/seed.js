@@ -297,3 +297,81 @@ module.exports = function seed() {
 
   console.log(`Loadbyton: seeded demo data (${seedAdmin ? 6 : 5} users, 6 jobs, 7 bids, templates, contract lanes).`);
 };
+
+// ---------------------------------------------------------------------------
+// Demo-login top-up for pre-existing databases.
+//
+// seed() above is all-or-nothing: it skips entirely if ANY user row exists.
+// A deployment whose disk DB predates the current roster (older demo emails,
+// a manually-created admin, real signups) therefore 401s every documented
+// demo login with "Invalid email or password" — exactly what happened on
+// the Render production disk. ensureDemoLogins() inserts ONLY the canonical
+// demo accounts that are missing (user + profile rows, APPROVED + email
+// verified), touching nothing else: no jobs, no bids, no existing users.
+//
+// Gated behind SEED_DEMO_ACCOUNTS=1 so a real customer deployment never
+// grows publicly-known demo credentials by accident. The ADMIN account
+// follows the same SEED_DEMO_ADMIN rule as the full seed.
+// ---------------------------------------------------------------------------
+const DEMO_LOGIN_ROSTER = [
+  {
+    email: 'shipper@jebelalilogistics.ae', role: 'SHIPPER', tier: 'SILVER', referral_code: 'SHP-ALMAJID',
+    profile: { company: 'Al-Majid Global Freight', trn: '100234567800003', license: 'CN-1122334', phone: '+971 4 221 5566', zones: 'Jebel Ali, JAFZA, Dubai South', rating: 4.7, completed: 58 },
+  },
+  {
+    email: 'carrier@dubaidrayage.com', role: 'CARRIER', tier: 'GOLD', referral_code: 'CAR-EMIRATES',
+    profile: { company: 'Emirates Overland Haulage', trn: '100987654300001', license: 'CN-5566778', phone: '+971 4 887 3210', iban: 'AE070331234567890123456', zones: 'JAFZA, Al Quoz, DIP', fleet: 42, chassis: 30, insurance: true, rating: 4.85, completed: 320, verifiedAt: sqliteTime(-120 * DAY) },
+  },
+  {
+    email: 'falcon@containerxpress.ae', role: 'CARRIER', tier: 'SILVER', referral_code: 'CAR-FALCON',
+    profile: { company: 'Falcon Container Express', trn: '100112233400002', license: 'CN-3344556', phone: '+971 4 556 8899', iban: 'AE290331234567890111222', zones: 'Jebel Ali, Dubai South', fleet: 18, chassis: 12, insurance: true, rating: 4.6, completed: 140, verifiedAt: sqliteTime(-90 * DAY) },
+  },
+  {
+    email: 'gulfheavy@fleet.ae', role: 'CARRIER', tier: 'GOLD', referral_code: 'CAR-GULFHEAVY',
+    profile: { company: 'Gulf Heavy Transport', trn: '100445566700003', license: 'CN-7788990', phone: '+971 6 553 4477', iban: 'AE330331234567890333444', zones: 'Jebel Ali, DIP, Al Quoz, Musaffah', fleet: 55, chassis: 40, insurance: true, rating: 4.9, completed: 410, verifiedAt: sqliteTime(-150 * DAY) },
+  },
+  {
+    email: 'desertline@drayage.ae', role: 'CARRIER', tier: 'BRONZE', referral_code: 'CAR-DESERTLINE', is_verified: false,
+    profile: { company: 'Desert Line Drayage', trn: '100667788900004', license: 'CN-9911223', phone: '+971 6 221 7788', zones: 'Sharjah, Al Quoz', fleet: 6, chassis: 2, insurance: false, rating: 5.0, completed: 0 },
+  },
+];
+
+function ensureDemoLogins() {
+  const insertUserStmt = db.prepare(
+    `INSERT INTO users (email, password_hash, role, is_verified, tier, referral_code, email_verified_at, account_approval_status, account_approved_at)
+     VALUES (?,?,?,?,?,?,datetime('now'),'APPROVED',datetime('now'))`
+  );
+  const insertProfileStmt = db.prepare(
+    `INSERT INTO profiles (user_id, company_name, trn_number, trade_license_number, phone, iban, coverage_zones,
+       fleet_size, owned_chassis, insurance_uploaded, rating_avg, completed_jobs, verified_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  );
+  const passwordHash = bcrypt.hashSync('demo1234', 10);
+  let created = [];
+
+  for (const acct of DEMO_LOGIN_ROSTER) {
+    if (db.prepare('SELECT id FROM users WHERE email=?').get(acct.email)) continue;
+    const p = acct.profile;
+    const r = insertUserStmt.run(acct.email, passwordHash, acct.role, acct.is_verified === false ? 0 : 1, acct.tier, acct.referral_code);
+    insertProfileStmt.run(
+      Number(r.lastInsertRowid), p.company, encryptField(p.trn), p.license || null, p.phone || null,
+      p.iban ? encryptField(p.iban) : null, p.zones || null, p.fleet || 0, p.chassis || 0,
+      p.insurance ? 1 : 0, p.rating ?? 5.0, p.completed ?? 0, p.verifiedAt || null
+    );
+    created.push(acct.email);
+  }
+
+  // Same admin gating as the full seed: never a publicly-known admin on a
+  // real deployment unless explicitly opted in.
+  if (process.env.NODE_ENV !== 'production' || process.env.SEED_DEMO_ADMIN === '1') {
+    if (!db.prepare("SELECT id FROM users WHERE email='admin@loadbyton.ae'").get()) {
+      const r = insertUserStmt.run('admin@loadbyton.ae', passwordHash, 'ADMIN', 1, 'GOLD', 'ADM-LOADBYTON');
+      insertProfileStmt.run(Number(r.lastInsertRowid), 'Loadbyton Ops', null, null, '+971 4 000 1000', null, null, 0, 0, 0, 5.0, 0, null);
+      created.push('admin@loadbyton.ae');
+    }
+  }
+
+  if (created.length) console.log(`Loadbyton: ensured demo logins exist (${created.join(', ')}).`);
+}
+
+module.exports.ensureDemoLogins = ensureDemoLogins;

@@ -30,6 +30,18 @@ services:
         value: 22.22.2
       - key: FRONTEND_URL
         value: https://claudeloadbyton.onrender.com
+      # Browser origins allowed to call the API cross-origin with cookies.
+      # The Vercel deployment normally reaches the API through its same-origin
+      # rewrite (see vercel.json); this is the direct-call fallback path.
+      - key: ADDITIONAL_ORIGINS
+        value: https://claudeloadbyton.vercel.app
+      # The live site is an intentional public demo (footer disclosure), but
+      # the Render disk DB predates the current demo roster — seed() skips
+      # when any user exists, which left every documented demo login dead.
+      # This top-up re-creates missing demo accounts on boot without touching
+      # existing data. Remove once real customer accounts exist.
+      - key: SEED_DEMO_ACCOUNTS
+        value: '1'
       - key: DB_PATH
         value: /data/loadbyton.db
       # Before real data: replace generateValue with a FIXED secret you
