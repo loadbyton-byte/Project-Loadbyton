@@ -397,6 +397,23 @@ addColumn('payouts', 'processor_payout_ref', 'processor_payout_ref TEXT');
 // in internal mode it stays NULL and is irrelevant.
 addColumn('profiles', 'processor_account_id', 'processor_account_id TEXT');
 
+// Shipment direction + 3-leg drayage model (CEO plan 2026-08-21). IMPORT is
+// terminal -> unloading -> empty return; EXPORT is empty pickup -> loading
+// -> terminal deposit. Existing pickup_terminal/delivery_area remain for
+// backward compat and are auto-backfilled from the leg fields on write.
+// All new columns are nullable so the migration is online with no downtime
+// on Render's /data/loadbyton.db persistent disk.
+addColumn('jobs', 'shipment_type', "shipment_type TEXT NOT NULL DEFAULT 'IMPORT'");
+addColumn('jobs', 'import_pickup_terminal', 'import_pickup_terminal TEXT');
+addColumn('jobs', 'import_unloading_location', 'import_unloading_location TEXT');
+addColumn('jobs', 'import_empty_return_location', 'import_empty_return_location TEXT');
+addColumn('jobs', 'export_empty_pickup_location', 'export_empty_pickup_location TEXT');
+addColumn('jobs', 'export_loading_location', 'export_loading_location TEXT');
+addColumn('jobs', 'export_deposit_terminal', 'export_deposit_terminal TEXT');
+// Optional depot lat/lng for future distance calc; nullable
+addColumn('jobs', 'leg_extra_lat', 'leg_extra_lat REAL');
+addColumn('jobs', 'leg_extra_lng', 'leg_extra_lng REAL');
+
 // ---------------------------------------------------------------------------
 // audit_log is append-only: DB triggers hard-abort UPDATE/DELETE. This makes
 // the audit trail tamper-evident even against a compromised app process.

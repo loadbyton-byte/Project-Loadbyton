@@ -2,6 +2,20 @@ export const CONTAINER_SIZES = ['20FT', '40FT', '40HC', 'REEFER'];
 export const CONTAINER_TYPES = ['DRY', 'REEFER', 'HAZMAT', 'OPEN_TOP', 'FLAT_RACK'];
 export const TERMINALS = ['JEBEL_ALI_T1', 'JEBEL_ALI_T2', 'JEBEL_ALI_T4', 'KHALIFA_PORT', 'PORT_KHALID', 'FUJAIRAH_PORT'];
 export const AREAS = ['AL_QUOZ', 'JAFZA_SOUTH', 'DUBAI_SOUTH', 'DIP', 'AL_QUSAIS', 'MUSAFFAH', 'SHARJAH_INDUSTRIAL', 'FUJAIRAH_FREEZONE'];
+export const SHIPMENT_TYPES = ['IMPORT', 'EXPORT'];
+export const DEPOTS = ['JAFZA_DEPOT', 'AL_QUSAIS_DEPOT', 'KHALIFA_DEPOT', 'SHARJAH_DEPOT', 'FUJAIRAH_DEPOT', 'DIP_DEPOT', 'MUSAFFAH_DEPOT'];
+
+export const SHIPMENT_TYPE_LABELS = { IMPORT: 'Import', EXPORT: 'Export' };
+export const DEPOT_LABELS = {
+  JAFZA_DEPOT: 'JAFZA Depot',
+  AL_QUSAIS_DEPOT: 'Al Qusais Depot',
+  KHALIFA_DEPOT: 'Khalifa Depot',
+  SHARJAH_DEPOT: 'Sharjah Depot',
+  FUJAIRAH_DEPOT: 'Fujairah Depot',
+  DIP_DEPOT: 'DIP Depot',
+  MUSAFFAH_DEPOT: 'Musaffah Depot',
+};
+export function depotLabel(v) { return DEPOT_LABELS[v] || formatLabel(v); }
 export const STATUS_FLOW = ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
 
 // Terminal → emirate/operator, for the UAE coverage section and any "which

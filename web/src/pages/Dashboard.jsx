@@ -4,8 +4,8 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import {
-  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, STATUS_FLOW,
-  equipmentLabel, formatAED, formatDate, formatLabel,
+  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, STATUS_FLOW,
+  equipmentLabel, formatAED, formatDate, formatLabel, depotLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet } from '../components/icons.jsx';
@@ -22,10 +22,13 @@ const SORT_OPTIONS = [
 ];
 
 const emptyJob = {
+  shipmentType: 'IMPORT',
   equipmentType: 'CONTAINER_CHASSIS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
   deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', requiresReefer: false, requiresHazmat: false, notes: '',
   containerCount: 1, truckCount: 1,
+  importPickupTerminal: TERMINALS[0], importUnloadingLocation: AREAS[0], importEmptyReturnLocation: DEPOTS[0],
+  exportEmptyPickupLocation: DEPOTS[0], exportLoadingLocation: AREAS[0], exportDepositTerminal: TERMINALS[0],
 };
 
 export default function Dashboard() {
@@ -194,21 +197,80 @@ export default function Dashboard() {
                   <p className="mt-1 text-xs text-ink-muted">Carriers see this as the job's requirement and bid with their own matching equipment.</p>
                 </div>
               ) : null}
-              <div>
-                <Label>Pickup terminal</Label>
-                <Select value={form.pickupTerminal} onChange={(e) => setForm({ ...form, pickupTerminal: e.target.value })}>
-                  {TERMINALS.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
-                </Select>
-              </div>
-              <div>
-                <Label>Delivery area</Label>
-                <Select value={form.deliveryArea} onChange={(e) => setForm({ ...form, deliveryArea: e.target.value })}>
-                  {AREAS.map((a) => <option key={a} value={a}>{formatLabel(a)}</option>)}
-                </Select>
-              </div>
               <div className="sm:col-span-2">
-                <Label>Delivery address</Label>
-                <Input required value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} placeholder="Street, warehouse, city" />
+                <Label>Shipment direction</Label>
+                <div className="mt-1 flex rounded-lg border p-1" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
+                  {SHIPMENT_TYPES.map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setForm({ ...form, shipmentType: st })}
+                      className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
+                      style={form.shipmentType === st ? { background: 'var(--bg-raised)', borderColor: 'var(--border-default)' } : {}}
+                    >
+                      {st === 'IMPORT' ? 'Import — Terminal → Customer → Depot' : 'Export — Depot → Shipper → Terminal'}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-xs text-ink-muted">
+                  {form.shipmentType === 'IMPORT'
+                    ? 'Container is picked at the port terminal, delivered to your customer, empty returns to depot.'
+                    : 'Empty is picked at depot, loaded at your site, then deposited at the port.'}
+                </p>
+              </div>
+              {form.shipmentType === 'IMPORT' ? (
+                <>
+                  <div>
+                    <Label>Container pickup at terminal <span className="text-status-danger">*</span></Label>
+                    <Select value={form.importPickupTerminal} onChange={(e) => setForm({ ...form, importPickupTerminal: e.target.value, pickupTerminal: e.target.value })}>
+                      {TERMINALS.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
+                    </Select>
+                    <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — where the laden container is picked up.</p>
+                  </div>
+                  <div>
+                    <Label>Unloading location (delivery) <span className="text-status-danger">*</span></Label>
+                    <Select value={form.importUnloadingLocation} onChange={(e) => setForm({ ...form, importUnloadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value })}>
+                      {AREAS.map((a) => <option key={a} value={a}>{formatLabel(a)}</option>)}
+                    </Select>
+                    <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — where cargo is unloaded.</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Empty container return location <span className="text-status-danger">*</span></Label>
+                    <Select value={form.importEmptyReturnLocation} onChange={(e) => setForm({ ...form, importEmptyReturnLocation: e.target.value })}>
+                      {DEPOTS.map((d) => <option key={d} value={d}>{depotLabel(d)}</option>)}
+                    </Select>
+                    <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — depot where empty is returned (detention clock stops here).</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <Label>Empty pickup location <span className="text-status-danger">*</span></Label>
+                    <Select value={form.exportEmptyPickupLocation} onChange={(e) => setForm({ ...form, exportEmptyPickupLocation: e.target.value })}>
+                      {DEPOTS.map((d) => <option key={d} value={d}>{depotLabel(d)}</option>)}
+                    </Select>
+                    <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — depot where empty container is picked up.</p>
+                  </div>
+                  <div>
+                    <Label>Loading location <span className="text-status-danger">*</span></Label>
+                    <Select value={form.exportLoadingLocation} onChange={(e) => setForm({ ...form, exportLoadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value })}>
+                      {AREAS.map((a) => <option key={a} value={a}>{formatLabel(a)}</option>)}
+                    </Select>
+                    <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — shipper site where container is stuffed.</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Deposit location (port/terminal) <span className="text-status-danger">*</span></Label>
+                    <Select value={form.exportDepositTerminal} onChange={(e) => setForm({ ...form, exportDepositTerminal: e.target.value, pickupTerminal: e.target.value })}>
+                      {TERMINALS.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
+                    </Select>
+                    <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — terminal where laden container is deposited.</p>
+                  </div>
+                </>
+              )}
+              <div className="sm:col-span-2">
+                <Label>Delivery address detail</Label>
+                <Input value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} placeholder="Street, warehouse, building, contact" />
+                <p className="mt-1 text-xs text-ink-muted">Precise address for the unloading/loading location above.</p>
               </div>
               <div>
                 <Label>Cargo weight (tons)</Label>

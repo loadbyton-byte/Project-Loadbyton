@@ -233,6 +233,9 @@ const EQUIPMENT_TYPES = [
 ];
 const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET'];
 
+const SHIPMENT_TYPES = ['IMPORT', 'EXPORT'];
+const DEPOTS = ['JAFZA_DEPOT', 'AL_QUSAIS_DEPOT', 'KHALIFA_DEPOT', 'SHARJAH_DEPOT', 'FUJAIRAH_DEPOT', 'DIP_DEPOT', 'MUSAFFAH_DEPOT'];
+
 function getSettings() {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -1289,13 +1292,21 @@ app.get('/api/jobs', auth(), (req, res) => {
     where += ' AND escrow_status = ?';
     params.push(escrowStatus);
   }
+  if (req.query.shipmentType && SHIPMENT_TYPES.includes(String(req.query.shipmentType).toUpperCase())) {
+    where += ' AND shipment_type = ?';
+    params.push(String(req.query.shipmentType).toUpperCase());
+  }
+  if (req.query.shipment_type && SHIPMENT_TYPES.includes(String(req.query.shipment_type).toUpperCase())) {
+    where += ' AND shipment_type = ?';
+    params.push(String(req.query.shipment_type).toUpperCase());
+  }
   // Search — job code, delivery address, notes, terminal/area. LIKE against
   // a handful of TEXT columns is plenty at this table size; a real search
   // index would only start mattering at a scale this app isn't at yet.
   if (q && q.trim()) {
-    where += ' AND (job_code LIKE ? OR delivery_address LIKE ? OR notes LIKE ? OR pickup_terminal LIKE ? OR delivery_area LIKE ?)';
+    where += ' AND (job_code LIKE ? OR delivery_address LIKE ? OR notes LIKE ? OR pickup_terminal LIKE ? OR delivery_area LIKE ? OR import_pickup_terminal LIKE ? OR import_unloading_location LIKE ? OR import_empty_return_location LIKE ? OR export_empty_pickup_location LIKE ? OR export_loading_location LIKE ? OR export_deposit_terminal LIKE ?)';
     const needle = `%${q.trim()}%`;
-    params.push(needle, needle, needle, needle, needle);
+    params.push(needle, needle, needle, needle, needle, needle, needle, needle, needle, needle, needle);
   }
   const orderBy = JOB_SORT_COLUMNS[sort] || JOB_SORT_COLUMNS.date_desc;
 
@@ -1329,8 +1340,55 @@ app.get('/api/jobs', auth(), (req, res) => {
 // failure instead of writing to res directly, so the caller decides whether
 // that's a single 400 or one row in a bulk-import report.
 function createJobFromBody(b, req) {
+  // Shipment direction — IMPORT (terminal -> customer -> depot) vs EXPORT (depot -> shipper -> terminal)
+  // Backward compat: old clients send no shipmentType, treat as IMPORT with legacy fields.
+  const rawShipmentType = b.shipmentType || b.shipment_type || null;
+  const shipmentType = rawShipmentType ? String(rawShipmentType).toUpperCase() : null;
+  if (shipmentType && !SHIPMENT_TYPES.includes(shipmentType)) throw { status: 400, message: 'shipmentType must be IMPORT or EXPORT' };
+  const effectiveShipmentType = shipmentType || 'IMPORT';
+
+  // Leg fields — support both camelCase (web) and snake_case (CSV/db)
+  const importPickupTerminal = b.importPickupTerminal || b.import_pickup_terminal || null;
+  const importUnloadingLocation = b.importUnloadingLocation || b.import_unloading_location || null;
+  const importEmptyReturnLocation = b.importEmptyReturnLocation || b.import_empty_return_location || null;
+  const exportEmptyPickupLocation = b.exportEmptyPickupLocation || b.export_empty_pickup_location || null;
+  const exportLoadingLocation = b.exportLoadingLocation || b.export_loading_location || null;
+  const exportDepositTerminal = b.exportDepositTerminal || b.export_deposit_terminal || null;
+
+  // Validate legs when shipmentType is explicitly provided (new UI); legacy payloads without
+  // shipmentType bypass leg validation to keep existing tests and CSV imports working.
+  if (shipmentType) {
+    if (effectiveShipmentType === 'IMPORT') {
+      if (!importPickupTerminal) throw { status: 400, message: 'importPickupTerminal is required for IMPORT' };
+      if (!importUnloadingLocation) throw { status: 400, message: 'importUnloadingLocation is required for IMPORT' };
+      if (!importEmptyReturnLocation) throw { status: 400, message: 'importEmptyReturnLocation is required for IMPORT (empty container return depot)' };
+    } else {
+      if (!exportEmptyPickupLocation) throw { status: 400, message: 'exportEmptyPickupLocation is required for EXPORT (where empty is picked up)' };
+      if (!exportLoadingLocation) throw { status: 400, message: 'exportLoadingLocation is required for EXPORT (where cargo is loaded)' };
+      if (!exportDepositTerminal) throw { status: 400, message: 'exportDepositTerminal is required for EXPORT (port/terminal for deposit)' };
+    }
+  }
+
+  // Legacy required fields — auto-backfill from legs for new jobs so old readers (OpenLoads, JobDetail)
+  // still see pickup_terminal/delivery_area. New jobs should send both, but we don't break if they don't.
+  let pickupTerminal = b.pickupTerminal;
+  let deliveryArea = b.deliveryArea;
+  let deliveryAddress = b.deliveryAddress;
+  if (shipmentType) {
+    if (effectiveShipmentType === 'IMPORT') {
+      pickupTerminal = pickupTerminal || importPickupTerminal;
+      deliveryArea = deliveryArea || importUnloadingLocation;
+      deliveryAddress = deliveryAddress || importUnloadingLocation;
+    } else {
+      pickupTerminal = pickupTerminal || exportDepositTerminal;
+      deliveryArea = deliveryArea || exportLoadingLocation;
+      deliveryAddress = deliveryAddress || exportLoadingLocation;
+    }
+  }
   const required = ['pickupTerminal', 'deliveryArea', 'deliveryAddress', 'readyAt', 'deadline'];
-  for (const f of required) if (!b[f]) throw { status: 400, message: `${f} is required` };
+  // Use the backfilled values for validation
+  const legacyCheck = { pickupTerminal, deliveryArea, deliveryAddress, readyAt: b.readyAt, deadline: b.deadline };
+  for (const f of required) if (!legacyCheck[f]) throw { status: 400, message: `${f} is required` };
 
   const equipmentType = EQUIPMENT_TYPES.includes(b.equipmentType) ? b.equipmentType : 'CONTAINER_CHASSIS';
   const needsContainer = CONTAINER_EQUIPMENT.includes(equipmentType);
@@ -1381,8 +1439,10 @@ function createJobFromBody(b, req) {
          pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, status, escrow_status,
          requires_reefer, requires_hazmat, free_time_days, demurrage_rate_aed, notes, equipment_type, container_count, truck_count,
          cargo_weight_tons,
-         pickup_lat, pickup_lng, pickup_address_detail, delivery_lat, delivery_lng, delivery_address_detail)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         pickup_lat, pickup_lng, pickup_address_detail, delivery_lat, delivery_lng, delivery_address_detail,
+         shipment_type, import_pickup_terminal, import_unloading_location, import_empty_return_location,
+         export_empty_pickup_location, export_loading_location, export_deposit_terminal)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       code,
@@ -1392,9 +1452,9 @@ function createJobFromBody(b, req) {
       containerSize,
       containerType,
       b.containerNumber || null,
-      b.pickupTerminal,
-      b.deliveryArea,
-      b.deliveryAddress,
+      pickupTerminal,
+      deliveryArea,
+      deliveryAddress,
       b.readyAt,
       b.deadline,
       b.maxBudgetAed ?? b.targetPriceAed ?? null,
@@ -1412,7 +1472,14 @@ function createJobFromBody(b, req) {
       b.pickupAddressDetail || null,
       deliveryLat,
       deliveryLng,
-      b.deliveryAddressDetail || null
+      b.deliveryAddressDetail || null,
+      effectiveShipmentType,
+      importPickupTerminal || null,
+      importUnloadingLocation || null,
+      importEmptyReturnLocation || null,
+      exportEmptyPickupLocation || null,
+      exportLoadingLocation || null,
+      exportDepositTerminal || null
     );
   const jobId = Number(result.lastInsertRowid);
   writeAudit(req, { userId: req.actorId, action: 'JOB_CREATE', details: `${code} posted`, entityType: 'job', entityId: jobId, afterState: 'OPEN' });
@@ -1462,6 +1529,13 @@ app.post('/api/jobs/import', auth(['SHIPPER']), writeLimiter, requireSeatRole(['
 // those are structural (a REEFER_TRUCK job becoming a TRIPPER job is a
 // different job, not an edit) and stay fixed for the job's lifetime.
 const JOB_EDITABLE_FIELDS = {
+  shipmentType: 'shipment_type',
+  importPickupTerminal: 'import_pickup_terminal',
+  importUnloadingLocation: 'import_unloading_location',
+  importEmptyReturnLocation: 'import_empty_return_location',
+  exportEmptyPickupLocation: 'export_empty_pickup_location',
+  exportLoadingLocation: 'export_loading_location',
+  exportDepositTerminal: 'export_deposit_terminal',
   pickupTerminal: 'pickup_terminal',
   deliveryArea: 'delivery_area',
   deliveryAddress: 'delivery_address',

@@ -109,23 +109,37 @@ module.exports = function seed() {
 
   // --- Jobs --------------------------------------------------------------
   function insertJob(j) {
+    const shipmentType = j.shipmentType || 'IMPORT';
+    const importPickup = j.importPickup || j.pickup;
+    const importUnloading = j.importUnloading || j.area;
+    const importEmptyReturn = j.importEmptyReturn || null;
+    const exportEmptyPickup = j.exportEmptyPickup || null;
+    const exportLoading = j.exportLoading || null;
+    const exportDeposit = j.exportDeposit || null;
+    // Backfill legacy pickup/area for old display paths
+    const legacyPickup = j.pickup || (shipmentType === 'IMPORT' ? importPickup : exportDeposit) || 'JEBEL_ALI_T1';
+    const legacyArea = j.area || (shipmentType === 'IMPORT' ? importUnloading : exportLoading) || 'AL_QUOZ';
     const r = db
       .prepare(
         `INSERT INTO jobs (job_code, shipper_id, carrier_id, container_size, container_type, container_number,
            pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, agreed_price_aed,
            status, awarded_bid_id, requires_reefer, requires_hazmat, notes, free_time_days, demurrage_rate_aed,
            escrow_status, delivered_at, auto_release_processed, payout_released_at, created_at, updated_at,
-           equipment_type, container_count, truck_count, cargo_weight_tons)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+           equipment_type, container_count, truck_count, cargo_weight_tons,
+           shipment_type, import_pickup_terminal, import_unloading_location, import_empty_return_location,
+           export_empty_pickup_location, export_loading_location, export_deposit_terminal)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         j.code, shipperId, j.carrierId || null, j.size, j.type, j.number || null,
-        j.pickup, j.area, j.address, j.readyAt, j.deadline, j.budget || null, j.price || null,
+        legacyPickup, legacyArea, j.address, j.readyAt, j.deadline, j.budget || null, j.price || null,
         j.status, null, j.reefer ? 1 : 0, j.hazmat ? 1 : 0, j.notes || null, j.freeDays ?? 5, j.demurrageRate ?? 400,
         j.escrow, j.deliveredAt || null, j.autoReleased ? 1 : 0, j.payoutReleasedAt || null,
         j.createdAt || sqliteTime(-10 * DAY), sqliteTime(-1 * DAY),
         j.equipment || 'CONTAINER_CHASSIS', j.containerCount ?? 1, j.truckCount ?? 1,
-        j.weight ?? null
+        j.weight ?? null,
+        shipmentType, importPickup, importUnloading, importEmptyReturn,
+        exportEmptyPickup, exportLoading, exportDeposit
       );
     return Number(r.lastInsertRowid);
   }
@@ -140,12 +154,13 @@ module.exports = function seed() {
     return Number(r.lastInsertRowid);
   }
 
-  // Job 1 — OPEN, 40HC dry to JAFZA South (the tutorial's headline job).
+  // Job 1 — OPEN, IMPORT 40HC dry: JEBEL_ALI_T2 -> JAFZA South -> JAFZA Depot
   const job1 = insertJob({
     code: 'LBT-DXB-2608-4921', size: '40HC', type: 'DRY', number: 'MSKU9281745',
     pickup: 'JEBEL_ALI_T2', area: 'JAFZA_SOUTH', address: 'Street 14, Warehouse 8B, JAFZA South, Dubai',
     readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(4 * DAY), budget: 600, status: 'OPEN', escrow: 'PENDING',
     notes: 'Gate pass required — see message thread for customs contact.', weight: 24,
+    shipmentType: 'IMPORT', importPickup: 'JEBEL_ALI_T2', importUnloading: 'JAFZA_SOUTH', importEmptyReturn: 'JAFZA_DEPOT',
   });
   insertBid(job1, falconId, 500, 30, 'PENDING', '3-axle flatbed');
   insertBid(job1, gulfheavyId, 480, 28, 'PENDING', '3-axle flatbed');
@@ -161,12 +176,13 @@ module.exports = function seed() {
     db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?)').run(job1, sender, content);
   }
 
-  // Job 2 — OPEN, 40FT hazmat.
+  // Job 2 — OPEN, EXPORT 40FT hazmat: Al Qusais Depot -> Dubai South -> JEBEL_ALI_T4
   const job2 = insertJob({
     code: 'LBT-DXB-2608-4933', size: '40FT', type: 'HAZMAT', number: 'TCLU5512309',
     pickup: 'JEBEL_ALI_T4', area: 'DUBAI_SOUTH', address: 'Plot 22, Dubai South Logistics District',
     readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(3 * DAY), budget: 800, status: 'OPEN', escrow: 'PENDING',
-    hazmat: true, notes: 'Class 3 flammable liquid — placarding required.', weight: 22,
+    hazmat: true, notes: 'Class 3 flammable liquid — placarding required. EXPORT: empty from Al Qusais Depot, load at Dubai South, deposit at JEBEL_ALI_T4.', weight: 22,
+    shipmentType: 'EXPORT', exportEmptyPickup: 'AL_QUSAIS_DEPOT', exportLoading: 'DUBAI_SOUTH', exportDeposit: 'JEBEL_ALI_T4',
   });
   insertBid(job2, emiratesId, 750, 40, 'PENDING', 'Hazmat-certified flatbed');
 
@@ -182,16 +198,15 @@ module.exports = function seed() {
   db.prepare("UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone='+971501234567' WHERE id=?").run('Hamdan Youssef', job3);
   db.prepare('INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status, release_type) VALUES (?,?,?,?,?,\'PENDING\',\'MANUAL\')').run(job3, emiratesId, 900, 54, 846);
 
-  // Job 4 — IN_TRANSIT, reefer, awarded to Gulf Heavy (the ACCEPTED reefer bid).
-  // Equipment is TRAILER_WITH_GENSET — the REEFER_TRUCK type no longer
-  // exists; reefer is expressed as container size/type + requires_reefer.
+  // Job 4 — IN_TRANSIT, EXPORT reefer, awarded to Gulf Heavy.
   const job4 = insertJob({
     code: 'LBT-DXB-2608-2277', size: 'REEFER', type: 'REEFER', number: 'CMAU8827761',
     pickup: 'JEBEL_ALI_T2', area: 'AL_QUOZ', address: 'Al Quoz Cold Chain Hub, Bay 6',
     readyAt: sqliteTime(-2 * DAY), deadline: sqliteTime(1 * DAY), price: 1600, carrierId: gulfheavyId,
     status: 'IN_TRANSIT', escrow: 'FUNDED', reefer: true, freeDays: 3, demurrageRate: 600,
     equipment: 'TRAILER_WITH_GENSET', containerCount: 1, truckCount: 1,
-    notes: 'Maintain -18C chain of custody throughout.', weight: 26,
+    notes: 'Maintain -18C chain of custody throughout. EXPORT: empty from Khalifa Depot, loaded at Al Quoz, deposited at JEBEL_ALI_T2.', weight: 26,
+    shipmentType: 'EXPORT', exportEmptyPickup: 'KHALIFA_DEPOT', exportLoading: 'AL_QUOZ', exportDeposit: 'JEBEL_ALI_T2',
   });
   const job4Bid = insertBid(job4, gulfheavyId, 1600, 65, 'ACCEPTED', 'Reefer trailer');
   db.prepare('UPDATE jobs SET awarded_bid_id=? WHERE id=?').run(job4Bid, job4);

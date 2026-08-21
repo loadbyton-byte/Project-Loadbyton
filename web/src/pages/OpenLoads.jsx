@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { formatAED, formatDate, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel } from '../lib/constants.js';
+import { formatAED, formatDate, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, SHIPMENT_TYPES, depotLabel } from '../lib/constants.js';
 import { EmptyState, Badge, Select, Input, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconAlert, IconPackage, IconSearch } from '../components/icons.jsx';
 
@@ -24,6 +24,7 @@ export default function OpenLoads() {
   const [jobs, setJobs] = useState(null);
   const [total, setTotal] = useState(0);
   const [equipmentFilter, setEquipmentFilter] = useState('all');
+  const [shipmentFilter, setShipmentFilter] = useState('all');
   const [sort, setSort] = useState('date_desc');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -38,15 +39,16 @@ export default function OpenLoads() {
     return () => clearTimeout(t);
   }, [search]);
 
-  useEffect(() => { setOffset(0); }, [equipmentFilter, sort, debouncedSearch]);
+  useEffect(() => { setOffset(0); }, [equipmentFilter, shipmentFilter, sort, debouncedSearch]);
 
   useEffect(() => {
     setJobs(null);
     const params = { status: 'OPEN', sort, limit: PAGE_SIZE, offset };
     if (equipmentFilter !== 'all') params.equipmentType = equipmentFilter;
+    if (shipmentFilter !== 'all') params.shipmentType = shipmentFilter;
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
     api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch(() => { setJobs([]); setTotal(0); });
-  }, [equipmentFilter, sort, debouncedSearch, offset]);
+  }, [equipmentFilter, shipmentFilter, sort, debouncedSearch, offset]);
 
   return (
     <div className="container-page py-6" dir="ltr">
@@ -77,6 +79,10 @@ export default function OpenLoads() {
           <option value="all">Equipment: All</option>
           {EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
         </Select>
+        <Select value={shipmentFilter} onChange={(e) => setShipmentFilter(e.target.value)} className="w-auto">
+          <option value="all">Shipment: All</option>
+          {SHIPMENT_TYPES.map((s) => <option key={s} value={s}>{s === 'IMPORT' ? 'Import' : 'Export'}</option>)}
+        </Select>
         <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-auto">
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
@@ -106,13 +112,16 @@ export default function OpenLoads() {
                     </div>
                   }
                   priceLabel={`Target ${formatAED(j.max_budget_aed)}`}
-                  origin={formatLabel(j.pickup_terminal)}
-                  destination={formatLabel(j.delivery_area)}
+                  origin={j.shipment_type === 'EXPORT' ? (j.export_empty_pickup_location ? depotLabel(j.export_empty_pickup_location) : formatLabel(j.pickup_terminal)) : formatLabel(j.import_pickup_terminal || j.pickup_terminal)}
+                  destination={j.shipment_type === 'EXPORT' ? formatLabel(j.export_deposit_terminal || j.pickup_terminal) : formatLabel(j.import_unloading_location || j.delivery_area)}
                   chips={[
+                    j.shipment_type || 'IMPORT',
                     CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
                     ...(j.cargo_weight_tons != null ? [`${j.cargo_weight_tons} t`] : []),
                     ...(j.container_count > 1 ? [`×${j.container_count} containers`] : []),
                     ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
+                    ...(j.shipment_type === 'IMPORT' && j.import_empty_return_location ? [`→ ${depotLabel(j.import_empty_return_location)}`] : []),
+                    ...(j.shipment_type === 'EXPORT' && j.export_loading_location ? [`via ${formatLabel(j.export_loading_location)}`] : []),
                   ]}
                   meta={
                     <span className="flex items-center justify-between">
