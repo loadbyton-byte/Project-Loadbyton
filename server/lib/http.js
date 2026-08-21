@@ -70,7 +70,7 @@ function jobCode() {
   const now = new Date();
   const yy = String(now.getUTCFullYear()).slice(2);
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const suffix = Math.floor(1000 + Math.random() * 9000);
+  const suffix = crypto.randomInt(1000, 10000);
   return `LBT-DXB-${yy}${mm}-${suffix}`;
 }
 
@@ -79,7 +79,8 @@ function referralCode(prefix, companyName) {
     .toUpperCase()
     .replace(/[^A-Z]/g, '')
     .slice(0, 8) || 'MEMBER';
-  return `${prefix}-${slug}`;
+  const suffix = crypto.randomInt(10, 100);
+  return `${prefix}-${slug}-${suffix}`;
 }
 
 module.exports = {

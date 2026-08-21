@@ -848,7 +848,7 @@ app.post(
     const prefix = role === 'SHIPPER' ? 'SHP' : 'CAR';
     let code = referralCode(prefix, companyName);
     while (db.prepare('SELECT 1 FROM users WHERE referral_code=?').get(code)) {
-      code = `${code}${Math.floor(Math.random() * 90 + 10)}`;
+      code = `${code}${crypto.randomInt(10, 100)}`;
     }
 
     // gstack review F3: a real, verifiable token — not just a flag — so
