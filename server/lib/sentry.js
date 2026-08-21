@@ -13,6 +13,12 @@ function init() {
     console.log('[Sentry] SENTRY_DSN not set — error tracking disabled');
     return;
   }
+  // Render dashboard currently has SENTRY_DSN=f3aaa004... (not a URL) — treat any
+  // non-URL as unset so the server still boots. A real DSN is https://<key>@<host>/<id>.
+  if (!dsn.includes('://')) {
+    console.log('[Sentry] SENTRY_DSN looks invalid (not a URL) — error tracking disabled');
+    return;
+  }
 
   try {
     Sentry = require('@sentry/node');
@@ -65,7 +71,7 @@ function captureMessage(message, level = 'info', context = {}) {
 }
 
 function expressErrorHandler() {
-  if (!Sentry) return (err, req, res, next) => next(err);
+  if (!Sentry || !Sentry.Handlers || !Sentry.Handlers.errorHandler) return (err, req, res, next) => next(err);
   return Sentry.Handlers.errorHandler({
     shouldHandleError(error) {
       return error.status >= 500;
@@ -74,7 +80,7 @@ function expressErrorHandler() {
 }
 
 function requestHandler() {
-  if (!Sentry) return (req, res, next) => next();
+  if (!Sentry || !Sentry.Handlers || !Sentry.Handlers.requestHandler) return (req, res, next) => next();
   return Sentry.Handlers.requestHandler();
 }
 
