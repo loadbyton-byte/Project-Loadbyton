@@ -31,6 +31,20 @@ function init() {
         if (error && error.status && error.status < 500) {
           return null;
         }
+        // PII scrub: Sentry's requestHandler attaches the full request —
+        // body, cookies, headers — which for this API contains passwords,
+        // IBANs, TRN numbers, and file base64. Drop everything sensitive
+        // before the event leaves the process.
+        if (event.request) {
+          delete event.request.cookies;
+          delete event.request.data;
+          delete event.request.body;
+          if (event.request.headers) {
+            delete event.request.headers.cookie;
+            delete event.request.headers.authorization;
+            delete event.request.headers['x-api-key'];
+          }
+        }
         return event;
       },
     });
