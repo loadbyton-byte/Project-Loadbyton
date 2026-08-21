@@ -8,7 +8,7 @@ import {
   equipmentLabel, formatAED, formatDate, formatLabel, depotLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
-import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet } from '../components/icons.jsx';
+import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet, IconClose } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 
@@ -57,6 +57,16 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [search]);
   useEffect(() => { setOffset(0); }, [filter, sort, debouncedSearch]);
+
+  // Popup modal: close on Escape, lock body scroll
+  useEffect(() => {
+    if (!showForm) return;
+    const onKey = (e) => { if (e.key === 'Escape') setShowForm(false); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [showForm]);
 
   function loadStats() {
     api.analytics().then((d) => setAnalytics(d.analytics)).catch(() => {});
@@ -153,10 +163,13 @@ export default function Dashboard() {
       )}
 
       {showForm && (
-        <Card className="mt-8">
-          <Card.Header>
-            <Card.Title>Post a new job</Card.Title>
-          </Card.Header>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Post a new job" onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
+            <Card className="border-0 shadow-none">
+              <Card.Header>
+                <Card.Title className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span> Post a new job</Card.Title>
+                <button type="button" onClick={() => setShowForm(false)} className="rounded-full p-1.5 text-ink-muted hover:bg-surface-container hover:text-ink" aria-label="Close"><IconClose size={18} /></button>
+              </Card.Header>
           <form onSubmit={onCreate}>
             <Card.Content className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
@@ -330,6 +343,8 @@ export default function Dashboard() {
             </Card.Footer>
           </form>
         </Card>
+          </div>
+        </div>
       )}
 
       {templates.length > 0 && (
