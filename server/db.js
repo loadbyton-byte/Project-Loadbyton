@@ -152,6 +152,14 @@ CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_id);
 -- racy under concurrent submits — the schema is the actual guarantee.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ratings_one_per_rater ON ratings(job_id, rater_id);
 
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  key TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  response_status INTEGER NOT NULL,
+  response_body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS templates (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   shipper_id INTEGER NOT NULL REFERENCES users(id),

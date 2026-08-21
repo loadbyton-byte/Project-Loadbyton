@@ -216,7 +216,8 @@ function canViewJob(job, user) {
 function sessionCookieAttributes(req) {
   const secure = req.protocol === 'https' ? '; Secure' : '';
   const sameSite = isAllowedOrigin(req.headers.origin) && secure ? 'None' : 'Lax';
-  return `${secure}; SameSite=${sameSite}`;
+  const partitioned = sameSite === 'None' ? '; Partitioned' : '';
+  return `${secure}; SameSite=${sameSite}${partitioned}`;
 }
 
 function createSession(req, res, userId, { impersonatingAdminId = null, actingSeatId = null, maxAgeSeconds = 7 * 24 * 60 * 60 } = {}) {

@@ -8,11 +8,14 @@ const { sendError } = require('../lib/http');
 const { DOC_TYPES, STATUS_ORDER, TRANSITIONS, DISPUTABLE_STATUSES } = require('../lib/constants');
 const { saveUploadedFile, normalizeUaeMobile, getSettings, writeAudit, notify, isPartyOnJob, isParticipantOrBidder } = require('../lib/helpers');
 const { auth, requireSeatRole, writeLimiter } = require('../middleware/auth');
+const { rateLimiter } = require('../lib/rateLimit');
+const bidLimiter = rateLimiter({ windowMs: 60*1000, max: 10, keyFn: (req) => `bid:${req.user.id}`, message: 'Too many bids. Max 10 per minute.' });
 const { markJobPaymentFailed, executePayoutAsync, refundJobAsync } = require('../services/payout.service');
+const { idempotency } = require('../lib/idempotency');
 
 const router = require('express').Router();
 
-router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, requireSeatRole(['OPS']), (req, res) => {
+router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, requireSeatRole(['OPS']), idempotency, (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.status !== 'OPEN') return sendError(res, 403, 'Job is not open for bidding.');
@@ -197,7 +200,7 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
   res.json({ job: updated });
 });
 
-router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), (req, res) => {
+router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), idempotency, (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');

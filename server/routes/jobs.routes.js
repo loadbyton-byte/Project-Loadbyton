@@ -86,6 +86,7 @@ router.get('/api/jobs', auth(), (req, res) => {
        WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`
     )
     .all(...rowParams);
+  res.set('X-Total-Count', String(total));
   res.json({ jobs, total, limit: lim, offset: off });
 });
 

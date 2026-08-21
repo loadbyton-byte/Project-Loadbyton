@@ -14,6 +14,8 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '8mb', verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); } }));
 app.use(cookieParser);
 app.use(requestId);
+const { requestLogger } = require('./lib/logger');
+app.use(requestLogger);
 app.use(securityHeaders);
 
 initSentry();
@@ -50,6 +52,7 @@ app.use(require('./routes/job-lifecycle.routes'));
 app.use(require('./routes/job-extras.routes'));
 app.use(require('./routes/org.routes'));
 app.use(require('./routes/retention.routes'));
+app.use(require('./routes/docs.routes'));
 app.use(require('./routes/admin.routes'));
 
 // =============================================================================

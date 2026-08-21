@@ -150,4 +150,13 @@ router.post(
   }
 );
 
+
+router.post('/api/system/rotate-key', auth(['ADMIN']), (req, res) => {
+  const { keyId } = req.body || {};
+  // In production this would re-encrypt IBAN/TRN with the new key version (enc:v2:...) and update Vault.
+  // Here we audit the rotation intent; the actual re-encryption is a manual runbook step (see docs/operations-runbook.md).
+  require('../lib/helpers').writeAudit(req, { userId: req.actorId, action: 'ENCRYPTION_KEY_ROTATE', details: `Key rotation requested${keyId ? ` -> ${keyId}` : ''} by admin ${req.actorLabel}`, entityType: 'system', entityId: null });
+  res.json({ ok: true, message: 'Rotation audit logged. Follow docs/operations-runbook.md § key rotation to re-encrypt at-rest fields and update ENCRYPTION_KEY in Vault.' });
+});
+
 module.exports = router;

@@ -173,6 +173,9 @@ router.post(
       recordFailure(email);
       return sendError(res, 403, 'This account has been deactivated');
     }
+    if (user.role === 'ADMIN' && !user.mfa_enabled && process.env.ADMIN_MFA_ENFORCE === '1') {
+      return sendError(res, 403, 'Admin MFA is required — set up TOTP via POST /api/auth/mfa/setup after logging in with ADMIN_MFA_ENFORCE=0, then re-enable enforcement.');
+    }
     if (user.mfa_enabled) {
       if (!totp.verifyCode(user.mfa_secret, totpCode)) {
         recordFailure(email);
@@ -256,6 +259,30 @@ router.patch('/api/profile', auth(), requireSeatRole(['OPS']), (req, res) => {
   }
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
   res.json({ user: toPublicUser(user) });
+});
+
+
+router.get('/api/me/export', auth(), (req, res) => {
+  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  const profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(req.user.id);
+  const jobs = db.prepare('SELECT * FROM jobs WHERE shipper_id=? OR carrier_id=?').all(req.user.id, req.user.id);
+  const bids = db.prepare('SELECT * FROM bids WHERE carrier_id=?').all(req.user.id);
+  const payouts = db.prepare('SELECT * FROM payouts WHERE carrier_id=?').all(req.user.id);
+  const notifications = db.prepare('SELECT * FROM notifications WHERE user_id=?').all(req.user.id);
+  const audit = db.prepare('SELECT * FROM audit_log WHERE user_id=?').all(req.user.id);
+  res.json({ user: { ...user, profile: profile ? { ...profile, trn_number: require('../lib/crypto').decryptField(profile.trn_number), iban: require('../lib/crypto').decryptField(profile.iban) } : null }, jobs, bids, payouts, notifications, audit });
+});
+
+router.delete('/api/me', auth(), (req, res) => {
+  const userId = req.user.id;
+  const token = req.cookies.lb_session;
+  if (token) db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);
+  // Anonymize rather than hard-delete to preserve FK integrity for jobs/bids
+  db.prepare("UPDATE users SET email=?, password_hash='deleted', is_active=0, is_verified=0 WHERE id=?").run(`deleted-${userId}@loadbyton.invalid`, userId);
+  db.prepare('UPDATE profiles SET company_name=?, trn_number=NULL, trade_license_number=NULL, phone=NULL, iban=NULL WHERE user_id=?').run(`Deleted User ${userId}`, userId);
+  require('../lib/helpers').writeAudit(req, { userId, action: 'ACCOUNT_DELETE', details: `User ${userId} self-deleted (PDPL)`, entityType: 'user', entityId: userId });
+  try { require('../lib/helpers').clearSessionCookie(req, res); } catch {}
+  res.json({ ok: true, message: 'Account deleted and anonymized. Jobs/bids retained for audit with anonymized identity.' });
 });
 
 module.exports = router;
