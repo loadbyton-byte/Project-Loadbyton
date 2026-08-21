@@ -50,7 +50,7 @@ async function createAwardedJob(shipper, carrier, overrides = {}) {
   const jobId = created.body.job.id;
 
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, {
-    amountAed: 650, etaMinutes: 40, truckType: '3-axle flatbed',
+    amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed',
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
 

@@ -157,8 +157,6 @@ export default function JobDetail() {
             <StatusBadge status={job.status} />
             <EscrowBadge status={job.escrow_status} />
             <Badge color="neutral">{equipmentLabel(job.equipment_type)}</Badge>
-            {!!job.requires_hazmat && <Badge color="warning">Hazmat</Badge>}
-            {!!job.requires_reefer && <Badge color="info">Reefer</Badge>}
             {job.container_count > 1 && <Badge color="accent">×{job.container_count} containers</Badge>}
             {job.truck_count > 1 && <Badge color="accent">×{job.truck_count} trucks</Badge>}
           </div>
@@ -210,8 +208,6 @@ export default function JobDetail() {
                 )}
                 <div><dt className="text-ink-muted">Ready at</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.ready_at)}</dd></div>
                 <div><dt className="text-ink-muted">Deadline</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.deadline)}</dd></div>
-                <div><dt className="text-ink-muted">Free time</dt><dd className="mt-0.5 font-medium text-ink">{job.free_time_days} days</dd></div>
-                <div><dt className="text-ink-muted">Demurrage rate</dt><dd className="mt-0.5 font-medium text-ink">{formatAED(job.demurrage_rate_aed)}/day</dd></div>
                 <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Delivery address</dt><dd className="mt-0.5 font-medium text-ink">{job.delivery_address}</dd></div>
                 {job.notes && <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Notes</dt><dd className="mt-0.5 text-ink-secondary">{job.notes}</dd></div>}
               </dl>
@@ -270,7 +266,7 @@ export default function JobDetail() {
                 </div>
               </div>
             )}
-            <p className="mt-4 text-xs text-ink-muted">Turn-key price covers all 3 legs. Detention free time: {job.free_time_days} days.</p>
+            <p className="mt-4 text-xs text-ink-muted">Turn-key price covers all 3 legs.</p>
           </Section>
 
           <Section title={`Bids (${bids.length})`}>
@@ -282,7 +278,7 @@ export default function JobDetail() {
                   <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3" style={{ borderColor: b.status === 'ACCEPTED' ? 'var(--status-success)' : 'var(--border-default)' }}>
                     <div className="min-w-0">
                       <p className="tabular font-display text-base font-semibold text-ink">{b.masked ? 'Hidden until award' : formatAED(b.amount_aed)}</p>
-                      <p className="text-xs text-ink-muted">{b.masked ? 'Competing bid' : `${b.eta_minutes} min ETA · ${b.truck_type ? equipmentLabel(b.truck_type) : 'equipment n/a'}`}</p>
+                      <p className="text-xs text-ink-muted">{b.masked ? 'Competing bid' : `Delivery by ${formatDateTime(b.eta_at)} · ${b.truck_type ? equipmentLabel(b.truck_type) : 'equipment n/a'}`}</p>
                       {!b.masked && b.carrier_company && (
                         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-secondary">
                           <span className="truncate">{b.carrier_company}</span> <RatingPill rating={b.carrier_rating} />
@@ -331,12 +327,6 @@ export default function JobDetail() {
                   <div className="flex items-center gap-2 text-ink-secondary">
                     <IconClock size={15} className="text-ink-muted" />
                     <span>Auto-releases {formatDateTime(track.autoReleaseAt)}</span>
-                  </div>
-                )}
-                {track.demurrageExposure > 0 && (
-                  <div className="flex items-center gap-2 rounded-md px-3 py-2" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
-                    <IconAlert size={15} />
-                    <span>Demurrage exposure: {formatAED(track.demurrageExposure)}</span>
                   </div>
                 )}
                 {payout && (
@@ -463,7 +453,7 @@ function PaymentPanel({ job, load }) {
 }
 
 function BidForm({ jobId, verified, defaultEquipment, onDone }) {
-  const [form, setForm] = useState({ amountAed: '', etaMinutes: '', truckType: defaultEquipment || 'CONTAINER_CHASSIS', notes: '' });
+  const [form, setForm] = useState({ amountAed: '', etaAt: '', truckType: defaultEquipment || 'CONTAINER_CHASSIS', notes: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -472,7 +462,7 @@ function BidForm({ jobId, verified, defaultEquipment, onDone }) {
     setBusy(true);
     setError('');
     try {
-      await api.placeBid(jobId, { ...form, amountAed: Number(form.amountAed), etaMinutes: Number(form.etaMinutes) });
+      await api.placeBid(jobId, { ...form, amountAed: Number(form.amountAed), etaAt: form.etaAt ? new Date(form.etaAt).toISOString() : '' });
       onDone();
     } catch (err) {
       setError(err.message);
@@ -496,8 +486,8 @@ function BidForm({ jobId, verified, defaultEquipment, onDone }) {
         <Input type="number" required min="1" value={form.amountAed} onChange={(e) => setForm({ ...form, amountAed: e.target.value })} />
       </div>
       <div>
-        <Label>ETA (minutes)</Label>
-        <Input type="number" required min="1" max="600" value={form.etaMinutes} onChange={(e) => setForm({ ...form, etaMinutes: e.target.value })} />
+        <Label>Delivery by (date &amp; time)</Label>
+        <Input type="datetime-local" required value={form.etaAt} onChange={(e) => setForm({ ...form, etaAt: e.target.value })} />
       </div>
       <div className="sm:col-span-2">
         <Label>Equipment you're bidding with</Label>
@@ -537,10 +527,6 @@ function JobEditForm({ job, onDone, onCancel }) {
     deadline: toDatetimeLocal(job.deadline),
     targetPriceAed: job.max_budget_aed ?? '',
     cargoWeightTons: job.cargo_weight_tons ?? '',
-    requiresReefer: !!job.requires_reefer,
-    requiresHazmat: !!job.requires_hazmat,
-    freeTimeDays: job.free_time_days,
-    demurrageRateAed: job.demurrage_rate_aed,
     notes: job.notes || '',
     containerCount: job.container_count,
     truckCount: job.truck_count,
@@ -645,14 +631,6 @@ function JobEditForm({ job, onDone, onCancel }) {
         <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} />
         <p className="mt-1 text-xs text-ink-muted">What you're willing to pay for this trip — bids above it still appear, just flagged.</p>
       </div>
-      <div>
-        <Label>Free time (days)</Label>
-        <Input type="number" min="0" value={form.freeTimeDays} onChange={(e) => setForm({ ...form, freeTimeDays: e.target.value })} />
-      </div>
-      <div>
-        <Label>Demurrage rate (AED/day)</Label>
-        <Input type="number" min="0" value={form.demurrageRateAed} onChange={(e) => setForm({ ...form, demurrageRateAed: e.target.value })} />
-      </div>
       {(job.container_count > 1 || job.truck_count > 1) && (
         <>
           <div>
@@ -665,14 +643,6 @@ function JobEditForm({ job, onDone, onCancel }) {
           </div>
         </>
       )}
-      <div className="flex items-end gap-4 pb-2">
-        <label className="flex items-center gap-2 text-sm text-ink-secondary">
-          <input type="checkbox" checked={form.requiresReefer} onChange={(e) => setForm({ ...form, requiresReefer: e.target.checked })} /> Requires reefer
-        </label>
-        <label className="flex items-center gap-2 text-sm text-ink-secondary">
-          <input type="checkbox" checked={form.requiresHazmat} onChange={(e) => setForm({ ...form, requiresHazmat: e.target.checked })} /> Hazmat
-        </label>
-      </div>
       <div className="sm:col-span-2">
         <Label>Notes</Label>
         <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />

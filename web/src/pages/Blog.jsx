@@ -5,10 +5,10 @@ import { Reveal } from '../components/Reveal.jsx';
 
 const POSTS = [
   {
-    title: 'Demurrage is the real cost of drayage — the truck is almost beside the point',
+    title: 'The idle container is the real cost of drayage — the truck is almost beside the point',
     date: '2026-07-18',
     tag: 'Operations',
-    body: 'Free time runs out whether or not anyone is watching the clock. A container sitting two days past its free-time window at 400 AED/day has quietly outspent the truck that moved it. The fix isn\'t a faster truck — it\'s a visible countdown attached to the job itself, not a separate spreadsheet someone forgets to check.',
+    body: 'A container sitting uncollected at the terminal for two extra days quietly outspends the truck that moved it. The fix isn\'t a faster truck — it\'s a committed delivery date and time attached to every job, not a separate spreadsheet someone forgets to check.',
   },
   {
     title: 'Why "just add a phone number field" breaks a freight marketplace',
@@ -26,7 +26,7 @@ const POSTS = [
 
 export default function Blog() {
   usePageTitle('Blog');
-  useMeta('Notes on UAE drayage, demurrage, and building a freight marketplace that survives past the first job.');
+  useMeta('Notes on UAE drayage logistics and building a freight marketplace that survives past the first job.');
   return (
     <div dir="ltr">
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
@@ -34,7 +34,7 @@ export default function Blog() {
           <Reveal className="max-w-2xl">
             <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent)' }}>Blog</span>
             <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Notes from building Loadbyton</h1>
-            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">Field notes on UAE drayage, demurrage economics, and the product/engineering decisions behind the platform.</p>
+            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">Field notes on UAE drayage economics and the product/engineering decisions behind the platform.</p>
           </Reveal>
         </div>
       </section>

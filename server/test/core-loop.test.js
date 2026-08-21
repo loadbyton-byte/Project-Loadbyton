@@ -39,7 +39,7 @@ test('unverified carrier is blocked from bidding, server-side', async () => {
   const job = jobs.body.jobs.find((j) => j.status === 'OPEN');
   assert.ok(job, 'expected at least one OPEN job in seed data');
 
-  const bid = await carrier.post(`/api/jobs/${job.id}/bids`, { amountAed: 500, etaMinutes: 30, truckType: 'flatbed' });
+  const bid = await carrier.post(`/api/jobs/${job.id}/bids`, { amountAed: 500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bid.status, 403, 'unverified carrier must be rejected server-side, not just hidden in the UI');
 });
 
@@ -63,7 +63,7 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234'); // seeded verified GOLD carrier
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, {
-    amountAed: 650, etaMinutes: 40, truckType: '3-axle flatbed',
+    amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed',
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
   const bidId = bidRes.body.bid.id;

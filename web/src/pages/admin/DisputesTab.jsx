@@ -116,7 +116,7 @@ function EvidenceDossier({ jobId }) {
       <div>
         <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Bids ({evidence.bids.length})</p>
         <ul className="mt-1.5 space-y-1 text-sm text-ink-secondary">
-          {evidence.bids.map((b) => <li key={b.id}>{formatAED(b.amount_aed)} · {b.eta_minutes}min · <Badge>{b.status}</Badge></li>)}
+          {evidence.bids.map((b) => <li key={b.id}>{formatAED(b.amount_aed)} · {b.eta_at ? formatDateTime(b.eta_at) : 'ETA n/a'} · <Badge>{b.status}</Badge></li>)}
           {evidence.bids.length === 0 && <li className="text-ink-muted">None</li>}
         </ul>
       </div>

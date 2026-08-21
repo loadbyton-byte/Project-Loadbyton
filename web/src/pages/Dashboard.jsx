@@ -25,7 +25,7 @@ const emptyJob = {
   shipmentType: 'IMPORT',
   equipmentType: 'CONTAINER_CHASSIS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
-  deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', requiresReefer: false, requiresHazmat: false, notes: '',
+  deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
   containerCount: 1, truckCount: 1,
   importPickupTerminal: TERMINALS[0], importUnloadingLocation: AREAS[0], importEmptyReturnLocation: DEPOTS[0],
   exportEmptyPickupLocation: DEPOTS[0], exportLoadingLocation: AREAS[0], exportDepositTerminal: TERMINALS[0],
@@ -319,10 +319,8 @@ export default function Dashboard() {
               </div>
               <div className="flex flex-wrap items-end gap-4 pb-2">
                 <label className="flex items-center gap-2 text-sm text-ink-secondary">
-                  <input type="checkbox" checked={form.requiresReefer} onChange={(e) => setForm({ ...form, requiresReefer: e.target.checked })} /> Requires reefer
                 </label>
                 <label className="flex items-center gap-2 text-sm text-ink-secondary">
-                  <input type="checkbox" checked={form.requiresHazmat} onChange={(e) => setForm({ ...form, requiresHazmat: e.target.checked })} /> Hazmat
                 </label>
               </div>
               <div className="sm:col-span-2">

@@ -31,8 +31,8 @@ export const TERMINAL_INFO = {
 
 // Equipment/vehicle types a job can require and a carrier can bid with. The
 // two container-carrying types are the only ones where container size/type
-// apply — everything else is general UAE road freight. Reefer is expressed
-// as container size/type + requires_reefer, NOT a dedicated truck type;
+// apply — everything else is general UAE road freight. Cold chain is expressed
+// via container size/type (REEFER) and TRAILER_WITH_GENSET equipment, NOT flags;
 // TRAILER_WITH_GENSET is a reefer-capable container trailer, and CUSTOM is
 // a written truck/requirement in the notes field.
 export const EQUIPMENT_TYPES = [

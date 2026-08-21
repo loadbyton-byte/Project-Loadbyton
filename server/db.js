@@ -82,11 +82,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   agreed_price_aed REAL,
   status TEXT NOT NULL DEFAULT 'OPEN',
   awarded_bid_id INTEGER,
-  requires_reefer INTEGER NOT NULL DEFAULT 0,
-  requires_hazmat INTEGER NOT NULL DEFAULT 0,
   notes TEXT,
-  free_time_days INTEGER NOT NULL DEFAULT 5,
-  demurrage_rate_aed INTEGER NOT NULL DEFAULT 400,
   escrow_status TEXT NOT NULL DEFAULT 'PENDING',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -100,7 +96,8 @@ CREATE TABLE IF NOT EXISTS bids (
   job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
   carrier_id INTEGER NOT NULL REFERENCES users(id),
   amount_aed REAL NOT NULL,
-  eta_minutes INTEGER NOT NULL,
+  eta_minutes INTEGER NOT NULL DEFAULT 0,
+  eta_at TEXT,
   truck_type TEXT,
   driver_name TEXT,
   notes TEXT,
@@ -404,6 +401,10 @@ addColumn('payouts', 'processor_payout_ref', 'processor_payout_ref TEXT');
 // sub-merchant id) — what payout/split money is addressed to. Optional:
 // in internal mode it stays NULL and is irrelevant.
 addColumn('profiles', 'processor_account_id', 'processor_account_id TEXT');
+
+// Bid ETA moved from minutes-of-travel to a committed delivery date/time.
+// eta_minutes kept NOT NULL DEFAULT 0 for pre-existing schemas; eta_at is truth.
+addColumn('bids', 'eta_at', 'eta_at TEXT');
 
 // Shipment direction + 3-leg drayage model (CEO plan 2026-08-21). IMPORT is
 // terminal -> unloading -> empty return; EXPORT is empty pickup -> loading

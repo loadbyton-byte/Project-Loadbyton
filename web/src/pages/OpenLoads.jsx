@@ -107,8 +107,6 @@ export default function OpenLoads() {
                   jobCode={j.job_code}
                   topRight={
                     <div className="flex flex-col items-end gap-1">
-                      {!!j.requires_hazmat && <Badge color="warning">Hazmat</Badge>}
-                      {!!j.requires_reefer && <Badge color="warning">Reefer</Badge>}
                     </div>
                   }
                   priceLabel={`Target ${formatAED(j.max_budget_aed)}`}

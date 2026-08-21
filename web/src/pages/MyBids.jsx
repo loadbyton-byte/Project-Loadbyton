@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
-import { formatAED, formatLabel, equipmentLabel } from '../lib/constants.js';
+import { formatAED, formatLabel, equipmentLabel, formatDateTime } from '../lib/constants.js';
 import { Button, Badge, EmptyState, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
 import { IconPackage, IconX, IconSearch } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -88,7 +88,7 @@ export default function MyBids() {
                   priceLabel={formatAED(b.amount_aed)}
                   origin={formatLabel(b.pickup_terminal)}
                   destination={formatLabel(b.delivery_area)}
-                  chips={[`${b.eta_minutes} min ETA`, ...(b.truck_type ? [equipmentLabel(b.truck_type)] : [])]}
+                  chips={[b.eta_at ? `Delivery by ${formatDateTime(b.eta_at)}` : 'ETA n/a', ...(b.truck_type ? [equipmentLabel(b.truck_type)] : [])]}
                   meta={
                     <div className="flex items-center justify-between">
                       <RatingPill rating={b.shipper_rating} />

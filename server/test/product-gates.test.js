@@ -64,7 +64,7 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   assert.ok(job, 'a carrier must see OPEN jobs');
 
   // …but every workflow action is blocked server-side by the approval gate.
-  const bid = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaMinutes: 30 });
+  const bid = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
   assert.equal(bid.status, 403, 'a pending account must not be able to bid');
 
   const createJob = await client.post('/api/jobs', {
@@ -93,7 +93,7 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   const verified = await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
   assert.equal(verified.status, 200, verified.raw);
 
-  const bidAfter = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaMinutes: 30 });
+  const bidAfter = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
   assert.equal(bidAfter.status, 201, bidAfter.raw);
 });
 
@@ -151,7 +151,7 @@ test('documents are private until the bid is confirmed; uploads are for parties 
   const loserUpload = await loser.post(`/api/jobs/${jobId}/documents`, { docType: 'OTHER', title: 'Sneaky', fileUrl: 'https://files.loadbyton.demo/x.pdf' });
   assert.equal(loserUpload.status, 403, 'a bidding (non-awarded) carrier must not upload documents to the job');
 
-  const loserBid = await loser.post(`/api/jobs/${jobId}/bids`, { amountAed: 640, etaMinutes: 35, truckType: 'CONTAINER_CHASSIS' });
+  const loserBid = await loser.post(`/api/jobs/${jobId}/bids`, { amountAed: 640, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS' });
   assert.equal(loserBid.status, 201, loserBid.raw);
 
   const loserView = await loser.get(`/api/jobs/${jobId}`);
@@ -161,7 +161,7 @@ test('documents are private until the bid is confirmed; uploads are for parties 
   assert.deepEqual(carrierView.body.documents, [], 'the bidding carrier must not see the shipper\u2019s documents pre-award');
 
   // After the shipper confirms the winning bid, the carrier sees the documents.
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaMinutes: 40, truckType: 'CONTAINER_CHASSIS' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS' });
   const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id });
   assert.equal(award.status, 200, award.raw);
 
@@ -198,7 +198,7 @@ test('driver details are not collected at bid time and are required before PICKE
   // A bid with driver fields must be silently stripped — the API contract
   // is "no driver at bid time".
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, {
-    amountAed: 650, etaMinutes: 40, truckType: 'CONTAINER_CHASSIS', driverName: 'Should Not Stick', driverPhone: '+971509998877',
+    amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS', driverName: 'Should Not Stick', driverPhone: '+971509998877',
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
   assert.equal(bidRes.body.bid.driver_name, null);

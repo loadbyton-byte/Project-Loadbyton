@@ -123,17 +123,17 @@ module.exports = function seed() {
       .prepare(
         `INSERT INTO jobs (job_code, shipper_id, carrier_id, container_size, container_type, container_number,
            pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, agreed_price_aed,
-           status, awarded_bid_id, requires_reefer, requires_hazmat, notes, free_time_days, demurrage_rate_aed,
+           status, awarded_bid_id, notes,
            escrow_status, delivered_at, auto_release_processed, payout_released_at, created_at, updated_at,
            equipment_type, container_count, truck_count, cargo_weight_tons,
            shipment_type, import_pickup_terminal, import_unloading_location, import_empty_return_location,
            export_empty_pickup_location, export_loading_location, export_deposit_terminal)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         j.code, shipperId, j.carrierId || null, j.size, j.type, j.number || null,
         legacyPickup, legacyArea, j.address, j.readyAt, j.deadline, j.budget || null, j.price || null,
-        j.status, null, j.reefer ? 1 : 0, j.hazmat ? 1 : 0, j.notes || null, j.freeDays ?? 5, j.demurrageRate ?? 400,
+        j.status, null, j.notes || null,
         j.escrow, j.deliveredAt || null, j.autoReleased ? 1 : 0, j.payoutReleasedAt || null,
         j.createdAt || sqliteTime(-10 * DAY), sqliteTime(-1 * DAY),
         j.equipment || 'CONTAINER_CHASSIS', j.containerCount ?? 1, j.truckCount ?? 1,
@@ -149,8 +149,8 @@ module.exports = function seed() {
   // flow instead, mirroring production behavior.
   function insertBid(jobId, carrierId, amount, eta, status, truckType) {
     const r = db
-      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, status) VALUES (?,?,?,?,?,?)')
-      .run(jobId, carrierId, amount, eta, truckType, status);
+      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, eta_at, truck_type, status) VALUES (?,?,?,?,?,?,?)')
+      .run(jobId, carrierId, amount, eta, new Date(Date.now() + eta * 60000).toISOString(), truckType, status);
     return Number(r.lastInsertRowid);
   }
 
@@ -180,8 +180,7 @@ module.exports = function seed() {
   const job2 = insertJob({
     code: 'LBT-DXB-2608-4933', size: '40FT', type: 'HAZMAT', number: 'TCLU5512309',
     pickup: 'JEBEL_ALI_T4', area: 'DUBAI_SOUTH', address: 'Plot 22, Dubai South Logistics District',
-    readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(3 * DAY), budget: 800, status: 'OPEN', escrow: 'PENDING',
-    hazmat: true, notes: 'Class 3 flammable liquid — placarding required. EXPORT: empty from Al Qusais Depot, load at Dubai South, deposit at JEBEL_ALI_T4.', weight: 22,
+    readyAt: sqliteTime(1 * DAY), deadline: sqliteTime(3 * DAY), budget: 800, status: 'OPEN', escrow: 'PENDING', notes: 'Class 3 flammable liquid — placarding required. EXPORT: empty from Al Qusais Depot, load at Dubai South, deposit at JEBEL_ALI_T4.', weight: 22,
     shipmentType: 'EXPORT', exportEmptyPickup: 'AL_QUSAIS_DEPOT', exportLoading: 'DUBAI_SOUTH', exportDeposit: 'JEBEL_ALI_T4',
   });
   insertBid(job2, emiratesId, 750, 40, 'PENDING', 'Hazmat-certified flatbed');
@@ -203,7 +202,7 @@ module.exports = function seed() {
     code: 'LBT-DXB-2608-2277', size: 'REEFER', type: 'REEFER', number: 'CMAU8827761',
     pickup: 'JEBEL_ALI_T2', area: 'AL_QUOZ', address: 'Al Quoz Cold Chain Hub, Bay 6',
     readyAt: sqliteTime(-2 * DAY), deadline: sqliteTime(1 * DAY), price: 1600, carrierId: gulfheavyId,
-    status: 'IN_TRANSIT', escrow: 'FUNDED', reefer: true, freeDays: 3, demurrageRate: 600,
+    status: 'IN_TRANSIT', escrow: 'FUNDED', 
     equipment: 'TRAILER_WITH_GENSET', containerCount: 1, truckCount: 1,
     notes: 'Maintain -18C chain of custody throughout. EXPORT: empty from Khalifa Depot, loaded at Al Quoz, deposited at JEBEL_ALI_T2.', weight: 26,
     shipmentType: 'EXPORT', exportEmptyPickup: 'KHALIFA_DEPOT', exportLoading: 'AL_QUOZ', exportDeposit: 'JEBEL_ALI_T2',

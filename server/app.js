@@ -66,7 +66,7 @@ const SEO_META = {
   '/features': { title: 'Features — Loadbyton', description: 'Escrow-backed drayage jobs, live tracking, contract lanes and a verified carrier network — everything Loadbyton ships.', slug: 'features' },
   '/pricing': { title: 'Pricing — Loadbyton', description: 'A transparent 6% take rate, no subscription. See how Loadbyton pricing compares to broker markups.', slug: 'pricing' },
   '/about': { title: 'About — Loadbyton', description: 'Loadbyton is a UAE container drayage marketplace built to make the second shipment happen on-platform, not on WhatsApp.', slug: 'about' },
-  '/blog': { title: 'Blog — Loadbyton', description: 'Notes on UAE drayage, demurrage, and building a freight marketplace that survives past the first job.', slug: 'blog' },
+  '/blog': { title: 'Blog — Loadbyton', description: 'Notes on UAE drayage logistics and building a freight marketplace that survives past the first job.', slug: 'blog' },
   '/security': { title: 'Security — Loadbyton', description: 'How Loadbyton protects account, financial, and shipment data — what is built today, and what is on the roadmap.', slug: 'security' },
   '/compliance': { title: 'Compliance — Loadbyton', description: 'How Loadbyton handles personal data under UAE PDPL, VAT invoicing, and where account data is hosted.', slug: 'compliance' },
   '/terms': { title: 'Terms of Service — Loadbyton', description: 'Loadbyton Terms of Service — governing your use of the UAE road freight & container drayage marketplace.', slug: 'terms' },

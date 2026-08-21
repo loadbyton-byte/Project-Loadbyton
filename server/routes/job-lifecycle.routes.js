@@ -24,9 +24,13 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   }
   const b = req.body || {};
   const amount = Number(b.amountAed);
-  const eta = Number(b.etaMinutes);
   if (!amount || amount <= 0) return sendError(res, 400, 'amountAed must be a positive number');
-  if (!eta || eta < 1 || eta > 600) return sendError(res, 400, 'etaMinutes must be between 1 and 600');
+  const etaAt = b.etaAt ? new Date(b.etaAt) : null;
+  if (!etaAt || isNaN(etaAt.getTime())) return sendError(res, 400, 'etaAt must be a valid date/time (ISO or datetime-local)');
+  const etaMs = etaAt.getTime() - Date.now();
+  if (etaMs < -3600000) return sendError(res, 400, 'etaAt cannot be more than an hour in the past');
+  if (etaMs > 90 * 86400000) return sendError(res, 400, 'etaAt cannot be more than 90 days out');
+  const legacyEtaMinutes = Math.max(0, Math.round(etaMs / 60000));
 
   // gstack review F5: without this a carrier could script unlimited bids on
   // the same job (notification spam, price signaling). Checked proactively
@@ -43,8 +47,8 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   let result;
   try {
     result = db
-      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, notes) VALUES (?,?,?,?,?,?)')
-      .run(job.id, req.user.id, amount, eta, b.truckType || null, b.notes || null);
+      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, eta_at, truck_type, notes) VALUES (?,?,?,?,?,?,?)')
+      .run(job.id, req.user.id, amount, legacyEtaMinutes, etaAt.toISOString(), b.truckType || null, b.notes || null);
   } catch (e) {
     if (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message)) {
       return sendError(res, 409, 'You already have a pending bid on this job — withdraw it before placing another.');
@@ -300,15 +304,11 @@ router.get('/api/jobs/:id/track', auth(), (req, res) => {
   const statusIndex = STATUS_ORDER.indexOf(job.status);
   const canProgress = req.user.role === 'CARRIER' && req.user.id === job.carrier_id && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status);
 
-  let demurrageExposure = 0;
   let hoursSinceDelivered = null;
   let autoReleaseAt = null;
   if (job.delivered_at) {
     const deliveredMs = new Date(job.delivered_at.replace(' ', 'T') + 'Z').getTime();
     hoursSinceDelivered = Math.max(0, (Date.now() - deliveredMs) / 3600000);
-    const daysSince = hoursSinceDelivered / 24;
-    const exceedDays = Math.max(0, Math.ceil(daysSince - job.free_time_days));
-    demurrageExposure = exceedDays * job.demurrage_rate_aed;
     autoReleaseAt = new Date(deliveredMs + auto_release_hours * 3600000).toISOString();
   }
 
@@ -318,7 +318,6 @@ router.get('/api/jobs/:id/track', auth(), (req, res) => {
     carrierName: carrier ? carrier.company_name : null,
     statusIndex,
     canProgress,
-    demurrageExposure,
     hoursSinceDelivered,
     autoReleaseAt,
     geofence: {

@@ -109,12 +109,12 @@ function createJobFromBody(b, req) {
     .prepare(
       `INSERT INTO jobs (job_code, shipper_id, contract_lane_id, template_id, container_size, container_type, container_number,
          pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, status, escrow_status,
-         requires_reefer, requires_hazmat, free_time_days, demurrage_rate_aed, notes, equipment_type, container_count, truck_count,
+         notes, equipment_type, container_count, truck_count,
          cargo_weight_tons,
          pickup_lat, pickup_lng, pickup_address_detail, delivery_lat, delivery_lng, delivery_address_detail,
          shipment_type, import_pickup_terminal, import_unloading_location, import_empty_return_location,
          export_empty_pickup_location, export_loading_location, export_deposit_terminal)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       code,
@@ -130,10 +130,6 @@ function createJobFromBody(b, req) {
       b.readyAt,
       b.deadline,
       b.maxBudgetAed ?? b.targetPriceAed ?? null,
-      b.requiresReefer ? 1 : 0,
-      b.requiresHazmat ? 1 : 0,
-      b.freeTimeDays ?? 5,
-      b.demurrageRateAed ?? 400,
       notes || null,
       equipmentType,
       containerCount,

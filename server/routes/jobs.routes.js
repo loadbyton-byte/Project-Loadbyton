@@ -107,6 +107,34 @@ router.post('/api/jobs/import', auth(['SHIPPER']), writeLimiter, requireSeatRole
   res.status(201).json({ results, created, failed: results.length - created });
 });
 
+const JOB_EDITABLE_FIELDS = {
+  shipmentType: 'shipment_type',
+  importPickupTerminal: 'import_pickup_terminal',
+  importUnloadingLocation: 'import_unloading_location',
+  importEmptyReturnLocation: 'import_empty_return_location',
+  exportEmptyPickupLocation: 'export_empty_pickup_location',
+  exportLoadingLocation: 'export_loading_location',
+  exportDepositTerminal: 'export_deposit_terminal',
+  pickupTerminal: 'pickup_terminal',
+  deliveryArea: 'delivery_area',
+  deliveryAddress: 'delivery_address',
+  containerNumber: 'container_number',
+  readyAt: 'ready_at',
+  deadline: 'deadline',
+  targetPriceAed: 'max_budget_aed',
+  notes: 'notes',
+  containerCount: 'container_count',
+  truckCount: 'truck_count',
+  cargoWeightTons: 'cargo_weight_tons',
+  pickupLat: 'pickup_lat',
+  pickupLng: 'pickup_lng',
+  pickupAddressDetail: 'pickup_address_detail',
+  deliveryLat: 'delivery_lat',
+  deliveryLng: 'delivery_lng',
+  deliveryAddressDetail: 'delivery_address_detail',
+};
+const COUNT_JOB_FIELDS = new Set(['containerCount', 'truckCount']);
+
 router.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, res) => {
   const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
@@ -170,7 +198,7 @@ router.get('/api/jobs/:id', auth(), (req, res) => {
     bids = bids.map((b) =>
       b.carrier_id === req.user.id
         ? b
-        : { ...b, amount_aed: null, eta_minutes: null, driver_name: null, notes: null, carrier_company: null, masked: true }
+        : { ...b, amount_aed: null, eta_at: null, eta_minutes: null, driver_name: null, notes: null, carrier_company: null, masked: true }
     );
   }
 
