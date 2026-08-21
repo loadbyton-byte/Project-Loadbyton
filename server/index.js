@@ -33,8 +33,10 @@ const PORT = Number(process.env.PORT) || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 // Extra browser origins allowed to call the API with credentials (e.g. the
 // Vercel deployment when it calls Render cross-origin instead of through a
-// same-origin proxy). Comma-separated list of exact origins.
-const ADDITIONAL_ORIGINS = (process.env.ADDITIONAL_ORIGINS || '')
+// same-origin proxy). Comma-separated list of exact origins. The production
+// Vercel URL is allowed by default so a stale render.yaml does not break
+// sign-in; override via ADDITIONAL_ORIGINS env if needed.
+const ADDITIONAL_ORIGINS = (process.env.ADDITIONAL_ORIGINS || 'https://claudeloadbyton.vercel.app')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
@@ -2953,8 +2955,14 @@ app.listen(PORT, () => {
   require('./seed')();
   // Top-up for databases that predate the current demo roster (seed() skips
   // when any user exists, which left the documented demo logins dead on the
-  // Render production disk). Opt-in via env so real deployments are unaffected.
-  if (process.env.SEED_DEMO_ACCOUNTS === '1') require('./seed').ensureDemoLogins();
+  // Render production disk). Runs unconditionally — it only inserts missing
+  // demo accounts and never touches existing data. SEED_DEMO_ACCOUNTS=0 can
+  // disable it for a real customer deployment.
+  if (process.env.SEED_DEMO_ACCOUNTS !== '0') {
+    try { require('./seed').ensureDemoLogins(); } catch (e) {
+      console.log(`[warning] ensureDemoLogins failed: ${e.message}`);
+    }
+  }
 });
 
 module.exports = app;
