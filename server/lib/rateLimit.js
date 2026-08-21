@@ -13,6 +13,13 @@
 // instance — move this to Redis at the same time as the Postgres port.
 
 function rateLimiter({ windowMs, max, keyFn, message }) {
+  // Redis path — share across 3 instances when REDIS_URL is set (see docs/enterprise-roadmap.md § Redis)
+  // Requires `ioredis` (npm i ioredis) and a Redis server (Render Redis, Upstash, or local).
+  // Falls back to in-memory Map when REDIS_URL is unset (single-instance dev/test).
+  let redis = null;
+  if (process.env.REDIS_URL) {
+    try { const IORedis = require('ioredis'); redis = new IORedis(process.env.REDIS_URL); redis.on('error', () => {}); } catch {}
+  }
   const hits = new Map();
 
   // Lazily sweep expired entries so this map doesn't grow unbounded under

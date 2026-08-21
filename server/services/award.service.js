@@ -10,7 +10,9 @@ async function awardJob(req, res, jobId, bidId) {
 
   try {
     db.exec('BEGIN');
-    const freshJob = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
+    const freshJob = db.isPostgres
+      ? db.prepare('SELECT * FROM jobs WHERE id=? FOR UPDATE').get(jobId)
+      : db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId); // Postgres row lock, SQLite serializes via single-writer
     if (freshJob.status !== 'OPEN') {
       db.exec('ROLLBACK');
       return sendError(res, 409, 'Job has already been awarded');
