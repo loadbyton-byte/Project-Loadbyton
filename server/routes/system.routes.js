@@ -6,6 +6,7 @@ const { sendError, asyncHandler } = require('../lib/http');
 const { referralCode, isPasswordValid, writeAudit, timingSafeEqualStr, notify } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
 const { runAutoReleaseSweep } = require('../services/escrow.service');
+const { publishScheduledJobs } = require('../services/scheduling.service');
 const bcrypt = require('bcryptjs');
 
 
@@ -31,6 +32,23 @@ router.post('/api/system/auto-release', (req, res) => {
 });
 
 setInterval(() => runAutoReleaseSweep(null), 10 * 60 * 1000).unref();
+
+router.post('/api/system/publish-scheduled', (req, res) => {
+  const key = req.headers['x-internal-key'];
+  let authorized = typeof key === 'string' && timingSafeEqualStr(key, INTERNAL_KEY);
+  if (!authorized) {
+    const token = req.cookies.lb_session;
+    const session = token && db.prepare('SELECT * FROM sessions WHERE session_token=?').get(token);
+    const user = session && db.prepare('SELECT * FROM users WHERE id=?').get(session.user_id);
+    if (user && user.role === 'ADMIN') authorized = true;
+  }
+  if (!authorized) return sendError(res, 403, 'Admin session or x-internal-key required');
+  const published = publishScheduledJobs(req);
+  res.json({ ok: true, published });
+});
+
+setInterval(() => publishScheduledJobs(null), 60 * 1000).unref();
+
 
 router.post(
   '/api/system/setup-admin',

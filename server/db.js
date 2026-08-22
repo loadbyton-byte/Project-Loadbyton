@@ -406,6 +406,15 @@ addColumn('profiles', 'processor_account_id', 'processor_account_id TEXT');
 // eta_minutes kept NOT NULL DEFAULT 0 for pre-existing schemas; eta_at is truth.
 addColumn('bids', 'eta_at', 'eta_at TEXT');
 
+// Local (inland, non-container) transport — loading -> delivery with any
+// road equipment (box truck, pickup, custom). Legacy pickup_terminal/
+// delivery_area are auto-backfilled so existing readers keep working.
+addColumn('jobs', 'loading_location', 'loading_location TEXT');
+addColumn('jobs', 'delivery_location', 'delivery_location TEXT');
+// Scheduled posting ("post later"): DRAFT jobs publish themselves when the
+// clock passes this timestamp (services/scheduling.service.js sweep).
+addColumn('jobs', 'scheduled_post_at', 'scheduled_post_at TEXT');
+
 // Shipment direction + 3-leg drayage model (CEO plan 2026-08-21). IMPORT is
 // terminal -> unloading -> empty return; EXPORT is empty pickup -> loading
 // -> terminal deposit. Existing pickup_terminal/delivery_area remain for

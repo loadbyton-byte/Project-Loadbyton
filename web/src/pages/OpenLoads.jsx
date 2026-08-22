@@ -81,7 +81,7 @@ export default function OpenLoads() {
         </Select>
         <Select value={shipmentFilter} onChange={(e) => setShipmentFilter(e.target.value)} className="w-auto">
           <option value="all">Shipment: All</option>
-          {SHIPMENT_TYPES.map((s) => <option key={s} value={s}>{s === 'IMPORT' ? 'Import' : 'Export'}</option>)}
+          {SHIPMENT_TYPES.map((s) => <option key={s} value={s}>{s === 'IMPORT' ? 'Import' : s === 'EXPORT' ? 'Export' : 'Local'}</option>)}
         </Select>
         <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-auto">
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -110,8 +110,8 @@ export default function OpenLoads() {
                     </div>
                   }
                   priceLabel={`Target ${formatAED(j.max_budget_aed)}`}
-                  origin={j.shipment_type === 'EXPORT' ? (j.export_empty_pickup_location ? depotLabel(j.export_empty_pickup_location) : formatLabel(j.pickup_terminal)) : formatLabel(j.import_pickup_terminal || j.pickup_terminal)}
-                  destination={j.shipment_type === 'EXPORT' ? formatLabel(j.export_deposit_terminal || j.pickup_terminal) : formatLabel(j.import_unloading_location || j.delivery_area)}
+                  origin={j.shipment_type === 'EXPORT' ? (j.export_empty_pickup_location ? depotLabel(j.export_empty_pickup_location) : formatLabel(j.pickup_terminal)) : j.shipment_type === 'LOCAL' ? formatLabel(j.loading_location || j.pickup_terminal) : formatLabel(j.import_pickup_terminal || j.pickup_terminal)}
+                  destination={j.shipment_type === 'EXPORT' ? formatLabel(j.export_deposit_terminal || j.pickup_terminal) : j.shipment_type === 'LOCAL' ? formatLabel(j.delivery_location || j.delivery_area) : formatLabel(j.import_unloading_location || j.delivery_area)}
                   chips={[
                     j.shipment_type || 'IMPORT',
                     CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
@@ -120,6 +120,7 @@ export default function OpenLoads() {
                     ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
                     ...(j.shipment_type === 'IMPORT' && j.import_empty_return_location ? [`→ ${depotLabel(j.import_empty_return_location)}`] : []),
                     ...(j.shipment_type === 'EXPORT' && j.export_loading_location ? [`via ${formatLabel(j.export_loading_location)}`] : []),
+                    ...(j.shipment_type === 'LOCAL' && j.ready_at ? [`loads ${new Date(j.ready_at).toLocaleDateString()}`] : []),
                   ]}
                   meta={
                     <span className="flex items-center justify-between">

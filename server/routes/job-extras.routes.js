@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const db = require('../db');
 const { sendError } = require('../lib/http');
 const { BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM, TERMINAL_EMIRATE, AREA_EMIRATE, DOC_TYPES } = require('../lib/constants');
-const { UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob } = require('../lib/helpers');
+const { saveUploadedFile, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();

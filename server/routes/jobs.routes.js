@@ -132,6 +132,8 @@ const JOB_EDITABLE_FIELDS = {
   deliveryLat: 'delivery_lat',
   deliveryLng: 'delivery_lng',
   deliveryAddressDetail: 'delivery_address_detail',
+  loadingLocation: 'loading_location',
+  deliveryLocation: 'delivery_location',
 };
 const COUNT_JOB_FIELDS = new Set(['containerCount', 'truckCount']);
 

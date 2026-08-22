@@ -2,7 +2,11 @@ export const CONTAINER_SIZES = ['20FT', '40FT', '40HC', 'REEFER'];
 export const CONTAINER_TYPES = ['DRY', 'REEFER', 'HAZMAT', 'OPEN_TOP', 'FLAT_RACK'];
 export const TERMINALS = ['JEBEL_ALI_T1', 'JEBEL_ALI_T2', 'JEBEL_ALI_T4', 'KHALIFA_PORT', 'PORT_KHALID', 'FUJAIRAH_PORT'];
 export const AREAS = ['AL_QUOZ', 'JAFZA_SOUTH', 'DUBAI_SOUTH', 'DIP', 'AL_QUSAIS', 'MUSAFFAH', 'SHARJAH_INDUSTRIAL', 'FUJAIRAH_FREEZONE'];
-export const SHIPMENT_TYPES = ['IMPORT', 'EXPORT'];
+export const SHIPMENT_TYPES = ['IMPORT', 'EXPORT', 'LOCAL'];
+
+export function shipmentTypeLabel(st) {
+  return { IMPORT: 'Import — Terminal → Customer → Depot', EXPORT: 'Export — Depot → Shipper → Terminal', LOCAL: 'Local — Loading → Delivery' }[st] || st;
+}
 export const DEPOTS = ['JAFZA_DEPOT', 'AL_QUSAIS_DEPOT', 'KHALIFA_DEPOT', 'SHARJAH_DEPOT', 'FUJAIRAH_DEPOT', 'DIP_DEPOT', 'MUSAFFAH_DEPOT'];
 
 export const SHIPMENT_TYPE_LABELS = { IMPORT: 'Import', EXPORT: 'Export' };

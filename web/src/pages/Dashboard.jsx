@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import {
-  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, STATUS_FLOW,
+  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, STATUS_FLOW, shipmentTypeLabel,
   equipmentLabel, formatAED, formatDate, formatLabel, depotLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
@@ -23,6 +23,7 @@ const SORT_OPTIONS = [
 
 const emptyJob = {
   shipmentType: 'IMPORT',
+  loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
   equipmentType: 'CONTAINER_CHASSIS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
   deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
@@ -99,13 +100,32 @@ export default function Dashboard() {
         cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
         containerCount: Number(form.containerCount) || 1,
         truckCount: Number(form.truckCount) || 1,
+        scheduledPostAt: form.scheduleForLater && form.scheduledPostAt ? new Date(form.scheduledPostAt).toISOString() : undefined,
       });
+      const jobId = created.job?.id;
+      if (form.packingList && jobId) {
+        const b64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+          reader.onerror = reject;
+          reader.readAsDataURL(form.packingList);
+        });
+        if (b64) {
+          try {
+            await api.addDocument(jobId, { title: 'Packing list', docType: 'PACKING_LIST', mimeType: 'application/pdf', fileBase64: b64 });
+          } catch (uploadErr) {
+            addToast({ type: 'system_message', title: 'Packing list upload failed', body: uploadErr.message });
+          }
+        }
+      }
       setForm(emptyJob);
       setShowForm(false);
       addToast({
         type: 'status_change',
-        title: 'Job posted',
-        body: `${created.job?.job_code || 'New job'} posted successfully`,
+        title: form.scheduleForLater ? 'Scheduled' : 'Job posted',
+        body: form.scheduleForLater
+          ? `${created.job?.job_code || 'New job'} will publish automatically at the chosen time`
+          : `${created.job?.job_code || 'New job'} posted successfully`,
       });
       load();
     } catch (err) {
@@ -221,17 +241,32 @@ export default function Dashboard() {
                       className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
                       style={form.shipmentType === st ? { background: 'var(--bg-raised)', borderColor: 'var(--border-default)' } : {}}
                     >
-                      {st === 'IMPORT' ? 'Import — Terminal → Customer → Depot' : 'Export — Depot → Shipper → Terminal'}
+                      {shipmentTypeLabel(st)}
                     </button>
                   ))}
                 </div>
                 <p className="mt-1 text-xs text-ink-muted">
                   {form.shipmentType === 'IMPORT'
                     ? 'Container is picked at the port terminal, delivered to your customer, empty returns to depot.'
-                    : 'Empty is picked at depot, loaded at your site, then deposited at the port.'}
+                    : form.shipmentType === 'EXPORT'
+                      ? 'Empty is picked at depot, loaded at your site, then deposited at the port.'
+                      : 'Inland move with any road equipment — box truck, pickup, flatbed or custom. No container needed.'}
                 </p>
               </div>
-              {form.shipmentType === 'IMPORT' ? (
+              {form.shipmentType === 'LOCAL' ? (
+                <>
+                  <div>
+                    <Label>Loading location <span className="text-status-danger">*</span></Label>
+                    <Input required value={form.loadingLocation} onChange={(e) => setForm({ ...form, loadingLocation: e.target.value, pickupTerminal: e.target.value })} placeholder="Warehouse, yard, site — e.g. Al Quoz Industrial 3" />
+                    <p className="mt-1 text-xs text-ink-muted">Where the truck loads your cargo.</p>
+                  </div>
+                  <div>
+                    <Label>Delivery location <span className="text-status-danger">*</span></Label>
+                    <Input required value={form.deliveryLocation} onChange={(e) => setForm({ ...form, deliveryLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value })} placeholder="Drop-off address or area" />
+                    <p className="mt-1 text-xs text-ink-muted">Where the cargo is unloaded.</p>
+                  </div>
+                </>
+              ) : form.shipmentType === 'IMPORT' ? (
                 <>
                   <div>
                     <Label>Container pickup at terminal <span className="text-status-danger">*</span></Label>
@@ -291,7 +326,7 @@ export default function Dashboard() {
                 <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
               </div>
               <div>
-                <Label>Ready at</Label>
+                <Label>{form.shipmentType === 'LOCAL' ? 'Loading date & time' : 'Ready at'}</Label>
                 <Input type="datetime-local" required value={form.readyAt} onChange={(e) => setForm({ ...form, readyAt: e.target.value })} />
               </div>
               <div>
@@ -317,11 +352,27 @@ export default function Dashboard() {
                 <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
                 <p className="mt-1 text-xs text-ink-muted">The price you're targeting for this trip — not a hard cap; higher bids still arrive, flagged.</p>
               </div>
-              <div className="flex flex-wrap items-end gap-4 pb-2">
+              <div className="sm:col-span-2 grid gap-3 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
+                <div>
+                  <Label>Packing list (PDF, optional)</Label>
+                  <input
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => setForm({ ...form, packingList: e.target.files && e.target.files[0] ? e.target.files[0] : null })}
+                    className="mt-1 block w-full text-sm text-ink-secondary file:mr-3 file:rounded-md file:border-0 file:bg-[var(--brand-accent)] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
+                  />
+                  <p className="mt-1 text-xs text-ink-muted">Attached to this job; the awarded carrier sees it once you confirm their bid.</p>
+                </div>
                 <label className="flex items-center gap-2 text-sm text-ink-secondary">
+                  <input type="checkbox" checked={form.scheduleForLater} onChange={(e) => setForm({ ...form, scheduleForLater: e.target.checked })} /> Post later (schedule publishing)
                 </label>
-                <label className="flex items-center gap-2 text-sm text-ink-secondary">
-                </label>
+                {form.scheduleForLater && (
+                  <div>
+                    <Label>Publish at</Label>
+                    <Input type="datetime-local" required value={form.scheduledPostAt} onChange={(e) => setForm({ ...form, scheduledPostAt: e.target.value })} />
+                    <p className="mt-1 text-xs text-ink-muted">Job stays a private draft until this time, then goes live to carriers automatically.</p>
+                  </div>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <Label>{CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 'Notes (optional)' : 'Cargo description'}</Label>

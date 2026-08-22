@@ -16,7 +16,7 @@ function createJobFromBody(b, req) {
   // Backward compat: old clients send no shipmentType, treat as IMPORT with legacy fields.
   const rawShipmentType = b.shipmentType || b.shipment_type || null;
   const shipmentType = rawShipmentType ? String(rawShipmentType).toUpperCase() : null;
-  if (shipmentType && !SHIPMENT_TYPES.includes(shipmentType)) throw { status: 400, message: 'shipmentType must be IMPORT or EXPORT' };
+  if (shipmentType && !SHIPMENT_TYPES.includes(shipmentType)) throw { status: 400, message: 'shipmentType must be IMPORT, EXPORT or LOCAL' };
   const effectiveShipmentType = shipmentType || 'IMPORT';
 
   // Leg fields — support both camelCase (web) and snake_case (CSV/db)
@@ -29,8 +29,20 @@ function createJobFromBody(b, req) {
 
   // Validate legs when shipmentType is explicitly provided (new UI); legacy payloads without
   // shipmentType bypass leg validation to keep existing tests and CSV imports working.
+  const loadingLocation = b.loadingLocation || null;
+  const deliveryLocation = b.deliveryLocation || null;
+
+  // Scheduled ("post later") — future timestamp keeps the job in DRAFT; the
+  // sweep flips it to OPEN at the chosen time. Past/absent posts immediately.
+  let scheduledPostAt = b.scheduledPostAt ? new Date(b.scheduledPostAt) : null;
+  if (scheduledPostAt && isNaN(scheduledPostAt.getTime())) throw { status: 400, message: 'scheduledPostAt must be a valid date/time' };
+  const isScheduled = Boolean(scheduledPostAt && scheduledPostAt.getTime() > Date.now() + 60000);
+
   if (shipmentType) {
-    if (effectiveShipmentType === 'IMPORT') {
+    if (effectiveShipmentType === 'LOCAL') {
+      if (!loadingLocation) throw { status: 400, message: 'loadingLocation is required for LOCAL' };
+      if (!deliveryLocation) throw { status: 400, message: 'deliveryLocation is required for LOCAL' };
+    } else if (effectiveShipmentType === 'IMPORT') {
       if (!importPickupTerminal) throw { status: 400, message: 'importPickupTerminal is required for IMPORT' };
       if (!importUnloadingLocation) throw { status: 400, message: 'importUnloadingLocation is required for IMPORT' };
       if (!importEmptyReturnLocation) throw { status: 400, message: 'importEmptyReturnLocation is required for IMPORT (empty container return depot)' };
@@ -55,6 +67,11 @@ function createJobFromBody(b, req) {
       pickupTerminal = pickupTerminal || exportDepositTerminal;
       deliveryArea = deliveryArea || exportLoadingLocation;
       deliveryAddress = deliveryAddress || exportLoadingLocation;
+    }
+    if (effectiveShipmentType === 'LOCAL') {
+      pickupTerminal = pickupTerminal || loadingLocation;
+      deliveryArea = deliveryArea || deliveryLocation;
+      deliveryAddress = deliveryAddress || deliveryLocation;
     }
   }
   const required = ['pickupTerminal', 'deliveryArea', 'deliveryAddress', 'readyAt', 'deadline'];
@@ -113,8 +130,9 @@ function createJobFromBody(b, req) {
          cargo_weight_tons,
          pickup_lat, pickup_lng, pickup_address_detail, delivery_lat, delivery_lng, delivery_address_detail,
          shipment_type, import_pickup_terminal, import_unloading_location, import_empty_return_location,
-         export_empty_pickup_location, export_loading_location, export_deposit_terminal)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         export_empty_pickup_location, export_loading_location, export_deposit_terminal,
+         loading_location, delivery_location, scheduled_post_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       code,
@@ -130,6 +148,7 @@ function createJobFromBody(b, req) {
       b.readyAt,
       b.deadline,
       b.maxBudgetAed ?? b.targetPriceAed ?? null,
+      isScheduled ? 'DRAFT' : 'OPEN',
       notes || null,
       equipmentType,
       containerCount,
@@ -147,7 +166,10 @@ function createJobFromBody(b, req) {
       importEmptyReturnLocation || null,
       exportEmptyPickupLocation || null,
       exportLoadingLocation || null,
-      exportDepositTerminal || null
+      exportDepositTerminal || null,
+      effectiveShipmentType === 'LOCAL' ? loadingLocation : null,
+      effectiveShipmentType === 'LOCAL' ? deliveryLocation : null,
+      isScheduled ? scheduledPostAt.toISOString() : null
     );
   const jobId = Number(result.lastInsertRowid);
   writeAudit(req, { userId: req.actorId, action: 'JOB_CREATE', details: `${code} posted`, entityType: 'job', entityId: jobId, afterState: 'OPEN' });

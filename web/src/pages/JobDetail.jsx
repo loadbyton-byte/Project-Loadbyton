@@ -150,7 +150,7 @@ export default function JobDetail() {
         <div>
           <p className="font-mono text-xs text-ink-muted">{job.job_code}</p>
           <h1 className="mt-1 font-display text-2xl font-semibold text-ink">
-            <span className="mr-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-100)' : 'var(--lb-orange-100)', color: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-700)' : 'var(--lb-orange-700)' }}>{job.shipment_type || 'IMPORT'}</span>
+            <span className="mr-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-100)' : job.shipment_type === 'LOCAL' ? 'var(--status-success-bg)' : 'var(--lb-orange-100)', color: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-700)' : job.shipment_type === 'LOCAL' ? 'var(--status-success)' : 'var(--lb-orange-700)' }}>{job.shipment_type || 'IMPORT'}{job.status === 'DRAFT' && job.scheduled_post_at ? ` · publishes ${formatDateTime(job.scheduled_post_at)}` : ''}</span>
             {CONTAINER_EQUIPMENT.includes(job.equipment_type) ? `${job.container_size} ${formatLabel(job.container_type)}` : equipmentLabel(job.equipment_type)} · {formatLabel(job.pickup_terminal)} → {formatLabel(job.delivery_area)}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -215,7 +215,26 @@ export default function JobDetail() {
           </Section>
 
           <Section title="Shipment legs">
-            {job.shipment_type === 'EXPORT' ? (
+            {job.shipment_type === 'LOCAL' ? (
+              <div className="grid gap-3">
+                <div className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: 'var(--brand-primary)' }}>1</span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Loading location</p>
+                    <p className="font-medium text-ink">{formatLabel(job.loading_location || job.pickup_terminal)}</p>
+                    {job.ready_at && <p className="text-sm text-ink-secondary">Loading {formatDateTime(job.ready_at)}</p>}
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: 'var(--lb-orange-600)' }}>2</span>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Delivery location</p>
+                    <p className="font-medium text-ink">{formatLabel(job.delivery_location || job.delivery_area)}</p>
+                    {job.delivery_address && <p className="text-sm text-ink-secondary">{job.delivery_address}</p>}
+                  </div>
+                </div>
+              </div>
+            ) : job.shipment_type === 'EXPORT' ? (
               <div className="grid gap-3">
                 <div className="flex gap-3">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: 'var(--lb-ink-900)' }}>1</span>
@@ -513,6 +532,8 @@ function toDatetimeLocal(raw) {
 function JobEditForm({ job, onDone, onCancel }) {
   const [form, setForm] = useState({
     shipmentType: job.shipment_type || 'IMPORT',
+    loadingLocation: job.loading_location || '',
+    deliveryLocation: job.delivery_location || '',
     importPickupTerminal: job.import_pickup_terminal || job.pickup_terminal,
     importUnloadingLocation: job.import_unloading_location || job.delivery_area,
     importEmptyReturnLocation: job.import_empty_return_location || 'JAFZA_DEPOT',
@@ -561,7 +582,18 @@ function JobEditForm({ job, onDone, onCancel }) {
           <button type="button" onClick={() => setForm({ ...form, shipmentType: 'EXPORT' })} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold ${form.shipmentType === 'EXPORT' ? 'bg-white shadow text-ink' : 'text-ink-muted'}`}>Export</button>
         </div>
       </div>
-      {form.shipmentType === 'IMPORT' ? (
+      {form.shipmentType === 'LOCAL' ? (
+        <>
+          <div>
+            <Label>Loading location</Label>
+            <Input value={form.loadingLocation} onChange={(e) => setForm({ ...form, loadingLocation: e.target.value, pickupTerminal: e.target.value })} />
+          </div>
+          <div>
+            <Label>Delivery location</Label>
+            <Input value={form.deliveryLocation} onChange={(e) => setForm({ ...form, deliveryLocation: e.target.value, deliveryArea: e.target.value })} />
+          </div>
+        </>
+      ) : form.shipmentType === 'IMPORT' ? (
         <>
           <div>
             <Label>Container pickup at terminal</Label>
