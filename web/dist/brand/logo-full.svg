@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" role="img" aria-label="Loadbyton">
+  <!-- Full lockup for light surfaces: the "LOAD | BY | TON" wordmark, navy
+       type, split by two Loadbyton Red divider bars. -->
+  <rect width="400" height="120" fill="none" />
+  <text x="20" y="80" font-family="sans-serif" font-weight="900" font-size="60" letter-spacing="4" fill="#0F2B3D">LOAD</text>
+  <line x1="210" y1="30" x2="210" y2="90" stroke="#E53935" stroke-width="4" />
+  <text x="220" y="55" font-family="sans-serif" font-weight="900" font-size="22" fill="#0F2B3D">B</text>
+  <text x="220" y="85" font-family="sans-serif" font-weight="900" font-size="22" fill="#0F2B3D">Y</text>
+  <line x1="255" y1="30" x2="255" y2="90" stroke="#E53935" stroke-width="4" />
+  <text x="270" y="80" font-family="sans-serif" font-weight="900" font-size="60" letter-spacing="4" fill="#0F2B3D">TON</text>
+</svg>

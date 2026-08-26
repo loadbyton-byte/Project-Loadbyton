@@ -12,11 +12,14 @@ const {
   createSession, clearSessionCookie,
 } = require('../lib/helpers');
 const { auth, requireSeatRole, isThrottled, recordFailure, clearThrottle } = require('../middleware/auth');
+const { rateLimiter, byIp } = require('../lib/rateLimit');
 
 const router = require('express').Router();
+const authIpLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20, keyFn: byIp, message: 'Too many auth requests. Please slow down.' });
 
 router.post(
   '/api/auth/register',
+  authIpLimiter,
   asyncHandler(async (req, res) => {
     const { email, password, role, companyName, phone, trnNumber, tradeLicenseNumber, referralCode: incomingReferral } = req.body || {};
     if (!email || !password || !companyName) return sendError(res, 400, 'email, password and companyName are required');
@@ -152,6 +155,7 @@ router.post(
 
 router.post(
   '/api/auth/login',
+  authIpLimiter,
   asyncHandler(async (req, res) => {
     const { email, password, totpCode } = req.body || {};
     if (!email || !password) return sendError(res, 400, 'email and password are required');
@@ -197,7 +201,7 @@ router.post(
   })
 );
 
-router.get('/api/auth/me', auth(), (req, res) => {
+router.get('/api/auth/me', authIpLimiter, auth(), (req, res) => {
   const impersonatingAdminId = req.session.impersonating_admin_id;
   const impersonatedBy = impersonatingAdminId
     ? db.prepare('SELECT id, email FROM users WHERE id=?').get(impersonatingAdminId)
