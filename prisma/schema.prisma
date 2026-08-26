@@ -1,0 +1,478 @@
+// Prisma schema — mirrors server/db.js + DATA_MODEL.md for Supabase/AWS RDS
+// Usage: DATABASE_URL=postgresql://... npx prisma migrate deploy
+// SQLite remains default when DATABASE_URL is unset — see server/lib/database.js
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      Int       @id @default(autoincrement())
+  email                   String    @unique
+  passwordHash            String    @map("password_hash")
+  role                    String    // SHIPPER | CARRIER | ADMIN | DRIVER
+  isVerified              Int       @default(0) @map("is_verified")
+  mfaEnabled              Int       @default(0) @map("mfa_enabled")
+  mfaSecret               String?   @map("mfa_secret")
+  tier                    String    @default("BRONZE")
+  referralCode            String?   @unique @map("referral_code")
+  referredBy              String?   @map("referred_by")
+  orgOwnerId              Int?      @map("org_owner_id")
+  seatRole                String?   @map("seat_role")
+  isActive                Int       @default(1) @map("is_active")
+  displayName             String?   @map("display_name")
+  emailVerifiedAt         String?   @map("email_verified_at")
+  emailVerifyTokenHash    String?   @map("email_verify_token_hash")
+  emailVerifyExpires      String?   @map("email_verify_expires")
+  passwordResetTokenHash  String?   @map("password_reset_token_hash")
+  passwordResetExpires    String?   @map("password_reset_expires")
+  notificationPrefsDisabled String @default("") @map("notification_prefs_disabled")
+  accountApprovalStatus   String    @default("APPROVED") @map("account_approval_status")
+  accountApprovedAt       String?   @map("account_approved_at")
+  createdAt               String    @default(dbgenerated("datetime('now')")) @map("created_at")
+
+  profile Profile?
+  sessions Session[]
+  org Seats Seat[]
+
+  @@map("users")
+}
+
+model Profile {
+  id                  Int     @id @default(autoincrement())
+  userId              Int     @unique @map("user_id")
+  companyName         String  @map("company_name")
+  trnNumber           String? @map("trn_number")
+  tradeLicenseNumber  String? @map("trade_license_number")
+  phone               String?
+  iban                String?
+  coverageZones       String? @map("coverage_zones")
+  fleetSize           Int     @default(0) @map("fleet_size")
+  ownedChassis        Int     @default(0) @map("owned_chassis")
+  insuranceUploaded   Int     @default(0) @map("insurance_uploaded")
+  ratingAvg           Float   @default(5.0) @map("rating_avg")
+  completedJobs       Int     @default(0) @map("completed_jobs")
+  verifiedAt          String? @map("verified_at")
+  processorAccountId  String? @map("processor_account_id")
+  // encrypted fields are stored as enc:v1:… ciphertext — see server/lib/crypto.js
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("profiles")
+}
+
+model Session {
+  id                    Int     @id @default(autoincrement())
+  sessionToken          String  @unique @map("session_token")
+  userId                Int     @map("user_id")
+  actingSeatId          Int?    @map("acting_seat_id")
+  impersonatingAdminId  Int?    @map("impersonating_admin_id")
+  createdAt             String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  expiresAt             String  @map("expires_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Job {
+  id                          Int     @id @default(autoincrement())
+  jobCode                     String  @unique @map("job_code")
+  shipperId                   Int     @map("shipper_id")
+  carrierId                   Int?    @map("carrier_id")
+  contractLaneId              Int?    @map("contract_lane_id")
+  templateId                  Int?    @map("template_id")
+  containerSize               String  @map("container_size")
+  containerType               String  @map("container_type")
+  containerNumber             String? @map("container_number")
+  pickupTerminal              String  @map("pickup_terminal")
+  deliveryArea                String  @map("delivery_area")
+  deliveryAddress             String  @map("delivery_address")
+  readyAt                     String  @map("ready_at")
+  deadline                    String  @map("deadline")
+  maxBudgetAed                Float?  @map("max_budget_aed")
+  agreedPriceAed              Float?  @map("agreed_price_aed")
+  status                      String  @default("OPEN")
+  awardedBidId                Int?    @map("awarded_bid_id")
+  notes                       String?
+  escrowStatus                String  @default("PENDING") @map("escrow_status")
+  deliveredAt                 String? @map("delivered_at")
+  autoReleaseProcessed        Int     @default(0) @map("auto_release_processed")
+  payoutReleasedAt            String? @map("payout_released_at")
+  containerCount              Int     @default(1) @map("container_count")
+  truckCount                  Int     @default(1) @map("truck_count")
+  equipmentType               String  @default("CONTAINER_CHASSIS") @map("equipment_type")
+  cargoWeightTons             Float?  @map("cargo_weight_tons")
+  assignedDriverName          String? @map("assigned_driver_name")
+  assignedDriverPhone         String? @map("assigned_driver_phone")
+  pickupLat                   Float?  @map("pickup_lat")
+  pickupLng                   Float?  @map("pickup_lng")
+  pickupAddressDetail         String? @map("pickup_address_detail")
+  deliveryLat                 Float?  @map("delivery_lat")
+  deliveryLng                 Float?  @map("delivery_lng")
+  deliveryAddressDetail       String? @map("delivery_address_detail")
+  shipmentType                String  @default("IMPORT") @map("shipment_type")
+  importPickupTerminal        String? @map("import_pickup_terminal")
+  importUnloadingLocation     String? @map("import_unloading_location")
+  importEmptyReturnLocation   String? @map("import_empty_return_location")
+  exportEmptyPickupLocation   String? @map("export_empty_pickup_location")
+  exportLoadingLocation       String? @map("export_loading_location")
+  exportDepositTerminal       String? @map("export_deposit_terminal")
+  loadingLocation             String? @map("loading_location")
+  deliveryLocation            String? @map("delivery_location")
+  scheduledPostAt             String? @map("scheduled_post_at")
+  processorPaymentRef         String? @map("processor_payment_ref")
+  processorTranref            String? @map("processor_tranref")
+  processorPaymentStatus      String  @default("PENDING") @map("processor_payment_status")
+  processorAmountAed          Float?  @map("processor_amount_aed")
+  processorLastError          String? @map("processor_last_error")
+  // Phase 4: global currency + tax
+  currency                    String  @default("AED") @map("currency")
+  countryCode                 String  @default("AE") @map("country_code")
+  taxRateBps                  Int     @default(500) @map("tax_rate_bps")
+  taxAmount                   Float?  @map("tax_amount")
+  // Phase 4: enterprise
+  dpWorldEToken               String? @map("dp_world_e_token")
+  eirPhotos                   String? @map("eir_photos") // JSON array of storage paths
+  detentionFreeDays           Int     @default(5) @map("detention_free_days")
+  // Phase 2: stop-loss buffer
+  incidentalsBufferAed        Float?  @map("incidentals_buffer_aed")
+  bufferReleased              Int     @default(0) @map("buffer_released")
+  // Phase 5: audit chain
+  ledgerHash                  String? @map("ledger_hash")
+  prevLedgerHash              String? @map("prev_ledger_hash")
+  createdAt                   String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  updatedAt                   String  @default(dbgenerated("datetime('now')")) @map("updated_at")
+
+  bids Bid[]
+  documents JobDocument[]
+  messages Message[]
+  ratings Rating[]
+  payouts Payout[]
+  disputes Dispute[]
+
+  @@index([shipperId])
+  @@index([carrierId])
+  @@index([status])
+  @@map("jobs")
+}
+
+model Bid {
+  id           Int     @id @default(autoincrement())
+  jobId        Int     @map("job_id")
+  carrierId    Int     @map("carrier_id")
+  amountAed    Float   @map("amount_aed")
+  etaMinutes   Int     @default(0) @map("eta_minutes")
+  etaAt        String? @map("eta_at")
+  truckType    String? @map("truck_type")
+  driverName   String? @map("driver_name")
+  driverPhone  String? @map("driver_phone")
+  notes        String?
+  status       String  @default("PENDING")
+  createdAt    String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  updatedAt    String  @default(dbgenerated("datetime('now')")) @map("updated_at")
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@index([jobId])
+  @@index([carrierId])
+  @@map("bids")
+}
+
+model JobDocument {
+  id          Int     @id @default(autoincrement())
+  jobId       Int     @map("job_id")
+  uploaderId  Int     @map("uploader_id")
+  docType     String  @map("doc_type")
+  title       String
+  fileUrl     String  @map("file_url")
+  storagePath String? @map("storage_path")
+  mimeType    String? @map("mime_type")
+  createdAt   String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@index([jobId])
+  @@map("job_documents")
+}
+
+model Message {
+  id        Int     @id @default(autoincrement())
+  jobId     Int     @map("job_id")
+  senderId  Int     @map("sender_id")
+  content   String
+  isRead    Int     @default(0) @map("is_read")
+  createdAt String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@index([jobId])
+  @@map("messages")
+}
+
+model Rating {
+  id        Int     @id @default(autoincrement())
+  jobId     Int     @map("job_id")
+  raterId   Int     @map("rater_id")
+  rateeId   Int     @map("ratee_id")
+  score     Int
+  comment   String?
+  createdAt String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@index([jobId])
+  @@map("ratings")
+}
+
+model Template {
+  id               Int     @id @default(autoincrement())
+  shipperId        Int     @map("shipper_id")
+  name             String
+  pickupTerminal   String  @map("pickup_terminal")
+  deliveryArea     String  @map("delivery_area")
+  deliveryAddress  String  @map("delivery_address")
+  containerSize    String  @map("container_size")
+  containerType    String  @default("DRY") @map("container_type")
+  cadence          String  @default("ONCE")
+  notes            String?
+  createdAt        String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  @@index([shipperId])
+  @@map("templates")
+}
+
+model ContractLane {
+  id              Int     @id @default(autoincrement())
+  shipperId       Int     @map("shipper_id")
+  pickupTerminal  String  @map("pickup_terminal")
+  deliveryArea    String  @map("delivery_area")
+  deliveryAddress String  @map("delivery_address")
+  monthlyLoads    Int     @map("monthly_loads")
+  targetPriceAed  Float?  @map("target_price_aed")
+  status          String  @default("ACTIVE")
+  createdAt       String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  @@index([shipperId])
+  @@map("contract_lanes")
+}
+
+model Payout {
+  id                    Int     @id @default(autoincrement())
+  jobId                 Int     @map("job_id")
+  carrierId             Int     @map("carrier_id")
+  grossAed              Float   @map("gross_aed")
+  platformFeeAed        Float   @map("platform_fee_aed")
+  netAed                Float   @map("net_aed")
+  status                String  @default("PENDING")
+  releaseType           String? @map("release_type")
+  releasedAt            String? @map("released_at")
+  slaDeadline           String? @map("sla_deadline")
+  transferExecutedAt    String? @map("transfer_executed_at")
+  transferReference     String? @map("transfer_reference")
+  processorPayoutStatus String  @default("PENDING") @map("processor_payout_status")
+  processorPayoutRef    String? @map("processor_payout_ref")
+  createdAt             String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  job Job @relation(fields: [jobId], references: [id])
+  @@index([carrierId])
+  @@index([jobId])
+  @@map("payouts")
+}
+
+model Dispute {
+  id            Int     @id @default(autoincrement())
+  jobId         Int     @map("job_id")
+  openedBy      Int     @map("opened_by")
+  reason        String
+  status        String  @default("OPEN")
+  determination String?
+  decision      String?
+  resolvedBy    Int?    @map("resolved_by")
+  resolvedAt    String? @map("resolved_at")
+  createdAt     String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  job Job @relation(fields: [jobId], references: [id])
+  @@index([jobId])
+  @@map("disputes")
+}
+
+model AuditLog {
+  id          Int     @id @default(autoincrement())
+  userId      Int?    @map("user_id")
+  action      String
+  details     String?
+  entityType  String? @map("entity_type")
+  entityId    Int?    @map("entity_id")
+  beforeState String? @map("before_state")
+  afterState  String? @map("after_state")
+  requestId   String? @map("request_id")
+  prevHash    String? @map("prev_hash")
+  hash        String? // SHA-256 chain
+  createdAt   String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  @@map("audit_log")
+}
+
+model Notification {
+  id        Int     @id @default(autoincrement())
+  userId    Int     @map("user_id")
+  title     String
+  body      String?
+  jobId     Int?    @map("job_id")
+  isRead    Int     @default(0) @map("is_read")
+  type      String  @default("system")
+  createdAt String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Setting {
+  key   String @id
+  value String
+  @@map("settings")
+}
+
+model Invoice {
+  id           Int     @id @default(autoincrement())
+  invoiceNumber String @unique @map("invoice_number")
+  payoutId     Int     @map("payout_id")
+  jobId        Int     @map("job_id")
+  carrierId    Int     @map("carrier_id")
+  supplierTrn  String? @map("supplier_trn")
+  customerTrn  String? @map("customer_trn")
+  grossAed     Float   @map("gross_aed")
+  commissionAed Float  @map("commission_aed")
+  vatRateBps   Int     @map("vat_rate_bps")
+  taxableAed   Float   @map("taxable_aed")
+  vatAed       Float   @map("vat_aed")
+  totalAed     Float   @map("total_aed")
+  issuedAt     String  @default(dbgenerated("datetime('now')")) @map("issued_at")
+  @@index([carrierId])
+  @@map("invoices")
+}
+
+// Phase 3: location tracking
+model LocationLog {
+  id        Int     @id @default(autoincrement())
+  jobId     Int     @map("job_id")
+  carrierId Int     @map("carrier_id")
+  lat       Float
+  lng       Float
+  speed     Float?
+  heading   Float?
+  recordedAt String @default(dbgenerated("datetime('now')")) @map("recorded_at")
+  @@index([jobId])
+  @@map("location_logs")
+}
+
+model TelematicsLog {
+  id           Int     @id @default(autoincrement())
+  jobId        Int?    @map("job_id")
+  deviceId     String  @map("device_id")
+  lat          Float
+  lng          Float
+  speed        Float?
+  temperature  Float?  @map("temperature")
+  fuelLevel    Float?  @map("fuel_level")
+  recordedAt   String  @default(dbgenerated("datetime('now')")) @map("recorded_at")
+  rawPayload   String? @map("raw_payload")
+  @@index([jobId])
+  @@map("telematics_logs")
+}
+
+// Phase 4: RFPs
+model ContractRfp {
+  id              Int     @id @default(autoincrement())
+  shipperId       Int     @map("shipper_id")
+  title           String
+  description     String?
+  origin          String
+  destination     String
+  totalContainers Int     @map("total_containers")
+  durationMonths  Int     @map("duration_months")
+  budgetAed       Float   @map("budget_aed")
+  status          String  @default("OPEN") // OPEN | AWARDED | CLOSED
+  awardedCarrierId Int?   @map("awarded_carrier_id")
+  createdAt       String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  bids            RfpBid[]
+  milestones      RfpMilestone[]
+  @@index([shipperId])
+  @@map("contract_rfps")
+}
+
+model RfpBid {
+  id          Int     @id @default(autoincrement())
+  rfpId       Int     @map("rfp_id")
+  carrierId   Int     @map("carrier_id")
+  amountAed   Float   @map("amount_aed")
+  etaDays     Int     @map("eta_days")
+  proposal    String?
+  status      String  @default("PENDING")
+  createdAt   String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  rfp ContractRfp @relation(fields: [rfpId], references: [id], onDelete: Cascade)
+  @@index([rfpId])
+  @@map("rfp_bids")
+}
+
+model RfpMilestone {
+  id          Int     @id @default(autoincrement())
+  rfpId       Int     @map("rfp_id")
+  title       String
+  dueAt       String  @map("due_at")
+  amountAed   Float   @map("amount_aed")
+  status      String  @default("PENDING")
+  invoiceId   Int?    @map("invoice_id")
+  rfp ContractRfp @relation(fields: [rfpId], references: [id], onDelete: Cascade)
+  @@index([rfpId])
+  @@map("rfp_milestones")
+}
+
+// Phase 4: fuel advances
+model FuelAdvance {
+  id          Int     @id @default(autoincrement())
+  jobId       Int     @map("job_id")
+  carrierId   Int     @map("carrier_id")
+  amountAed   Float   @map("amount_aed")
+  type        String  // FUEL | SALIK
+  status      String  @default("APPROVED")
+  createdAt   String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  @@index([jobId])
+  @@map("fuel_advances")
+}
+
+// Phase 5: global consignments + EDI
+model GlobalConsignment {
+  id              String  @id // EDI 304 bol number or Cargo-XML awb
+  source          String  // EDI_304 | EDI_310 | CARGO_XML
+  mode            String  // MARITIME | RAIL | DRAYAGE
+  status          String  @default("CREATED")
+  origin          String
+  destination     String
+  payload         String  // JSON
+  linkedJobId     Int?    @map("linked_job_id")
+  updatedAt       String  @default(dbgenerated("datetime('now')")) @map("updated_at")
+  @@map("global_consignments")
+}
+
+model ComplianceDeclaration {
+  id              Int     @id @default(autoincrement())
+  jobId           Int     @map("job_id")
+  hsCode          String  @map("hs_code")
+  manifestHash    String  @map("manifest_hash") // ZKP commitment
+  zkProof         String? @map("zk_proof")
+  status          String  @default("PENDING")
+  clearedAt       String? @map("cleared_at")
+  createdAt       String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  @@index([jobId])
+  @@map("compliance_declarations")
+}
+
+model DebtInstrument {
+  id              Int     @id @default(autoincrement())
+  jobId           Int     @map("job_id")
+  blNumber        String  @map("bl_number")
+  faceValueAed    Float   @map("face_value_aed")
+  interestRateBps Int     @map("interest_rate_bps")
+  riskScore       Float   @map("risk_score")
+  tokenId         String  @unique @map("token_id")
+  status          String  @default("ACTIVE")
+  createdAt       String  @default(dbgenerated("datetime('now')")) @map("created_at")
+  @@index([jobId])
+  @@map("debt_instruments")
+}
+
+// Seat is a User with orgOwnerId — kept as view for Prisma
+model Seat {
+  id Int @id
+  @@map("users")
+}

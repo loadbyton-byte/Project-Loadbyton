@@ -1,0 +1,69 @@
+version: "3.9"
+# Production-grade docker-compose — 3 isolated services sharing Postgres & Redis
+# Matches "microservices: Auth/User, Bidding/Marketplace, Escrow/Financial"
+# Single-process mode still works: `docker-compose up` boots all 3 with one DB.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: loadbyton
+      POSTGRES_PASSWORD: loadbyton
+      POSTGRES_DB: loadbyton
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data", "./server/migrations/postgres_init.sql:/docker-entrypoint-initdb.d/init.sql"]
+    healthcheck: { test: ["CMD-SHELL","pg_isready -U loadbyton"], interval: 5s, retries: 10 }
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck: { test: ["CMD","redis-cli","ping"], interval: 5s, retries: 10 }
+  auth-service:
+    build: { context: ., dockerfile: Dockerfile.auth }
+    environment:
+      DATABASE_URL: postgres://loadbyton:loadbyton@postgres:5432/loadbyton
+      REDIS_URL: redis://redis:6379
+      PORT: 4001
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-key-not-for-prod}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    ports: ["4001:4001"]
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+    restart: unless-stopped
+  marketplace-service:
+    build: { context: ., dockerfile: Dockerfile.marketplace }
+    environment:
+      DATABASE_URL: postgres://loadbyton:loadbyton@postgres:5432/loadbyton
+      REDIS_URL: redis://redis:6379
+      PORT: 4002
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-key-not-for-prod}
+    ports: ["4002:4002"]
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+    restart: unless-stopped
+  escrow-service:
+    build: { context: ., dockerfile: Dockerfile.escrow }
+    environment:
+      DATABASE_URL: postgres://loadbyton:loadbyton@postgres:5432/loadbyton
+      REDIS_URL: redis://redis:6379
+      PORT: 4003
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-key-not-for-prod}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      INTERNAL_KEY: ${INTERNAL_KEY:-}
+    ports: ["4003:4003"]
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+    restart: unless-stopped
+  # Optional: monolith fallback (single Express serving SPA+API as today)
+  app:
+    build: { context: ., dockerfile: Dockerfile }
+    environment:
+      DATABASE_URL: postgres://loadbyton:loadbyton@postgres:5432/loadbyton
+      REDIS_URL: redis://redis:6379
+      PORT: 4000
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-key-not-for-prod}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      INTERNAL_KEY: ${INTERNAL_KEY:-}
+    ports: ["4000:4000"]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+volumes:
+  pgdata:
