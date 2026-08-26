@@ -1,0 +1,7 @@
+{
+  "name": "loadbyton-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Loadbyton — React SPA",
+  "scripts": { "dev": "vite", "build": "vite build && node scripts/prerender.mjs" }
+}
