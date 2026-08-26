@@ -1,0 +1,709 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Loadbyton design tokens — mirrors docs/brand/design-tokens.css.
+  Light is default (:root); dark via [data-theme="dark"] or, absent an
+  explicit choice, prefers-color-scheme. See docs/brand/BRAND_GUIDELINES.md.
+*/
+:root {
+  /* "Loadbyton Navy" ramp — replaces the Industrial Trust near-black
+     primary. Variable names kept as --lb-ink-* on purpose: several
+     marketing pages (About.jsx, Features.jsx, Landing.jsx, Pricing.jsx)
+     reference these primitives directly for fixed-dark panels that never
+     theme-swap, and renaming would mean touching those files for no
+     functional reason — only the values change here. */
+  --lb-ink-950: #0A1A24;
+  --lb-ink-900: #0F2B3D;
+  --lb-ink-800: #1A3A52;
+  --lb-ink-700: #2C4E68;
+  --lb-ink-600: #3E6280;
+
+  --lb-blue-700: #1E40AF;
+  --lb-blue-600: #2563EB;
+  --lb-blue-500: #3B82F6;
+  --lb-blue-300: #93C5FD;
+  --lb-blue-100: #DBEAFE;
+  --lb-blue-50: #EFF6FF;
+
+  /* "Loadbyton Red" — the one reserved accent (award, confirm, release,
+     primary marketing CTA), and — per the brand kit's own CSS variables,
+     which alias --loadbyton-error to the same red — also status.danger.
+     Kept as --lb-orange-* names for the same reason as --lb-ink-* above
+     (Features.jsx/Landing.jsx reference --lb-orange-500 directly for
+     decorative dots/badges); only the values changed. */
+  --lb-orange-700: #C62828;
+  --lb-orange-600: #E53935;
+  --lb-orange-500: #E53935;
+  --lb-orange-200: #FDE8E8;
+  --lb-orange-100: #FEF2F2;
+
+  --lb-amber-700: #B45309;
+  --lb-amber-600: #D97706;
+  --lb-amber-500: #F59E0B;
+  --lb-amber-200: #FDE3B4;
+  --lb-amber-100: #FEF3D9;
+
+  --lb-slate-900: #0F172A;
+  --lb-slate-700: #334155;
+  --lb-slate-500: #64748B;
+  /* D3 (gstack review): dark-mode --text-muted sat at slate-500 in every
+     theme, which is 4.16:1 on the near-black dark canvas — below AA's
+     4.5:1. slate-400 sits between muted (500) and secondary (300) rather
+     than collapsing the two into the same brightness. */
+  --lb-slate-400: #94A3B8;
+  --lb-slate-300: #CBD5E1;
+  --lb-slate-200: #E2E8F0;
+  --lb-slate-100: #F1F5F9;
+  --lb-slate-50: #F8FAFC;
+  --lb-slate-0: #FFFFFF;
+
+  /* Loadbyton's "Success Green" / kept named --lb-teal-* (used only via
+     --status-success below) for the same minimal-diff reason as above. */
+  --lb-teal-600: #2E7D32;
+  --lb-teal-500: #43A047;
+  --lb-teal-100: #E3F2E4;
+  --lb-red-600: #C62828;
+  --lb-red-500: #E53935;
+  --lb-red-100: #FDE8E8;
+
+  /* Sharper, more geometric shape language — matches the navy/red/Geist
+     "corporate enterprise" register (confirmed with the user), replacing
+     Industrial Trust's rounder 8/12/16/24 scale. */
+  --lb-radius-sm: 4px;
+  --lb-radius-md: 6px;
+  --lb-radius-lg: 8px;
+  --lb-radius-xl: 12px;
+  --lb-radius-full: 999px;
+  --lb-shadow-sm: 0 1px 2px rgba(15,43,61,0.08);
+  --lb-shadow-md: 0 2px 6px rgba(15,43,61,0.10);
+  --lb-shadow-lg: 0 4px 12px rgba(15,43,61,0.14);
+  --lb-shadow-focus: 0 0 0 3px rgba(229,57,53,0.35);
+
+  /* "Warm White" / "Light Gray" from the brand kit, replacing Industrial
+     Trust's cool slate-50/white. */
+  --bg-canvas: #FFFDF7;
+  --bg-surface: var(--lb-slate-0);
+  --bg-raised: #F5F6F4;
+  --bg-inverse: var(--lb-ink-900);
+
+  /* Tonal-layering ladder used by the nested-card components (BentoStat,
+     JobCard, sidebar). Existing components keep using bg-surface/bg-raised
+     above; this ladder is additive, not a replacement. */
+  --surface-container-lowest: var(--lb-slate-0);
+  --surface-container-low: #FFFDF7;
+  --surface-container: #F5F6F4;
+  --surface-container-high: var(--lb-slate-200);
+  --surface-container-highest: var(--lb-slate-300);
+  --outline: var(--lb-slate-500);
+  --outline-variant: #E5E8E3;
+
+  --border-default: #E5E8E3;
+  --border-subtle: var(--lb-slate-100);
+  --border-strong: var(--lb-slate-300);
+
+  /* "Dark" body-text color from the brand kit (#0F2129) — a hair off
+     Loadbyton Navy (#0F2B3D, --lb-ink-900) but close enough that adding a
+     second "headline vs. body" text-color token isn't worth the extra
+     architecture for the difference; headlines read fine off this same
+     token via .font-display. */
+  --text-primary: #0F2129;
+  --text-secondary: #586A72;
+  --text-muted: #7A8A90;
+  --text-inverse: var(--lb-slate-0);
+  /* White text on Loadbyton Red (#E53935) measures ~4.2:1 — passes AA for
+     large/bold text and UI components (3:1) but falls just short of the
+     4.5:1 normal-text bar; navy-on-red measures worse (~3.5:1). White is
+     the better of the two real options here, same reasoning as the D2
+     gstack-review comment this replaces, just a different accent hue. */
+  --text-on-accent: var(--lb-slate-0);
+
+  --brand-primary: var(--lb-ink-900);
+  --brand-primary-hover: var(--lb-ink-800);
+  --brand-secondary: var(--lb-blue-500);
+  --brand-accent: var(--lb-orange-600);
+  --brand-accent-hover: var(--lb-orange-700);
+  /* D4 (gstack review): Badge's "accent" variant and the carrier tier badge
+     both read this. Routed through a semantic token (not a raw primitive)
+     so the dark-mode override below actually applies. */
+  --brand-accent-bg: var(--lb-orange-200);
+
+  --status-success: var(--lb-teal-600);
+  --status-success-bg: var(--lb-teal-100);
+  --status-warning: #F57C00;
+  --status-warning-bg: #FEF0E0;
+  /* Brand kit's own --loadbyton-error is the same red as the accent — kept
+     merged rather than re-split, per the redesign plan's note on this. */
+  --status-danger: var(--lb-red-500);
+  --status-danger-bg: var(--lb-red-100);
+  --status-info: var(--lb-blue-600);
+  --status-info-bg: var(--lb-blue-50);
+
+  --lb-shadow-elevated: 0 4px 10px rgba(15,43,61,0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-canvas: var(--lb-ink-950);
+    --bg-surface: var(--lb-ink-900);
+    --bg-raised: var(--lb-ink-800);
+    --bg-inverse: var(--lb-slate-50);
+    --surface-container-lowest: var(--lb-ink-950);
+    --surface-container-low: var(--lb-ink-900);
+    --surface-container: var(--lb-ink-800);
+    --surface-container-high: var(--lb-ink-700);
+    --surface-container-highest: var(--lb-ink-600);
+    --outline: var(--lb-slate-400);
+    --outline-variant: var(--lb-ink-700);
+    --border-default: var(--lb-ink-700);
+    --border-subtle: var(--lb-ink-800);
+    --border-strong: var(--lb-ink-600);
+    --text-primary: var(--lb-slate-50);
+    --text-secondary: var(--lb-slate-300);
+    --text-muted: var(--lb-slate-400);
+    --text-inverse: var(--lb-ink-900);
+    --text-on-accent: var(--lb-slate-0);
+    --brand-primary: var(--lb-slate-50);
+    --brand-primary-hover: var(--lb-slate-200);
+    --brand-secondary: var(--lb-blue-300);
+    --brand-accent: #FF5449;
+    --brand-accent-hover: #FF7A70;
+    --brand-accent-bg: #3D1616;
+    --status-success: var(--lb-teal-500);
+    --status-success-bg: #123832;
+    --status-warning: #FFA733;
+    --status-warning-bg: #3D2A10;
+    --status-danger: #FF5449;
+    --status-danger-bg: #3D1616;
+    --status-info: var(--lb-blue-300);
+    --status-info-bg: #122540;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-canvas: var(--lb-ink-950);
+  --bg-surface: var(--lb-ink-900);
+  --bg-raised: var(--lb-ink-800);
+  --bg-inverse: var(--lb-slate-50);
+  --surface-container-lowest: var(--lb-ink-950);
+  --surface-container-low: var(--lb-ink-900);
+  --surface-container: var(--lb-ink-800);
+  --surface-container-high: var(--lb-ink-700);
+  --surface-container-highest: var(--lb-ink-600);
+  --outline: var(--lb-slate-400);
+  --outline-variant: var(--lb-ink-700);
+  --border-default: var(--lb-ink-700);
+  --border-subtle: var(--lb-ink-800);
+  --border-strong: var(--lb-ink-600);
+  --text-primary: var(--lb-slate-50);
+  --text-secondary: var(--lb-slate-300);
+  --text-muted: var(--lb-slate-400);
+  --text-inverse: var(--lb-ink-900);
+  --text-on-accent: var(--lb-slate-0);
+  --brand-primary: var(--lb-slate-50);
+  --brand-primary-hover: var(--lb-slate-200);
+  --brand-secondary: var(--lb-blue-300);
+  --brand-accent: #FF5449;
+  --brand-accent-hover: #FF7A70;
+  --brand-accent-bg: #3D1616;
+  --status-success: var(--lb-teal-500);
+  --status-success-bg: #123832;
+  --status-warning: #FFA733;
+  --status-warning-bg: #3D2A10;
+  --status-danger: #FF5449;
+  --status-danger-bg: #3D1616;
+  --status-info: var(--lb-blue-300);
+  --status-info-bg: #122540;
+}
+
+* { border-color: var(--border-default); }
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: 'Inter', ui-sans-serif, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: 'Geist', ui-sans-serif, sans-serif;
+}
+
+/* Arabic locale: Geist/Inter have no Arabic glyphs, so without this the
+   whole app would silently fall back to the browser's unstyled default
+   font the moment dir="rtl" is set (see lib/i18n.jsx). Noto Sans Arabic
+   covers both display and body weight, keeping Arabic text intentional
+   rather than a fallback accident. */
+html[lang="ar"] body,
+html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, html[lang="ar"] .font-display {
+  font-family: 'Noto Sans Arabic', 'Inter', ui-sans-serif, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-secondary);
+  outline-offset: 2px;
+  border-radius: var(--lb-radius-sm);
+}
+
+::selection {
+  background: var(--lb-orange-100);
+  color: var(--lb-ink-900);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion system — two deliberately different mechanisms:              */
+/*   .animate-hero-in  — pure CSS @keyframes, no JS. Runs identically  */
+/*     whether client JS has loaded yet or not, so above-the-fold      */
+/*     content (the hero) never depends on a script executing to be    */
+/*     visible — including in the prerendered response a crawler sees. */
+/*   .reveal/.reveal-visible — paired with the useReveal() hook        */
+/*     (lib/motion.js), an IntersectionObserver flips the class. Only  */
+/*     used below the fold, where "hidden until scrolled to" is        */
+/*     correct, not a bug a slow script could turn into a blank page.  */
+/* Both durations collapse near-zero under prefers-reduced-motion via  */
+/* the block above — neither needs its own reduced-motion check.       */
+/* ------------------------------------------------------------------ */
+
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-hero-in {
+  animation: hero-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Mount-triggered (not scroll-triggered) — dropdowns, mobile nav panel.
+   Plain CSS @keyframes again: these render the instant they mount, no
+   IntersectionObserver needed since there's no "off-screen until scrolled"
+   state for a menu that only exists while open. */
+@keyframes menu-in {
+  from { opacity: 0; transform: scale(0.97) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-menu-in {
+  animation: menu-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top right;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-panel-in {
+  animation: panel-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* DocumentScanner.jsx's viewfinder — a thin line sweeping top-to-bottom
+   inside the corner-bracket frame, the "actively scanning" cue. */
+.scanner-laser {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 2px;
+  border-radius: 999px;
+  box-shadow: 0 0 8px 1px currentColor;
+  animation: scanner-sweep 2.2s ease-in-out infinite;
+}
+@keyframes scanner-sweep {
+  0%, 100% { top: 8%; opacity: 0.9; }
+  50% { top: 90%; opacity: 0.9; }
+}
+
+/* Shell.jsx's drawer (the mobile-app-shell hamburger menu, replacing the
+   old desktop nav row) — slides in from the reading-start edge. */
+@keyframes drawer-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-drawer-in {
+  animation: drawer-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+html[dir="rtl"] .animate-drawer-in {
+  animation-name: drawer-in-rtl;
+}
+@keyframes drawer-in-rtl {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Equipment strip on the landing page — a slow, continuous drift rather
+   than a wall of 12 labeled cards. The track holds two copies of the same
+   list back to back; animating exactly -50% loops seamlessly regardless of
+   viewport width, since that's always "one full copy" of a track sized to
+   its content (w-max). Pauses on hover so a curious visitor can actually
+   read a label instead of chasing it. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Hero visual (components/FreightMotionScene.jsx) — a simple auto-advancing
+   slide deck: one slide at a time explaining the workflow, then how to
+   register, how to post a job, and how payout works. Gentle fade/slide
+   entrance per slide, a thin auto-progress bar, arrows and dots for manual
+   browsing; auto-advance pauses on hover. Deliberately more vivid than the
+   rest of the page (dark card, accent color) — contained entirely inside
+   its own dark card so it reads as one intentional vivid moment, not a
+   break from the page's restraint elsewhere. All keyframe-driven, so the
+   global prefers-reduced-motion rule above collapses the entrance and
+   progress animations to static frames. */
+.freight-deck {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 22px 14px;
+  background:
+    radial-gradient(120% 120% at 85% -10%, rgba(255, 176, 103, 0.28), transparent 55%),
+    linear-gradient(180deg, #15111f 0%, #2a1a22 55%, #1a1418 100%);
+}
+.freight-deck-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.freight-deck-progress-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--lb-orange-500), var(--lb-orange-400));
+  transform-origin: left;
+  animation-name: freight-deck-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+@keyframes freight-deck-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.freight-slide {
+  min-height: 200px;
+  animation: freight-slide-in 320ms ease-out both;
+}
+@keyframes freight-slide-in {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+.freight-slide-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--lb-radius-md);
+  background: rgba(242, 96, 12, 0.18);
+  color: var(--lb-orange-500);
+}
+.freight-slide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.freight-step-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.freight-step-num {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--lb-radius-full);
+  font-family: var(--lb-font-mono);
+  font-size: 10px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--lb-orange-500);
+}
+.freight-deck-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.freight-dot {
+  width: 18px;
+  height: 4px;
+  border-radius: var(--lb-radius-full);
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 150ms ease;
+}
+.freight-dot-active {
+  background: var(--lb-orange-500);
+}
+.freight-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--lb-radius-md);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  transition: background 150ms ease;
+}
+.freight-nav:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Component classes — in @layer components so plain Tailwind utility  */
+/* classes (hidden, w-full, sm:inline-flex, …) always win the cascade  */
+/* when combined with these, regardless of source order.               */
+/* ------------------------------------------------------------------ */
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-content px-5 sm:px-6 lg:px-8;
+  }
+
+  /* Fades the trailing edge of a horizontally-scrollable, dir=ltr container
+     (a data table, a tab bar, the job-status stepper) so a mobile user sees
+     a visual cue that there's more content to swipe to, instead of a hard
+     edge that reads as "the page cut off" — these all already scroll
+     correctly, they just gave no hint that they do. Right-edge fade only:
+     every container this is applied to is explicitly dir="ltr". */
+  .scroll-fade-x {
+    mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+  }
+
+  .card {
+    @apply rounded-lg bg-surface shadow-sm transition-shadow duration-300 ease-out;
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* Elevation, not hairlines, is the primary way interactive surfaces read as
+     "raised" in this system (the ride-hailing-app school, not the enterprise-
+     SaaS-border school) — pair with hover:shadow-md in JSX for anything
+     clickable, the way OpenLoads' job cards already do. */
+  .card-interactive {
+    @apply card transition-shadow duration-150;
+  }
+  .card-interactive:hover {
+    box-shadow: var(--lb-shadow-md);
+  }
+  /* Opt-in — only cards meant to read as interactive (a whole card that's a
+     link/button, not a form panel) get the lift. Applied via .card-hover in
+     the JSX, not baked into .card itself, so a settings panel doesn't lift
+     on hover for no reason. */
+  .card-hover {
+    @apply transition-[transform,box-shadow] duration-300 ease-out;
+  }
+  .card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--lb-shadow-elevated);
+  }
+
+  .btn {
+    /* py-3 (was py-2.5) puts the default button at ~44px total height —
+       py-2.5 sat exactly at the 40px touch-target floor with no margin. */
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-bold
+      transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out
+      active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap;
+  }
+  .btn-primary {
+    @apply btn text-ink-inverse;
+    background: var(--brand-primary);
+  }
+  .btn-primary:hover { background: var(--brand-primary-hover); box-shadow: var(--lb-shadow-md); transform: translateY(-1px); }
+
+  .btn-accent {
+    @apply btn;
+    background: var(--brand-accent);
+    color: var(--text-on-accent);
+  }
+  .btn-accent:hover { background: var(--brand-accent-hover); box-shadow: var(--lb-shadow-md); transform: translateY(-1px); }
+
+  .btn-secondary {
+    @apply btn border bg-surface text-ink;
+    border-color: var(--border-strong);
+  }
+  .btn-secondary:hover { background: var(--bg-raised); }
+
+  .btn-ghost {
+    @apply btn text-ink-secondary font-semibold;
+  }
+  .btn-ghost:hover { background: var(--bg-raised); color: var(--text-primary); }
+
+  .btn-danger {
+    @apply btn;
+    background: var(--status-danger);
+    color: white;
+  }
+  .btn-danger:hover { filter: brightness(0.92); }
+
+  .btn-success {
+    @apply btn;
+    background: var(--status-success);
+    color: white;
+  }
+  .btn-success:hover { filter: brightness(0.92); }
+
+  .btn-link {
+    @apply inline-flex items-center gap-1.5 text-sm font-medium text-brand-secondary underline-offset-2;
+    padding: 0;
+    background: none;
+  }
+  .btn-link:hover { text-decoration: underline; }
+
+  .btn-sm {
+    /* py-2.5 (was py-1.5) brings this to ~36px total — was ~28px, well
+       under the ~40px touch-target floor (Pagination prev/next, table row
+       actions). Still visibly smaller than the default .btn, on purpose. */
+    @apply px-3 py-2.5 text-xs;
+  }
+  .btn-lg {
+    @apply px-6 py-3 text-base rounded-lg;
+  }
+
+  .input,
+  .textarea,
+  .select {
+    @apply w-full rounded-md border bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted;
+    border-color: var(--border-strong);
+  }
+  .input:focus,
+  .textarea:focus,
+  .select:focus {
+    outline: none;
+    box-shadow: var(--lb-shadow-focus);
+    border-color: var(--brand-secondary);
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink-secondary;
+  }
+
+  /* Tag-style, not a pill — sharper shape language (confirmed with the
+     user for this rebrand) reads status badges as data tags, not the
+     rounded consumer-app chip style Industrial Trust used. */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .nav-link {
+    @apply rounded-md px-3.5 py-2 text-sm font-semibold text-ink-secondary transition-colors hover:bg-raised hover:text-ink;
+  }
+  /* Filled block, not a soft tint — the current page reads as a decision
+     that was made, not a hover state that happened to stick. */
+  .nav-link-active {
+    @apply rounded-md px-3.5 py-2 text-sm font-semibold;
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Toast notifications — a single React-driven `.toast-leaving` class
+     controls the exit transition; there is no separate CSS `animation`
+     racing the JS dismiss timer (that was a real bug: two independently
+     timed fade-outs meant a toast could sit invisible-but-still-mounted
+     for about a second before actually unmounting). */
+  .toast-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: calc(100vw - 32px);
+    pointer-events: none;
+    z-index: 60;
+  }
+
+  .toast {
+    pointer-events: auto;
+    width: 380px;
+    max-width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: var(--lb-radius-lg);
+    border: 1px solid var(--border-strong);
+    /* --bg-raised, not --bg-surface: in dark mode --bg-surface (navy-900) is
+       nearly indistinguishable from the page's own --bg-canvas (navy-950), so
+       a toast using it renders but is functionally invisible against a busy
+       page. --bg-raised (navy-800) is the token this codebase already uses
+       for "this should read as elevated" (cards-on-cards, dropdown menus). */
+    background: var(--bg-raised);
+    box-shadow: var(--lb-shadow-lg);
+    padding: 14px 16px;
+    font-size: 0.875rem;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.2s ease-in, transform 0.2s ease-in;
+  }
+  .toast-leaving {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  .toast-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .toast-message {
+    flex: 1;
+    min-width: 0;
+  }
+  .toast-message p + p {
+    margin-top: 2px;
+  }
+  .toast-dismiss {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    padding: 2px;
+    border-radius: 4px;
+  }
+  .toast-dismiss:hover {
+    background: var(--bg-raised);
+    color: var(--text-primary);
+  }
+}

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Theme is light by default; a visitor's saved dark preference (set via
+       the in-app toggle) is applied before first paint so there is never a
+       light/dark flash. Absent a saved choice the page always renders light,
+       regardless of OS preference. -->
+  <script>
+    try {
+      var t = localStorage.getItem('loadbyton-theme');
+      document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  </script>
+  <title>Loadbyton — UAE Road Freight & Container Drayage Marketplace</title>
+    <meta name="description" content="Post a freight job — container, flatbed, tripper, or a multi-truck volume inquiry — get verified-carrier bids across Dubai, Abu Dhabi, Sharjah and Fujairah, and move it under escrow with live tracking and payout on delivery." />
+    <meta property="og:title" content="Loadbyton — UAE Road Freight & Container Drayage Marketplace" />
+    <meta property="og:description" content="Post a freight job, get verified-carrier bids from across the UAE, and move it under escrow — with live tracking, a demurrage clock, and payout on delivery." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Loadbyton — UAE Road Freight & Container Drayage Marketplace" />
+    <meta name="twitter:description" content="Post a freight job, get verified-carrier bids from across the UAE, and move it under escrow — with live tracking and payout on delivery." />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#0F2B3D" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Loaded non-render-blocking (media=print, swapped to all in main.jsx) so a
+         slow or unreachable font CDN never delays first paint of the app shell. -->
+    <!-- Noto Sans Arabic covers both display and body weights so the
+         Arabic locale never falls back to the browser's unstyled default
+         font next to the branded Latin type — see web/src/index.css
+         [lang="ar"] rule and web/src/lib/i18n.jsx. -->
+    <!-- Geist is the display face (see docs/brand/BRAND_GUIDELINES.md §3) —
+         the Loadbyton Brand Kit's chosen headline face, corporate/enterprise
+         register. JetBrains Mono is the data/label face (job codes, AED
+         amounts, timestamps) — replaced IBM Plex Mono in the Industrial
+         Trust redesign pass and carries over unchanged into this rebrand. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+      media="print"
+      data-async-font
+    />
+    <!-- Scroll-reveal (.reveal in index.css) starts at opacity:0 and is
+         only flipped visible by an IntersectionObserver in lib/motion.js —
+         correct for a JS-enabled browser, but a fetcher that never
+         executes JS at all would see that content stuck invisible
+         forever. This forces it to its final visible state whenever
+         JavaScript doesn't run, so a no-JS crawler still gets full
+         content, matching the crawlability fix in server/index.js. -->
+    <noscript>
+      <style>.reveal { opacity: 1 !important; transform: none !important; }</style>
+    </noscript>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

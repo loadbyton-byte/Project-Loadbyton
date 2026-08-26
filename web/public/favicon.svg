@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Loadbyton">
+  <!-- Simplified for browser-tab scale: navy tile + red "LB" monogram,
+       matches web/public/brand/logo-mark.svg at a tighter radius. -->
+  <rect width="64" height="64" rx="12" fill="#0F2B3D" />
+  <text x="32" y="44" font-family="sans-serif" font-weight="900" font-size="32" text-anchor="middle" fill="#E53935">LB</text>
+</svg>

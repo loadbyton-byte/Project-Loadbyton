@@ -2,6 +2,33 @@
   "name": "loadbyton-web",
   "version": "1.0.0",
   "private": true,
-  "description": "Loadbyton — React SPA",
-  "scripts": { "dev": "vite", "build": "vite build && node scripts/prerender.mjs" }
+  "type": "commonjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/prerender.mjs",
+    "build:vercel": "vite build && node scripts/prerender.mjs && node scripts/vercel-static-seo.mjs",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .js,.jsx"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router": "^7.18.0",
+    "react-router-dom": "^7.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "vite": "^5.4.8"
+  },
+  "optionalDependencies": {
+    "@sentry/react": "^8.0.0",
+    "@sentry/vite-plugin": "^2.20.0"
+  }
 }

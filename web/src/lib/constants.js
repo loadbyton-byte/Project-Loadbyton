@@ -1,0 +1,88 @@
+export const CONTAINER_SIZES = ['20FT', '40FT', '40HC', 'REEFER'];
+export const CONTAINER_TYPES = ['DRY', 'REEFER', 'HAZMAT', 'OPEN_TOP', 'FLAT_RACK'];
+export const TERMINALS = ['JEBEL_ALI_T1', 'JEBEL_ALI_T2', 'JEBEL_ALI_T4', 'KHALIFA_PORT', 'PORT_KHALID', 'FUJAIRAH_PORT'];
+export const AREAS = ['AL_QUOZ', 'JAFZA_SOUTH', 'DUBAI_SOUTH', 'DIP', 'AL_QUSAIS', 'MUSAFFAH', 'SHARJAH_INDUSTRIAL', 'FUJAIRAH_FREEZONE'];
+export const SHIPMENT_TYPES = ['IMPORT', 'EXPORT', 'LOCAL'];
+
+export function shipmentTypeLabel(st) {
+  return { IMPORT: 'Import — Terminal → Customer → Depot', EXPORT: 'Export — Depot → Shipper → Terminal', LOCAL: 'Local — Loading → Delivery' }[st] || st;
+}
+export const DEPOTS = ['JAFZA_DEPOT', 'AL_QUSAIS_DEPOT', 'KHALIFA_DEPOT', 'SHARJAH_DEPOT', 'FUJAIRAH_DEPOT', 'DIP_DEPOT', 'MUSAFFAH_DEPOT'];
+
+export const SHIPMENT_TYPE_LABELS = { IMPORT: 'Import', EXPORT: 'Export' };
+export const DEPOT_LABELS = {
+  JAFZA_DEPOT: 'JAFZA Depot',
+  AL_QUSAIS_DEPOT: 'Al Qusais Depot',
+  KHALIFA_DEPOT: 'Khalifa Depot',
+  SHARJAH_DEPOT: 'Sharjah Depot',
+  FUJAIRAH_DEPOT: 'Fujairah Depot',
+  DIP_DEPOT: 'DIP Depot',
+  MUSAFFAH_DEPOT: 'Musaffah Depot',
+};
+export function depotLabel(v) { return DEPOT_LABELS[v] || formatLabel(v); }
+export const STATUS_FLOW = ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
+
+// Terminal → emirate/operator, for the UAE coverage section and any "which
+// emirate is this in" display. Keys must match TERMINALS above.
+export const TERMINAL_INFO = {
+  JEBEL_ALI_T1: { emirate: 'Dubai', operator: 'DP World' },
+  JEBEL_ALI_T2: { emirate: 'Dubai', operator: 'DP World' },
+  JEBEL_ALI_T4: { emirate: 'Dubai', operator: 'DP World' },
+  KHALIFA_PORT: { emirate: 'Abu Dhabi', operator: 'Abu Dhabi Ports' },
+  PORT_KHALID: { emirate: 'Sharjah', operator: 'Gulftainer' },
+  FUJAIRAH_PORT: { emirate: 'Fujairah', operator: 'Fujairah Port Authority' },
+};
+
+// Equipment/vehicle types a job can require and a carrier can bid with. The
+// two container-carrying types are the only ones where container size/type
+// apply — everything else is general UAE road freight. Cold chain is expressed
+// via container size/type (REEFER) and TRAILER_WITH_GENSET equipment, NOT flags;
+// TRAILER_WITH_GENSET is a reefer-capable container trailer, and CUSTOM is
+// a written truck/requirement in the notes field.
+export const EQUIPMENT_TYPES = [
+  'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'BOX_TRUCK',
+  'CURTAIN_TRUCK', 'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T',
+  'SIDE_LOADER_TRAILER', 'TRIPPER', 'CUSTOM',
+];
+export const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET'];
+export const EQUIPMENT_TYPE_LABELS = {
+  CONTAINER_CHASSIS: 'Container chassis',
+  TRAILER_WITH_GENSET: 'Trailer with genset',
+  LOWBED_TRAILER: 'Lowbed trailer',
+  FLATBED_TRAILER: 'Flatbed trailer',
+  BOX_TRUCK: 'Box truck',
+  CURTAIN_TRUCK: 'Curtain-side truck',
+  PICKUP_3T: 'Pickup — 3 tonne',
+  PICKUP_5T: 'Pickup — 5 tonne',
+  PICKUP_7T: 'Pickup — 7 tonne',
+  PICKUP_10T: 'Pickup — 10 tonne',
+  SIDE_LOADER_TRAILER: 'Side loader trailer',
+  TRIPPER: 'Tripper',
+  CUSTOM: 'Custom truck / requirement',
+};
+export function equipmentLabel(value) {
+  return EQUIPMENT_TYPE_LABELS[value] || formatLabel(value);
+}
+
+export function formatLabel(value) {
+  return value ? value.replaceAll('_', ' ') : '';
+}
+
+export function formatAED(amount) {
+  if (amount === null || amount === undefined) return '—';
+  return `AED ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+}
+
+export function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso.includes('T') || iso.includes('Z') ? iso : iso.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+export function formatDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso.includes('T') || iso.includes('Z') ? iso : iso.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('en-AE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
