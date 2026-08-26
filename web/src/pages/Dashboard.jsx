@@ -98,8 +98,8 @@ export default function Dashboard() {
         ...form,
         targetPriceAed: form.targetPriceAed ? Number(form.targetPriceAed) : undefined,
         cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
-        containerCount: Number(form.containerCount) || 1,
-        truckCount: Number(form.truckCount) || 1,
+        containerCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.containerCount) || 1,
+        truckCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.truckCount) || 1,
         scheduledPostAt: form.scheduleForLater && form.scheduledPostAt ? new Date(form.scheduledPostAt).toISOString() : undefined,
       });
       const jobId = created.job?.id;
@@ -333,20 +333,22 @@ export default function Dashboard() {
                 <Label>Deadline</Label>
                 <Input type="datetime-local" required value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
               </div>
-              <div className="sm:col-span-2 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
-                <p className="text-sm font-medium text-ink">Volume — how much does this job cover?</p>
-                <p className="mt-0.5 text-xs text-ink-muted">Leave both at 1 for a single load. Raise either to post one inquiry a carrier fulfils as a batch.</p>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label>No. of containers</Label>
-                    <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>No. of trucks</Label>
-                    <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
+              {form.shipmentType !== 'LOCAL' && (
+                <div className="sm:col-span-2 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
+                  <p className="text-sm font-medium text-ink">Volume — how much does this job cover?</p>
+                  <p className="mt-0.5 text-xs text-ink-muted">Leave both at 1 for a single load. Raise either to post one inquiry a carrier fulfils as a batch.</p>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label>No. of containers</Label>
+                      <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
+                    </div>
+                    <div>
+                      <Label>No. of trucks</Label>
+                      <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
               <div>
                 <Label>Target price (AED, per trip)</Label>
                 <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />

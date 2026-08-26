@@ -18,15 +18,10 @@ function approveAccount(req, userId, action) {
   }
   return toPublicUser(db.prepare('SELECT * FROM users WHERE id=?').get(user.id));
 }
-
-// Shared by the single-carrier route and the bulk route below. Throws
-// { status, message } on failure (bulk catches per-row; single re-throws
-// as a normal sendError) rather than writing to res directly.
 function verifyCarrier(req, carrierId, action, iban) {
   const carrier = db.prepare('SELECT * FROM users WHERE id=?').get(carrierId);
   if (!carrier) throw { status: 404, message: 'Carrier not found' };
   if (!['approve', 'reject'].includes(action)) throw { status: 400, message: 'action must be approve or reject' };
-
   if (action === 'approve') {
     const existingIban = db.prepare('SELECT iban FROM profiles WHERE user_id=?').get(carrier.id).iban;
     if (!iban && !existingIban) throw { status: 400, message: 'IBAN is required to approve verification' };
@@ -40,5 +35,23 @@ function verifyCarrier(req, carrierId, action, iban) {
   }
   return toPublicUser(db.prepare('SELECT * FROM users WHERE id=?').get(carrier.id));
 }
-
-module.exports = { approveAccount, verifyCarrier };
+// External business verification — TRN corporate registry (FTA) stub
+const cache = new Map();
+async function verifyTrnExternal(trn){
+  if(cache.has(trn)) return cache.get(trn);
+  const url = process.env.VERIFICATION_API_URL;
+  if(url){
+    try{
+      const r = await fetch(`${url}/verify?trn=${encodeURIComponent(trn)}`, { headers: { 'x-api-key': process.env.VERIFICATION_API_KEY||'' }});
+      const data = await r.json();
+      const out = { valid: !!data.valid, source: 'external', trn, details: data };
+      cache.set(trn, out);
+      return out;
+    }catch(e){}
+  }
+  const valid = /^\d{15}$/.test(trn) && trn.startsWith('100');
+  const out = { valid, source: 'stub', trn, details: valid? 'FTA registry match (stub)':'Not found in registry (stub). Use 100xxxxxxxxxxxxx for demo.' };
+  cache.set(trn, out);
+  return out;
+}
+module.exports = { approveAccount, verifyCarrier, verifyTrnExternal, cache };

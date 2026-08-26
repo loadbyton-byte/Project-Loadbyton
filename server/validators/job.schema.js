@@ -97,8 +97,9 @@ function createJobFromBody(b, req) {
   // keep working without knowing about the field.
   const notes = b.customRequirement && !b.notes ? b.customRequirement : b.notes;
 
-  const containerCount = Math.max(1, Number(b.containerCount) || 1);
-  const truckCount = Math.max(1, Number(b.truckCount) || 1);
+  // LOCAL is a single inland move — volume fields are not exposed in the UI and are forced to 1
+  const containerCount = effectiveShipmentType === 'LOCAL' ? 1 : Math.max(1, Number(b.containerCount) || 1);
+  const truckCount = effectiveShipmentType === 'LOCAL' ? 1 : Math.max(1, Number(b.truckCount) || 1);
 
   // Optional cargo weight (metric tons) — drives carrier equipment choice.
   const cargoWeightTons = b.cargoWeightTons === undefined || b.cargoWeightTons === null || b.cargoWeightTons === '' ? null : Number(b.cargoWeightTons);

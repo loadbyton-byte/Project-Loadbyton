@@ -54,6 +54,19 @@ app.use(require('./routes/org.routes'));
 app.use(require('./routes/retention.routes'));
 app.use(require('./routes/docs.routes'));
 app.use(require('./routes/admin.routes'));
+app.use(require('./routes/stripe.routes'));
+app.use(require('./routes/verify.routes'));
+app.use(require('./routes/location.routes'));
+app.use(require('./routes/telematics.routes'));
+app.use(require('./routes/currency.routes'));
+app.use(require('./routes/enterprise.routes'));
+app.use(require('./routes/rfp.routes'));
+app.use(require('./routes/edi.routes'));
+app.use(require('./routes/compliance.routes'));
+app.use(require('./routes/ledger.routes'));
+app.use(require('./routes/ml.routes'));
+app.use(require('./routes/audit.routes'));
+app.use(require('./routes/fleet.routes'));
 
 // =============================================================================
 // 7. SEO pages, static SPA, fallback

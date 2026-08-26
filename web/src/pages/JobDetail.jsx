@@ -8,6 +8,9 @@ import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, Escro
 import { IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
+import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
+import { EirChecklist } from '../components/EirChecklist.jsx';
+import { DetentionAlarm } from '../components/DetentionAlarm.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
 
@@ -87,6 +90,7 @@ export default function JobDetail() {
 
   useEffect(() => { load(); }, [load]);
   usePageTitle(data?.job ? data.job.job_code : 'Job');
+  useLiveTracking(data?.job?.id, user.id===data?.job?.carrier_id, data?.job?.status);
 
   // Shippers return from the hosted checkout with ?pay=ok|cancel|declined —
   // surface that once, then clean the URL so a refresh doesn't re-show it.
@@ -359,6 +363,12 @@ export default function JobDetail() {
             </Card>
           )}
 
+          {/* Phase 3: live map when IN_TRANSIT */}
+          {['PICKED_UP','IN_TRANSIT','DELIVERED'].includes(job.status) && (
+            <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
+          )}
+          {/* Phase 4: EIR for carrier at pickup */}
+          {isAwardedCarrier && ['PICKED_UP','IN_TRANSIT'].includes(job.status) && <div className="mb-6"><EirChecklist jobId={job.id} onDone={load} /></div>}
           {isAwardedCarrier && BACKLOAD_ELIGIBLE_STATUSES.includes(job.status) && <BackloadMatches jobId={job.id} />}
 
           {job.status === 'DISPUTED' && (isShipper || isAwardedCarrier) && (
@@ -663,7 +673,7 @@ function JobEditForm({ job, onDone, onCancel }) {
         <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} />
         <p className="mt-1 text-xs text-ink-muted">What you're willing to pay for this trip — bids above it still appear, just flagged.</p>
       </div>
-      {(job.container_count > 1 || job.truck_count > 1) && (
+      {job.shipment_type !== 'LOCAL' && (job.container_count > 1 || job.truck_count > 1) && (
         <>
           <div>
             <Label>No. of containers</Label>

@@ -15,7 +15,7 @@ function runAutoReleaseSweep(req) {
 
   let released = 0;
   for (const job of due) {
-    if (job.escrow_status === 'DISPUTED') continue; // frozen, skip
+    if (job.escrow_status === 'DISPUTED') continue;
     try {
       db.exec('BEGIN');
       db.prepare(
@@ -34,17 +34,10 @@ function runAutoReleaseSweep(req) {
       notify(job.shipper_id, 'Payout auto-released', `${job.job_code} funds were released ${auto_release_hours}h after delivery.`, job.id, 'payout');
       notify(job.carrier_id, 'Funds on the way', `Your payout for ${job.job_code} was auto-released.`, job.id, 'payout');
       db.exec('COMMIT');
-      // TODO-3: with a processor configured this moves the money; in
-      // internal mode it is a no-op and the admin SLA flow applies.
       executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
       released++;
     } catch (e) {
       db.exec('ROLLBACK');
-      // gstack review F6: this used to swallow the error entirely — a
-      // failing issueInvoice() (or anything else in the transaction) meant
-      // the job silently never released, with nothing to grep for. Money
-      // moving on a schedule needs a visible failure, not a quiet retry.
-      // eslint-disable-next-line no-console
       console.error(`[auto-release] job #${job.id} (${job.job_code}) failed, rolled back:`, e.message);
       writeAudit(req, {
         action: 'ESCROW_RELEASE_FAILED',
@@ -60,3 +53,21 @@ function runAutoReleaseSweep(req) {
 }
 
 module.exports = { runAutoReleaseSweep };
+
+// Microservice entry — only activates when SERVICE=escrow (Docker)
+if (process.env.SERVICE==='escrow') {
+  const express=require('express');
+  const { requestId, securityHeaders, cookieParser }=require('../lib/http');
+  const app=express();
+  app.disable('x-powered-by'); app.set('trust proxy',1);
+  app.use(express.json({limit:'8mb', verify:(req,res,buf)=>{req.rawBody=buf.toString('utf8');}}));
+  app.use(cookieParser); app.use(requestId); app.use(securityHeaders);
+  app.use(require('../routes/system.routes'));
+  app.use(require('../routes/stripe.routes'));
+  app.use(require('../routes/ledger.routes'));
+  app.use(require('../routes/compliance.routes'));
+  app.use(require('../routes/ml.routes'));
+  app.use(require('../routes/audit.routes'));
+  const port=process.env.PORT||4003;
+  app.listen(port,()=>console.log(`Escrow service on :${port}`));
+}

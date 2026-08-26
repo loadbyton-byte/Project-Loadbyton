@@ -452,6 +452,124 @@ db.exec(`
 `);
 
 // ---------------------------------------------------------------------------
+// Phase 2-5: Enterprise tables (idempotent) — Postgres mirror in server/migrations/postgres_init.sql
+// ---------------------------------------------------------------------------
+db.exec(`
+CREATE TABLE IF NOT EXISTS location_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  speed REAL,
+  heading REAL,
+  recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_location_job ON location_logs(job_id);
+CREATE TABLE IF NOT EXISTS telematics_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+  device_id TEXT NOT NULL,
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  speed REAL,
+  temperature REAL,
+  fuel_level REAL,
+  recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
+  raw_payload TEXT
+);
+CREATE TABLE IF NOT EXISTS global_consignments (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'CREATED',
+  origin TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  linked_job_id INTEGER REFERENCES jobs(id),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS compliance_declarations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  hs_code TEXT NOT NULL,
+  manifest_hash TEXT NOT NULL,
+  zk_proof TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  cleared_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS debt_instruments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  bl_number TEXT NOT NULL,
+  face_value_aed REAL NOT NULL,
+  interest_rate_bps INTEGER NOT NULL,
+  risk_score REAL NOT NULL,
+  token_id TEXT UNIQUE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACTIVE',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS contract_rfps (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shipper_id INTEGER NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  origin TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  total_containers INTEGER NOT NULL,
+  duration_months INTEGER NOT NULL,
+  budget_aed REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'OPEN',
+  awarded_carrier_id INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS rfp_bids (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  rfp_id INTEGER NOT NULL REFERENCES contract_rfps(id) ON DELETE CASCADE,
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  amount_aed REAL NOT NULL,
+  eta_days INTEGER NOT NULL,
+  proposal TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS rfp_milestones (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  rfp_id INTEGER NOT NULL REFERENCES contract_rfps(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  due_at TEXT NOT NULL,
+  amount_aed REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  invoice_id INTEGER REFERENCES invoices(id)
+);
+CREATE TABLE IF NOT EXISTS fuel_advances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  amount_aed REAL NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('FUEL','SALIK')),
+  status TEXT NOT NULL DEFAULT 'APPROVED',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`);
+
+// addColumns for jobs enterprise fields
+addColumn('jobs', 'currency', "currency TEXT NOT NULL DEFAULT 'AED'");
+addColumn('jobs', 'country_code', "country_code TEXT NOT NULL DEFAULT 'AE'");
+addColumn('jobs', 'tax_rate_bps', "tax_rate_bps INTEGER NOT NULL DEFAULT 500");
+addColumn('jobs', 'tax_amount', "tax_amount REAL");
+addColumn('jobs', 'dp_world_e_token', "dp_world_e_token TEXT");
+addColumn('jobs', 'eir_photos', "eir_photos TEXT");
+addColumn('jobs', 'detention_free_days', "detention_free_days INTEGER NOT NULL DEFAULT 5");
+addColumn('jobs', 'incidentals_buffer_aed', "incidentals_buffer_aed REAL");
+addColumn('jobs', 'buffer_released', "buffer_released INTEGER NOT NULL DEFAULT 0");
+addColumn('jobs', 'ledger_hash', "ledger_hash TEXT");
+addColumn('jobs', 'prev_ledger_hash', "prev_ledger_hash TEXT");
+addColumn('audit_log', 'prev_hash', "prev_hash TEXT");
+addColumn('audit_log', 'hash', "hash TEXT");
+
+// ---------------------------------------------------------------------------
 // Platform settings — seeded once, editable via /api/admin/settings.
 // ---------------------------------------------------------------------------
 

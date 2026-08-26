@@ -125,3 +125,41 @@ export const api = {
   endImpersonation: () => post('/admin/impersonate/end'),
   runAutoRelease: () => post('/system/auto-release'),
 };
+// ——— enterprise additions (Phase 2-5) ———
+Object.assign(api, {
+  // Stripe escrow
+  payJob: (id) => post(`/jobs/${id}/pay`, {}),
+  mockConfirmPay: (ref) => post('/webhooks/stripe/mock-confirm', { processorPaymentRef: ref }),
+  releasePayout: (id, sigs) => fetch(`${API_BASE_URL}/api/jobs/${id}/release-payout`, { method:'POST', credentials:'include', headers: { 'Content-Type':'application/json', 'x-hsm-sigs': (sigs||[]).join(',') } }).then(r=>r.json()),
+  // verification
+  verifyTrn: (trn) => get(`/verify/trn/${encodeURIComponent(trn)}`),
+  verifyCheck: (body) => post('/verify/check', body),
+  verifyGate: () => get('/verify/gate'),
+  // location / telematics
+  postLocation: (id, body) => post(`/jobs/${id}/location`, body),
+  getLocations: (id) => get(`/jobs/${id}/locations`),
+  ingestTelematics: (body) => post('/telematics/ingest', body),
+  // currency / tax
+  currencyRates: () => get('/currency/rates'),
+  setJobCurrency: (id, body) => post(`/jobs/${id}/currency`, body),
+  // enterprise
+  setEToken: (id, token) => post(`/jobs/${id}/etoken`, { token }),
+  postEir: (id, photos) => post(`/jobs/${id}/eir`, { photos }),
+  getDetention: (id) => get(`/jobs/${id}/detention`),
+  requestFuelAdvance: (id, type) => post(`/jobs/${id}/fuel-advance`, { type }),
+  getFleet: () => get('/carrier/fleet'),
+  // RFPs
+  listRfps: () => get('/rfps'),
+  createRfp: (body) => post('/rfps', body),
+  getRfp: (id) => get(`/rfps/${id}`),
+  bidRfp: (id, body) => post(`/rfps/${id}/bids`, body),
+  awardRfp: (id, bidId) => post(`/rfps/${id}/award`, { bidId }),
+  // EDI / compliance / ledger / ML
+  ingestEdi: (body) => post('/edi/ingest', body),
+  listConsignments: () => get('/edi/consignments'),
+  createCompliance: (id, body) => post(`/jobs/${id}/compliance`, body),
+  tokenizeBL: (id, body) => post(`/jobs/${id}/tokenize`, body),
+  predictEta: (body) => post('/ml/predict-eta', body),
+  auditChain: () => get('/audit/chain'),
+  auditVerify: () => get('/audit/chain/verify'),
+});
