@@ -38,22 +38,22 @@ function clearThrottle(email) {
 }
 
 function auth(allowedRoles) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const cookies = parseCookies(req.headers.cookie);
     const token = cookies.lb_session;
     if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
-    const session = db.prepare('SELECT * FROM sessions WHERE session_token=?').get(token);
+    const session = await db.prepare('SELECT * FROM sessions WHERE session_token=?').get(token);
     if (!session) return res.status(401).json({ error: 'Invalid session' });
     if (new Date(session.expires_at) < new Date()) {
-      db.prepare('DELETE FROM sessions WHERE session_token=?').run(token);
+      await db.prepare('DELETE FROM sessions WHERE session_token=?').run(token);
       return res.status(401).json({ error: 'Session expired' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id=? AND is_active=1').get(session.user_id);
+    const user = await db.prepare('SELECT * FROM users WHERE id=? AND is_active=1').get(session.user_id);
     if (!user) return res.status(401).json({ error: 'Account not found or deactivated' });
 
-    const profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(user.id);
+    const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(user.id);
     req.user = { ...user, profile };
     req.session = session;
     req.actorId = session.acting_seat_id || user.id;
@@ -72,9 +72,9 @@ function auth(allowedRoles) {
 }
 
 function requireSeatRole(allowedSeatRoles) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     if (!req.session || !req.session.acting_seat_id) return next();
-    const seat = db.prepare('SELECT seat_role FROM users WHERE id=?').get(req.session.acting_seat_id);
+    const seat = await db.prepare('SELECT seat_role FROM users WHERE id=?').get(req.session.acting_seat_id);
     if (!seat) return res.status(403).json({ error: 'Seat account not found' });
     if (allowedSeatRoles && !allowedSeatRoles.includes(seat.seat_role)) {
       return res.status(403).json({ error: `Seat role ${seat.seat_role} not in [${allowedSeatRoles}]` });

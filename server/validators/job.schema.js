@@ -3,7 +3,7 @@ const { randomToken, jobCode } = require('../lib/http');
 const { EQUIPMENT_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT } = require('../lib/constants');
 const { isValidUaeLatLng } = require('../lib/helpers');
 
-function createJobFromBody(body, req) {
+async function createJobFromBody(body, req) {
   const {
     shipmentType, containerSize, containerType, containerCount,
     pickupTerminal, deliveryArea, deliveryAddress,
@@ -41,7 +41,7 @@ function createJobFromBody(body, req) {
 
   const code = jobCode();
   const initialStatus = scheduledPostAt && new Date(scheduledPostAt) > new Date() ? 'DRAFT' : 'OPEN';
-  const result = db.prepare(
+  const result = await db.prepare(
     `INSERT INTO jobs (job_code, shipper_id, status, shipment_type, equipment_type, container_size, container_type, container_count,
        pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, notes,
        truck_count, cargo_weight_tons, pickup_lat, pickup_lng, pickup_address_detail,
@@ -86,7 +86,7 @@ function createJobFromBody(body, req) {
   );
 
   const jobId = Number(result.lastInsertRowid);
-  return db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
+  return await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
 }
 
 module.exports = { createJobFromBody };

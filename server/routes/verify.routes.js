@@ -26,7 +26,7 @@ router.post('/api/verify/check', auth(), async (req,res)=>{
 });
 // gate: carrier cannot list jobs if TRN not verified (enforced server-side)
 router.get('/api/verify/gate', auth(['CARRIER']), async (req,res)=>{
-  const profile = db.prepare('SELECT trn_number FROM profiles WHERE user_id=?').get(req.user.id);
+  const profile = await db.prepare('SELECT trn_number FROM profiles WHERE user_id=?').get(req.user.id);
   const trnEnc = profile?.trn_number;
   // decrypt if enc:v1: — keep simple: if starts with enc:, consider not yet verified via external
   const isEnc = trnEnc && trnEnc.startsWith('enc:v1:');

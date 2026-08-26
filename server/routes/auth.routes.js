@@ -25,7 +25,7 @@ router.post(
     if (!email || !password || !companyName) return sendError(res, 400, 'email, password and companyName are required');
     if (!isPasswordValid(password)) return sendError(res, 400, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     if (!['SHIPPER', 'CARRIER'].includes(role)) return sendError(res, 422, 'role must be SHIPPER or CARRIER');
-    const existing = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+    const existing = await db.prepare('SELECT id FROM users WHERE email=?').get(email);
     if (existing) return sendError(res, 400, 'An account with that email already exists');
 
     // UAE-format business identifiers — the signup gate that makes a random
@@ -38,14 +38,14 @@ router.post(
 
     let referredBy = null;
     if (incomingReferral) {
-      const referrer = db.prepare('SELECT referral_code FROM users WHERE referral_code=?').get(incomingReferral);
+      const referrer = await db.prepare('SELECT referral_code FROM users WHERE referral_code=?').get(incomingReferral);
       if (referrer) referredBy = referrer.referral_code;
     }
 
     const passwordHash = bcrypt.hashSync(password, 10);
     const prefix = role === 'SHIPPER' ? 'SHP' : 'CAR';
     let code = referralCode(prefix, companyName);
-    while (db.prepare('SELECT 1 FROM users WHERE referral_code=?').get(code)) {
+    while (await db.prepare('SELECT 1 FROM users WHERE referral_code=?').get(code)) {
       code = `${code}${crypto.randomInt(10, 100)}`;
     }
 
@@ -55,26 +55,26 @@ router.post(
     const verifyToken = randomToken(32);
     const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-    const userResult = db
+    const userResult = await db
       .prepare(
         `INSERT INTO users (email, password_hash, role, tier, referral_code, referred_by, email_verify_token_hash, email_verify_expires, account_approval_status)
          VALUES (?,?,?,?,?,?,?,?, 'PENDING')`
       )
       .run(email, passwordHash, role, 'BRONZE', code, referredBy, hashToken(verifyToken), verifyExpires);
     const userId = Number(userResult.lastInsertRowid);
-    db.prepare(
+    await db.prepare(
       'INSERT INTO profiles (user_id, company_name, trn_number, trade_license_number, phone) VALUES (?,?,?,?,?)'
     ).run(userId, companyName, encryptField(trnNumber.trim()), tradeLicenseNumber.toUpperCase(), normalizeUaeMobile(phone));
 
-    writeAudit(req, { userId, action: 'REGISTER', details: `${role} registered: ${email}`, entityType: 'user', entityId: userId });
+    await writeAudit(req, { userId, action: 'REGISTER', details: `${role} registered: ${email}`, entityType: 'user', entityId: userId });
     sendEmailAsync({
       to: email,
       subject: 'Verify your Loadbyton account',
       html: `<p>Confirm this email address to finish setting up Loadbyton:</p><p><a href="${FRONTEND_URL}/verify-email?token=${verifyToken}">Verify email</a></p><p>This link expires in 24 hours.</p>`,
     });
-    createSession(req, res, userId);
-    const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
-    res.status(201).json({ user: toPublicUser(user) });
+    await createSession(req, res, userId);
+    const user = await db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+    res.status(201).json({ user: await toPublicUser(user) });
   })
 );
 
@@ -83,25 +83,25 @@ router.get(
   asyncHandler(async (req, res) => {
     const token = req.query.token;
     if (!token || typeof token !== 'string') return sendError(res, 400, 'token is required');
-    const user = db
+    const user = await db
       .prepare('SELECT id, email_verify_expires FROM users WHERE email_verify_token_hash=?')
       .get(hashToken(token));
     if (!user || !user.email_verify_expires || new Date(user.email_verify_expires) < new Date()) {
       return sendError(res, 400, 'This verification link is invalid or has expired');
     }
-    db.prepare(
+    await db.prepare(
       `UPDATE users SET email_verified_at=datetime('now'), email_verify_token_hash=NULL, email_verify_expires=NULL WHERE id=?`
     ).run(user.id);
-    writeAudit(req, { userId: user.id, action: 'EMAIL_VERIFY', entityType: 'user', entityId: user.id });
+    await writeAudit(req, { userId: user.id, action: 'EMAIL_VERIFY', entityType: 'user', entityId: user.id });
     res.json({ ok: true });
   })
 );
 
-router.post('/api/auth/resend-verification', auth(), (req, res) => {
+router.post('/api/auth/resend-verification', auth(), async (req, res) => {
   if (req.user.email_verified_at) return sendError(res, 400, 'Email is already verified');
   const verifyToken = randomToken(32);
   const verifyExpires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  db.prepare('UPDATE users SET email_verify_token_hash=?, email_verify_expires=? WHERE id=?').run(hashToken(verifyToken), verifyExpires, req.user.id);
+  await db.prepare('UPDATE users SET email_verify_token_hash=?, email_verify_expires=? WHERE id=?').run(hashToken(verifyToken), verifyExpires, req.user.id);
   sendEmailAsync({
     to: req.user.email,
     subject: 'Verify your Loadbyton account',
@@ -115,12 +115,12 @@ router.post(
   asyncHandler(async (req, res) => {
     const { email } = req.body || {};
     if (!email) return sendError(res, 400, 'email is required');
-    const user = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+    const user = await db.prepare('SELECT id FROM users WHERE email=?').get(email);
     if (user) {
       const resetToken = randomToken(32);
       const resetExpires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      db.prepare('UPDATE users SET password_reset_token_hash=?, password_reset_expires=? WHERE id=?').run(hashToken(resetToken), resetExpires, user.id);
-      writeAudit(req, { userId: user.id, action: 'PASSWORD_RESET_REQUEST', entityType: 'user', entityId: user.id });
+      await db.prepare('UPDATE users SET password_reset_token_hash=?, password_reset_expires=? WHERE id=?').run(hashToken(resetToken), resetExpires, user.id);
+      await writeAudit(req, { userId: user.id, action: 'PASSWORD_RESET_REQUEST', entityType: 'user', entityId: user.id });
       sendEmailAsync({
         to: email,
         subject: 'Reset your Loadbyton password',
@@ -137,18 +137,18 @@ router.post(
     const { token, password } = req.body || {};
     if (!token || typeof token !== 'string') return sendError(res, 400, 'token is required');
     if (!isPasswordValid(password)) return sendError(res, 400, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-    const user = db
+    const user = await db
       .prepare('SELECT id FROM users WHERE password_reset_token_hash=? AND password_reset_expires > datetime(\'now\')')
       .get(hashToken(token));
     if (!user) return sendError(res, 400, 'This reset link is invalid or has expired');
 
     const passwordHash = bcrypt.hashSync(password, 10);
-    db.prepare('UPDATE users SET password_hash=?, password_reset_token_hash=NULL, password_reset_expires=NULL WHERE id=?').run(passwordHash, user.id);
+    await db.prepare('UPDATE users SET password_hash=?, password_reset_token_hash=NULL, password_reset_expires=NULL WHERE id=?').run(passwordHash, user.id);
     // A password reset is exactly the moment every existing session (on
     // every device, including whoever the attacker was if this reset was
     // defensive) should be invalidated.
-    db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
-    writeAudit(req, { userId: user.id, action: 'PASSWORD_RESET', entityType: 'user', entityId: user.id });
+    await db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
+    await writeAudit(req, { userId: user.id, action: 'PASSWORD_RESET', entityType: 'user', entityId: user.id });
     res.json({ ok: true });
   })
 );
@@ -161,7 +161,7 @@ router.post(
     if (!email || !password) return sendError(res, 400, 'email and password are required');
     if (isThrottled(email)) return sendError(res, 429, 'Too many failed attempts. Try again in a few minutes.');
 
-    const user = db.prepare('SELECT * FROM users WHERE email=?').get(email);
+    const user = await db.prepare('SELECT * FROM users WHERE email=?').get(email);
     // past the bcrypt call entirely when the email doesn't exist, so a
     // nonexistent-email response returns measurably faster than a
     // wrong-password one — a timing oracle for enumerating registered
@@ -191,50 +191,54 @@ router.post(
     // comment on auth() above.
     const isSeat = !!user.org_owner_id;
     const rootId = user.org_owner_id || user.id;
-    const rootUser = isSeat ? db.prepare('SELECT * FROM users WHERE id=?').get(rootId) : user;
-    createSession(req, res, rootId, { actingSeatId: isSeat ? user.id : null });
-    writeAudit(req, { userId: user.id, action: 'LOGIN', details: `${user.email} logged in`, entityType: 'user', entityId: user.id });
+    const rootUser = isSeat ? await db.prepare('SELECT * FROM users WHERE id=?').get(rootId) : user;
+    await createSession(req, res, rootId, { actingSeatId: isSeat ? user.id : null });
+    await writeAudit(req, { userId: user.id, action: 'LOGIN', details: `${user.email} logged in`, entityType: 'user', entityId: user.id });
+    const publicUser = await toPublicUser(rootUser);
+    const unreadCount = await unreadNotificationCount(rootUser.id);
     res.json({
-      user: { ...toPublicUser(rootUser), unreadNotifications: unreadNotificationCount(rootUser.id) },
+      user: { ...publicUser, unreadNotifications: unreadCount },
       actingAs: isSeat ? { id: user.id, email: user.email, displayName: user.display_name, seatRole: user.seat_role } : null,
     });
   })
 );
 
-router.get('/api/auth/me', authIpLimiter, auth(), (req, res) => {
+router.get('/api/auth/me', authIpLimiter, auth(), async (req, res) => {
   const impersonatingAdminId = req.session.impersonating_admin_id;
   const impersonatedBy = impersonatingAdminId
-    ? db.prepare('SELECT id, email FROM users WHERE id=?').get(impersonatingAdminId)
+    ? await db.prepare('SELECT id, email FROM users WHERE id=?').get(impersonatingAdminId)
     : null;
   const actingSeatId = req.session.acting_seat_id;
-  const actingSeat = actingSeatId ? db.prepare('SELECT id, email, display_name, seat_role FROM users WHERE id=?').get(actingSeatId) : null;
+  const actingSeat = actingSeatId ? await db.prepare('SELECT id, email, display_name, seat_role FROM users WHERE id=?').get(actingSeatId) : null;
+  const publicUser = await toPublicUser(req.user);
+  const unreadCount = await unreadNotificationCount(req.user.id);
   res.json({
-    user: { ...toPublicUser(req.user), impersonating: !!impersonatedBy, impersonatedBy, unreadNotifications: unreadNotificationCount(req.user.id) },
+    user: { ...publicUser, impersonating: !!impersonatedBy, impersonatedBy, unreadNotifications: unreadCount },
     actingAs: actingSeat ? { id: actingSeat.id, email: actingSeat.email, displayName: actingSeat.display_name, seatRole: actingSeat.seat_role } : null,
   });
 });
 
-router.post('/api/auth/logout', auth(), (req, res) => {
+router.post('/api/auth/logout', auth(), async (req, res) => {
   const token = req.cookies.lb_session;
-  if (token) db.prepare('DELETE FROM sessions WHERE session_token=?').run(token);
+  if (token) await db.prepare('DELETE FROM sessions WHERE session_token=?').run(token);
   clearSessionCookie(req, res);
   res.json({ ok: true });
 });
 
-router.post('/api/auth/mfa/setup', auth(), (req, res) => {
+router.post('/api/auth/mfa/setup', auth(), async (req, res) => {
   const secret = totp.randomBase32Secret();
-  db.prepare('UPDATE users SET mfa_secret=?, mfa_enabled=1 WHERE id=?').run(secret, req.actorId);
-  writeAudit(req, { userId: req.actorId, action: 'MFA_ENABLE', entityType: 'user', entityId: req.actorId });
+  await db.prepare('UPDATE users SET mfa_secret=?, mfa_enabled=1 WHERE id=?').run(secret, req.actorId);
+  await writeAudit(req, { userId: req.actorId, action: 'MFA_ENABLE', entityType: 'user', entityId: req.actorId });
   res.json({ ok: true, secret, otpauthUrl: totp.provisioningUrl(secret, req.actorLabel) });
 });
 
-router.post('/api/auth/mfa/disable', auth(), (req, res) => {
-  db.prepare('UPDATE users SET mfa_secret=NULL, mfa_enabled=0 WHERE id=?').run(req.actorId);
-  writeAudit(req, { userId: req.actorId, action: 'MFA_DISABLE', entityType: 'user', entityId: req.actorId });
+router.post('/api/auth/mfa/disable', auth(), async (req, res) => {
+  await db.prepare('UPDATE users SET mfa_secret=NULL, mfa_enabled=0 WHERE id=?').run(req.actorId);
+  await writeAudit(req, { userId: req.actorId, action: 'MFA_DISABLE', entityType: 'user', entityId: req.actorId });
   res.json({ ok: true });
 });
 
-router.patch('/api/profile', auth(), requireSeatRole(['OPS']), (req, res) => {
+router.patch('/api/profile', auth(), requireSeatRole(['OPS']), async (req, res) => {
   const b = req.body || {};
   const fields = {
     company_name: b.companyName,
@@ -257,32 +261,32 @@ router.patch('/api/profile', auth(), requireSeatRole(['OPS']), (req, res) => {
   }
   if (sets.length) {
     params.push(req.user.id);
-    db.prepare(`UPDATE profiles SET ${sets.join(', ')} WHERE user_id=?`).run(...params);
+    await db.prepare(`UPDATE profiles SET ${sets.join(', ')} WHERE user_id=?`).run(...params);
   }
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
-  res.json({ user: toPublicUser(user) });
+  const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  res.json({ user: await toPublicUser(user) });
 });
 
 
-router.get('/api/me/export', auth(), (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
-  const profile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(req.user.id);
-  const jobs = db.prepare('SELECT * FROM jobs WHERE shipper_id=? OR carrier_id=?').all(req.user.id, req.user.id);
-  const bids = db.prepare('SELECT * FROM bids WHERE carrier_id=?').all(req.user.id);
-  const payouts = db.prepare('SELECT * FROM payouts WHERE carrier_id=?').all(req.user.id);
-  const notifications = db.prepare('SELECT * FROM notifications WHERE user_id=?').all(req.user.id);
-  const audit = db.prepare('SELECT * FROM audit_log WHERE user_id=?').all(req.user.id);
+router.get('/api/me/export', auth(), async (req, res) => {
+  const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+  const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(req.user.id);
+  const jobs = await db.prepare('SELECT * FROM jobs WHERE shipper_id=? OR carrier_id=?').all(req.user.id, req.user.id);
+  const bids = await db.prepare('SELECT * FROM bids WHERE carrier_id=?').all(req.user.id);
+  const payouts = await db.prepare('SELECT * FROM payouts WHERE carrier_id=?').all(req.user.id);
+  const notifications = await db.prepare('SELECT * FROM notifications WHERE user_id=?').all(req.user.id);
+  const audit = await db.prepare('SELECT * FROM audit_log WHERE user_id=?').all(req.user.id);
   res.json({ user: { ...user, profile: profile ? { ...profile, trn_number: require('../lib/crypto').decryptField(profile.trn_number), iban: require('../lib/crypto').decryptField(profile.iban) } : null }, jobs, bids, payouts, notifications, audit });
 });
 
-router.delete('/api/me', auth(), (req, res) => {
+router.delete('/api/me', auth(), async (req, res) => {
   const userId = req.user.id;
   const token = req.cookies.lb_session;
-  if (token) db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);
+  if (token) await db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);
   // Anonymize rather than hard-delete to preserve FK integrity for jobs/bids
-  db.prepare("UPDATE users SET email=?, password_hash='deleted', is_active=0, is_verified=0 WHERE id=?").run(`deleted-${userId}@loadbyton.invalid`, userId);
-  db.prepare('UPDATE profiles SET company_name=?, trn_number=NULL, trade_license_number=NULL, phone=NULL, iban=NULL WHERE user_id=?').run(`Deleted User ${userId}`, userId);
-  require('../lib/helpers').writeAudit(req, { userId, action: 'ACCOUNT_DELETE', details: `User ${userId} self-deleted (PDPL)`, entityType: 'user', entityId: userId });
+  await db.prepare("UPDATE users SET email=?, password_hash='deleted', is_active=0, is_verified=0 WHERE id=?").run(`deleted-${userId}@loadbyton.invalid`, userId);
+  await db.prepare('UPDATE profiles SET company_name=?, trn_number=NULL, trade_license_number=NULL, phone=NULL, iban=NULL WHERE user_id=?').run(`Deleted User ${userId}`, userId);
+  await require('../lib/helpers').writeAudit(req, { userId, action: 'ACCOUNT_DELETE', details: `User ${userId} self-deleted (PDPL)`, entityType: 'user', entityId: userId });
   try { require('../lib/helpers').clearSessionCookie(req, res); } catch {}
   res.json({ ok: true, message: 'Account deleted and anonymized. Jobs/bids retained for audit with anonymized identity.' });
 });

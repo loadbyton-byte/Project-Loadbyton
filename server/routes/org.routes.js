@@ -7,8 +7,8 @@ const { auth, requireSeatRole } = require('../middleware/auth');
 
 const router = require('express').Router();
 
-router.get('/api/org/members', auth(['SHIPPER', 'CARRIER']), (req, res) => {
-  const seats = db
+router.get('/api/org/members', auth(['SHIPPER', 'CARRIER']), async (req, res) => {
+  const seats = await db
     .prepare('SELECT id, email, display_name, seat_role, is_active, created_at FROM users WHERE org_owner_id=? ORDER BY created_at ASC')
     .all(req.user.id);
   res.json({
@@ -17,24 +17,24 @@ router.get('/api/org/members', auth(['SHIPPER', 'CARRIER']), (req, res) => {
   });
 });
 
-router.post('/api/org/members', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]), (req, res) => {
+router.post('/api/org/members', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]), async (req, res) => {
   const { email, password, seatRole, displayName } = req.body || {};
   if (!email || !password) return sendError(res, 400, 'email and password are required');
   if (!SEAT_ROLES.includes(seatRole)) return sendError(res, 422, `seatRole must be one of ${SEAT_ROLES.join(', ')}`);
-  if (db.prepare('SELECT id FROM users WHERE email=?').get(email)) return sendError(res, 400, 'An account with that email already exists');
+  if (await db.prepare('SELECT id FROM users WHERE email=?').get(email)) return sendError(res, 400, 'An account with that email already exists');
 
   const passwordHash = bcrypt.hashSync(password, 10);
-  const result = db
+  const result = await db
     .prepare('INSERT INTO users (email, password_hash, role, tier, org_owner_id, seat_role, display_name, is_verified) VALUES (?,?,?,?,?,?,?,?)')
     .run(email, passwordHash, req.user.role, 'BRONZE', req.user.id, seatRole, displayName || null, req.user.is_verified ? 1 : 0);
   const seatId = Number(result.lastInsertRowid);
-  writeAudit(req, { userId: req.actorId, action: 'ORG_MEMBER_ADD', details: `Added seat ${email} (${seatRole})`, entityType: 'user', entityId: seatId });
-  const seat = db.prepare('SELECT id, email, display_name, seat_role, is_active, created_at FROM users WHERE id=?').get(seatId);
+  await writeAudit(req, { userId: req.actorId, action: 'ORG_MEMBER_ADD', details: `Added seat ${email} (${seatRole})`, entityType: 'user', entityId: seatId });
+  const seat = await db.prepare('SELECT id, email, display_name, seat_role, is_active, created_at FROM users WHERE id=?').get(seatId);
   res.status(201).json({ seat });
 });
 
-router.patch('/api/org/members/:id', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]), (req, res) => {
-  const seat = db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
+router.patch('/api/org/members/:id', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]), async (req, res) => {
+  const seat = await db.prepare('SELECT * FROM users WHERE id=?').get(req.params.id);
   if (!seat || seat.org_owner_id !== req.user.id) return sendError(res, 404, 'Seat not found');
   const { seatRole, isActive } = req.body || {};
   if (seatRole !== undefined && !SEAT_ROLES.includes(seatRole)) return sendError(res, 422, `seatRole must be one of ${SEAT_ROLES.join(', ')}`);
@@ -45,14 +45,14 @@ router.patch('/api/org/members/:id', auth(['SHIPPER', 'CARRIER']), requireSeatRo
   if (isActive !== undefined) { sets.push('is_active=?'); params.push(isActive ? 1 : 0); }
   if (sets.length) {
     params.push(seat.id);
-    db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id=?`).run(...params);
+    await db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id=?`).run(...params);
     // Deactivating a seat must also kill any live session for it immediately —
     // otherwise a seat already logged in stays fully active until their
     // cookie naturally expires, up to 7 days later.
-    if (isActive === false) db.prepare('DELETE FROM sessions WHERE acting_seat_id=?').run(seat.id);
+    if (isActive === false) await db.prepare('DELETE FROM sessions WHERE acting_seat_id=?').run(seat.id);
   }
-  writeAudit(req, { userId: req.actorId, action: 'ORG_MEMBER_UPDATE', details: `Updated seat #${seat.id}`, entityType: 'user', entityId: seat.id });
-  const updated = db.prepare('SELECT id, email, display_name, seat_role, is_active, created_at FROM users WHERE id=?').get(seat.id);
+  await writeAudit(req, { userId: req.actorId, action: 'ORG_MEMBER_UPDATE', details: `Updated seat #${seat.id}`, entityType: 'user', entityId: seat.id });
+  const updated = await db.prepare('SELECT id, email, display_name, seat_role, is_active, created_at FROM users WHERE id=?').get(seat.id);
   res.json({ seat: updated });
 });
 

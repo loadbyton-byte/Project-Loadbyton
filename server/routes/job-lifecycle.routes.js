@@ -15,11 +15,11 @@ const { idempotency } = require('../lib/idempotency');
 
 const router = require('express').Router();
 
-router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, requireSeatRole(['OPS']), idempotency, (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, requireSeatRole(['OPS']), idempotency, async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.status !== 'OPEN') return sendError(res, 403, 'Job is not open for bidding.');
-  if (!req.user.profile || !req.user.profile.rating_avg || !db.prepare('SELECT is_verified FROM users WHERE id=?').get(req.user.id).is_verified) {
+  if (!req.user.profile || !req.user.profile.rating_avg || !(await db.prepare('SELECT is_verified FROM users WHERE id=?').get(req.user.id)).is_verified) {
     return sendError(res, 403, 'Carrier verification required to bid.');
   }
   const b = req.body || {};
@@ -35,7 +35,7 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   // the same job (notification spam, price signaling). Checked proactively
   // for a clean 409; idx_bids_one_pending_per_carrier (server/db.js) is the
   // real guarantee against the race between this check and the insert.
-  const alreadyBidding = db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND carrier_id=? AND status='PENDING'`).get(job.id, req.user.id);
+  const alreadyBidding = await db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND carrier_id=? AND status='PENDING'`).get(job.id, req.user.id);
   if (alreadyBidding) return sendError(res, 409, 'You already have a pending bid on this job — withdraw it before placing another.');
 
   // Driver identity is deliberately NOT collected at bid time anymore:
@@ -45,7 +45,7 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   // losing bids' competitors.
   let result;
   try {
-    result = db
+    result = await db
       .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, eta_at, truck_type, notes) VALUES (?,?,?,?,?,?,?)')
       .run(job.id, req.user.id, amount, legacyEtaMinutes, etaAt.toISOString(), b.truckType || null, b.notes || null);
   } catch (e) {
@@ -55,14 +55,14 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
     throw e;
   }
   const bidId = Number(result.lastInsertRowid);
-  writeAudit(req, { userId: req.actorId, action: 'BID_CREATE', details: `Bid AED ${amount} on ${job.job_code}`, entityType: 'bid', entityId: bidId });
-  notify(job.shipper_id, 'New bid received', `${req.user.profile.company_name} bid AED ${amount} on ${job.job_code}.`, job.id, 'bid');
-  const bid = db.prepare('SELECT * FROM bids WHERE id=?').get(bidId);
+  await writeAudit(req, { userId: req.actorId, action: 'BID_CREATE', details: `Bid AED ${amount} on ${job.job_code}`, entityType: 'bid', entityId: bidId });
+  await notify(job.shipper_id, 'New bid received', `${req.user.profile.company_name} bid AED ${amount} on ${job.job_code}.`, job.id, 'bid');
+  const bid = await db.prepare('SELECT * FROM bids WHERE id=?').get(bidId);
   res.status(201).json({ bid });
 });
 
-router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');
   if (job.status !== 'AWARDED') return sendError(res, 409, 'Only AWARDED jobs can be paid');
@@ -72,41 +72,39 @@ router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole
 
   const payRef = job.processor_payment_ref || `lb_${job.job_code.toLowerCase()}_${crypto.randomUUID().slice(0, 8)}`;
   const returnBase = `${FRONTEND_URL}/jobs/${job.id}`;
-  payments
-    .createCheckoutOrder({
+  try {
+    const r = await payments.createCheckoutOrder({
       jobCode: job.job_code,
       amountAed: job.agreed_price_aed,
       description: `Loadbyton escrow for ${job.job_code}`,
       returnUrls: { auth: `${returnBase}?pay=ok`, cancel: `${returnBase}?pay=cancel`, decline: `${returnBase}?pay=declined` },
       paymentRef: payRef,
-    })
-    .then((r) => {
-      if (!r.ok) {
-        markJobPaymentFailed(job.id, `${r.error}${r.detail ? `: ${r.detail}` : ''}`);
-        return sendError(res, 502, 'Payment provider unavailable — please try again');
-      }
-      db.prepare(
-        `UPDATE jobs SET processor_payment_ref=?, processor_payment_status='REQUIRES_PAYMENT', processor_amount_aed=?, processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`
-      ).run(payRef, job.agreed_price_aed, job.id);
-      writeAudit(req, {
-        userId: req.actorId,
-        action: 'PAYMENT_CHECKOUT',
-        details: `${job.job_code}: checkout created (${payments.provider()}, ref ${payRef})`,
-        entityType: 'job',
-        entityId: job.id,
-        beforeState: 'HELD',
-        afterState: 'REQUIRES_PAYMENT',
-      });
-      res.json({ ok: true, paymentUrl: r.url, ref: payRef, provider: payments.provider(), testMode: payments.providerInfo().testMode });
-    })
-    .catch((e) => {
-      markJobPaymentFailed(job.id, e.message);
-      sendError(res, 502, 'Payment provider unavailable — please try again');
     });
+    if (!r.ok) {
+      markJobPaymentFailed(job.id, `${r.error}${r.detail ? `: ${r.detail}` : ''}`);
+      return sendError(res, 502, 'Payment provider unavailable — please try again');
+    }
+    await db.prepare(
+      `UPDATE jobs SET processor_payment_ref=?, processor_payment_status='REQUIRES_PAYMENT', processor_amount_aed=?, processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`
+    ).run(payRef, job.agreed_price_aed, job.id);
+    await writeAudit(req, {
+      userId: req.actorId,
+      action: 'PAYMENT_CHECKOUT',
+      details: `${job.job_code}: checkout created (${payments.provider()}, ref ${payRef})`,
+      entityType: 'job',
+      entityId: job.id,
+      beforeState: 'HELD',
+      afterState: 'REQUIRES_PAYMENT',
+    });
+    res.json({ ok: true, paymentUrl: r.url, ref: payRef, provider: payments.provider(), testMode: payments.providerInfo().testMode });
+  } catch (e) {
+    markJobPaymentFailed(job.id, e.message);
+    sendError(res, 502, 'Payment provider unavailable — please try again');
+  }
 });
 
-router.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   const { status: next } = req.body || {};
   const role = req.user.role;
@@ -127,27 +125,27 @@ router.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), (req, res
     return sendError(res, 400, 'Add the assigned driver first — driver details are shared after bid confirmation (PATCH /api/jobs/:id/driver).');
   }
 
-  db.prepare(`UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?`).run(next, job.id);
+  await db.prepare(`UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?`).run(next, job.id);
 
   if (next === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
-    db.prepare(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`).run(job.id);
-    db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
+    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`).run(job.id);
+    await db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
     // TODO-3: if funds were actually taken before the cancellation, give
     // them back. No-op unless a processor is configured AND the charge was
     // PAID (internal mode has nothing to refund).
     if (job.escrow_status === 'FUNDED') refundJobAsync(job);
   }
   if (next === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
-    db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(job.id);
-    db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
+    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(job.id);
+    await db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
     issueInvoice(db, job.id);
-    notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, job.id, 'payout');
+    await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, job.id, 'payout');
     // TODO-3: with a processor configured this moves the money; in
     // internal mode it is a no-op and the admin SLA flow applies.
-    executePayoutAsync(job, db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
+    executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
   }
 
-  writeAudit(req, {
+  await writeAudit(req, {
     userId: req.actorId,
     action: 'STATUS',
     details: `${job.job_code}: ${job.status} -> ${next}`,
@@ -157,14 +155,14 @@ router.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), (req, res
     afterState: next,
   });
   const other = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
-  notify(other, 'Job status updated', `${job.job_code} is now ${next}.`, job.id, 'status');
+  await notify(other, 'Job status updated', `${job.job_code} is now ${next}.`, job.id, 'status');
 
-  const updated = db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
+  const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
   res.json({ job: updated });
 });
 
-router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS']), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
   if (!['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status)) {
@@ -175,12 +173,12 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
   const normalizedPhone = normalizeUaeMobile(driverPhone);
   if (!normalizedPhone) return sendError(res, 400, 'driverPhone is required and must be a valid UAE mobile number');
 
-  db.prepare(`UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone=?, updated_at=datetime('now') WHERE id=?`).run(
+  await db.prepare(`UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone=?, updated_at=datetime('now') WHERE id=?`).run(
     driverName,
     normalizedPhone,
     job.id
   );
-  writeAudit(req, {
+  await writeAudit(req, {
     userId: req.actorId,
     action: 'DRIVER_REASSIGN',
     details: `${job.job_code}: driver changed from ${job.assigned_driver_name || 'unset'} (${job.assigned_driver_phone || 'unset'}) to ${driverName} (${normalizedPhone})`,
@@ -189,7 +187,7 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
     beforeState: job.assigned_driver_phone || 'unset',
     afterState: normalizedPhone,
   });
-  notify(job.shipper_id, 'Driver reassigned', `${job.job_code}: the assigned driver was changed to ${driverName}.`, job.id, 'status');
+  await notify(job.shipper_id, 'Driver reassigned', `${job.job_code}: the assigned driver was changed to ${driverName}.`, job.id, 'status');
   // Driver details are shared with the shipper only from this point on (the
   // award no longer copies a bid-time driver). Fire the pickup-details
   // WhatsApp/SMS only when the driver is actually on file — first assignment
@@ -199,12 +197,12 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
     template: 'job_awarded_pickup_details',
     params: [driverName, job.job_code, job.pickup_terminal],
   });
-  const updated = db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
+  const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
   res.json({ job: updated });
 });
 
-router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), idempotency, (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), idempotency, async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
   if (job.status !== 'IN_TRANSIT') return sendError(res, 403, 'Job must be IN_TRANSIT to submit proof of delivery');
@@ -221,9 +219,9 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
       return sendError(res, e.status || 400, e.message || 'Upload failed');
     }
   }
-  db.prepare(`UPDATE jobs SET status='DELIVERED', delivered_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
+  await db.prepare(`UPDATE jobs SET status='DELIVERED', delivered_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
   if (doc && (doc.fileUrl || storagePath)) {
-    db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
+    await db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
       job.id,
       req.actorId,
       DOC_TYPES.includes(doc.docType) ? doc.docType : 'POD',
@@ -233,7 +231,7 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
       mimeType
     );
   }
-  writeAudit(req, {
+  await writeAudit(req, {
     userId: req.actorId,
     action: 'STATUS',
     details: `${job.job_code}: POD submitted`,
@@ -242,14 +240,14 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
     beforeState: 'IN_TRANSIT',
     afterState: 'DELIVERED',
   });
-  const { auto_release_hours } = getSettings();
-  notify(job.shipper_id, 'Proof of delivery submitted', `Confirm delivery on ${job.job_code}, or it auto-releases in ${auto_release_hours}h.`, job.id, 'status');
-  const updated = db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
+  const { auto_release_hours } = await getSettings();
+  await notify(job.shipper_id, 'Proof of delivery submitted', `Confirm delivery on ${job.job_code}, or it auto-releases in ${auto_release_hours}h.`, job.id, 'status');
+  const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
   res.json({ job: updated });
 });
 
-router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRole(['OPS']), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRole(['OPS']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   const isShipperOwner = req.user.role === 'SHIPPER' && job.shipper_id === req.user.id;
   const isCarrierOwner = req.user.role === 'CARRIER' && job.carrier_id === req.user.id;
@@ -258,9 +256,9 @@ router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRo
   const { reason } = req.body || {};
   if (!reason || !reason.trim()) return sendError(res, 400, 'reason is required');
 
-  const result = db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\')').run(job.id, req.user.id, reason.trim());
-  db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
-  writeAudit(req, {
+  const result = await db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\')').run(job.id, req.user.id, reason.trim());
+  await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
+  await writeAudit(req, {
     userId: req.actorId,
     action: 'DISPUTE_OPEN',
     details: reason.trim(),
@@ -270,19 +268,19 @@ router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRo
     afterState: 'DISPUTED',
   });
   const other = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
-  notify(other, 'Dispute opened', `${job.job_code}: a dispute was opened by the counterparty. Escrow is frozen pending admin review.`, job.id, 'dispute');
-  notifyAdmins('New dispute filed', `${job.job_code}: filed by ${req.actorLabel}. Escrow frozen, awaiting review.`, job.id);
-  const dispute = db.prepare('SELECT * FROM disputes WHERE id=?').get(Number(result.lastInsertRowid));
+  await notify(other, 'Dispute opened', `${job.job_code}: a dispute was opened by the counterparty. Escrow is frozen pending admin review.`, job.id, 'dispute');
+  await notifyAdmins('New dispute filed', `${job.job_code}: filed by ${req.actorLabel}. Escrow frozen, awaiting review.`, job.id);
+  const dispute = await db.prepare('SELECT * FROM disputes WHERE id=?').get(Number(result.lastInsertRowid));
   res.status(201).json({ dispute });
 });
 
-router.get('/api/jobs/:id/dispute', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.get('/api/jobs/:id/dispute', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   const isParty = req.user.id === job.shipper_id || req.user.id === job.carrier_id;
   if (!isParty && req.user.role !== 'ADMIN') return sendError(res, 403, 'Not permitted');
 
-  const dispute = db.prepare('SELECT * FROM disputes WHERE job_id=? ORDER BY created_at DESC LIMIT 1').get(job.id);
+  const dispute = await db.prepare('SELECT * FROM disputes WHERE job_id=? ORDER BY created_at DESC LIMIT 1').get(job.id);
   if (!dispute) return sendError(res, 404, 'No dispute on this job');
 
   res.json({
@@ -291,14 +289,14 @@ router.get('/api/jobs/:id/dispute', auth(), (req, res) => {
   });
 });
 
-router.get('/api/jobs/:id/track', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.get('/api/jobs/:id/track', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  if (!canViewJob(job, req.user)) return sendError(res, 403, 'Not permitted');
+  if (!(await canViewJob(job, req.user))) return sendError(res, 403, 'Not permitted');
 
-  const shipper = db.prepare('SELECT company_name FROM profiles WHERE user_id=?').get(job.shipper_id);
-  const carrier = job.carrier_id ? db.prepare('SELECT company_name FROM profiles WHERE user_id=?').get(job.carrier_id) : null;
-  const { auto_release_hours } = getSettings();
+  const shipper = await db.prepare('SELECT company_name FROM profiles WHERE user_id=?').get(job.shipper_id);
+  const carrier = job.carrier_id ? await db.prepare('SELECT company_name FROM profiles WHERE user_id=?').get(job.carrier_id) : null;
+  const { auto_release_hours } = await getSettings();
 
   const statusIndex = STATUS_ORDER.indexOf(job.status);
   const canProgress = req.user.role === 'CARRIER' && req.user.id === job.carrier_id && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status);

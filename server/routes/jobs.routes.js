@@ -7,7 +7,7 @@ const { createJobFromBody } = require('../validators/job.schema');
 
 const router = require('express').Router();
 
-router.get('/api/jobs', auth(), (req, res) => {
+router.get('/api/jobs', auth(), async (req, res) => {
   const { status, limit, offset, mine, sort, q, equipmentType, escrowStatus } = req.query;
   // clause unclamped (LIMIT -1 means "no limit" in SQLite) — main's `mine`
   // param (F19, a different/better fix than the client-side limit:200 bump
@@ -67,7 +67,7 @@ router.get('/api/jobs', auth(), (req, res) => {
   // Total count for real pagination (page X of Y), not just "was there a
   // next page" — same WHERE, no LIMIT/OFFSET, params array cloned before
   // the LIMIT/OFFSET values are appended for the row query below.
-  const total = db.prepare(`SELECT COUNT(*) c FROM jobs WHERE ${where}`).get(...params).c;
+  const total = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE ${where}`).get(...params)).c;
 
   const rowParams = [...params, lim, off];
   // Ratings-on-rows: a shipper deciding whether to award, or a carrier
@@ -76,7 +76,7 @@ router.get('/api/jobs', auth(), (req, res) => {
   // LEFT JOIN (not INNER) because a job in DRAFT/OPEN may have no carrier
   // yet, and a shipper always has a profile but the join must not drop the
   // job row if either side is briefly missing.
-  const jobs = db
+  const jobs = await db
     .prepare(
       `SELECT jobs.*, sp.rating_avg as shipper_rating, cp.rating_avg as carrier_rating
        FROM jobs
@@ -89,19 +89,19 @@ router.get('/api/jobs', auth(), (req, res) => {
   res.json({ jobs, total, limit: lim, offset: off });
 });
 
-router.post('/api/jobs/import', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), (req, res) => {
+router.post('/api/jobs/import', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), async (req, res) => {
   const rows = (req.body || {}).jobs;
   if (!Array.isArray(rows) || rows.length === 0) return sendError(res, 400, 'jobs must be a non-empty array');
   if (rows.length > JOB_IMPORT_MAX_ROWS) return sendError(res, 400, `Cannot import more than ${JOB_IMPORT_MAX_ROWS} jobs at once`);
 
-  const results = rows.map((row, i) => {
+  const results = await Promise.all(rows.map(async (row, i) => {
     try {
-      const job = createJobFromBody(row || {}, req);
+      const job = await createJobFromBody(row || {}, req);
       return { row: i + 1, ok: true, jobCode: job.job_code, jobId: job.id };
     } catch (e) {
       return { row: i + 1, ok: false, error: e.message || 'Unknown error' };
     }
-  });
+  }));
   const created = results.filter((r) => r.ok).length;
   res.status(201).json({ results, created, failed: results.length - created });
 });
@@ -136,12 +136,12 @@ const JOB_EDITABLE_FIELDS = {
 };
 const COUNT_JOB_FIELDS = new Set(['containerCount', 'truckCount']);
 
-router.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');
   if (job.status !== 'OPEN') return sendError(res, 403, 'A job can only be edited while OPEN');
-  const hasPendingBid = db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND status='PENDING'`).get(job.id);
+  const hasPendingBid = await db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND status='PENDING'`).get(job.id);
   if (hasPendingBid) return sendError(res, 403, 'Cannot edit a job that already has a pending bid — withdraw/reject bids first, or cancel and repost');
 
   const b = req.body || {};
@@ -167,8 +167,8 @@ router.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), (req,
 
   sets.push(`updated_at=datetime('now')`);
   params.push(job.id);
-  db.prepare(`UPDATE jobs SET ${sets.join(', ')} WHERE id=?`).run(...params);
-  writeAudit(req, {
+  await db.prepare(`UPDATE jobs SET ${sets.join(', ')} WHERE id=?`).run(...params);
+  await writeAudit(req, {
     userId: req.actorId,
     action: 'JOB_EDIT',
     details: `${job.job_code} edited: ${Object.keys(beforeState).join(', ')}`,
@@ -177,16 +177,16 @@ router.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), (req,
     beforeState: JSON.stringify(beforeState),
     afterState: JSON.stringify(Object.fromEntries(Object.entries(JOB_EDITABLE_FIELDS).filter(([k]) => b[k] !== undefined).map(([k, col]) => [col, b[k]]))),
   });
-  const updated = db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
+  const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
   res.json({ job: updated });
 });
 
-router.get('/api/jobs/:id', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.get('/api/jobs/:id', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  if (!canViewJob(job, req.user)) return sendError(res, 403, 'Not permitted to view this job');
+  if (!(await canViewJob(job, req.user))) return sendError(res, 403, 'Not permitted to view this job');
 
-  let bids = db
+  let bids = await db
     .prepare(
       `SELECT bids.*, cp.rating_avg as carrier_rating, cp.company_name as carrier_company
        FROM bids LEFT JOIN profiles cp ON cp.user_id = bids.carrier_id
@@ -203,22 +203,22 @@ router.get('/api/jobs/:id', auth(), (req, res) => {
     );
   }
 
-  const shipperProfile = db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
+  const shipperProfile = await db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
   const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null };
 
-  const allDocs = isParticipantOrBidder(job, req.user) ? db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
+  const allDocs = (await isParticipantOrBidder(job, req.user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   // Visibility is per-document (uploader sees own docs pre-award; the
   // counterparty sees them only once the bid is confirmed). Returning a
   // filtered array — not metadata of hidden docs — so the UI can't infer
   // anything about documents it can't read.
   const documents = allDocs.filter((d) => canSeeDocument(job, d, req.user));
-  const payout = db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id) || null;
+  const payout = await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id) || null;
   res.json({ job: jobWithRating, bids, documents, payout });
 });
 
-router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), (req, res) => {
+router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), async (req, res) => {
   try {
-    const job = createJobFromBody(req.body || {}, req);
+    const job = await createJobFromBody(req.body || {}, req);
     res.status(201).json({ job });
   } catch (e) {
     if (e.status) return sendError(res, e.status, e.message);
@@ -228,10 +228,10 @@ router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS'
 
 // Award — the money-moving transaction lives in services/award.service.js;
 // this wrapper only does HTTP.
-router.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), (req, res) => {
+router.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req, res) => {
   const { bidId } = req.body || {};
   const { awardJob } = require('../services/award.service');
-  awardJob(req, res, Number(req.params.id), bidId);
+  await awardJob(req, res, Number(req.params.id), bidId);
 });
 
 module.exports = router;

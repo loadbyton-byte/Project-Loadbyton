@@ -19,8 +19,8 @@ router.get('/api/public/lanes', (req, res) => {
   res.set('Cache-Control', PUBLIC_JSON_CACHE).json({ lanes: unifiedLanes });
 });
 
-router.get('/api/public/carriers', (req, res) => {
-  const rows = db
+router.get('/api/public/carriers', async (req, res) => {
+  const rows = await db
     .prepare(
       `SELECT u.id, p.company_name, p.rating_avg, p.completed_jobs, p.fleet_size, p.coverage_zones, u.tier
        FROM users u JOIN profiles p ON p.user_id = u.id
@@ -42,9 +42,9 @@ router.get('/api/public/carriers', (req, res) => {
   });
 });
 
-router.get('/api/public/market', (req, res) => {
-  const { commission_rate_bps } = getSettings();
-  const openJobs = db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN'`).get().c;
+router.get('/api/public/market', async (req, res) => {
+  const { commission_rate_bps } = await getSettings();
+  const openJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN'`).get()).c;
   const avgDrayageAED = Math.round(unifiedLanes.reduce((s, l) => s + l.basePriceAed, 0) / unifiedLanes.length);
   const containersPerDay = 300;
   res.set('Cache-Control', PUBLIC_JSON_CACHE).json({

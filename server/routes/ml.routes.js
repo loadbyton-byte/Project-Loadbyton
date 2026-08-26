@@ -16,11 +16,11 @@ function predictEta({ origin, destination, vesselLat, vesselLng, weatherSeverity
   ];
   return { baseHours, weatherPenalty, congestion: Math.round(congestion*10)/10, predictedHours: Math.round(total*10)/10, alternatives, inputs: { vesselLat, vesselLng, weatherSeverity } };
 }
-router.post('/api/ml/predict-eta', (req,res)=>{
+router.post('/api/ml/predict-eta', async (req,res)=>{
   const { jobId, vesselLat, vesselLng, weatherSeverity, origin, destination } = req.body||{};
   let o=origin, d=destination;
   if(jobId){
-    const job=db.prepare('SELECT pickup_terminal, delivery_area FROM jobs WHERE id=?').get(Number(jobId));
+    const job=await db.prepare('SELECT pickup_terminal, delivery_area FROM jobs WHERE id=?').get(Number(jobId));
     if(job){ o=job.pickup_terminal; d=job.delivery_area; }
   }
   if(!o||!d) return sendError(res,400,'origin/destination or jobId required');

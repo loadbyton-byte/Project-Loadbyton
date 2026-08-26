@@ -8,8 +8,8 @@ const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();
 
-router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
   if (!BACKLOAD_ELIGIBLE_STATUSES.includes(job.status)) {
@@ -17,7 +17,7 @@ router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), (req, res) => {
   }
 
   const deliveryEmirate = AREA_EMIRATE[job.delivery_area] || null;
-  const candidates = db
+  const candidates = await db
     .prepare(
       `SELECT j.*, p.company_name AS shipper_company, p.rating_avg AS shipper_rating
        FROM jobs j LEFT JOIN profiles p ON p.user_id = j.shipper_id
@@ -51,12 +51,12 @@ router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), (req, res) => {
   res.json({ matches: matches.slice(0, 10) });
 });
 
-router.post('/api/jobs/:id/documents', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.post('/api/jobs/:id/documents', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   // Uploads are for the job's parties (shipper or awarded carrier) — a
   // bidding carrier has no business attaching files to a job they may lose.
-  if (!isPartyOnJob(job, req.user)) return sendError(res, 403, 'Only the shipper and the awarded carrier can attach documents');
+  if (!(await isPartyOnJob(job, req.user))) return sendError(res, 403, 'Only the shipper and the awarded carrier can attach documents');
   const b = req.body || {};
   if (!b.title || !(b.fileUrl || b.fileBase64)) return sendError(res, 400, 'title and (fileUrl or fileBase64+mimeType) are required');
   let storagePath = null;
@@ -68,7 +68,7 @@ router.post('/api/jobs/:id/documents', auth(), (req, res) => {
       return sendError(res, e.status || 400, e.message || 'Upload failed');
     }
   }
-  db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
+  await db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
     job.id,
     req.actorId,
     DOC_TYPES.includes(b.docType) ? b.docType : 'OTHER',
@@ -77,14 +77,14 @@ router.post('/api/jobs/:id/documents', auth(), (req, res) => {
     storagePath,
     mimeType
   );
-  writeAudit(req, { userId: req.actorId, action: 'DOCUMENT_ADD', details: `${b.docType || 'OTHER'} on ${job.job_code}`, entityType: 'job', entityId: job.id });
+  await writeAudit(req, { userId: req.actorId, action: 'DOCUMENT_ADD', details: `${b.docType || 'OTHER'} on ${job.job_code}`, entityType: 'job', entityId: job.id });
   res.status(201).json({ ok: true });
 });
 
-router.get('/api/jobs/:id/documents/:docId/file', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.get('/api/jobs/:id/documents/:docId/file', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  const doc = db.prepare('SELECT * FROM job_documents WHERE id=? AND job_id=?').get(req.params.docId, job.id);
+  const doc = await db.prepare('SELECT * FROM job_documents WHERE id=? AND job_id=?').get(req.params.docId, job.id);
   if (!doc) return sendError(res, 404, 'Document not found');
   if (!canSeeDocument(job, doc, req.user)) return sendError(res, 403, 'Not permitted — documents are shared once the bid is confirmed');
   if (!doc.storage_path) return res.redirect(doc.file_url);
@@ -95,14 +95,14 @@ router.get('/api/jobs/:id/documents/:docId/file', auth(), (req, res) => {
   res.sendFile(filePath);
 });
 
-router.post('/api/jobs/:id/rating', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.post('/api/jobs/:id/rating', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  if (!isParticipantOrBidder(job, req.user) || (req.user.id !== job.shipper_id && req.user.id !== job.carrier_id)) {
+  if (!(await isParticipantOrBidder(job, req.user)) || (req.user.id !== job.shipper_id && req.user.id !== job.carrier_id)) {
     return sendError(res, 403, 'Not permitted');
   }
   if (job.status !== 'COMPLETED') return sendError(res, 403, 'Job must be completed before rating');
-  const existing = db.prepare('SELECT 1 FROM ratings WHERE job_id=? AND rater_id=?').get(job.id, req.user.id);
+  const existing = await db.prepare('SELECT 1 FROM ratings WHERE job_id=? AND rater_id=?').get(job.id, req.user.id);
   if (existing) return sendError(res, 409, 'You already rated this job');
 
   const b = req.body || {};
@@ -114,58 +114,58 @@ router.post('/api/jobs/:id/rating', auth(), (req, res) => {
   // guarantee; this just turns a constraint violation into a clean 409
   // instead of a 500.
   try {
-    db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment) VALUES (?,?,?,?,?)').run(job.id, req.user.id, rateeId, score, b.comment || null);
+    await db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment) VALUES (?,?,?,?,?)').run(job.id, req.user.id, rateeId, score, b.comment || null);
   } catch (e) {
     if (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message)) {
       return sendError(res, 409, 'You already rated this job');
     }
     throw e;
   }
-  const agg = db.prepare('SELECT AVG(score) avg, COUNT(*) n FROM ratings WHERE ratee_id=?').get(rateeId);
-  db.prepare('UPDATE profiles SET rating_avg=?, completed_jobs=completed_jobs+1 WHERE user_id=?').run(Math.round(agg.avg * 100) / 100, rateeId);
-  writeAudit(req, { userId: req.actorId, action: 'RATING', details: `${score}/5 on ${job.job_code}`, entityType: 'job', entityId: job.id });
+  const agg = await db.prepare('SELECT AVG(score) avg, COUNT(*) n FROM ratings WHERE ratee_id=?').get(rateeId);
+  await db.prepare('UPDATE profiles SET rating_avg=?, completed_jobs=completed_jobs+1 WHERE user_id=?').run(Math.round(agg.avg * 100) / 100, rateeId);
+  await writeAudit(req, { userId: req.actorId, action: 'RATING', details: `${score}/5 on ${job.job_code}`, entityType: 'job', entityId: job.id });
   res.status(201).json({ ok: true });
 });
 
-router.get('/api/jobs/:id/messages', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.get('/api/jobs/:id/messages', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   // Once a job is DISPUTED this thread doubles as the dispute correspondence
   // (see GET /api/jobs/:id/dispute) — a losing bidder who never won the
   // award has no business reading it, so drop the bidder-visibility
   // fallback specifically for disputed jobs.
-  const permitted = job.status === 'DISPUTED' ? isPartyOnJob(job, req.user) : isParticipantOrBidder(job, req.user);
+  const permitted = job.status === 'DISPUTED' ? await isPartyOnJob(job, req.user) : await isParticipantOrBidder(job, req.user);
   if (!permitted) return sendError(res, 403, 'Not permitted');
   // sender_role is additive (existing consumers only ever read
   // sender_id/content) — lets the party-facing dispute view (JobDispute.jsx)
   // render an admin's reply as a distinct "Admin" bubble instead of looking
   // like a second copy of the counterparty.
-  const messages = db
+  const messages = await db
     .prepare('SELECT m.*, u.role as sender_role FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.job_id=? ORDER BY m.created_at ASC')
     .all(job.id);
   res.json({ messages });
 });
 
-router.post('/api/jobs/:id/messages', auth(), (req, res) => {
-  const job = db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
-  const permitted = job.status === 'DISPUTED' ? isPartyOnJob(job, req.user) : isParticipantOrBidder(job, req.user);
+  const permitted = job.status === 'DISPUTED' ? await isPartyOnJob(job, req.user) : await isParticipantOrBidder(job, req.user);
   if (!permitted) return sendError(res, 403, 'Not permitted');
   const { content } = req.body || {};
   if (!content || !content.trim()) return sendError(res, 400, 'content is required');
-  const result = db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?)').run(job.id, req.actorId, content.trim());
+  const result = await db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?)').run(job.id, req.actorId, content.trim());
   // Sender may be neither party (an admin replying in a dispute thread) —
   // notify both shipper and carrier in that case rather than defaulting to
   // the shipper, which previously left the carrier silently un-notified.
   if (req.user.id === job.shipper_id) {
-    notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
   } else if (req.user.id === job.carrier_id) {
-    notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    await notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
   } else {
-    notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
-    notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    await notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
   }
-  const message = db.prepare('SELECT * FROM messages WHERE id=?').get(Number(result.lastInsertRowid));
+  const message = await db.prepare('SELECT * FROM messages WHERE id=?').get(Number(result.lastInsertRowid));
   res.status(201).json({ message });
 });
 

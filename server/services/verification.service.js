@@ -14,20 +14,20 @@ async function verifyTrnExternal(trn) {
   return result;
 }
 
-function approveAccount(req, userId, action) {
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+async function approveAccount(req, userId, action) {
+  const user = await db.prepare('SELECT * FROM users WHERE id=?').get(userId);
   if (!user) { const e = new Error('User not found'); e.status = 404; throw e; }
   if (user.account_approval_status !== 'PENDING') { const e = new Error('Account is not pending approval'); e.status = 409; throw e; }
 
   if (action === 'approve') {
-    db.prepare(`UPDATE users SET account_approval_status='APPROVED', account_approved_at=datetime('now'), is_active=1 WHERE id=?`).run(userId);
+    await db.prepare(`UPDATE users SET account_approval_status='APPROVED', account_approved_at=datetime('now'), is_active=1 WHERE id=?`).run(userId);
   } else if (action === 'reject') {
-    db.prepare(`UPDATE users SET account_approval_status='REJECTED', is_active=0 WHERE id=?`).run(userId);
+    await db.prepare(`UPDATE users SET account_approval_status='REJECTED', is_active=0 WHERE id=?`).run(userId);
   } else {
     const e = new Error('action must be approve or reject'); e.status = 400; throw e;
   }
 
-  writeAudit(req, {
+  await writeAudit(req, {
     userId: req.actorId,
     action: 'ACCOUNT_APPROVE',
     details: `${user.email} ${action}d`,
@@ -38,31 +38,31 @@ function approveAccount(req, userId, action) {
   });
 
   if (action === 'approve') {
-    notify(userId, 'Account approved', 'Your account has been approved. You can now use the platform.', null, 'verification');
+    await notify(userId, 'Account approved', 'Your account has been approved. You can now use the platform.', null, 'verification');
   }
 
-  return db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+  return await db.prepare('SELECT * FROM users WHERE id=?').get(userId);
 }
 
-function verifyCarrier(req, userId, action, iban) {
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+async function verifyCarrier(req, userId, action, iban) {
+  const user = await db.prepare('SELECT * FROM users WHERE id=?').get(userId);
   if (!user) { const e = new Error('User not found'); e.status = 404; throw e; }
   if (user.role !== 'CARRIER') { const e = new Error('User is not a carrier'); e.status = 400; throw e; }
 
   if (action === 'approve') {
-    db.prepare(`UPDATE users SET is_verified=1 WHERE id=?`).run(userId);
+    await db.prepare(`UPDATE users SET is_verified=1 WHERE id=?`).run(userId);
     if (iban) {
-      db.prepare(`UPDATE profiles SET iban=?, verified_at=datetime('now') WHERE user_id=?`).run(encryptField(iban), userId);
+      await db.prepare(`UPDATE profiles SET iban=?, verified_at=datetime('now') WHERE user_id=?`).run(encryptField(iban), userId);
     } else {
-      db.prepare(`UPDATE profiles SET verified_at=datetime('now') WHERE user_id=?`).run(userId);
+      await db.prepare(`UPDATE profiles SET verified_at=datetime('now') WHERE user_id=?`).run(userId);
     }
   } else if (action === 'reject') {
-    db.prepare(`UPDATE users SET is_verified=0 WHERE id=?`).run(userId);
+    await db.prepare(`UPDATE users SET is_verified=0 WHERE id=?`).run(userId);
   } else {
     const e = new Error('action must be approve or reject'); e.status = 400; throw e;
   }
 
-  writeAudit(req, {
+  await writeAudit(req, {
     userId: req.actorId,
     action: 'CARRIER_VERIFY',
     details: `${user.email} ${action}d${iban ? ' with IBAN' : ''}`,
@@ -73,10 +73,10 @@ function verifyCarrier(req, userId, action, iban) {
   });
 
   if (action === 'approve') {
-    notify(userId, 'Carrier verified', 'Your carrier account has been verified. You can now bid on jobs.', null, 'verification');
+    await notify(userId, 'Carrier verified', 'Your carrier account has been verified. You can now bid on jobs.', null, 'verification');
   }
 
-  return db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+  return await db.prepare('SELECT * FROM users WHERE id=?').get(userId);
 }
 
 module.exports = { verifyTrnExternal, cache, approveAccount, verifyCarrier };

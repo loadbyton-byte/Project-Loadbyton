@@ -1,9 +1,9 @@
 const db = require('../db');
 
-function idempotency(req, res, next) {
+async function idempotency(req, res, next) {
   const key = req.headers['idempotency-key'] || req.headers['Idempotency-Key'];
   if (!key || typeof key !== 'string' || key.length < 8 || key.length > 128) return next();
-  const existing = db.prepare('SELECT response_status, response_body FROM idempotency_keys WHERE key=? AND user_id=?').get(key, req.user ? req.user.id : 0);
+  const existing = await db.prepare('SELECT response_status, response_body FROM idempotency_keys WHERE key=? AND user_id=?').get(key, req.user ? req.user.id : 0);
   if (existing) {
     res.set('X-Idempotent-Replayed', 'true');
     return res.status(existing.response_status).set('Content-Type', 'application/json').send(existing.response_body);
