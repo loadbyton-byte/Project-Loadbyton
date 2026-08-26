@@ -1,0 +1,240 @@
+/*
+  Loadbyton design tokens — canonical source.
+  Mirrored into web/src/index.css and consumed by web/tailwind.config.js.
+  Three layers: primitive (raw values) -> semantic (role-based) -> component.
+  Light is the default (:root); dark overrides via [data-theme="dark"] and,
+  absent an explicit choice, prefers-color-scheme.
+*/
+
+:root {
+  /* primitive: color */
+
+  /* "Loadbyton Navy" — the brand-kit rebrand's primary (replaced the
+     Industrial Trust near-black ramp this variable used to hold). Names
+     kept as --lb-ink-* on purpose: several marketing pages reference these
+     primitives directly for fixed-dark panels that never theme-swap, and
+     renaming would mean touching those files for no functional reason. */
+  --lb-ink-950: #0A1A24;
+  --lb-ink-900: #0F2B3D;
+  --lb-ink-800: #1A3A52;
+  --lb-ink-700: #2C4E68;
+  --lb-ink-600: #3E6280;
+
+  --lb-blue-700: #1E40AF;
+  --lb-blue-600: #2563EB;
+  --lb-blue-500: #3B82F6;
+  --lb-blue-300: #93C5FD;
+  --lb-blue-100: #DBEAFE;
+  --lb-blue-50:  #EFF6FF;
+
+  /* "Loadbyton Red" — the one accent (award a bid, confirm delivery, the
+     primary marketing CTA), and — per the brand kit's own CSS variables,
+     which alias --loadbyton-error to this same red — status.danger too.
+     Kept as --lb-orange-* names for the same minimal-diff reason as
+     --lb-ink-* above (a couple of pages reference --lb-orange-500 directly
+     for decorative dots/badges); only the values changed. */
+  --lb-orange-700: #C62828;
+  --lb-orange-600: #E53935;
+  --lb-orange-500: #E53935;
+  --lb-orange-200: #FDE8E8;
+  --lb-orange-100: #FEF2F2;
+
+  --lb-amber-700: #B45309;
+  --lb-amber-600: #D97706;
+  --lb-amber-500: #F59E0B;
+  --lb-amber-200: #FDE3B4;
+  --lb-amber-100: #FEF3D9;
+
+  --lb-slate-900: #0F172A;
+  --lb-slate-700: #334155;
+  --lb-slate-500: #64748B;
+  /* gstack review D3: dark-mode --text-muted read at slate-500 in every
+     theme — 4.16:1 on the near-black dark canvas, below AA's 4.5:1.
+     slate-400 sits between muted (500) and secondary (300). */
+  --lb-slate-400: #94A3B8;
+  --lb-slate-300: #CBD5E1;
+  --lb-slate-200: #E2E8F0;
+  --lb-slate-100: #F1F5F9;
+  --lb-slate-50:  #F8FAFC;
+  --lb-slate-0:   #FFFFFF;
+
+  /* "Success Green" / "Warning Amber" from the brand kit — kept the
+     --lb-teal-* name (only ever consumed via --status-success below) for
+     the same minimal-diff reason as the ramps above. */
+  --lb-teal-600: #2E7D32;
+  --lb-teal-500: #43A047;
+  --lb-teal-100: #E3F2E4;
+  --lb-red-600: #C62828;
+  --lb-red-500: #E53935;
+  --lb-red-100: #FDE8E8;
+
+  /* Note: the previous "container plate" mark reserved a crimson distinct
+     from the UI accent (--lb-logo-accent-*) specifically so the logo and
+     the UI could never accidentally drift together. The new wordmark's
+     divider bars use the brand accent red directly (see the kit's own SVG
+     markup) — no separate reserved token needed, so --lb-logo-accent-* is
+     retired rather than kept as a second alias for the same color. */
+
+  /* primitive: type */
+  --lb-font-display: 'Geist', ui-sans-serif, sans-serif;
+  --lb-font-body: 'Inter', ui-sans-serif, sans-serif;
+  --lb-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* primitive: radius / shadow — sharper and flatter than Industrial
+     Trust's rounder scale, matching navy/red/Geist's "corporate
+     enterprise" register (confirmed with the user for this rebrand). */
+  --lb-radius-sm: 4px;
+  --lb-radius-md: 6px;
+  --lb-radius-lg: 8px;
+  --lb-radius-xl: 12px;
+  --lb-radius-full: 999px;
+  --lb-shadow-sm: 0 1px 2px rgba(15,43,61,0.08);
+  --lb-shadow-md: 0 2px 6px rgba(15,43,61,0.10);
+  --lb-shadow-lg: 0 4px 12px rgba(15,43,61,0.14);
+  --lb-shadow-elevated: 0 4px 10px rgba(15,43,61,0.12);
+  --lb-shadow-focus: 0 0 0 3px rgba(229,57,53,0.35);
+
+  /* semantic: light theme (default) — "Warm White" / "Light Gray" from the
+     brand kit, replacing Industrial Trust's cool slate-50/white. */
+  --bg-canvas: #FFFDF7;
+  --bg-surface: var(--lb-slate-0);
+  --bg-raised: #F5F6F4;
+  --bg-inverse: var(--lb-ink-900);
+
+  /* Tonal-layering ladder — additive to bg.surface/bg.raised above, used
+     by nested-card components (BentoStat, JobCard, the sidebar). */
+  --surface-container-lowest: var(--lb-slate-0);
+  --surface-container-low: #FFFDF7;
+  --surface-container: #F5F6F4;
+  --surface-container-high: var(--lb-slate-200);
+  --surface-container-highest: var(--lb-slate-300);
+  --outline: var(--lb-slate-500);
+  --outline-variant: #E5E8E3;
+
+  --border-default: #E5E8E3;
+  --border-subtle: var(--lb-slate-100);
+  --border-strong: var(--lb-slate-300);
+
+  /* "Dark" body-text color from the brand kit (#0F2129) — a hair off
+     Loadbyton Navy (#0F2B3D, --lb-ink-900) but close enough that adding a
+     second "headline vs. body" text-color token isn't worth the extra
+     architecture; headlines read fine off this same token via
+     .font-display. */
+  --text-primary: #0F2129;
+  --text-secondary: #586A72;
+  --text-muted: #7A8A90;
+  --text-inverse: var(--lb-slate-0);
+  /* White text on Loadbyton Red (#E53935) measures ~4.2:1 — passes AA for
+     large/bold text and UI components (3:1) but falls just short of the
+     4.5:1 normal-text bar; navy-on-red measures worse (~3.5:1). White is
+     the better of the two real options, same reasoning as the D2 review
+     comment this replaces, just a different accent hue. */
+  --text-on-accent: var(--lb-slate-0);
+
+  --brand-primary: var(--lb-ink-900);
+  --brand-primary-hover: var(--lb-ink-800);
+  --brand-secondary: var(--lb-blue-500);
+  --brand-accent: var(--lb-orange-600);
+  --brand-accent-hover: var(--lb-orange-700);
+  /* gstack review D4: Badge's "accent" variant and the carrier tier badge
+     read the raw --lb-orange-100 primitive directly (unthemed) — a light
+     peach chip with orange-500 text at ~2.2:1 in dark mode. A semantic
+     token, the same pattern every --status-*-bg already uses, is what lets
+     the dark override below actually apply. */
+  --brand-accent-bg: var(--lb-orange-200);
+
+  --status-success: var(--lb-teal-600);
+  --status-success-bg: var(--lb-teal-100);
+  --status-warning: #F57C00;
+  --status-warning-bg: #FEF0E0;
+  /* The brand kit's own --loadbyton-error is the same red as the accent —
+     kept merged rather than re-split; see BRAND_GUIDELINES.md §2. */
+  --status-danger: var(--lb-red-500);
+  --status-danger-bg: var(--lb-red-100);
+  --status-info: var(--lb-blue-600);
+  --status-info-bg: var(--lb-blue-50);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-canvas: var(--lb-ink-950);
+    --bg-surface: var(--lb-ink-900);
+    --bg-raised: var(--lb-ink-800);
+    --bg-inverse: var(--lb-slate-50);
+
+    --surface-container-lowest: var(--lb-ink-950);
+    --surface-container-low: var(--lb-ink-900);
+    --surface-container: var(--lb-ink-800);
+    --surface-container-high: var(--lb-ink-700);
+    --surface-container-highest: var(--lb-ink-600);
+    --outline: var(--lb-slate-400);
+    --outline-variant: var(--lb-ink-700);
+
+    --border-default: var(--lb-ink-700);
+    --border-subtle: var(--lb-ink-800);
+    --border-strong: var(--lb-ink-600);
+
+    --text-primary: var(--lb-slate-50);
+    --text-secondary: var(--lb-slate-300);
+    --text-muted: var(--lb-slate-400);
+    --text-inverse: var(--lb-ink-900);
+    --text-on-accent: var(--lb-slate-0);
+
+    --brand-primary: var(--lb-slate-50);
+    --brand-primary-hover: var(--lb-slate-200);
+    --brand-secondary: var(--lb-blue-300);
+    --brand-accent: #FF5449;
+    --brand-accent-hover: #FF7A70;
+    --brand-accent-bg: #3D1616;
+
+    --status-success: var(--lb-teal-500);
+    --status-success-bg: #123832;
+    --status-warning: #FFA733;
+    --status-warning-bg: #3D2A10;
+    --status-danger: #FF5449;
+    --status-danger-bg: #3D1616;
+    --status-info: var(--lb-blue-300);
+    --status-info-bg: #122540;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-canvas: var(--lb-ink-950);
+  --bg-surface: var(--lb-ink-900);
+  --bg-raised: var(--lb-ink-800);
+  --bg-inverse: var(--lb-slate-50);
+
+  --surface-container-lowest: var(--lb-ink-950);
+  --surface-container-low: var(--lb-ink-900);
+  --surface-container: var(--lb-ink-800);
+  --surface-container-high: var(--lb-ink-700);
+  --surface-container-highest: var(--lb-ink-600);
+  --outline: var(--lb-slate-400);
+  --outline-variant: var(--lb-ink-700);
+
+  --border-default: var(--lb-ink-700);
+  --border-subtle: var(--lb-ink-800);
+  --border-strong: var(--lb-ink-600);
+
+  --text-primary: var(--lb-slate-50);
+  --text-secondary: var(--lb-slate-300);
+  --text-muted: var(--lb-slate-400);
+  --text-inverse: var(--lb-ink-900);
+  --text-on-accent: var(--lb-slate-0);
+
+  --brand-primary: var(--lb-slate-50);
+  --brand-primary-hover: var(--lb-slate-200);
+  --brand-secondary: var(--lb-blue-300);
+  --brand-accent: #FF5449;
+  --brand-accent-hover: #FF7A70;
+  --brand-accent-bg: #3D1616;
+
+  --status-success: var(--lb-teal-500);
+  --status-success-bg: #123832;
+  --status-warning: #FFA733;
+  --status-warning-bg: #3D2A10;
+  --status-danger: #FF5449;
+  --status-danger-bg: #3D1616;
+  --status-info: var(--lb-blue-300);
+  --status-info-bg: #122540;
+}
