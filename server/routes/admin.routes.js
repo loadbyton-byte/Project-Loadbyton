@@ -10,6 +10,69 @@ const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();
 
+router.get('/api/admin/live', auth(['ADMIN']), (req, res) => {
+  const openJobs = db.prepare(`
+    SELECT j.id, j.job_code, j.status, j.shipment_type, j.container_size, j.container_type,
+           j.pickup_terminal, j.delivery_area, j.delivery_address, j.max_budget_aed,
+           j.equipment_type, j.created_at, j.ready_at, j.deadline,
+           u.email AS shipper_email, p.company_name AS shipper_company,
+           (SELECT COUNT(*) FROM bids WHERE job_id = j.id AND status = 'PENDING') AS bid_count
+    FROM jobs j
+    JOIN users u ON u.id = j.shipper_id
+    LEFT JOIN profiles p ON p.user_id = u.id
+    WHERE j.status = 'OPEN'
+    ORDER BY j.created_at DESC
+  `).all();
+
+  const openJobIds = openJobs.map((j) => j.id);
+  const liveBids = openJobIds.length
+    ? db.prepare(`
+        SELECT b.id, b.job_id, b.amount_aed, b.eta_at, b.truck_type, b.notes, b.status, b.created_at,
+               u.email AS carrier_email, p.company_name AS carrier_company, p.rating_avg, p.completed_jobs
+        FROM bids b
+        JOIN users u ON u.id = b.carrier_id
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE b.job_id IN (${openJobIds.map(() => '?').join(',')})
+        ORDER BY b.created_at DESC
+      `).all(...openJobIds)
+    : [];
+  const bidsByJob = {};
+  for (const b of liveBids) {
+    (bidsByJob[b.job_id] ||= []).push(b);
+  }
+
+  const activeJobs = db.prepare(`
+    SELECT j.id, j.job_code, j.status, j.agreed_price_aed, j.escrow_status,
+           j.pickup_terminal, j.delivery_area, j.created_at,
+           j.assigned_driver_name, j.assigned_driver_phone,
+           s.email AS shipper_email, sp.company_name AS shipper_company,
+           c.email AS carrier_email, cp.company_name AS carrier_company
+    FROM jobs j
+    JOIN users s ON s.id = j.shipper_id
+    LEFT JOIN profiles sp ON sp.user_id = s.id
+    LEFT JOIN users c ON c.id = j.carrier_id
+    LEFT JOIN profiles cp ON cp.user_id = c.id
+    WHERE j.status IN ('AWARDED','PICKED_UP','IN_TRANSIT')
+    ORDER BY j.updated_at DESC
+    LIMIT 50
+  `).all();
+
+  const recentActivity = db.prepare(`
+    SELECT a.id, a.action, a.details, a.entity_type, a.entity_id, a.before_state, a.after_state, a.created_at,
+           u.email AS actor_email
+    FROM audit_log a
+    LEFT JOIN users u ON u.id = a.user_id
+    ORDER BY a.id DESC
+    LIMIT 50
+  `).all();
+
+  res.json({
+    openJobs: openJobs.map((j) => ({ ...j, bids: bidsByJob[j.id] || [] })),
+    activeJobs,
+    recentActivity,
+  });
+});
+
 router.get('/api/admin/health', auth(['ADMIN']), (req, res) => {
   const openJobs = db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN'`).get().c;
   const totalJobs = db.prepare('SELECT COUNT(*) c FROM jobs').get().c;

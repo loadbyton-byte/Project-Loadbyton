@@ -3,6 +3,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { Spinner } from '../components/ui.jsx';
 
 const HealthTab = lazy(() => import('./admin/HealthTab.jsx'));
+const LiveActivityTab = lazy(() => import('./admin/LiveActivityTab.jsx'));
 const VerificationTab = lazy(() => import('./admin/VerificationTab.jsx'));
 const AccountApprovalsTab = lazy(() => import('./admin/AccountApprovalsTab.jsx'));
 const MembersTab = lazy(() => import('./admin/MembersTab.jsx'));
@@ -13,9 +14,10 @@ const AuditTab = lazy(() => import('./admin/AuditTab.jsx'));
 const RevenueTab = lazy(() => import('./admin/RevenueTab.jsx'));
 const SettingsTab = lazy(() => import('./admin/SettingsTab.jsx'));
 
-const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
+const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
 const TAB_COMPONENTS = {
   Health: HealthTab,
+  'Live activity': LiveActivityTab,
   Verification: VerificationTab,
   'Account approvals': AccountApprovalsTab,
   Members: MembersTab,

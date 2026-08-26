@@ -102,6 +102,7 @@ export const api = {
   updateNotificationPreferences: (disabled) => patch('/notifications/preferences', { disabled }),
 
   // admin
+  adminLive: () => get('/admin/live'),
   adminHealth: () => get('/admin/health'),
   adminVerificationQueue: () => get('/admin/verification'),
   adminVerify: (id, body) => post(`/admin/verify/${id}`, body),
