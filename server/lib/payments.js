@@ -26,11 +26,26 @@
 //     shape must be confirmed against live sandbox docs) — until then
 //     executePayout() returns not_implemented and the existing admin
 //     "mark-transferred" flow (payouts-sla view) remains the operating
-//     procedure. Everything is fail-closed: any verification or provider
+//     procedure.
+//
+//   stripe — PAYMENTS_PROVIDER=stripe + STRIPE_SECRET_KEY (+ optional
+//     STRIPE_WEBHOOK_SECRET, recommended). Stripe Connect marketplace
+//     flow: createCheckoutOrder() returns a hosted Stripe Checkout
+//     Session URL (card data never touches our servers), the
+//     checkout.session.completed webhook funds escrow, refundCharge()
+//     calls Stripe Refunds, and executePayout() performs a Connect
+//     transfer to the carrier's connected account (profiles
+//     .processor_account_id, provisioned via the Connect onboarding
+//     endpoints in routes/stripe.routes.js). Compete, production-grade,
+//     sandbox-friendly out of the box.
+//
+// Everything is fail-closed: any verification or provider
 //     failure leaves escrow untouched and surfaces via Sentry + the audit
 //     log; the job/refund/release never silently assumes success.
 
 const crypto = require('node:crypto');
+let stripeLib;
+try { stripeLib = require('./stripe'); } catch {}
 
 const TELR_GATEWAY = 'https://secure.telr.com/gateway';
 
@@ -42,6 +57,7 @@ function isConfigured() {
   const p = provider();
   if (p === 'mock') return !!process.env.PAYMENTS_WEBHOOK_SECRET;
   if (p === 'telr') return !!(process.env.TELR_STORE_ID && process.env.TELR_AUTH_KEY);
+  if (p === 'stripe') return !!process.env.STRIPE_SECRET_KEY;
   return false;
 }
 
@@ -52,7 +68,8 @@ function providerInfo() {
     configured: isConfigured(),
     // Telr sandbox uses ivp_test=1; production uses ivp_test=0. Never
     // default to production when the env var is missing.
-    testMode: p === 'telr' ? process.env.TELR_TEST !== '0' : p === 'mock',
+    // Stripe: sk_test_ prefix means test mode, sk_live_ is production.
+    testMode: p === 'telr' ? process.env.TELR_TEST !== '0' : p === 'mock' ? true : p === 'stripe' ? !!String(process.env.STRIPE_SECRET_KEY || '').startsWith('sk_test_') : false,
   };
 }
 
@@ -142,6 +159,22 @@ async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', descr
       return { ok: true, ref: paymentRef, url: data.order.url || null, provider: p };
     }
 
+    if (p === 'stripe') {
+      // Stripe Connect: shipper is redirected to a hosted Checkout
+      // Session URL. client_reference_id carries our paymentRef so the
+      // checkout.session.completed webhook maps back to the job.
+      const r = await stripeLib.createCheckoutSession({
+        amountAed,
+        jobCode,
+        description,
+        successUrl: returnUrls?.auth || null,
+        cancelUrl: returnUrls?.cancel || null,
+        paymentRef,
+      });
+      if (!r.ok) return r;
+      return { ok: true, ref: paymentRef, url: r.url, provider: p };
+    }
+
     return { ok: false, error: 'unknown_provider', provider: p };
   } catch (e) {
     return { ok: false, error: 'network_error', detail: e.message, provider: p };
@@ -159,18 +192,22 @@ async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', descr
 //        (sorted fields, exclusion of the sig param, secret = your Telr
 //        callback secret) must be confirmed from the sandbox docs and
 //        applied here before go-live. Fail-closed until then.
+// stripe: signed with STRIPE_WEBHOOK_SECRET via the stripe-signature
+//        header; constructEvent() rejects tampered bodies.
 // ---------------------------------------------------------------------------
 
 function verifyWebhookSignature(rawBody, signature, _contentType) {
   if (!isConfigured() || !signature) return false;
-  const secret = provider() === 'mock' ? process.env.PAYMENTS_WEBHOOK_SECRET : process.env.TELR_WEBHOOK_SECRET;
+  const p = provider();
+  if (p === 'stripe') return stripeLib.verifyWebhookSignature(rawBody, signature);
+  const secret = p === 'mock' ? process.env.PAYMENTS_WEBHOOK_SECRET : process.env.TELR_WEBHOOK_SECRET;
   if (!secret) return false;
 
   // Providers sign the body as received; for form-encoded callbacks the
   // signature covers the canonical query string. Support both shapes and
   // let the caller's provider mode decide what it actually receives.
   let expected = null;
-  if (provider() === 'mock') {
+  if (p === 'mock') {
     expected = hmac(secret, rawBody);
   } else {
     // telr — VERIFY canonicalization with Telr sandbox docs (see header).
@@ -220,6 +257,28 @@ function parseWebhook(body, _contentType) {
       const amountFils = Number(body.amount); // VERIFY: Telr amounts arrive in fils
       const amountAed = Number.isFinite(amountFils) ? amountFils / 100 : null;
       return { ok: true, event, ref, tranref: body.tran_ref || null, amountAed, provider: p };
+    }
+
+    if (p === 'stripe') {
+      // Stripe sends JSON events: type + data.object. Normalize to the
+      // same AUTHORISED/DECLINED/CANCELLED/REFUNDED model the rest of the
+      // system uses. client_reference_id carries our paymentRef
+      // (fallback: metadata.payment_ref / object id for direct PI flows).
+      const event = typeof body === 'string' ? JSON.parse(body) : body;
+      if (!event || !event.type || !event.data) return { ok: false, error: 'malformed_payload' };
+      const obj = event.data.object || {};
+      let mapped = null;
+      if (event.type === 'checkout.session.completed' || event.type === 'payment_intent.succeeded') mapped = 'AUTHORISED';
+      else if (event.type === 'payment_intent.payment_failed' || event.type === 'charge.failed') mapped = 'DECLINED';
+      else if (event.type === 'checkout.session.expired') mapped = 'CANCELLED';
+      else if (event.type === 'charge.refunded' || event.type === 'charge.refund.updated' || String(event.type).startsWith('refund.')) mapped = 'REFUNDED';
+      else return { ok: false, error: 'unknown_event' };
+      const ref = obj.client_reference_id || obj.metadata?.payment_ref || obj.metadata?.paymentRef || obj.id;
+      if (!ref) return { ok: false, error: 'missing_ref' };
+      const amountMinor = obj.amount_total ?? obj.amount_received ?? obj.amount_refunded ?? obj.amount ?? null;
+      const amountAed = Number.isFinite(Number(amountMinor)) ? Number(amountMinor) / 100 : null;
+      const tranref = obj.payment_intent || obj.id || null;
+      return { ok: true, event: mapped, ref, tranref, amountAed, provider: p };
     }
 
     return { ok: false, error: 'unknown_provider' };
@@ -272,6 +331,12 @@ async function refundCharge({ tranref, amountAed, paymentRef }) {
       return { ok: true, refundRef: data.refund?.ref || tranref, provider: p };
     }
 
+    if (p === 'stripe') {
+      const r = await stripeLib.refundPaymentIntent({ paymentIntentId: tranref, amountAed });
+      if (!r.ok) return r;
+      return { ok: true, refundRef: r.refundRef, provider: p };
+    }
+
     return { ok: false, error: 'unknown_provider' };
   } catch (e) {
     return { ok: false, error: 'network_error', detail: e.message, provider: p };
@@ -313,6 +378,19 @@ async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId,
       // VERIFY Telr Payouts / split-payment API against sandbox docs.
       // Until confirmed, released payouts remain admin-confirmed manually.
       return { ok: false, error: 'not_implemented', detail: 'TELR payout API shape pending verification — see docs/PAYMENTS.md', provider: p };
+    }
+
+    if (p === 'stripe') {
+      if (!carrierAccountId) {
+        return { ok: false, error: 'missing_destination', detail: 'Stripe payout requires a carrier Connect account (profiles.processor_account_id) — onboard via POST /api/stripe/connect', provider: p };
+      }
+      const tr = await stripeLib.createTransfer({ amountAed, destination: carrierAccountId, jobCode });
+      // createTransfer returns a Transfer object on success (has .id). On
+      // mock it returns a fake id; on failure Stripe throws -> caught as
+      // network_error below. Be defensive: if it unexpectedly lacks an id
+      // treat it as a failure rather than a phantom success.
+      if (!tr || !tr.id) return { ok: false, error: 'stripe_transfer_failed', detail: tr?.detail || 'missing transfer id', provider: p };
+      return { ok: true, payoutRef: tr.id, provider: p };
     }
 
     return { ok: false, error: 'unknown_provider' };

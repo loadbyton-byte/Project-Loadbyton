@@ -13,6 +13,7 @@ const {
 } = require('../lib/helpers');
 const { auth, requireSeatRole, isThrottled, recordFailure, clearThrottle } = require('../middleware/auth');
 const { rateLimiter, byIp } = require('../lib/rateLimit');
+const { validate, registerSchema } = require('../middleware/validate');
 
 const router = require('express').Router();
 const authIpLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20, keyFn: byIp, message: 'Too many auth requests. Please slow down.' });
@@ -20,6 +21,7 @@ const authIpLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20, keyFn: byIp, m
 router.post(
   '/api/auth/register',
   authIpLimiter,
+  validate(registerSchema),
   asyncHandler(async (req, res) => {
     const { email, password, role, companyName, phone, trnNumber, tradeLicenseNumber, referralCode: incomingReferral } = req.body || {};
     if (!email || !password || !companyName) return sendError(res, 400, 'email, password and companyName are required');

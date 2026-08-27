@@ -25,11 +25,20 @@ async function executePayoutAsync(job, payout, req) {
   }
 
   try {
+    // Stripe Connect transfers need the carrier's connected account id.
+    // Look it up so payments.executePayout can route the transfer to the
+    // right destination. For other providers this field is ignored.
+    let carrierAccountId = null;
+    try {
+      const prof = job.carrier_id ? await db.prepare('SELECT processor_account_id FROM profiles WHERE user_id=?').get(job.carrier_id) : null;
+      carrierAccountId = prof?.processor_account_id || null;
+    } catch {}
     const r = await payments.executePayout({
       amountAed: payout.net_aed,
       jobCode: job.job_code,
       paymentRef: `payout-${payout.id}`,
       reference: `payout-${payout.id}`,
+      carrierAccountId,
     });
     if (r.ok) {
       await db.prepare(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=?`).run(`processor:${r.payoutRef || null}`, payout.id);

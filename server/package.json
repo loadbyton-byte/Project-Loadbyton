@@ -3,7 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "description": "Loadbyton — UAE road freight marketplace API",
-  "scripts": { "start": "node index.js", "test": "node --test server/test/*.test.js" },
-  "engines": { "node": ">=22.0.0" },
-  "dependencies": { "express": "^5.1.0", "bcryptjs": "^3.0.2" }
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test server/test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1119.0",
+    "@sentry/node": "^10.71.0",
+    "bcryptjs": "^3.0.2",
+    "express": "^5.1.0",
+    "stripe": "^22.6.0",
+    "zod": "^4.4.3"
+  }
 }

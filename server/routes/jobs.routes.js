@@ -4,6 +4,7 @@ const { JOB_SORT_COLUMNS, ESCROW_STATUSES, EQUIPMENT_TYPES, SHIPMENT_TYPES } = r
 const { getSettings, writeAudit, notify, isParticipantOrBidder, canViewJob, canSeeDocument } = require('../lib/helpers');
 const { auth, requireSeatRole, writeLimiter } = require('../middleware/auth');
 const { createJobFromBody } = require('../validators/job.schema');
+const { validate, jobCreateSchema } = require('../middleware/validate');
 
 const router = require('express').Router();
 
@@ -216,7 +217,7 @@ router.get('/api/jobs/:id', auth(), async (req, res) => {
   res.json({ job: jobWithRating, bids, documents, payout });
 });
 
-router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), async (req, res) => {
+router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), validate(jobCreateSchema), async (req, res) => {
   try {
     const job = await createJobFromBody(req.body || {}, req);
     res.status(201).json({ job });

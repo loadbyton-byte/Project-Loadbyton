@@ -30,7 +30,7 @@ router.post('/api/jobs/:id/eir', auth(['CARRIER']), async (req,res)=>{
   for(let i=0;i<3;i++){
     const p=photos[i];
     if(!p.fileBase64||!p.mimeType) return sendError(res,400,`Photo ${i+1} missing fileBase64/mimeType`);
-    const { storagePath } = saveUploadedFile(job.id, p.mimeType, p.fileBase64);
+    const { storagePath } = await saveUploadedFile(job.id, p.mimeType, p.fileBase64);
     const title = `EIR ${labels[i]} — ${job.job_code}`;
     await db.prepare(`INSERT INTO job_documents (job_id,uploader_id,doc_type,title,file_url,storage_path,mime_type) VALUES (?,?,?,?,?,?,?)`).run(job.id, req.user.id, 'EIR', title, storagePath, storagePath, p.mimeType);
     stored.push(storagePath);

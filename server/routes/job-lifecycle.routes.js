@@ -214,7 +214,7 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
   let mimeType = null;
   if (doc && doc.fileBase64) {
     try {
-      ({ storagePath, mimeType } = saveUploadedFile(job.id, doc.mimeType, doc.fileBase64));
+      ({ storagePath, mimeType } = await saveUploadedFile(job.id, doc.mimeType, doc.fileBase64));
     } catch (e) {
       return sendError(res, e.status || 400, e.message || 'Upload failed');
     }

@@ -97,7 +97,15 @@ router.post(
     if (!payments.isConfigured()) return res.status(200).json({ ok: false, reason: 'not_configured' });
 
     const contentType = req.headers['content-type'] || '';
-    const signature = req.headers['x-payments-signature'] || (req.body && req.body.sig);
+    // Stripe signs webhooks with the stripe-signature header; mock/telr
+    // use x-payments-signature. Pick the right header for the active
+    // provider so the unified /api/webhooks/payments endpoint works for
+    // all three. For Stripe the raw JSON body captured by the global
+    // express.json verify hook is exactly what constructEvent expects.
+    const signature =
+      payments.provider() === 'stripe'
+        ? (req.headers['stripe-signature'] || req.headers['x-payments-signature'] || '')
+        : (req.headers['x-payments-signature'] || (req.body && req.body.sig));
     if (!payments.verifyWebhookSignature(req.rawBody || '', signature, contentType)) {
       await writeAudit(req, {
         action: 'PAYMENT_WEBHOOK_REJECTED',

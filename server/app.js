@@ -2,6 +2,10 @@ const express = require('express');
 const path = require('node:path');
 const { FRONTEND_URL, ADDITIONAL_ORIGINS, DIST_DIR, DIST_INDEX } = require('./lib/config');
 const { cookieParser, requestId, securityHeaders } = require('./lib/http');
+const sentry = require('./lib/sentry');
+const { requestLogger } = require('./lib/logger');
+
+sentry.init();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -30,6 +34,8 @@ app.use(express.json({
 app.use(cookieParser);
 app.use(requestId);
 app.use(securityHeaders);
+app.use(sentry.requestHandler());
+app.use(requestLogger);
 
 const routes = [
   './routes/auth.routes',
@@ -77,7 +83,12 @@ if (fs.existsSync(DIST_DIR)) {
   });
 }
 
+app.use(sentry.expressErrorHandler());
+
 app.use((err, req, res, _next) => {
+  if (err.status >= 500 || !err.status) {
+    try { sentry.captureException(err, { requestId: req.requestId, userId: req.user?.id }); } catch {}
+  }
   console.error(`[${req.requestId || 'unknown'}]`, err);
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });

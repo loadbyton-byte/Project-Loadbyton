@@ -63,7 +63,7 @@ router.post('/api/jobs/:id/documents', auth(), async (req, res) => {
   let mimeType = null;
   if (b.fileBase64) {
     try {
-      ({ storagePath, mimeType } = saveUploadedFile(job.id, b.mimeType, b.fileBase64));
+      ({ storagePath, mimeType } = await saveUploadedFile(job.id, b.mimeType, b.fileBase64));
     } catch (e) {
       return sendError(res, e.status || 400, e.message || 'Upload failed');
     }
@@ -88,10 +88,24 @@ router.get('/api/jobs/:id/documents/:docId/file', auth(), async (req, res) => {
   if (!doc) return sendError(res, 404, 'Document not found');
   if (!canSeeDocument(job, doc, req.user)) return sendError(res, 403, 'Not permitted — documents are shared once the bid is confirmed');
   if (!doc.storage_path) return res.redirect(doc.file_url);
-  const filePath = path.join(UPLOADS_DIR, doc.storage_path);
-  if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) return sendError(res, 404, 'File not found');
   res.set('Content-Type', doc.mime_type || 'application/octet-stream');
   res.set('Content-Disposition', `inline; filename="${doc.title.replace(/[^\w.-]/g, '_')}"`);
+  try {
+    const storage = require('../lib/storage');
+    if (storage.isS3Enabled()) {
+      const obj = await storage.getFile(doc.storage_path);
+      if (!obj || !obj.stream) return sendError(res, 404, 'File not found');
+      // Stream S3 object directly; adapt Web ReadableStream vs Node stream
+      if (typeof obj.stream.pipe === 'function') {
+        return obj.stream.pipe(res);
+      }
+      // @aws-sdk returns a web stream in some runtimes — convert
+      const { Readable } = require('node:stream');
+      return Readable.fromWeb(obj.stream).pipe(res);
+    }
+  } catch {}
+  const filePath = path.join(UPLOADS_DIR, doc.storage_path);
+  if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) return sendError(res, 404, 'File not found');
   res.sendFile(filePath);
 });
 

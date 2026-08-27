@@ -7,29 +7,19 @@ const { randomToken } = require('./http');
 const { MIN_PASSWORD_LENGTH } = require('./constants');
 const { FRONTEND_URL, ADDITIONAL_ORIGINS, isAllowedOrigin } = require('./config');
 
-const UPLOADS_DIR = path.join(path.dirname(process.env.DB_PATH || path.join(__dirname, 'data', 'loadbyton.db')), 'uploads');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-const ALLOWED_UPLOAD_MIME_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-
-function saveUploadedFile(jobId, mimeType, base64) {
-  const ext = ALLOWED_UPLOAD_MIME_TYPES[mimeType];
-  if (!ext) throw { status: 400, message: `mimeType must be one of: ${Object.keys(ALLOWED_UPLOAD_MIME_TYPES).join(', ')}` };
-  if (typeof base64 !== 'string' || !base64) throw { status: 400, message: 'fileBase64 is required' };
-  let buffer;
-  try {
-    buffer = Buffer.from(base64, 'base64');
-  } catch {
-    throw { status: 400, message: 'fileBase64 is not valid base64' };
-  }
-  if (!buffer.length || buffer.length > MAX_UPLOAD_BYTES) {
-    throw { status: 400, message: `File must be between 1 byte and ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB` };
-  }
-  const jobDir = path.join(UPLOADS_DIR, String(jobId));
-  fs.mkdirSync(jobDir, { recursive: true });
-  const filename = `${crypto.randomUUID()}.${ext}`;
-  fs.writeFileSync(path.join(jobDir, filename), buffer);
-  return { storagePath: `${jobId}/${filename}`, mimeType };
+// Storage abstraction — S3 when S3_BUCKET is set, local disk otherwise.
+// Delegated to lib/storage.js so this module stays focused on domain
+// helpers. Re-exported here so existing imports keep working.
+let _storage;
+function getStorage() {
+  if (!_storage) _storage = require('./storage');
+  return _storage;
+}
+const UPLOADS_DIR = getStorage().UPLOADS_DIR;
+const ALLOWED_UPLOAD_MIME_TYPES = getStorage().ALLOWED_UPLOAD_MIME_TYPES;
+const MAX_UPLOAD_BYTES = getStorage().MAX_UPLOAD_BYTES;
+async function saveUploadedFile(jobId, mimeType, base64) {
+  return getStorage().saveUploadedFile(jobId, mimeType, base64);
 }
 
 const UAE_MOBILE_RE = /^(\+?971|0)?5\d{8}$/;

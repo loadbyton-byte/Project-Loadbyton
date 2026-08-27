@@ -3,9 +3,60 @@ const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { sendError } = require('../lib/http');
 const { writeAudit, notify } = require('../lib/helpers');
-const { createPaymentIntent, createTransfer, constructWebhookEvent } = require('../lib/stripe');
+const { createPaymentIntent, createTransfer, constructWebhookEvent, createConnectAccount, createAccountLink, retrieveAccount } = require('../lib/stripe');
 const { ledgerHash, verifyMultiSig, getHsmKeys } = require('../lib/hsm');
 const router = express.Router();
+
+// Carrier Connect onboarding — provision an Express account + hosted
+// onboarding link. The carrier is redirected to Stripe, completes KYC
+// there, and is returned to FRONTEND_URL. The resulting account id is
+// stored on profiles.processor_account_id and used as the transfer
+// destination in both payments.js executePayout (unified flow) and
+// release-payout below.
+router.post('/api/stripe/connect/onboard', auth(['CARRIER']), async (req, res) => {
+  const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(req.user.id);
+  let accountId = profile?.processor_account_id;
+  // Reuse a real, already-verified account; otherwise provision a fresh
+  // one. Mock accounts (acct_mock_*) are intentionally recreated so a
+  // reviewer can step through onboarding without side effects.
+  const needsNew = !accountId || String(accountId).startsWith('acct_mock_');
+  if (needsNew) {
+    try {
+      const acct = await createConnectAccount({ email: req.user.email });
+      accountId = acct.id;
+      await db.prepare('UPDATE profiles SET processor_account_id=? WHERE user_id=?').run(accountId, req.user.id);
+      await writeAudit(req, { userId: req.actorId, action: 'CONNECT_ACCOUNT_CREATED', details: `carrier ${req.user.id} -> ${accountId}`, entityType: 'profile', entityId: profile?.id || req.user.id });
+    } catch (e) {
+      return sendError(res, 502, `Connect account creation failed: ${e.message}`);
+    }
+  }
+  const origin = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173';
+  const base = String(origin).replace(/\/$/, '');
+  try {
+    const link = await createAccountLink({ accountId, refreshUrl: `${base}/carrier/onboarding?refresh=1`, returnUrl: `${base}/carrier/onboarding?success=1` });
+    res.json({ accountId, url: link.url, mock: !!link.mock });
+  } catch (e) {
+    sendError(res, 502, `Account link failed: ${e.message}`);
+  }
+});
+
+router.get('/api/stripe/connect/status', auth(['CARRIER']), async (req, res) => {
+  const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(req.user.id);
+  if (!profile?.processor_account_id) return res.json({ accountId: null, onboarded: false });
+  try {
+    const acct = await retrieveAccount(profile.processor_account_id);
+    res.json({
+      accountId: profile.processor_account_id,
+      charges_enabled: !!acct.charges_enabled,
+      payouts_enabled: !!acct.payouts_enabled,
+      details_submitted: !!acct.details_submitted,
+      mock: !!acct.mock,
+      onboarded: !!acct.payouts_enabled,
+    });
+  } catch (e) {
+    sendError(res, 502, `Status check failed: ${e.message}`);
+  }
+});
 
 // Shipper creates hosted checkout / payment_intent for a job's escrow
 router.post('/api/jobs/:id/pay', auth(['SHIPPER']), async (req,res) => {
