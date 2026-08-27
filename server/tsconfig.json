@@ -16,6 +16,6 @@
     "baseUrl": ".",
     "paths": { "@/*": ["*"] }
   },
-  "include": ["types/**/*.ts", "lib/**/*.ts", "services/**/*.ts", "services/**/*.js", "repositories/**/*.ts", "routes/**/*.ts", "routes/**/*.js", "middleware/**/*.ts"],
+  "include": ["types/**/*.ts", "lib/**/*.ts", "services/**/*.ts", "services/**/*.js", "repositories/**/*.ts", "routes/**/*.ts", "routes/**/*.js", "middleware/**/*.ts", "middleware/**/*.js"],
   "exclude": ["node_modules", "dist", "data"]
 }

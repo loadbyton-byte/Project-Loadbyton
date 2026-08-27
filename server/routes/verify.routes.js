@@ -1,5 +1,11 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
 const db = require('../db');
-const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { auth } = require('../middleware/auth');
 const { verifyTrnExternal, cache } = require('../services/verification.service');
 const router = require('express').Router();
@@ -7,13 +13,13 @@ const router = require('express').Router();
 // Carrier hits external registry before OpenLoads
 router.get('/api/verify/trn/:trn', auth(), async (req,res)=>{
   const trn = String(req.params.trn||'').trim();
-  if(!/^\d{15}$/.test(trn)) return sendError(res,400,'TRN must be 15 digits');
+  if(!/^\d{15}$/.test(trn)) return apiResponse.error(req,res,'VALIDATION_FAILED','TRN must be 15 digits');
   const r = await verifyTrnExternal(trn);
   res.json(r);
 });
 router.post('/api/verify/check', auth(), async (req,res)=>{
   const { trnNumber, tradeLicenseNumber } = req.body||{};
-  if(!trnNumber) return sendError(res,400,'trnNumber required');
+  if(!trnNumber) return apiResponse.error(req,res,'VALIDATION_FAILED','trnNumber required');
   const trn = await verifyTrnExternal(trnNumber);
   // trade licence external check stub (same service)
   const licenceOk = tradeLicenseNumber ? /^[A-Z0-9-]{5,15}$/.test(String(tradeLicenseNumber).toUpperCase()) : true;

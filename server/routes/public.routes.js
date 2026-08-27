@@ -1,3 +1,9 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
 const db = require('../db');
 const { unifiedLanes } = require('../lib/lanes');
 const { getSettings } = require('../lib/helpers');

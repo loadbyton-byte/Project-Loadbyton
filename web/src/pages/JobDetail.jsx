@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, TERMINALS, AREAS, DEPOTS, depotLabel } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, StatusTracker } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
@@ -16,6 +16,14 @@ import JobTimeline from '../features/job/JobTimeline.jsx';
 import MessagesPanel from '../features/job/MessagesPanel.jsx';
 import DriverPanel from '../features/job/DriverPanel.jsx';
 import RatingPanel from '../features/job/RatingPanel.jsx';
+import BidForm from '../features/job/BidForm.jsx';
+import PaymentPanel from '../features/job/PaymentPanel.jsx';
+import JobEditForm from '../features/job/JobEditForm.jsx';
+import DocumentList from '../features/job/DocumentList.jsx';
+import BackloadMatches from '../features/job/BackloadMatches.jsx';
+import PodForm from '../features/job/PodForm.jsx';
+import JobStatusTracker from '../features/job/JobStatusTracker.jsx';
+import DisputePanel from '../features/job/DisputePanel.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
 
@@ -56,16 +64,6 @@ function inferTerminalIndex(job) {
   return 0;
 }
 
-function JobStatusTracker({ job }) {
-  const terminal = job.status === 'CANCELLED' ? 'danger' : job.status === 'DISPUTED' ? 'danger' : undefined;
-  const idx = terminal ? inferTerminalIndex(job) : Math.max(0, STATUS_FLOW.indexOf(job.status) - 1);
-  return (
-    <div className="overflow-x-auto scroll-fade-x pb-1">
-      <StatusTracker steps={TRACKER_STEPS} currentIndex={idx} terminal={terminal} className="min-w-[560px]" />
-      {terminal && <Badge color="danger" className="mt-3">{job.status}</Badge>}
-    </div>
-  );
-}
 
 export default function JobDetail() {
   const { id } = useParams();
@@ -410,7 +408,7 @@ export default function JobDetail() {
                 <p className="text-xs text-ink-muted">No actions available.</p>
               )}
               {(isShipper || isAwardedCarrier) && DISPUTABLE_STATUSES.includes(job.status) && (
-                <DisputeForm jobId={job.id} onDone={load} />
+                <DisputePanel jobId={job.id} onDone={load} />
               )}
             </Card.Content>
           </Card>
@@ -424,464 +422,18 @@ export default function JobDetail() {
   );
 }
 
-function PaymentPanel({ job, load }) {
-  const { user } = useAuth();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const isShipper = user.id === job.shipper_id;
-  const amount = job.processor_amount_aed || job.agreed_price_aed;
-
-  const label = {
-    REQUIRES_PAYMENT: { color: 'warning', text: 'Awaiting payment' },
-    CREATED: { color: 'warning', text: 'Payment pending' },
-    PAID: { color: 'success', text: `Paid ${formatAED(amount)}` },
-    FAILED: { color: 'danger', text: 'Payment failed' },
-    REFUNDED: { color: 'neutral', text: `Refunded ${formatAED(amount)}` },
-  }[job.processor_payment_status] || { color: 'neutral', text: job.processor_payment_status };
-
-  async function pay() {
-    setBusy(true);
-    setError('');
-    try {
-      const r = await api.paymentCheckout(job.id);
-      if (r.paymentUrl) {
-        window.location.href = r.paymentUrl;
-        return;
-      }
-      await load();
-      if (r.testMode && !r.paymentUrl) setError('Payment started in test mode — awaiting processor confirmation. It will auto-confirm via webhook.');
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Card className="mb-6">
-      <Card.Header>
-        <Card.Title>Payment</Card.Title>
-        <Badge color={label.color}>{label.text}</Badge>
-      </Card.Header>
-      <Card.Content className="space-y-3">
-        {isShipper && job.escrow_status === 'HELD' && !['PAID', 'REFUNDED'].includes(job.processor_payment_status) && (
-          <div className="space-y-2">
-            <Button variant="accent" className="w-full" onClick={pay} loading={busy}>
-              Pay {formatAED(amount)} — secure hosted checkout
-            </Button>
-            {error && <p className="text-sm text-status-danger">{error}</p>}
-            {job.processor_payment_status === 'FAILED' && (
-              <p className="text-xs text-ink-muted">Your earlier payment attempt was declined or cancelled — you can try again.</p>
-            )}
-          </div>
-        )}
-        {job.processor_payment_status === 'PAID' && (
-          <p className="text-sm text-ink-secondary">Escrow is funded. The carrier can now proceed with pickup.</p>
-        )}
-        {!isShipper && job.processor_payment_status === 'REQUIRES_PAYMENT' && (
-          <p className="text-sm text-ink-secondary">Waiting for the shipper to complete payment before pickup.</p>
-        )}
-        {job.processor_payment_status === 'REFUNDED' && (
-          <p className="text-sm text-ink-secondary">This payment was refunded. Refunds typically arrive within 5–7 business days.</p>
-        )}
-      </Card.Content>
-    </Card>
-  );
-}
-
-function BidForm({ jobId, verified, defaultEquipment, onDone }) {
-  const [form, setForm] = useState({ amountAed: '', etaAt: '', truckType: defaultEquipment || 'CONTAINER_CHASSIS', notes: '' });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  async function submit(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await api.placeBid(jobId, { ...form, amountAed: Number(form.amountAed), etaAt: form.etaAt ? new Date(form.etaAt).toISOString() : '' });
-      onDone();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!verified) {
-    return (
-      <div className="mt-4 flex items-start gap-2 rounded-md px-3 py-2.5 text-sm" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
-        <IconAlert size={16} className="mt-0.5 shrink-0" /> Carrier verification required to bid. An admin needs to approve your account first.
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit} className="mt-5 grid gap-3 border-t pt-5 sm:grid-cols-2" style={{ borderColor: 'var(--border-subtle)' }}>
-      <div>
-        <Label>Your price (AED)</Label>
-        <Input type="number" required min="1" value={form.amountAed} onChange={(e) => setForm({ ...form, amountAed: e.target.value })} />
-      </div>
-      <div>
-        <Label>Delivery by (date &amp; time)</Label>
-        <Input type="datetime-local" required value={form.etaAt} onChange={(e) => setForm({ ...form, etaAt: e.target.value })} />
-      </div>
-      <div className="sm:col-span-2">
-        <Label>Equipment you're bidding with</Label>
-        <Select value={form.truckType} onChange={(e) => setForm({ ...form, truckType: e.target.value })}>
-          {EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
-        </Select>
-        <p className="mt-1 text-xs text-ink-muted">Driver name and mobile are added only after the shipper confirms your bid — they're shared with the shipper at that point, never before.</p>
-      </div>
-      {error && <p className="sm:col-span-2 text-sm text-status-danger">{error}</p>}
-      <Button type="submit" className="sm:col-span-2" loading={busy}>Place bid</Button>
-    </form>
-  );
-}
 
 // datetime-local inputs need "YYYY-MM-DDTHH:mm" — stored values can be
 // either that exact shape (created via this same form) or SQLite's
 // "YYYY-MM-DD HH:MM:SS" (seeded data), so normalize rather than assume.
-function toDatetimeLocal(raw) {
-  if (!raw) return '';
-  return raw.replace(' ', 'T').slice(0, 16);
-}
 
-function JobEditForm({ job, onDone, onCancel }) {
-  const [form, setForm] = useState({
-    shipmentType: job.shipment_type || 'IMPORT',
-    loadingLocation: job.loading_location || '',
-    deliveryLocation: job.delivery_location || '',
-    importPickupTerminal: job.import_pickup_terminal || job.pickup_terminal,
-    importUnloadingLocation: job.import_unloading_location || job.delivery_area,
-    importEmptyReturnLocation: job.import_empty_return_location || 'JAFZA_DEPOT',
-    exportEmptyPickupLocation: job.export_empty_pickup_location || 'JAFZA_DEPOT',
-    exportLoadingLocation: job.export_loading_location || job.delivery_area,
-    exportDepositTerminal: job.export_deposit_terminal || job.pickup_terminal,
-    pickupTerminal: job.pickup_terminal,
-    deliveryArea: job.delivery_area,
-    deliveryAddress: job.delivery_address,
-    containerNumber: job.container_number || '',
-    readyAt: toDatetimeLocal(job.ready_at),
-    deadline: toDatetimeLocal(job.deadline),
-    targetPriceAed: job.max_budget_aed ?? '',
-    cargoWeightTons: job.cargo_weight_tons ?? '',
-    notes: job.notes || '',
-    containerCount: job.container_count,
-    truckCount: job.truck_count,
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  async function save(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError('');
-    try {
-      await api.editJob(job.id, {
-        ...form,
-        targetPriceAed: form.targetPriceAed === '' ? undefined : Number(form.targetPriceAed),
-        cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
-      });
-      onDone();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
-      <div className="sm:col-span-2">
-        <Label>Shipment direction</Label>
-        <div className="mt-1 flex rounded-lg border p-1" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
-          <button type="button" onClick={() => setForm({ ...form, shipmentType: 'IMPORT' })} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold ${form.shipmentType === 'IMPORT' ? 'bg-white shadow text-ink' : 'text-ink-muted'}`}>Import</button>
-          <button type="button" onClick={() => setForm({ ...form, shipmentType: 'EXPORT' })} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold ${form.shipmentType === 'EXPORT' ? 'bg-white shadow text-ink' : 'text-ink-muted'}`}>Export</button>
-        </div>
-      </div>
-      {form.shipmentType === 'LOCAL' ? (
-        <>
-          <div>
-            <Label>Loading location</Label>
-            <Input value={form.loadingLocation} onChange={(e) => setForm({ ...form, loadingLocation: e.target.value, pickupTerminal: e.target.value })} />
-          </div>
-          <div>
-            <Label>Delivery location</Label>
-            <Input value={form.deliveryLocation} onChange={(e) => setForm({ ...form, deliveryLocation: e.target.value, deliveryArea: e.target.value })} />
-          </div>
-        </>
-      ) : form.shipmentType === 'IMPORT' ? (
-        <>
-          <div>
-            <Label>Container pickup at terminal</Label>
-            <Select value={form.importPickupTerminal} onChange={(e) => setForm({ ...form, importPickupTerminal: e.target.value, pickupTerminal: e.target.value })}>
-              {TERMINALS.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
-            </Select>
-          </div>
-          <div>
-            <Label>Unloading location</Label>
-            <Select value={form.importUnloadingLocation} onChange={(e) => setForm({ ...form, importUnloadingLocation: e.target.value, deliveryArea: e.target.value })}>
-              {AREAS.map((a) => <option key={a} value={a}>{formatLabel(a)}</option>)}
-            </Select>
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Empty return depot</Label>
-            <Select value={form.importEmptyReturnLocation} onChange={(e) => setForm({ ...form, importEmptyReturnLocation: e.target.value })}>
-              {['JAFZA_DEPOT','AL_QUSAIS_DEPOT','KHALIFA_DEPOT','SHARJAH_DEPOT','FUJAIRAH_DEPOT','DIP_DEPOT'].map((d) => <option key={d} value={d}>{d.replace('_',' ')}</option>)}
-            </Select>
-          </div>
-        </>
-      ) : (
-        <>
-          <div>
-            <Label>Empty pickup depot</Label>
-            <Select value={form.exportEmptyPickupLocation} onChange={(e) => setForm({ ...form, exportEmptyPickupLocation: e.target.value })}>
-              {['JAFZA_DEPOT','AL_QUSAIS_DEPOT','KHALIFA_DEPOT','SHARJAH_DEPOT','FUJAIRAH_DEPOT','DIP_DEPOT'].map((d) => <option key={d} value={d}>{d.replace('_',' ')}</option>)}
-            </Select>
-          </div>
-          <div>
-            <Label>Loading location</Label>
-            <Select value={form.exportLoadingLocation} onChange={(e) => setForm({ ...form, exportLoadingLocation: e.target.value, deliveryArea: e.target.value })}>
-              {AREAS.map((a) => <option key={a} value={a}>{formatLabel(a)}</option>)}
-            </Select>
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Deposit terminal</Label>
-            <Select value={form.exportDepositTerminal} onChange={(e) => setForm({ ...form, exportDepositTerminal: e.target.value, pickupTerminal: e.target.value })}>
-              {TERMINALS.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
-            </Select>
-          </div>
-        </>
-      )}
-      <div className="sm:col-span-2">
-        <Label>Delivery address detail</Label>
-        <Input required value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} />
-      </div>
-      <div>
-        <Label>Cargo weight (tons)</Label>
-        <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
-      </div>
-      {CONTAINER_EQUIPMENT.includes(job.equipment_type) && (
-        <div>
-          <Label>Container #</Label>
-          <Input value={form.containerNumber} onChange={(e) => setForm({ ...form, containerNumber: e.target.value })} />
-        </div>
-      )}
-      <div>
-        <Label>Ready at</Label>
-        <Input type="datetime-local" required value={form.readyAt} onChange={(e) => setForm({ ...form, readyAt: e.target.value })} />
-      </div>
-      <div>
-        <Label>Deadline</Label>
-        <Input type="datetime-local" required value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
-      </div>
-      <div>
-        <Label>Target price (AED, per trip)</Label>
-        <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} />
-        <p className="mt-1 text-xs text-ink-muted">What you're willing to pay for this trip — bids above it still appear, just flagged.</p>
-      </div>
-      {job.shipment_type !== 'LOCAL' && (job.container_count > 1 || job.truck_count > 1) && (
-        <>
-          <div>
-            <Label>No. of containers</Label>
-            <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
-          </div>
-          <div>
-            <Label>No. of trucks</Label>
-            <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
-          </div>
-        </>
-      )}
-      <div className="sm:col-span-2">
-        <Label>Notes</Label>
-        <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-      </div>
-      {error && <p className="sm:col-span-2 text-sm text-status-danger">{error}</p>}
-      <div className="flex gap-2 sm:col-span-2">
-        <Button type="submit" loading={busy}>Save changes</Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-      </div>
-    </form>
-  );
-}
 
 // "Zero deadhead miles" — while hauling this job, surface OPEN jobs that
 // start roughly where it's dropping off, so the return leg isn't empty.
 // Ranking (real distance vs. same-emirate fallback) is entirely server-side
 // (GET /api/jobs/:id/backload-matches) — this just renders what comes back.
-function BackloadMatches({ jobId }) {
-  const [matches, setMatches] = useState(null);
-  useEffect(() => {
-    api.backloadMatches(jobId).then((d) => setMatches(d.matches)).catch(() => setMatches([]));
-  }, [jobId]);
 
-  if (matches === null) return null;
 
-  return (
-    <Card className="mb-6">
-      <Card.Header><Card.Title>Backload matches</Card.Title></Card.Header>
-      <Card.Content className="space-y-3 text-sm">
-        {matches.length === 0 ? (
-          <p className="text-ink-muted">No open loads near this delivery point right now — check back as new jobs are posted.</p>
-        ) : (
-          matches.map((m) => (
-            <Link key={m.id} to={`/jobs/${m.id}`} className="block rounded-md border px-3 py-2.5 hover:bg-raised" style={{ borderColor: 'var(--border-default)' }}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-xs text-ink-muted">{m.job_code}</span>
-                <Badge color={m.matchType === 'coords' ? 'success' : 'neutral'}>
-                  {m.matchType === 'coords' ? `${m.distanceKm} km away` : 'Same emirate'}
-                </Badge>
-              </div>
-              <p className="mt-1 font-medium text-ink">{formatLabel(m.pickup_terminal)} → {formatLabel(m.delivery_area)}</p>
-              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-secondary">
-                {m.shipper_company} <RatingPill rating={m.shipper_rating} /> · {formatAED(m.max_budget_aed)} target
-              </p>
-            </Link>
-          ))
-        )}
-      </Card.Content>
-    </Card>
-  );
-}
 
-function PodForm({ jobId, onDone, busy, setBusy, setError }) {
-  const [file, setFile] = useState(null);
-  async function submit() {
-    setBusy(true);
-    setError('');
-    try {
-      let document;
-      if (file) {
-        const { base64, mimeType } = await fileToBase64(file);
-        document = { docType: 'POD', title: file.name, fileBase64: base64, mimeType };
-      }
-      await api.submitPod(jobId, document ? { document } : {});
-      onDone();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="space-y-2">
-      <input type="file" accept={UPLOAD_ACCEPT} className="input" onChange={(e) => setFile(e.target.files[0] || null)} />
-      <p className="text-xs text-ink-muted">Optional — a photo of the signed delivery note or POD stamp (JPEG/PNG/WEBP/PDF, up to 5MB).</p>
-      <Button className="w-full" variant="accent" onClick={submit} loading={busy}>Submit proof of delivery</Button>
-    </div>
-  );
-}
 
-function DocumentList({ documents, jobId, onAdd }) {
-  const { addToast } = useToasts();
-  const [docType, setDocType] = useState('CUSTOMS');
-  const [title, setTitle] = useState('');
-  const [file, setFile] = useState(null);
-  const [busy, setBusy] = useState(false);
-  async function submit(e) {
-    e.preventDefault();
-    if (!title || !file) return;
-    setBusy(true);
-    try {
-      const { base64, mimeType } = await fileToBase64(file);
-      await api.addDocument(jobId, { docType, title, fileBase64: base64, mimeType });
-      setDocType('CUSTOMS');
-      setTitle('');
-      setFile(null);
-      onAdd();
-    } catch (err) {
-      // F17, fixed independently on both branches: this had no catch — a
-      // failed add (e.g. a bad file) threw as an unhandled rejection and
-      // the user saw nothing.
-      addToast({ type: 'system_message', title: 'Could not add document', body: err.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div>
-      {documents.length === 0 ? (
-        <p className="text-sm text-ink-muted">No documents yet.</p>
-      ) : (
-        <ul className="space-y-2">
-          {documents.map((d) => (
-            <li key={d.id} className="flex items-center gap-2.5 text-sm">
-              <IconFile size={15} className="text-ink-muted" />
-              <a href={documentFileUrl(jobId, d)} target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">{d.title}</a>
-              <Badge color="neutral">{d.doc_type}</Badge>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mt-2 text-xs text-ink-muted">Private between shipper and carrier — your own uploads are visible to you; the other side's uploads appear here only after the bid is confirmed.</p>
-      <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-        <details className="mb-3 text-xs text-ink-muted">
-          <summary className="cursor-pointer select-none font-medium text-ink-secondary">What should I upload?</summary>
-          <ul className="mt-2 space-y-1 pl-4" style={{ listStyle: 'disc' }}>
-            <li><strong>CUSTOMS</strong> — customs release/clearance paperwork for the container or cargo.</li>
-            <li><strong>RECEIPT</strong> — terminal handling receipt or any charge slip tied to this job.</li>
-            <li><strong>POD</strong> — proof of delivery (signed delivery note, gate pass) — usually attached automatically when you submit POD in the Actions panel.</li>
-            <li><strong>LICENCE</strong> — trade licence, used when a document needs to reference the carrier's registration.</li>
-            <li><strong>INSURANCE</strong> — cargo or fleet insurance certificate relevant to this shipment.</li>
-            <li><strong>OTHER</strong> — anything else worth keeping on the job record.</li>
-          </ul>
-        </details>
-        <form onSubmit={submit} className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[110px,1fr,1fr,auto]">
-          <select className="input" value={docType} onChange={(e) => setDocType(e.target.value)}>
-            {DOC_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
-          <Input placeholder="Title" required value={title} onChange={(e) => setTitle(e.target.value)} />
-          <input type="file" accept={UPLOAD_ACCEPT} required className="input" onChange={(e) => setFile(e.target.files[0] || null)} />
-          <Button type="submit" variant="secondary" loading={busy}>Add</Button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// Self-serve dispute filing — previously the only way to flag a real
-// problem on a job was to reach an admin outside the product entirely.
-// Collapsed by default so it doesn't read as "something's wrong" on every
-// normal job; opening it is a deliberate, named action, not a stray button.
-function DisputeForm({ jobId, onDone }) {
-  const { addToast } = useToasts();
-  const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    if (!reason.trim()) return;
-    setBusy(true);
-    try {
-      await api.disputeJob(jobId, reason.trim());
-      addToast({ type: 'status_change', title: 'Dispute filed', body: 'Escrow is frozen pending admin review.' });
-      setOpen(false);
-      setReason('');
-      onDone();
-    } catch (err) {
-      addToast({ type: 'system_message', title: 'Could not file dispute', body: err.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <Button className="w-full" variant="ghost" onClick={() => setOpen(true)}>
-        <IconAlert size={15} /> Report a problem
-      </Button>
-    );
-  }
-  return (
-    <div className="space-y-2 rounded-md border p-3" style={{ borderColor: 'var(--status-danger)' }}>
-      <p className="text-xs text-ink-secondary">Opening a dispute freezes escrow and hands the job to admin review. Describe what went wrong:</p>
-      <Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Cargo arrived damaged, driver never showed up, wrong delivery address used…" />
-      <div className="flex gap-2">
-        <Button className="flex-1" variant="danger" onClick={submit} loading={busy} disabled={!reason.trim()}>File dispute</Button>
-        <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-      </div>
-    </div>
-  );
-}
 

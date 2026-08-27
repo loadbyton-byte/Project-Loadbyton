@@ -1,5 +1,11 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
 const db = require('../db');
-const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { auth, requireSeatRole } = require('../middleware/auth');
 const { writeAudit, notify } = require('../lib/helpers');
 const router = require('express').Router();
@@ -7,10 +13,10 @@ const router = require('express').Router();
 // DP World E-Token — carrier pastes/syncs token, shipper auto-notified
 router.post('/api/jobs/:id/etoken', auth(['CARRIER']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if(!job) return sendError(res,404,'Job not found');
-  if(job.carrier_id!==req.user.id) return sendError(res,403,'Not your job');
+  if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
+  if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
   const { token } = req.body||{};
-  if(!token||String(token).trim().length<6) return sendError(res,400,'E-Token required (min 6 chars)');
+  if(!token||String(token).trim().length<6) return apiResponse.error(req,res,'VALIDATION_FAILED','E-Token required (min 6 chars)');
   await db.prepare(`UPDATE jobs SET dp_world_e_token=?, updated_at=datetime('now') WHERE id=?`).run(String(token).trim(), job.id);
   await notify(job.shipper_id, 'E-Token locked', `Carrier locked DP World gate slot for ${job.job_code}: ${String(token).trim().slice(0,12)}…`, job.id, 'status');
   await writeAudit(req,{userId:req.actorId, action:'ETOKEN_SET', entityType:'job', entityId:job.id});
@@ -20,16 +26,16 @@ router.post('/api/jobs/:id/etoken', auth(['CARRIER']), async (req,res)=>{
 // EIR 3-photo checklist — Seal, Right, Left — becomes immutable ledger via job_documents
 router.post('/api/jobs/:id/eir', auth(['CARRIER']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if(!job) return sendError(res,404,'Job not found');
-  if(job.carrier_id!==req.user.id) return sendError(res,403,'Not your job');
+  if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
+  if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
   const { photos } = req.body||{}; // [{title, fileBase64, mimeType}]
-  if(!Array.isArray(photos)||photos.length!==3) return sendError(res,400,'EIR requires exactly 3 photos: Seal, Right Side, Left Side');
+  if(!Array.isArray(photos)||photos.length!==3) return apiResponse.error(req,res,'VALIDATION_FAILED','EIR requires exactly 3 photos: Seal, Right Side, Left Side');
   const labels=['Seal','Right Side','Left Side'];
   const { saveUploadedFile } = require('../lib/helpers');
   const stored=[];
   for(let i=0;i<3;i++){
     const p=photos[i];
-    if(!p.fileBase64||!p.mimeType) return sendError(res,400,`Photo ${i+1} missing fileBase64/mimeType`);
+    if(!p.fileBase64||!p.mimeType) return apiResponse.error(req,res,'VALIDATION_FAILED',`Photo ${i+1} missing fileBase64/mimeType`);
     const { storagePath } = await saveUploadedFile(job.id, p.mimeType, p.fileBase64);
     const title = `EIR ${labels[i]} — ${job.job_code}`;
     await db.prepare(`INSERT INTO job_documents (job_id,uploader_id,doc_type,title,file_url,storage_path,mime_type) VALUES (?,?,?,?,?,?,?)`).run(job.id, req.user.id, 'EIR', title, storagePath, storagePath, p.mimeType);
@@ -43,7 +49,7 @@ router.post('/api/jobs/:id/eir', auth(['CARRIER']), async (req,res)=>{
 // Demurrage/detention alarm check — called by cron or carrier dashboard
 router.get('/api/jobs/:id/detention', auth(), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if(!job) return sendError(res,404,'Job not found');
+  if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
   const free = job.detention_free_days ?? job.free_time_days ?? 5;
   const rate = job.demurrage_rate_aed ?? 400;
   const deliveredAt = job.delivered_at ? new Date(job.delivered_at) : null;
@@ -57,7 +63,7 @@ router.get('/api/jobs/:id/detention', auth(), async (req,res)=>{
 // Admin trigger for SMS alarms (24h before penalty)
 router.post('/api/system/detention-alarms', async (req,res)=>{
   const key=req.headers['x-internal-key'];
-  if(key!==process.env.INTERNAL_KEY && req.user?.role!=='ADMIN') return sendError(res,401,'Internal key required');
+  if(key!==process.env.INTERNAL_KEY && req.user?.role!=='ADMIN') return apiResponse.error(req,res,'NOT_AUTHENTICATED','Internal key required');
   const jobs=await db.prepare(`SELECT * FROM jobs WHERE status IN ('DELIVERED','IN_TRANSIT','PICKED_UP') AND delivered_at IS NOT NULL`).all();
   let alerted=0;
   for(const job of jobs){
@@ -77,15 +83,15 @@ router.post('/api/system/detention-alarms', async (req,res)=>{
 // Fuel/Salik advance — 20% of agreed freight instantly as voucher/wallet
 router.post('/api/jobs/:id/fuel-advance', auth(['CARRIER']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if(!job) return sendError(res,404,'Job not found');
-  if(job.carrier_id!==req.user.id) return sendError(res,403,'Not your job');
+  if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
+  if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
   const exists=await db.prepare('SELECT 1 FROM fuel_advances WHERE job_id=? AND carrier_id=?').get(job.id, req.user.id);
-  if(exists) return sendError(res,400,'Advance already taken for this job');
+  if(exists) return apiResponse.error(req,res,'VALIDATION_FAILED','Advance already taken for this job');
   const amount = Math.round((job.agreed_price_aed||job.max_budget_aed||0)*0.20);
-  if(amount<=0) return sendError(res,400,'No agreed price to advance');
+  if(amount<=0) return apiResponse.error(req,res,'VALIDATION_FAILED','No agreed price to advance');
   const { type } = req.body||{};
   const t = String(type||'FUEL').toUpperCase();
-  if(!['FUEL','SALIK'].includes(t)) return sendError(res,400,'type must be FUEL or SALIK');
+  if(!['FUEL','SALIK'].includes(t)) return apiResponse.error(req,res,'VALIDATION_FAILED','type must be FUEL or SALIK');
   await db.prepare(`INSERT INTO fuel_advances (job_id,carrier_id,amount_aed,type) VALUES (?,?,?,?)`).run(job.id, req.user.id, amount, t);
   await writeAudit(req,{userId:req.actorId, action:'FUEL_ADVANCE', details:`${job.job_code} ${t} ${amount} AED`, entityType:'job', entityId:job.id});
   res.json({ ok:true, amount, type: t });

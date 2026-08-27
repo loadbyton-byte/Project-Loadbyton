@@ -1,25 +1,27 @@
-import { useState } from 'react';
-import { api } from '../../lib/api.js';
+import React, { useState, useCallback } from 'react';
 import { useAuth } from '../../lib/auth.jsx';
+import { api } from '../../lib/api.js';
+import { useToasts } from '../../components/Toast.jsx';
 import { formatAED } from '../../lib/constants.js';
 import { Button, Card, Badge } from '../../components/ui.jsx';
 
-export default function PaymentPanel({ job, load, onDone }) {
+const STATUS_LABEL = {
+  REQUIRES_PAYMENT: { color: 'warning', text: 'Awaiting payment' },
+  CREATED: { color: 'warning', text: 'Payment pending' },
+  PAID: { color: 'success', text: 'Paid' },
+  FAILED: { color: 'danger', text: 'Payment failed' },
+  REFUNDED: { color: 'neutral', text: 'Refunded' },
+};
+
+export default function PaymentPanel({ job, load }) {
   const { user } = useAuth();
+  const { addToast } = useToasts();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const isShipper = user?.id === job?.shipper_id;
-  const amount = job?.processor_amount_aed || job?.agreed_price_aed;
-  const onSuccess = onDone || load;
+  const isShipper = user.id === job.shipper_id;
+  const amount = job.processor_amount_aed || job.agreed_price_aed;
 
-  const label =
-    {
-      REQUIRES_PAYMENT: { color: 'warning', text: 'Awaiting payment' },
-      CREATED: { color: 'warning', text: 'Payment pending' },
-      PAID: { color: 'success', text: `Paid ${formatAED(amount)}` },
-      FAILED: { color: 'danger', text: 'Payment failed' },
-      REFUNDED: { color: 'neutral', text: `Refunded ${formatAED(amount)}` },
-    }[job.processor_payment_status] || { color: 'neutral', text: job.processor_payment_status };
+  const label = STATUS_LABEL[job.processor_payment_status] || { color: 'neutral', text: job.processor_payment_status };
 
   async function pay() {
     setBusy(true);
@@ -30,7 +32,7 @@ export default function PaymentPanel({ job, load, onDone }) {
         window.location.href = r.paymentUrl;
         return;
       }
-      if (onSuccess) await onSuccess();
+      await load();
       if (r.testMode && !r.paymentUrl) setError('Payment started in test mode — awaiting processor confirmation. It will auto-confirm via webhook.');
     } catch (e) {
       setError(e.message);
@@ -38,8 +40,6 @@ export default function PaymentPanel({ job, load, onDone }) {
       setBusy(false);
     }
   }
-
-  if (!job) return null;
 
   return (
     <Card className="mb-6">
@@ -68,7 +68,6 @@ export default function PaymentPanel({ job, load, onDone }) {
         {job.processor_payment_status === 'REFUNDED' && (
           <p className="text-sm text-ink-secondary">This payment was refunded. Refunds typically arrive within 5–7 business days.</p>
         )}
-        {error && !(isShipper && job.escrow_status === 'HELD') && <p className="text-sm text-status-danger">{error}</p>}
       </Card.Content>
     </Card>
   );

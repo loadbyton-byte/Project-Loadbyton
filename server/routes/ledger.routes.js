@@ -1,6 +1,13 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
 const crypto = require('node:crypto');
 const db = require('../db');
 const { sendError } = require('../lib/http');
+const { apiResponse } = require('../lib/apiResponse');
 const { auth } = require('../middleware/auth');
 const router = require('express').Router();
 

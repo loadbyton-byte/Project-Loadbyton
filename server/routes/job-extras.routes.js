@@ -1,7 +1,13 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
 const path = require('node:path');
 const fs = require('node:fs');
 const db = require('../db');
-const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM, TERMINAL_EMIRATE, AREA_EMIRATE, DOC_TYPES } = require('../lib/constants');
 const { saveUploadedFile, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
@@ -10,10 +16,10 @@ const router = require('express').Router();
 
 router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
-  if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (job.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
   if (!BACKLOAD_ELIGIBLE_STATUSES.includes(job.status)) {
-    return sendError(res, 403, `Backload matching is only available once a job is ${BACKLOAD_ELIGIBLE_STATUSES.join('/')}`);
+    return apiResponse.error(req, res, 'FORBIDDEN', `Backload matching is only available once a job is ${BACKLOAD_ELIGIBLE_STATUSES.join('/')}`);
   }
 
   const deliveryEmirate = AREA_EMIRATE[job.delivery_area] || null;
@@ -53,19 +59,19 @@ router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), async (req, res)
 
 router.post('/api/jobs/:id/documents', auth(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   // Uploads are for the job's parties (shipper or awarded carrier) — a
   // bidding carrier has no business attaching files to a job they may lose.
-  if (!(await isPartyOnJob(job, req.user))) return sendError(res, 403, 'Only the shipper and the awarded carrier can attach documents');
+  if (!(await isPartyOnJob(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Only the shipper and the awarded carrier can attach documents');
   const b = req.body || {};
-  if (!b.title || !(b.fileUrl || b.fileBase64)) return sendError(res, 400, 'title and (fileUrl or fileBase64+mimeType) are required');
+  if (!b.title || !(b.fileUrl || b.fileBase64)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'title and (fileUrl or fileBase64+mimeType) are required');
   let storagePath = null;
   let mimeType = null;
   if (b.fileBase64) {
     try {
       ({ storagePath, mimeType } = await saveUploadedFile(job.id, b.mimeType, b.fileBase64));
     } catch (e) {
-      return sendError(res, e.status || 400, e.message || 'Upload failed');
+      return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
     }
   }
   await db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
@@ -83,10 +89,10 @@ router.post('/api/jobs/:id/documents', auth(), async (req, res) => {
 
 router.get('/api/jobs/:id/documents/:docId/file', auth(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   const doc = await db.prepare('SELECT * FROM job_documents WHERE id=? AND job_id=?').get(req.params.docId, job.id);
-  if (!doc) return sendError(res, 404, 'Document not found');
-  if (!canSeeDocument(job, doc, req.user)) return sendError(res, 403, 'Not permitted — documents are shared once the bid is confirmed');
+  if (!doc) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'Document not found', { status: 404 });
+  if (!canSeeDocument(job, doc, req.user)) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted — documents are shared once the bid is confirmed');
   if (!doc.storage_path) return res.redirect(doc.file_url);
   res.set('Content-Type', doc.mime_type || 'application/octet-stream');
   res.set('Content-Disposition', `inline; filename="${doc.title.replace(/[^\w.-]/g, '_')}"`);
@@ -94,7 +100,7 @@ router.get('/api/jobs/:id/documents/:docId/file', auth(), async (req, res) => {
     const storage = require('../lib/storage');
     if (storage.isS3Enabled()) {
       const obj = await storage.getFile(doc.storage_path);
-      if (!obj || !obj.stream) return sendError(res, 404, 'File not found');
+      if (!obj || !obj.stream) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'File not found', { status: 404 });
       // Stream S3 object directly; adapt Web ReadableStream vs Node stream
       if (typeof obj.stream.pipe === 'function') {
         return obj.stream.pipe(res);
@@ -105,23 +111,23 @@ router.get('/api/jobs/:id/documents/:docId/file', auth(), async (req, res) => {
     }
   } catch {}
   const filePath = path.join(UPLOADS_DIR, doc.storage_path);
-  if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) return sendError(res, 404, 'File not found');
+  if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'File not found', { status: 404 });
   res.sendFile(filePath);
 });
 
 router.post('/api/jobs/:id/rating', auth(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   if (!(await isParticipantOrBidder(job, req.user)) || (req.user.id !== job.shipper_id && req.user.id !== job.carrier_id)) {
-    return sendError(res, 403, 'Not permitted');
+    return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
   }
-  if (job.status !== 'COMPLETED') return sendError(res, 403, 'Job must be completed before rating');
+  if (job.status !== 'COMPLETED') return apiResponse.error(req, res, 'FORBIDDEN', 'Job must be completed before rating');
   const existing = await db.prepare('SELECT 1 FROM ratings WHERE job_id=? AND rater_id=?').get(job.id, req.user.id);
-  if (existing) return sendError(res, 409, 'You already rated this job');
+  if (existing) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'You already rated this job', { status: 409 });
 
   const b = req.body || {};
   const score = Number(b.score);
-  if (!score || score < 1 || score > 5) return sendError(res, 400, 'score must be 1-5');
+  if (!score || score < 1 || score > 5) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'score must be 1-5');
   const rateeId = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
 
   // submits — idx_ratings_one_per_rater (server/db.js) is the real
@@ -131,7 +137,7 @@ router.post('/api/jobs/:id/rating', auth(), async (req, res) => {
     await db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment) VALUES (?,?,?,?,?)').run(job.id, req.user.id, rateeId, score, b.comment || null);
   } catch (e) {
     if (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message)) {
-      return sendError(res, 409, 'You already rated this job');
+      return apiResponse.error(req, res, 'VALIDATION_FAILED', 'You already rated this job', { status: 409 });
     }
     throw e;
   }
@@ -143,13 +149,13 @@ router.post('/api/jobs/:id/rating', auth(), async (req, res) => {
 
 router.get('/api/jobs/:id/messages', auth(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   // Once a job is DISPUTED this thread doubles as the dispute correspondence
   // (see GET /api/jobs/:id/dispute) — a losing bidder who never won the
   // award has no business reading it, so drop the bidder-visibility
   // fallback specifically for disputed jobs.
   const permitted = job.status === 'DISPUTED' ? await isPartyOnJob(job, req.user) : await isParticipantOrBidder(job, req.user);
-  if (!permitted) return sendError(res, 403, 'Not permitted');
+  if (!permitted) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
   // sender_role is additive (existing consumers only ever read
   // sender_id/content) — lets the party-facing dispute view (JobDispute.jsx)
   // render an admin's reply as a distinct "Admin" bubble instead of looking
@@ -162,11 +168,11 @@ router.get('/api/jobs/:id/messages', auth(), async (req, res) => {
 
 router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   const permitted = job.status === 'DISPUTED' ? await isPartyOnJob(job, req.user) : await isParticipantOrBidder(job, req.user);
-  if (!permitted) return sendError(res, 403, 'Not permitted');
+  if (!permitted) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
   const { content } = req.body || {};
-  if (!content || !content.trim()) return sendError(res, 400, 'content is required');
+  if (!content || !content.trim()) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'content is required');
   const result = await db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?)').run(job.id, req.actorId, content.trim());
   // Sender may be neither party (an admin replying in a dispute thread) —
   // notify both shipper and carrier in that case rather than defaulting to

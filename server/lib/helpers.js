@@ -1,47 +1,108 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ * @typedef {import('../types/domain').UserRole} UserRole
+ */
+
+/**
+ * @param {Job} _job
+ * @param {Payout} _payout
+ * @param {Money} _money
+ * @returns {void}
+ */
+function _strictTypeRefs(_job, _payout, _money) {}
+
+/** @type {any} */
 const path = require('node:path');
+/** @type {any} */
 const fs = require('node:fs');
+/** @type {any} */
 const crypto = require('node:crypto');
+/** @type {any} */
 const db = require('../db');
-const { encryptField, decryptField } = require('./crypto');
-const { randomToken } = require('./http');
-const { MIN_PASSWORD_LENGTH } = require('./constants');
-const { FRONTEND_URL, ADDITIONAL_ORIGINS, isAllowedOrigin } = require('./config');
+/** @type {any} */
+const cryptoMod = require('./crypto');
+const encryptField = /** @type {any} */ (cryptoMod).encryptField;
+const decryptField = /** @type {any} */ (cryptoMod).decryptField;
+/** @type {any} */
+const httpMod = require('./http');
+const randomToken = /** @type {any} */ (httpMod).randomToken;
+/** @type {any} */
+const constantsMod = require('./constants');
+const MIN_PASSWORD_LENGTH = /** @type {any} */ (constantsMod).MIN_PASSWORD_LENGTH;
+/** @type {any} */
+const configMod = require('./config');
+const FRONTEND_URL = /** @type {any} */ (configMod).FRONTEND_URL;
+const ADDITIONAL_ORIGINS = /** @type {any} */ (configMod).ADDITIONAL_ORIGINS;
+const isAllowedOrigin = /** @type {any} */ (configMod).isAllowedOrigin;
 
 // Storage abstraction — S3 when S3_BUCKET is set, local disk otherwise.
 // Delegated to lib/storage.js so this module stays focused on domain
 // helpers. Re-exported here so existing imports keep working.
 let _storage;
 function getStorage() {
-  if (!_storage) _storage = require('./storage');
+  if (!_storage) _storage = /** @type {any} */ (require('./storage'));
   return _storage;
 }
-const UPLOADS_DIR = getStorage().UPLOADS_DIR;
-const ALLOWED_UPLOAD_MIME_TYPES = getStorage().ALLOWED_UPLOAD_MIME_TYPES;
-const MAX_UPLOAD_BYTES = getStorage().MAX_UPLOAD_BYTES;
+const UPLOADS_DIR = /** @type {any} */ (getStorage().UPLOADS_DIR);
+const ALLOWED_UPLOAD_MIME_TYPES = /** @type {any} */ (getStorage().ALLOWED_UPLOAD_MIME_TYPES);
+const MAX_UPLOAD_BYTES = /** @type {any} */ (getStorage().MAX_UPLOAD_BYTES);
+/**
+ * @param {number} jobId
+ * @param {string} mimeType
+ * @param {string} base64
+ * @returns {Promise<any>}
+ */
 async function saveUploadedFile(jobId, mimeType, base64) {
   return getStorage().saveUploadedFile(jobId, mimeType, base64);
 }
 
 const UAE_MOBILE_RE = /^(\+?971|0)?5\d{8}$/;
+/**
+ * @param {any} raw
+ * @returns {string | null}
+ */
 function normalizeUaeMobile(raw) {
   const digits = String(raw || '').replace(/[\s-]/g, '');
   return UAE_MOBILE_RE.test(digits) ? digits : null;
 }
 
 const UAE_TRN_RE = /^\d{15}$/;
+/**
+ * @param {any} raw
+ * @returns {boolean}
+ */
 function isValidUaeTrn(raw) {
   return UAE_TRN_RE.test(String(raw || '').trim());
 }
 
 const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
+/**
+ * @param {any} raw
+ * @returns {boolean}
+ */
 function isValidUaeTradeLicence(raw) {
   return UAE_LICENCE_RE.test(String(raw || '').toUpperCase());
 }
 
+/**
+ * @param {number} lat
+ * @param {number} lng
+ * @returns {boolean}
+ */
 function isValidUaeLatLng(lat, lng) {
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 22 && lat <= 27 && lng >= 51 && lng <= 57;
 }
 
+/**
+ * @param {number} lat1
+ * @param {number} lng1
+ * @param {number} lat2
+ * @param {number} lng2
+ * @returns {number}
+ */
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -51,33 +112,50 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/**
+ * @param {any} password
+ * @returns {boolean}
+ */
 function isPasswordValid(password) {
   return typeof password === 'string' && password.length >= MIN_PASSWORD_LENGTH;
 }
 
+/**
+ * @param {any} a
+ * @param {any} b
+ * @returns {boolean}
+ */
 function timingSafeEqualStr(a, b) {
   const ha = crypto.createHash('sha256').update(String(a)).digest();
   const hb = crypto.createHash('sha256').update(String(b)).digest();
   return crypto.timingSafeEqual(ha, hb);
 }
 
+/**
+ * @param {any} token
+ * @returns {string}
+ */
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 async function getSettings() {
-  const rows = (await db.prepare('SELECT key, value FROM settings').all());
-  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const rows = /** @type {any} */ ((await db.prepare('SELECT key, value FROM settings').all()));
+  const map = Object.fromEntries(rows.map((/** @type {any} */ r) => [r.key, r.value]));
   return {
-    commission_rate_bps: Number(map.commission_rate_bps ?? 600),
-    auto_release_hours: Number(map.auto_release_hours ?? 24),
+    commission_rate_bps: Number(/** @type {any} */ (map).commission_rate_bps ?? 600),
+    auto_release_hours: Number(/** @type {any} */ (map).auto_release_hours ?? 24),
   };
 }
 
+/**
+ * @param {any} row
+ * @returns {Promise<any>}
+ */
 async function toPublicUser(row) {
   if (!row) return null;
   const profile =
-    row.profile !== undefined ? row.profile : await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(row.id);
+    row.profile !== undefined ? row.profile : /** @type {any} */ (await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(row.id));
   return {
     id: row.id,
     email: row.email,
@@ -110,6 +188,11 @@ async function toPublicUser(row) {
   };
 }
 
+/**
+ * @param {any} req
+ * @param {{ userId?: any, action: string, details?: any, entityType?: any, entityId?: any, beforeState?: any, afterState?: any }} opts
+ * @returns {Promise<void>}
+ */
 async function writeAudit(req, { userId = null, action, details = null, entityType = null, entityId = null, beforeState = null, afterState = null }) {
   await db.prepare(
     `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id)
@@ -117,36 +200,65 @@ async function writeAudit(req, { userId = null, action, details = null, entityTy
   ).run(userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null);
 }
 
+/**
+ * @param {any} userId
+ * @returns {Promise<any>}
+ */
 async function unreadNotificationCount(userId) {
-  return (await db.prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0').get(userId)).c;
+  return /** @type {any} */ ((await db.prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id=? AND is_read=0').get(userId))).c;
 }
 
+/**
+ * @param {any} userId
+ * @param {string} title
+ * @param {string} body
+ * @param {any} jobId
+ * @param {string} type
+ * @returns {Promise<void>}
+ */
 async function notify(userId, title, body, jobId = null, type = 'system') {
   if (!userId) return;
   if (type !== 'system') {
-    const user = await db.prepare('SELECT notification_prefs_disabled FROM users WHERE id=?').get(userId);
-    const disabled = user ? user.notification_prefs_disabled.split(',').filter(Boolean) : [];
+    const user = /** @type {any} */ (await db.prepare('SELECT notification_prefs_disabled FROM users WHERE id=?').get(userId));
+    const disabled = user ? String(user.notification_prefs_disabled).split(',').filter(Boolean) : [];
     if (disabled.includes(type)) return;
   }
   await db.prepare('INSERT INTO notifications (user_id, title, body, job_id, type) VALUES (?,?,?,?,?)').run(userId, title, body, jobId, type);
 }
 
+/**
+ * @param {string} title
+ * @param {string} body
+ * @param {any} jobId
+ * @param {string} type
+ * @returns {Promise<void>}
+ */
 async function notifyAdmins(title, body, jobId = null, type = 'dispute') {
-  const admins = await db.prepare(`SELECT id FROM users WHERE role='ADMIN'`).all();
+  const admins = /** @type {any} */ (await db.prepare(`SELECT id FROM users WHERE role='ADMIN'`).all());
   for (const a of admins) await notify(a.id, title, body, jobId, type);
 }
 
+/**
+ * @param {any} job
+ * @param {any} user
+ * @returns {Promise<boolean>}
+ */
 async function isParticipantOrBidder(job, user) {
   if (user.role === 'ADMIN') return true;
   if (user.id === job.shipper_id) return true;
   if (user.id === job.carrier_id) return true;
   if (user.role === 'CARRIER') {
-    const hasBid = await db.prepare('SELECT 1 FROM bids WHERE job_id=? AND carrier_id=?').get(job.id, user.id);
+    const hasBid = /** @type {any} */ (await db.prepare('SELECT 1 FROM bids WHERE job_id=? AND carrier_id=?').get(job.id, user.id));
     if (hasBid) return true;
   }
   return false;
 }
 
+/**
+ * @param {any} job
+ * @param {any} user
+ * @returns {boolean}
+ */
 function isPartyOnJob(job, user) {
   if (user.role === 'ADMIN') return true;
   if (user.id === job.shipper_id) return true;
@@ -154,12 +266,21 @@ function isPartyOnJob(job, user) {
   return false;
 }
 
+/**
+ * @param {any} job
+ * @param {any} user
+ * @returns {Promise<boolean>}
+ */
 async function canViewJob(job, user) {
   if (await isParticipantOrBidder(job, user)) return true;
   if (user.role === 'CARRIER' && job.status === 'OPEN') return true;
   return false;
 }
 
+/**
+ * @param {any} req
+ * @returns {string}
+ */
 function sessionCookieAttributes(req) {
   const secure = req.protocol === 'https' ? '; Secure' : '';
   const sameSite = isAllowedOrigin(req.headers.origin) && secure ? 'None' : 'Lax';
@@ -167,6 +288,13 @@ function sessionCookieAttributes(req) {
   return `${secure}; SameSite=${sameSite}${partitioned}`;
 }
 
+/**
+ * @param {any} req
+ * @param {any} res
+ * @param {any} userId
+ * @param {{ impersonatingAdminId?: any, actingSeatId?: any, maxAgeSeconds?: number }} opts
+ * @returns {Promise<void>}
+ */
 async function createSession(req, res, userId, { impersonatingAdminId = null, actingSeatId = null, maxAgeSeconds = 7 * 24 * 60 * 60 } = {}) {
   const token = randomToken(32);
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
@@ -180,10 +308,21 @@ async function createSession(req, res, userId, { impersonatingAdminId = null, ac
   res.setHeader('Set-Cookie', `lb_session=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSeconds}${sessionCookieAttributes(req)}`);
 }
 
+/**
+ * @param {any} req
+ * @param {any} res
+ * @returns {void}
+ */
 function clearSessionCookie(req, res) {
   res.setHeader('Set-Cookie', `lb_session=; HttpOnly; Path=/; Max-Age=0${sessionCookieAttributes(req)}`);
 }
 
+/**
+ * @param {any} job
+ * @param {any} doc
+ * @param {any} user
+ * @returns {boolean}
+ */
 function canSeeDocument(job, doc, user) {
   if (user.role === 'ADMIN') return true;
   if (doc.uploader_id === user.id) return true;

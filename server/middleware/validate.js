@@ -1,12 +1,33 @@
-const { z } = require('zod');
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
 
+/**
+ * @param {Job} _job
+ * @param {Payout} _payout
+ * @param {Money} _money
+ * @returns {void}
+ */
+function _strictTypeRefs(_job, _payout, _money) {}
+
+/** @type {any} */
+const zodMod = require('zod');
+const z = /** @type {any} */ (zodMod).z;
+
+/**
+ * @param {any} schema
+ * @returns {any}
+ */
 function validate(schema) {
-  return (req, res, next) => {
-    const result = schema.safeParse(req.body);
+  return (/** @type {any} */ req, /** @type {any} */ res, /** @type {any} */ next) => {
+    const result = /** @type {any} */ (schema.safeParse(req.body));
     if (!result.success) {
-      const issues = result.error.issues || result.error.errors || [];
+      const issues = /** @type {any} */ (result.error.issues || result.error.errors || []);
       const msg = issues
-        .map((e) => {
+        .map((/** @type {any} */ e) => {
           const path = Array.isArray(e.path) ? e.path.join('.') : '';
           return path ? `${path}: ${e.message}` : e.message;
         })

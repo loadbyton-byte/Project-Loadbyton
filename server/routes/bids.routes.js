@@ -1,5 +1,11 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
 const db = require('../db');
-const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { BID_SORT_COLUMNS } = require('../lib/constants');
 const { writeAudit } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
@@ -35,9 +41,9 @@ router.get('/api/bids/mine', auth(['CARRIER']), async (req, res) => {
 
 router.post('/api/bids/:id/withdraw', auth(['CARRIER']), async (req, res) => {
   const bid = await db.prepare('SELECT * FROM bids WHERE id=?').get(req.params.id);
-  if (!bid) return sendError(res, 404, 'Bid not found');
-  if (bid.carrier_id !== req.user.id) return sendError(res, 403, 'Not your bid');
-  if (bid.status !== 'PENDING') return sendError(res, 400, 'Only a pending bid can be withdrawn');
+  if (!bid) return apiResponse.error(req, res, 'BID_NOT_FOUND', 'Bid not found');
+  if (bid.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your bid');
+  if (bid.status !== 'PENDING') return apiResponse.error(req, res, 'BID_NOT_PENDING', 'Only a pending bid can be withdrawn', { status: 400 });
   await db.prepare(`UPDATE bids SET status='WITHDRAWN', updated_at=datetime('now') WHERE id=?`).run(bid.id);
   await writeAudit(req, { userId: req.actorId, action: 'BID_WITHDRAW', details: `Withdrew bid #${bid.id}`, entityType: 'bid', entityId: bid.id, beforeState: 'PENDING', afterState: 'WITHDRAWN' });
   const updated = await db.prepare('SELECT * FROM bids WHERE id=?').get(bid.id);
