@@ -11,6 +11,8 @@ import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
 import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
 import { EirChecklist } from '../components/EirChecklist.jsx';
 import { DetentionAlarm } from '../components/DetentionAlarm.jsx';
+import JobHeader from '../features/job/JobHeader.jsx';
+import JobTimeline from '../features/job/JobTimeline.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
 
@@ -150,6 +152,9 @@ export default function JobDetail() {
       >
         <IconArrowLeft size={16} /> Back
       </button>
+      <div className="mb-6">
+        <JobHeader job={job} />
+      </div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="font-mono text-xs text-ink-muted">{job.job_code}</p>
@@ -186,7 +191,7 @@ export default function JobDetail() {
 
       <Card className="mb-6">
         <Card.Content>
-          <JobStatusTracker job={job} />
+          <JobTimeline job={job} />
         </Card.Content>
       </Card>
 

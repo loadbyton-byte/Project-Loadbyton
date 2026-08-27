@@ -8,43 +8,345 @@ servers:
     description: Local
   - url: https://claudeloadbyton.onrender.com
     description: Production
+tags:
+  - name: system
+    description: Health, auto-release, webhooks
+  - name: auth
+    description: Register, login, MFA, org seats
+  - name: jobs
+    description: Job CRUD, bidding, lifecycle, documents
+  - name: bids
+    description: Carrier bid inbox
+  - name: admin
+    description: Verification, approvals, disputes, revenue, SLA
+  - name: payments
+    description: Stripe Connect, payouts, webhooks
 paths:
   /api/health:
     get:
+      tags: [system]
       summary: Health check
       responses:
         '200':
           description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
   /api/auth/register:
     post:
+      tags: [auth]
       summary: Register SHIPPER/CARRIER
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Register' } } } }
-      responses: { '201': { description: created }, '400': { description: validation } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Register' }
+      responses:
+        '201': { description: created }
+        '400': { description: validation }
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Login — sets lb_session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Login' }
+      responses:
+        '200': { description: ok }
+        '403': { description: invalid credentials }
+        '429': { description: throttled }
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Current session user
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+        '401': { description: unauthenticated }
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout — clears lb_session
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
   /api/jobs:
     get:
+      tags: [jobs]
       summary: List jobs
+      security: [{ cookieAuth: [] }]
       parameters:
         - { name: status, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
-      responses: { '200': { description: ok } }
+        - { name: offset, in: query, schema: { type: integer } }
+        - { name: mine, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: equipmentType, in: query, schema: { type: string } }
+        - { name: escrowStatus, in: query, schema: { type: string } }
+        - { name: shipmentType, in: query, schema: { type: string } }
+      responses:
+        '200': { description: ok }
+        '401': { description: unauthenticated }
     post:
+      tags: [jobs]
       summary: Create job
       security: [{ cookieAuth: [] }]
-      responses: { '201': { description: created } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JobCreate' }
+      responses:
+        '201': { description: created }
+        '403': { description: pending approval or role }
+  /api/jobs/{id}:
+    get:
+      tags: [jobs]
+      summary: Get job detail with bids and documents
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+        '404': { description: not found }
+    patch:
+      tags: [jobs]
+      summary: Edit job while OPEN (no pending bids)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetPriceAed: { type: number }
+                notes: { type: string }
+                deliveryAddress: { type: string }
+      responses:
+        '200': { description: updated }
+        '403': { description: not owner or not OPEN }
+  /api/jobs/{id}/bids:
+    post:
+      tags: [jobs]
+      summary: Place a bid on an OPEN job (carrier, verified)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BidCreate' }
+      responses:
+        '201': { description: bid created }
+        '403': { description: not verified or not carrier }
+        '409': { description: already bidding }
   /api/jobs/{id}/award:
     post:
+      tags: [jobs]
       summary: Award job to bid (atomic, idempotent)
-      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
-      responses: { '200': { description: awarded }, '409': { description: already awarded } }
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bidId]
+              properties:
+                bidId: { type: integer }
+      responses:
+        '200': { description: awarded }
+        '409': { description: already awarded }
+  /api/bids/{id}/withdraw:
+    post:
+      tags: [bids]
+      summary: Withdraw own pending bid
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: withdrawn }
+        '400': { description: not pending }
+        '404': { description: not found }
+  /api/bids/mine:
+    get:
+      tags: [bids]
+      summary: Carrier bid inbox
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+  /api/jobs/{id}/documents:
+    post:
+      tags: [jobs]
+      summary: Attach document to job (shipper or awarded carrier only)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentCreate' }
+      responses:
+        '201': { description: created }
+        '403': { description: not party }
+    get:
+      tags: [jobs]
+      summary: List visible documents (filtered per role)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+  /api/jobs/{id}/documents/{docId}/file:
+    get:
+      tags: [jobs]
+      summary: Download document file (stream or redirect)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: docId, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: file stream }
+        '302': { description: redirect to file_url }
+        '404': { description: not found }
+  /api/jobs/{id}/status:
+    patch:
+      tags: [jobs]
+      summary: Advance job status (state machine per role)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [PICKED_UP, IN_TRANSIT, DELIVERED, COMPLETED, CANCELLED] }
+      responses:
+        '200': { description: updated }
+        '403': { description: illegal transition }
+  /api/jobs/{id}/track:
+    get:
+      tags: [jobs]
+      summary: Tracking timeline and geofence
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
   /api/webhooks/payments:
     post:
+      tags: [payments]
       summary: Payment webhook (HMAC verified, idempotent via payment_webhook_events)
-      responses: { '200': { description: ack } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event: { type: string, enum: [AUTHORISED, DECLINED, CANCELLED, REFUNDED] }
+                ref: { type: string }
+                tranref: { type: string }
+                amount_aed: { type: number }
+      responses:
+        '200': { description: ack }
+        '401': { description: bad signature }
+  /api/stripe/connect/onboard:
+    post:
+      tags: [payments]
+      summary: Carrier Connect onboarding — create Express account and account link
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: account link }
+        '502': { description: provider error }
+  /api/stripe/connect/status:
+    get:
+      tags: [payments]
+      summary: Carrier Connect status — charges_enabled, payouts_enabled
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/jobs/{id}/pay:
+    post:
+      tags: [payments]
+      summary: Create payment intent for escrow (shipper)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: payment intent }
+  /api/jobs/{id}/release-payout:
+    post:
+      tags: [payments]
+      summary: Release payout via Stripe transfer (HSM multi-sig 2-of-3 when configured)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: transfer }
+        '403': { description: HSM required }
+  /api/admin/health:
+    get:
+      tags: [admin]
+      summary: Lane health, escrow held, completion rate
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
   /api/admin/reconciliation:
     get:
+      tags: [admin]
       summary: Run ledger reconciliation
       security: [{ cookieAuth: [] }]
-      responses: { '200': { description: ok } }
+      responses:
+        '200': { description: ok }
+  /api/admin/users:
+    get:
+      tags: [admin]
+      summary: List all users with profile aggregates
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/admin/payouts-sla:
+    get:
+      tags: [admin]
+      summary: Outstanding RELEASED payouts awaiting manual transfer confirmation
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/admin/revenue:
+    get:
+      tags: [admin]
+      summary: GMV, platform fees, escrow held
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/admin/audit:
+    get:
+      tags: [admin]
+      summary: Append-only audit log (last 100)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
 components:
   schemas:
     Register:
@@ -55,8 +357,49 @@ components:
         password: { type: string, minLength: 8 }
         role: { type: string, enum: [SHIPPER, CARRIER] }
         companyName: { type: string }
-        phone: { type: string }
+        phone: { type: string, description: 'UAE mobile 05XXXXXXXX or +9715XXXXXXXX' }
         trnNumber: { type: string, pattern: '^[0-9]{15}$' }
         tradeLicenseNumber: { type: string }
+    Login:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+        totpCode: { type: string, description: '6-digit TOTP when MFA enabled' }
+    JobCreate:
+      type: object
+      required: [pickupTerminal, deliveryArea, deliveryAddress, readyAt, deadline]
+      properties:
+        containerSize: { type: string }
+        containerType: { type: string }
+        pickupTerminal: { type: string }
+        deliveryArea: { type: string }
+        deliveryAddress: { type: string }
+        readyAt: { type: string, format: date-time }
+        deadline: { type: string, format: date-time }
+        maxBudgetAed: { type: number }
+        targetPriceAed: { type: number }
+        shipmentType: { type: string, enum: [PORT_DRAYAGE, LOCAL] }
+        equipmentType: { type: string }
+        cargoWeightTons: { type: number }
+        notes: { type: string }
+    BidCreate:
+      type: object
+      required: [amountAed, etaAt]
+      properties:
+        amountAed: { type: number, minimum: 1 }
+        etaAt: { type: string, format: date-time }
+        truckType: { type: string }
+        notes: { type: string }
+    DocumentCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        docType: { type: string, enum: [CUSTOMS, LICENCE, POD, PACKING_LIST, OTHER] }
+        fileUrl: { type: string, format: uri }
+        fileBase64: { type: string, contentEncoding: base64 }
+        mimeType: { type: string }
   securitySchemes:
     cookieAuth: { type: apiKey, in: cookie, name: lb_session }

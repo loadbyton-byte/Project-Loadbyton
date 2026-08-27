@@ -6,12 +6,13 @@ const { notifyDriverAsync } = require('../lib/whatsapp');
 const { FRONTEND_URL } = require('../lib/config');
 const { sendError } = require('../lib/http');
 const { DOC_TYPES, STATUS_ORDER, TRANSITIONS, DISPUTABLE_STATUSES } = require('../lib/constants');
-const { saveUploadedFile, normalizeUaeMobile, getSettings, writeAudit, notify, isPartyOnJob, isParticipantOrBidder } = require('../lib/helpers');
+const { saveUploadedFile, normalizeUaeMobile, getSettings, writeAudit, notify, notifyAdmins, isPartyOnJob, isParticipantOrBidder, canViewJob } = require('../lib/helpers');
 const { auth, requireSeatRole, writeLimiter } = require('../middleware/auth');
 const { rateLimiter } = require('../lib/rateLimit');
 const bidLimiter = rateLimiter({ windowMs: 60*1000, max: 10, keyFn: (req) => `bid:${req.user.id}`, message: 'Too many bids. Max 10 per minute.' });
 const { markJobPaymentFailed, executePayoutAsync, refundJobAsync } = require('../services/payout.service');
 const { idempotency } = require('../lib/idempotency');
+const jobController = require('../controllers/job.controller');
 
 const router = require('express').Router();
 
@@ -32,17 +33,9 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   if (etaMs > 90 * 86400000) return sendError(res, 400, 'etaAt cannot be more than 90 days out');
   const legacyEtaMinutes = Math.max(0, Math.round(etaMs / 60000));
 
-  // the same job (notification spam, price signaling). Checked proactively
-  // for a clean 409; idx_bids_one_pending_per_carrier (server/db.js) is the
-  // real guarantee against the race between this check and the insert.
   const alreadyBidding = await db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND carrier_id=? AND status='PENDING'`).get(job.id, req.user.id);
   if (alreadyBidding) return sendError(res, 409, 'You already have a pending bid on this job — withdraw it before placing another.');
 
-  // Driver identity is deliberately NOT collected at bid time anymore:
-  // driver name/phone are shared only after the shipper confirms the bid
-  // (award), via PATCH /api/jobs/:id/driver. Bidding without a driver keeps
-  // carrier capacity flexible and stops driver details from leaking to
-  // losing bids' competitors.
   let result;
   try {
     result = await db
@@ -103,63 +96,8 @@ router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole
   }
 });
 
-router.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), async (req, res) => {
-  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
-  const { status: next } = req.body || {};
-  const role = req.user.role;
-  const isShipperOwner = role === 'SHIPPER' && job.shipper_id === req.user.id;
-  const isCarrierOwner = role === 'CARRIER' && job.carrier_id === req.user.id;
-  if (!isShipperOwner && !isCarrierOwner && role !== 'ADMIN') return sendError(res, 403, 'Not a participant on this job');
-  if (job.status === 'DISPUTED') return sendError(res, 403, 'Job is under dispute — escrow frozen');
-
-  const allowedFor = TRANSITIONS[role] || {};
-  const allowedNext = allowedFor[job.status] || [];
-  if (!allowedNext.includes(next)) return sendError(res, 403, `Illegal state transition: ${job.status} -> ${next}`);
-
-  // Driver identity is shared only AFTER the bid is confirmed (award) — and
-  // the driver must actually be on file before the trip starts. A carrier
-  // who picks up without registering the assigned driver breaks the
-  // contact/tracking chain this platform is built on.
-  if (next === 'PICKED_UP' && !job.assigned_driver_name) {
-    return sendError(res, 400, 'Add the assigned driver first — driver details are shared after bid confirmation (PATCH /api/jobs/:id/driver).');
-  }
-
-  await db.prepare(`UPDATE jobs SET status=?, updated_at=datetime('now') WHERE id=?`).run(next, job.id);
-
-  if (next === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
-    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`).run(job.id);
-    await db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
-    // TODO-3: if funds were actually taken before the cancellation, give
-    // them back. No-op unless a processor is configured AND the charge was
-    // PAID (internal mode has nothing to refund).
-    if (job.escrow_status === 'FUNDED') refundJobAsync(job);
-  }
-  if (next === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
-    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(job.id);
-    await db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
-    issueInvoice(db, job.id);
-    await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, job.id, 'payout');
-    // TODO-3: with a processor configured this moves the money; in
-    // internal mode it is a no-op and the admin SLA flow applies.
-    executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
-  }
-
-  await writeAudit(req, {
-    userId: req.actorId,
-    action: 'STATUS',
-    details: `${job.job_code}: ${job.status} -> ${next}`,
-    entityType: 'job',
-    entityId: job.id,
-    beforeState: job.status,
-    afterState: next,
-  });
-  const other = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
-  await notify(other, 'Job status updated', `${job.job_code} is now ${next}.`, job.id, 'status');
-
-  const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
-  res.json({ job: updated });
-});
+// Delegated to controller/service — preserves HTTP shape, business logic lives in job.service
+router.patch('/api/jobs/:id/status', auth(), requireSeatRole(['OPS']), jobController.updateJobStatus);
 
 router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
@@ -188,10 +126,6 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
     afterState: normalizedPhone,
   });
   await notify(job.shipper_id, 'Driver reassigned', `${job.job_code}: the assigned driver was changed to ${driverName}.`, job.id, 'status');
-  // Driver details are shared with the shipper only from this point on (the
-  // award no longer copies a bid-time driver). Fire the pickup-details
-  // WhatsApp/SMS only when the driver is actually on file — first assignment
-  // on a freshly awarded job, or any later reassignment.
   notifyDriverAsync({
     to: normalizedPhone,
     template: 'job_awarded_pickup_details',
@@ -208,8 +142,6 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
   if (job.status !== 'IN_TRANSIT') return sendError(res, 403, 'Job must be IN_TRANSIT to submit proof of delivery');
 
   const doc = (req.body || {}).document;
-  // Validate/save any uploaded file *before* mutating job status, so a bad
-  // upload 400s cleanly instead of leaving the job DELIVERED with no POD.
   let storagePath = null;
   let mimeType = null;
   if (doc && doc.fileBase64) {
