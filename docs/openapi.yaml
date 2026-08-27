@@ -1,0 +1,62 @@
+openapi: 3.1.0
+info:
+  title: Loadbyton API
+  version: 1.0.0
+  description: UAE road freight marketplace — jobs, bids, escrow, payouts
+servers:
+  - url: http://localhost:4000
+    description: Local
+  - url: https://claudeloadbyton.onrender.com
+    description: Production
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: ok
+  /api/auth/register:
+    post:
+      summary: Register SHIPPER/CARRIER
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Register' } } } }
+      responses: { '201': { description: created }, '400': { description: validation } }
+  /api/jobs:
+    get:
+      summary: List jobs
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses: { '200': { description: ok } }
+    post:
+      summary: Create job
+      security: [{ cookieAuth: [] }]
+      responses: { '201': { description: created } }
+  /api/jobs/{id}/award:
+    post:
+      summary: Award job to bid (atomic, idempotent)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses: { '200': { description: awarded }, '409': { description: already awarded } }
+  /api/webhooks/payments:
+    post:
+      summary: Payment webhook (HMAC verified, idempotent via payment_webhook_events)
+      responses: { '200': { description: ack } }
+  /api/admin/reconciliation:
+    get:
+      summary: Run ledger reconciliation
+      security: [{ cookieAuth: [] }]
+      responses: { '200': { description: ok } }
+components:
+  schemas:
+    Register:
+      type: object
+      required: [email, password, role, companyName, phone, trnNumber, tradeLicenseNumber]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        role: { type: string, enum: [SHIPPER, CARRIER] }
+        companyName: { type: string }
+        phone: { type: string }
+        trnNumber: { type: string, pattern: '^[0-9]{15}$' }
+        tradeLicenseNumber: { type: string }
+  securitySchemes:
+    cookieAuth: { type: apiKey, in: cookie, name: lb_session }
