@@ -1,7 +1,10 @@
+const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { parseCookies } = require('../lib/http');
 const { SEAT_ROLES } = require('../lib/constants');
 const { rateLimiter } = require('../lib/rateLimit');
+const { hasPermission } = require('../lib/permissions');
+const totp = require('../lib/totp');
 
 const writeLimiter = rateLimiter({
   windowMs: 60 * 1000,
@@ -83,4 +86,44 @@ function requireSeatRole(allowedSeatRoles) {
   };
 }
 
-module.exports = { auth, requireSeatRole, writeLimiter, isThrottled, recordFailure, clearThrottle };
+function requirePermission(permission) {
+  return async (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    if (!hasPermission(req.user, permission)) {
+      return res.status(403).json({ error: `Missing permission: ${permission}`, code: 'FORBIDDEN' });
+    }
+    next();
+  };
+}
+
+// Sensitive operations (IBAN change, payout account, ownership, admin role)
+// require re-authentication: password + MFA if enabled. Prevents session
+// hijack from escalating to financial fraud without fresh credentials.
+function requireReauth({ requireMfa = true } = {}) {
+  return async (req, res, next) => {
+    const { password, totpCode } = req.body || {};
+    if (!password) {
+      return res.status(403).json({ error: 'Re-authentication required: password needed for sensitive operation', code: 'REAUTH_REQUIRED' });
+    }
+    const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+      return res.status(403).json({ error: 'Re-authentication failed: invalid password', code: 'REAUTH_FAILED' });
+    }
+    if (requireMfa && user.mfa_enabled) {
+      if (!totpCode) {
+        return res.status(403).json({ error: 'MFA code required for sensitive operation', code: 'MFA_REQUIRED' });
+      }
+      const ok = totp.verifyCode(user.mfa_secret, totpCode);
+      if (!ok) return res.status(403).json({ error: 'Invalid MFA code', code: 'MFA_FAILED' });
+    }
+    next();
+  };
+}
+
+// Session revocation — invalidate all sessions for a user (e.g., after
+// password change, or admin deactivation). Used by auth routes.
+async function revokeAllSessions(userId) {
+  await db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);
+}
+
+module.exports = { auth, requireSeatRole, requirePermission, requireReauth, revokeAllSessions, writeLimiter, isThrottled, recordFailure, clearThrottle };

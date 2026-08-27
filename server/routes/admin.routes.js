@@ -430,4 +430,11 @@ router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
   res.json({ settings: await getSettings() });
 });
 
+router.get('/api/admin/reconciliation', auth(['ADMIN']), async (req, res) => {
+  const { runReconciliation } = require('../services/reconciliation.service');
+  const result = await runReconciliation();
+  await writeAudit(req, { userId: req.actorId, action: 'RECONCILIATION_RUN', details: result.summary, entityType: 'system', entityId: null });
+  res.json(result);
+});
+
 module.exports = router;
