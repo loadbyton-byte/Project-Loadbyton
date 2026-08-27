@@ -15,6 +15,8 @@ app.listen(PORT, () => {
       console.log(`[warning] ensureDemoLogins failed: ${e.message}`);
     }
   }
+  // Outbox worker — reliable delivery of post-transaction side-effects (notifications, ledger fanout)
+  try { require('./workers/outbox.worker').startOutboxWorker(); } catch (e) { console.warn('[outbox] worker failed to start:', e.message); }
 });
 
 module.exports = app;

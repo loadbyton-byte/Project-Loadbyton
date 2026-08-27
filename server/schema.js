@@ -468,6 +468,92 @@ module.exports = function initSchema(db) {
   addColumn('audit_log', 'prev_hash', 'prev_hash TEXT');
   addColumn('audit_log', 'hash', 'hash TEXT');
 
+  // Payout idempotency — deterministic key per payout prevents duplicate external transfers
+  // SQLite does not allow UNIQUE via ALTER TABLE ADD COLUMN, so add plain column then index
+  addColumn('payouts', 'idempotency_key', 'idempotency_key TEXT');
+
+  // ---------------------------------------------------------------------------
+  // Financial Core v2 — double-entry ledger, webhook idempotency, payout attempts, outbox
+  // ---------------------------------------------------------------------------
+
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS ledger_accounts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('ASSET','LIABILITY','REVENUE','EXPENSE')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS ledger_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    idempotency_key TEXT UNIQUE NOT NULL,
+    job_id INTEGER REFERENCES jobs(id),
+    payout_id INTEGER REFERENCES payouts(id),
+    description TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS ledger_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES ledger_transactions(id) ON DELETE CASCADE,
+    account_code TEXT NOT NULL REFERENCES ledger_accounts(code),
+    amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+    currency TEXT NOT NULL DEFAULT 'AED',
+    side TEXT NOT NULL CHECK (side IN ('DEBIT','CREDIT')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS payment_webhook_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    provider_event_id TEXT UNIQUE NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_hash TEXT,
+    raw_payload TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    received_at TEXT NOT NULL DEFAULT (datetime('now')),
+    processed_at TEXT
+  );
+  CREATE TABLE IF NOT EXISTS payout_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    payout_id INTEGER NOT NULL REFERENCES payouts(id) ON DELETE CASCADE,
+    attempt_number INTEGER NOT NULL,
+    provider TEXT NOT NULL,
+    amount_aed REAL NOT NULL,
+    destination TEXT,
+    idempotency_key TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL,
+    provider_response TEXT,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS outbox_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    aggregate_type TEXT NOT NULL,
+    aggregate_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    processed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_ledger_entries_tx ON ledger_entries(transaction_id);
+  CREATE INDEX IF NOT EXISTS idx_ledger_entries_account ON ledger_entries(account_code);
+  CREATE INDEX IF NOT EXISTS idx_webhook_provider_event ON payment_webhook_events(provider, provider_event_id);
+  CREATE INDEX IF NOT EXISTS idx_payout_attempts_payout ON payout_attempts(payout_id);
+  CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_job_unique ON payouts(job_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_idempotency_key ON payouts(idempotency_key) WHERE idempotency_key IS NOT NULL;
+  `);
+
+  // Seed canonical ledger accounts — idempotent
+  const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
+  seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');
+  seedAccount.run('escrow_liability', 'Escrow Liability', 'LIABILITY');
+  seedAccount.run('carrier_payable', 'Carrier Payable', 'LIABILITY');
+  seedAccount.run('platform_revenue', 'Platform Revenue', 'REVENUE');
+  seedAccount.run('refund_liability', 'Refund Liability', 'LIABILITY');
+
   // ---------------------------------------------------------------------------
   // Platform settings — seeded once, editable via /api/admin/settings.
   // ---------------------------------------------------------------------------

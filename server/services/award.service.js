@@ -2,49 +2,120 @@ const db = require('../db');
 const { getSettings, writeAudit, notify } = require('../lib/helpers');
 
 async function awardJob(req, res, jobId, bidId) {
-  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
-  if (!job) return res.status(404).json({ error: 'Job not found' });
-  if (job.shipper_id !== req.user.id) return res.status(403).json({ error: 'Not your job' });
-  if (job.status !== 'OPEN') return res.status(job.status === 'AWARDED' ? 409 : 403).json({ error: job.status === 'AWARDED' ? 'Job already awarded' : 'Job is not open' });
-
-  const bid = await db.prepare('SELECT * FROM bids WHERE id=? AND job_id=?').get(bidId, jobId);
-  if (!bid) return res.status(404).json({ error: 'Bid not found' });
+  // Pre-checks outside transaction for fast 404/403 (still re-validated inside)
+  const preJob = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
+  if (!preJob) return res.status(404).json({ error: 'Job not found' });
+  if (preJob.shipper_id !== req.user.id) return res.status(403).json({ error: 'Not your job' });
+  const preBid = await db.prepare('SELECT * FROM bids WHERE id=? AND job_id=?').get(bidId, jobId);
+  if (!preBid) return res.status(404).json({ error: 'Bid not found' });
 
   const { commission_rate_bps } = await getSettings();
   const commissionRate = commission_rate_bps / 10000;
-  const agreedPrice = bid.amount_aed;
+  const agreedPrice = preBid.amount_aed;
   const platformFee = Math.round(agreedPrice * commissionRate);
+  const netAed = agreedPrice - platformFee;
+  const idempotencyKey = `award-${jobId}-${bidId}`;
 
-  await db.prepare(
-    `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`
-  ).run(bid.carrier_id, agreedPrice, jobId);
+  try {
+    await db.transaction(async (trx) => {
+      // Row-level locks — prevents concurrent awards. FOR UPDATE is stripped on SQLite.
+      const jobRow = await trx.query('SELECT * FROM jobs WHERE id=? FOR UPDATE', [jobId]);
+      const job = jobRow.rows[0];
+      if (!job) throw Object.assign(new Error('Job not found'), { status: 404 });
+      if (job.status !== 'OPEN') {
+        const err = new Error(job.status === 'AWARDED' ? 'Job already awarded' : 'Job is not open');
+        err.status = job.status === 'AWARDED' ? 409 : 403;
+        throw err;
+      }
+      if (job.shipper_id !== req.user.id) {
+        const err = new Error('Not your job'); err.status = 403; throw err;
+      }
 
-  await db.prepare(
-    `UPDATE bids SET status='AWARDED' WHERE id=?`
-  ).run(bidId);
+      const bidRow = await trx.query('SELECT * FROM bids WHERE id=? AND job_id=? FOR UPDATE', [bidId, jobId]);
+      const bid = bidRow.rows[0];
+      if (!bid) { const err = new Error('Bid not found'); err.status = 404; throw err; }
+      if (bid.status !== 'PENDING') {
+        const err = new Error('Bid is not pending'); err.status = 409; throw err;
+      }
 
-  await db.prepare(
-    `UPDATE bids SET status='REJECTED' WHERE job_id=? AND id != ?`
-  ).run(jobId, bidId);
+      // Idempotency: if payout already exists for this job, this is a replay
+      const existingPayout = await trx.query('SELECT id FROM payouts WHERE job_id=?', [jobId]);
+      if (existingPayout.rows[0]) {
+        const err = new Error('Job already awarded'); err.status = 409; throw err;
+      }
 
-  const grossAed = agreedPrice;
-  const netAed = grossAed - platformFee;
-  await db.prepare(
-    `INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status) VALUES (?,?,?,?,?, 'PENDING')`
-  ).run(jobId, bid.carrier_id, grossAed, platformFee, netAed);
+      await trx.query(
+        `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`,
+        [bid.carrier_id, agreedPrice, jobId]
+      );
 
-  await writeAudit(req, {
-    userId: req.actorId,
-    action: 'AWARD',
-    details: `${job.job_code}: awarded to bid #${bidId} (AED ${agreedPrice})`,
-    entityType: 'job',
-    entityId: jobId,
-    beforeState: 'OPEN',
-    afterState: 'AWARDED',
-  });
+      await trx.query(`UPDATE bids SET status='AWARDED' WHERE id=?`, [bidId]);
+      await trx.query(`UPDATE bids SET status='REJECTED' WHERE job_id=? AND id != ?`, [jobId, bidId]);
 
-  await notify(bid.carrier_id, 'Bid awarded', `Your bid on ${job.job_code} was awarded. Agreed price: AED ${agreedPrice}.`, jobId, 'award');
-  await notify(job.shipper_id, 'Job awarded', `${job.job_code} was awarded to a carrier. Escrow HELD: AED ${agreedPrice}.`, jobId, 'award');
+      // Payout — unique on job_id prevents duplicates under race
+      try {
+        await trx.query(
+          `INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status, idempotency_key) VALUES (?,?,?,?,?, 'PENDING', ?)`,
+          [jobId, bid.carrier_id, agreedPrice, platformFee, netAed, idempotencyKey]
+        );
+      } catch (e) {
+        if (/no such column|idempotency_key/i.test(e.message)) {
+          await trx.query(
+            `INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status) VALUES (?,?,?,?,?, 'PENDING')`,
+            [jobId, bid.carrier_id, agreedPrice, platformFee, netAed]
+          );
+        } else throw e;
+      }
+
+      // Double-entry ledger: escrow liability created (funds expected)
+      try {
+        const ledger = require('../lib/ledger');
+        await ledger.createTransaction(trx, {
+          idempotencyKey,
+          jobId,
+          description: `Award ${preJob.job_code} AED ${agreedPrice}`,
+          entries: [
+            { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
+            { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
+          ],
+        });
+      } catch (e) {
+        if (e.status === 409) throw e;
+        // Missing tables on DBs without 002 migration — log and continue; financial integrity still holds via payouts
+        console.warn('[award] ledger insert skipped:', e.message);
+      }
+
+      // Audit atomically with the financial writes
+      await trx.query(
+        `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id) VALUES (?,?,?,?,?,?,?,?)`,
+        [req.actorId, 'AWARD', `${preJob.job_code}: awarded to bid #${bidId} (AED ${agreedPrice})`, 'job', jobId, 'OPEN', 'AWARDED', req.requestId || null]
+      );
+
+      try {
+        await trx.query(
+          `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, status) VALUES (?,?,?,?,?)`,
+          ['job', jobId, 'JOB_AWARDED', JSON.stringify({ jobId, bidId, carrierId: bid.carrier_id, amount: agreedPrice }), 'PENDING']
+        );
+      } catch (e) {
+        console.warn('[award] outbox insert skipped:', e.message);
+      }
+    });
+  } catch (e) {
+    if (e.status === 404 || e.status === 403 || e.status === 409) {
+      return res.status(e.status).json({ error: e.message });
+    }
+    // UNIQUE violation on payouts.job_id -> concurrent award
+    if (e.message && /UNIQUE.*payouts|duplicate key/i.test(e.message)) {
+      return res.status(409).json({ error: 'Job already awarded' });
+    }
+    throw e;
+  }
+
+  // Notifications after commit — never inside the financial transaction (outbox worker will also deliver)
+  try {
+    await notify(preBid.carrier_id, 'Bid awarded', `Your bid on ${preJob.job_code} was awarded. Agreed price: AED ${agreedPrice}.`, jobId, 'award');
+    await notify(preJob.shipper_id, 'Job awarded', `${preJob.job_code} was awarded to a carrier. Escrow HELD: AED ${agreedPrice}.`, jobId, 'award');
+  } catch {}
 
   const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
   res.json({ job: updated });

@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('node:crypto');
 const db = require('../db');
 const payments = require('../lib/payments');
 const { PORT, INTERNAL_KEY } = require('../lib/config');
@@ -125,6 +126,21 @@ router.post(
       return res.status(200).json({ ok: false, reason: parsed.error });
     }
 
+    // Idempotency: durable event table prevents duplicate financial effects on replay
+    const payloadHash = crypto.createHash('sha256').update(req.rawBody || JSON.stringify(req.body) || '').digest('hex');
+    const providerEventId = parsed.providerEventId || payloadHash;
+    try {
+      await db.prepare(
+        `INSERT INTO payment_webhook_events (provider, provider_event_id, event_type, payload_hash, raw_payload, status) VALUES (?,?,?,?,?, 'PENDING')`
+      ).run(parsed.provider, providerEventId, parsed.rawEventType || parsed.event, payloadHash, (req.rawBody || '').slice(0, 8000));
+    } catch (e) {
+      if (e.message && /UNIQUE|duplicate key/i.test(e.message)) {
+        return res.json({ ok: true, idempotent: true, duplicate_event: true });
+      }
+      if (e.message && !/no such table/i.test(e.message)) throw e;
+      // Table missing (DB without 002) — fall through to legacy idempotency via escrow status check
+    }
+
     const job = await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(parsed.ref);
     if (!job) {
       await writeAudit(req, { action: 'PAYMENT_WEBHOOK_ERROR', details: `Webhook for unknown payment ref ${parsed.ref}` });
@@ -171,6 +187,10 @@ router.post(
       });
       await notify(job.shipper_id, 'Refund processed', `The refund for ${job.job_code} was processed by the payment provider.`, job.id, 'status');
     }
+
+    try {
+      await db.prepare(`UPDATE payment_webhook_events SET status='PROCESSED', processed_at=? WHERE provider_event_id=?`).run(new Date().toISOString(), providerEventId);
+    } catch {}
 
     res.json({ ok: true });
   }

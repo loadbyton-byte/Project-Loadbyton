@@ -12,31 +12,56 @@
 // single-writer model) but won't hold once the app runs more than one
 // instance — move this to Redis at the same time as the Postgres port.
 
-function rateLimiter({ windowMs, max, keyFn, message }) {
-  // Redis path — share across 3 instances when REDIS_URL is set (see docs/enterprise-roadmap.md § Redis)
-  // Requires `ioredis` (npm i ioredis) and a Redis server (Render Redis, Upstash, or local).
-  // Falls back to in-memory Map when REDIS_URL is unset (single-instance dev/test).
-  let redis = null;
-  if (process.env.REDIS_URL) {
-    try { const IORedis = require('ioredis'); redis = new IORedis(process.env.REDIS_URL); redis.on('error', () => {}); } catch {}
+let sharedRedis = null;
+function getRedis() {
+  if (sharedRedis) return sharedRedis;
+  if (!process.env.REDIS_URL) return null;
+  try {
+    const IORedis = require('ioredis');
+    sharedRedis = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 1, enableOfflineQueue: false });
+    sharedRedis.on('error', () => {});
+    if (process.env.NODE_ENV === 'production') console.log('[rateLimit] Redis enabled — distributed rate limiting active');
+    return sharedRedis;
+  } catch (e) {
+    console.warn('[rateLimit] REDIS_URL set but ioredis failed:', e.message);
+    return null;
   }
-  const hits = new Map();
+}
+if (process.env.NODE_ENV === 'production' && !process.env.REDIS_URL) {
+  console.warn('[rateLimit] WARNING: REDIS_URL not set in production — rate limits are in-memory only (single-instance). Set REDIS_URL for distributed limiting.');
+}
 
-  // Lazily sweep expired entries so this map doesn't grow unbounded under
-  // sustained traffic — piggybacks on request handling rather than running
-  // its own timer.
+function rateLimiter({ windowMs, max, keyFn, message }) {
+  const hits = new Map();
   function sweep(now) {
     for (const [key, rec] of hits) {
       if (now - rec.windowStart > windowMs) hits.delete(key);
     }
   }
 
-  return function rateLimit(req, res, next) {
+  return async function rateLimit(req, res, next) {
     const key = keyFn(req);
     if (!key) return next();
+
+    const redis = getRedis();
+    if (redis) {
+      const redisKey = `rl:${key}`;
+      try {
+        const count = await redis.incr(redisKey);
+        if (count === 1) await redis.pexpire(redisKey, windowMs);
+        if (count > max) {
+          const ttl = await redis.pttl(redisKey);
+          res.setHeader('Retry-After', Math.ceil((ttl > 0 ? ttl : windowMs) / 1000));
+          return res.status(429).json({ error: message || 'Too many requests. Please slow down.' });
+        }
+        return next();
+      } catch {
+        // Redis unavailable — fall through to in-memory
+      }
+    }
+
     const now = Date.now();
     if (hits.size > 5000) sweep(now);
-
     const rec = hits.get(key);
     if (!rec || now - rec.windowStart > windowMs) {
       hits.set(key, { count: 1, windowStart: now });

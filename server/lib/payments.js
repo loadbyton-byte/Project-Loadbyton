@@ -241,7 +241,8 @@ function parseWebhook(body, _contentType) {
       if (event === 'AUTHORISED') entry.status = 'PAID';
       if (event === 'REFUNDED') entry.status = 'REFUNDED';
       if (event === 'DECLINED' || event === 'CANCELLED') entry.status = event;
-      return { ok: true, event, ref: payload.ref, tranref: payload.tranref || null, amountAed: Number.isFinite(amountAed) ? amountAed : null, provider: p };
+      const providerEventId = `mock-${payload.ref}-${event}-${payload.tranref || '0'}`;
+      return { ok: true, event, ref: payload.ref, tranref: payload.tranref || null, amountAed: Number.isFinite(amountAed) ? amountAed : null, provider: p, providerEventId, rawEventType: payload.event };
     }
 
     if (p === 'telr') {
@@ -256,7 +257,8 @@ function parseWebhook(body, _contentType) {
       if (!ref) return { ok: false, error: 'missing_ref' };
       const amountFils = Number(body.amount); // VERIFY: Telr amounts arrive in fils
       const amountAed = Number.isFinite(amountFils) ? amountFils / 100 : null;
-      return { ok: true, event, ref, tranref: body.tran_ref || null, amountAed, provider: p };
+      const providerEventId = `telr-${body.tran_ref || ref}-${orderStatus}`;
+      return { ok: true, event, ref, tranref: body.tran_ref || null, amountAed, provider: p, providerEventId, rawEventType: orderStatus };
     }
 
     if (p === 'stripe') {
@@ -278,7 +280,8 @@ function parseWebhook(body, _contentType) {
       const amountMinor = obj.amount_total ?? obj.amount_received ?? obj.amount_refunded ?? obj.amount ?? null;
       const amountAed = Number.isFinite(Number(amountMinor)) ? Number(amountMinor) / 100 : null;
       const tranref = obj.payment_intent || obj.id || null;
-      return { ok: true, event: mapped, ref, tranref, amountAed, provider: p };
+      const providerEventId = event.id || `stripe-${event.type}-${tranref || ref}`;
+      return { ok: true, event: mapped, ref, tranref, amountAed, provider: p, providerEventId, rawEventType: event.type };
     }
 
     return { ok: false, error: 'unknown_provider' };

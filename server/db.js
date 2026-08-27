@@ -55,8 +55,13 @@ if (isPostgres) {
       try {
         await client.query('BEGIN');
         const result = await fn({
-          query: (text, params) => client.query(text, params),
+          query: (text, params) => client.query(toPg(text), params),
           exec: (sql) => client.query(sql),
+          prepare: (sql) => ({
+            get: async (...p) => { const r = await client.query(toPg(sql), p); return r.rows[0] || null; },
+            all: async (...p) => { const r = await client.query(toPg(sql), p); return r.rows; },
+            run: async (...p) => { const r = await client.query(toPg(sql), p); return { lastInsertRowid: r.rows[0]?.id || null, changes: r.rowCount }; },
+          }),
         });
         await client.query('COMMIT');
         return result;
@@ -139,19 +144,37 @@ if (isPostgres) {
 
     exec: (sql) => { sqliteDb.exec(sql); return Promise.resolve(); },
 
-    // Transaction helper — SQLite is single-wrapped (implicit transaction)
+    // Transaction helper — SQLite uses BEGIN IMMEDIATE for atomicity
     transaction: async (fn) => {
-      return fn({
-        query: (sql, params = []) => {
-          const stmt = sql.trim().toUpperCase();
-          if (stmt.startsWith('SELECT')) {
-            return Promise.resolve({ rows: sqliteDb.prepare(sql).all(...params) });
-          }
-          const r = sqliteDb.prepare(sql).run(...params);
-          return Promise.resolve({ rows: [], rowCount: r.changes });
-        },
-        exec: (sql) => { sqliteDb.exec(sql); return Promise.resolve(); },
-      });
+      sqliteDb.exec('BEGIN IMMEDIATE');
+      try {
+        const result = await fn({
+          query: (sql, params = []) => {
+            // Strip FOR UPDATE for SQLite (not supported)
+            const cleanSql = sql.replace(/\sFOR\s+UPDATE\s*$/i, '').replace(/\sFOR\s+UPDATE\s+OF\s+.*$/i, '');
+            const stmt = cleanSql.trim().toUpperCase();
+            if (stmt.startsWith('SELECT')) {
+              return Promise.resolve({ rows: sqliteDb.prepare(cleanSql).all(...params) });
+            }
+            const r = sqliteDb.prepare(cleanSql).run(...params);
+            return Promise.resolve({ rows: [], rowCount: r.changes });
+          },
+          exec: (sql) => { sqliteDb.exec(sql); return Promise.resolve(); },
+          prepare: (sql) => {
+            const cleanSql = sql.replace(/\sFOR\s+UPDATE\s*$/i, '');
+            return {
+              get: (...p) => sqliteDb.prepare(cleanSql).get(...p),
+              all: (...p) => sqliteDb.prepare(cleanSql).all(...p),
+              run: (...p) => sqliteDb.prepare(cleanSql).run(...p),
+            };
+          },
+        });
+        sqliteDb.exec('COMMIT');
+        return result;
+      } catch (err) {
+        try { sqliteDb.exec('ROLLBACK'); } catch {}
+        throw err;
+      }
     },
 
     // Native sync prepare — existing code continues to work unchanged

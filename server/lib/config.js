@@ -12,6 +12,18 @@ function isAllowedOrigin(origin) {
   return Boolean(origin) && (origin === FRONTEND_URL || ADDITIONAL_ORIGINS.includes(origin));
 }
 const INTERNAL_KEY = process.env.INTERNAL_KEY || randomToken(16);
+if (process.env.NODE_ENV === 'production' && !process.env.INTERNAL_KEY) {
+  console.warn('[config] WARNING: INTERNAL_KEY not set in production — generated ephemeral key. Set INTERNAL_KEY env for stable cron auth.');
+}
+if (process.env.NODE_ENV === 'production' && !process.env.ENCRYPTION_KEY) {
+  throw new Error('ENCRYPTION_KEY must be set in production');
+}
+if (process.env.NODE_ENV === 'production' && process.env.PAYMENTS_PROVIDER === 'mock') {
+  throw new Error('PAYMENTS_PROVIDER=mock is forbidden in production');
+}
+if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+  console.warn('[config] WARNING: DATABASE_URL not set in production — falling back to SQLite (ephemeral). Set DATABASE_URL for durable storage.');
+}
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('no-such-user-timing-guard', 10);
 const DIST_DIR = path.join(__dirname, '..', '..', 'web', 'dist');
 const DIST_INDEX = path.join(DIST_DIR, 'index.html');
