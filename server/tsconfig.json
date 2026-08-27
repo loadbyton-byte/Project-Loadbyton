@@ -14,10 +14,8 @@
     "checkJs": false,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["*"]
-    }
+    "paths": { "@/*": ["*"] }
   },
-  "include": ["types/**/*.ts", "lib/**/*.ts", "services/**/*.ts", "repositories/**/*.ts", "routes/**/*.ts", "middleware/**/*.ts"],
+  "include": ["types/**/*.ts", "lib/**/*.ts", "services/**/*.ts", "services/**/*.js", "repositories/**/*.ts", "routes/**/*.ts", "routes/**/*.js", "middleware/**/*.ts"],
   "exclude": ["node_modules", "dist", "data"]
 }

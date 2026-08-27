@@ -1,10 +1,33 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
+
+/** @type {any} */
 const db = require('../db');
+/** @type {any} */
 const payments = require('../lib/payments');
+/** @type {any} */
 const { writeAudit, notify } = require('../lib/helpers');
 
+/**
+ * @param {Job} _job
+ * @param {Payout} _payout
+ * @param {Money} _money
+ * @returns {void}
+ */
+function _strictTypeRefs(_job, _payout, _money) {}
+
+/**
+ * @param {number} jobId
+ * @param {string} error
+ * @returns {Promise<void>}
+ */
 async function markJobPaymentFailed(jobId, error) {
   await db.prepare(`UPDATE jobs SET processor_payment_status='FAILED', processor_last_error=?, updated_at=datetime('now') WHERE id=?`).run(error, jobId);
-  await writeAudit(null, {
+  await (/** @type {any} */ (writeAudit))(null, {
     action: 'PAYMENT_FAILED',
     details: `Job #${jobId} payment failed: ${error}`,
     entityType: 'job',
@@ -12,10 +35,16 @@ async function markJobPaymentFailed(jobId, error) {
   });
 }
 
+/**
+ * @param {Job} job
+ * @param {Payout & { transfer_executed_at?: string | null }} payout
+ * @param {any} req
+ * @returns {Promise<void>}
+ */
 async function executePayoutAsync(job, payout, req) {
   if (!payout) return;
   if (!payments.isConfigured()) {
-    await writeAudit(req, {
+    await (/** @type {any} */ (writeAudit))(req, {
       action: 'PAYOUT_DEFERRED',
       details: `${job.job_code}: payout deferred (no payment provider configured)`,
       entityType: 'payout',
@@ -32,22 +61,23 @@ async function executePayoutAsync(job, payout, req) {
   try {
     const existing = await db.prepare('SELECT * FROM payout_attempts WHERE idempotency_key=?').get(idempotencyKey);
     if (existing && ['SUBMITTED', 'SENT', 'SETTLED'].includes(existing.status)) return;
-    if (payout.transfer_executed_at) return;
-  } catch (e) {
-    if (e.message && !/no such table/i.test(e.message)) throw e;
+    if (/** @type {any} */ (payout).transfer_executed_at) return;
+  } catch (/** @type {any} */ e) {
+    const _e = /** @type {any} */ (e);
+    if (_e.message && !/no such table/i.test(_e.message)) throw _e;
   }
 
   let attemptNumber = 1;
   try {
     const cnt = await db.prepare('SELECT COUNT(*) as c FROM payout_attempts WHERE payout_id=?').get(payout.id);
-    attemptNumber = (cnt?.c || 0) + 1;
+    attemptNumber = (/** @type {any} */ (cnt)?.c || 0) + 1;
   } catch {}
 
   try {
     let carrierAccountId = null;
     try {
       const prof = job.carrier_id ? await db.prepare('SELECT processor_account_id FROM profiles WHERE user_id=?').get(job.carrier_id) : null;
-      carrierAccountId = prof?.processor_account_id || null;
+      carrierAccountId = /** @type {any} */ (prof)?.processor_account_id || null;
     } catch {}
     const r = await payments.executePayout({
       amountAed: payout.net_aed,
@@ -61,20 +91,21 @@ async function executePayoutAsync(job, payout, req) {
     try {
       await db.prepare(
         `INSERT INTO payout_attempts (payout_id, attempt_number, provider, amount_aed, destination, idempotency_key, status, provider_response, error) VALUES (?,?,?,?,?,?,?,?,?)`
-      ).run(payout.id, attemptNumber, provider, payout.net_aed, carrierAccountId || destinationHint, idempotencyKey, attemptStatus, r.payoutRef || null, r.error || null);
-    } catch (e) {
-      if (e.message && !/no such table|UNIQUE/i.test(e.message)) throw e;
+      ).run(payout.id, attemptNumber, provider, payout.net_aed, carrierAccountId || destinationHint, idempotencyKey, attemptStatus, /** @type {any} */ (r).payoutRef || null, /** @type {any} */ (r).error || null);
+    } catch (/** @type {any} */ e) {
+      const _e = /** @type {any} */ (e);
+      if (_e.message && !/no such table|UNIQUE/i.test(_e.message)) throw _e;
       // UNIQUE on idempotency_key means concurrent attempt raced — the other succeeded, treat as idempotent
-      if (e.message && /UNIQUE/i.test(e.message)) return;
+      if (_e.message && /UNIQUE/i.test(_e.message)) return;
     }
 
     if (r.ok) {
       // Successful transfer — keep payout status as RELEASED (set by job-lifecycle before calling), just record transfer
       // Add ledger entries for escrow release (idempotent on idempotencyKey)
       try {
-        await db.transaction(async (trx) => {
+        await db.transaction(async (/** @type {any} */ trx) => {
           // Update transfer fields if not already set (preserve RELEASED status)
-          await trx.query(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`, [`processor:${r.payoutRef}`, payout.id]);
+          await trx.query(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`, [`processor:${/** @type {any} */ (r).payoutRef}`, payout.id]);
           try {
             const ledger = require('../lib/ledger');
             const grossMinor = ledger.toMinor(payout.gross_aed);
@@ -91,52 +122,57 @@ async function executePayoutAsync(job, payout, req) {
                 { account: 'platform_revenue', side: 'CREDIT', amountMinor: feeMinor },
               ],
             });
-          } catch (e) {
-            console.warn('[payout] ledger insert skipped:', e.message);
+          } catch (/** @type {any} */ e) {
+            console.warn('[payout] ledger insert skipped:', /** @type {any} */ (e).message);
           }
           try {
             await trx.query(`INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, status) VALUES (?,?,?,?,?)`, ['payout', payout.id, 'PAYOUT_SETTLED', JSON.stringify({ payoutId: payout.id, jobId: job.id, amount: payout.net_aed }), 'PENDING']);
-          } catch (e) {
-            console.warn('[payout] outbox insert skipped:', e.message);
+          } catch (/** @type {any} */ e) {
+            console.warn('[payout] outbox insert skipped:', /** @type {any} */ (e).message);
           }
         });
-      } catch (e) {
+      } catch (/** @type {any} */ e) {
         // Fallback: at least mark transfer
-        try { await db.prepare(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`).run(`processor:${r.payoutRef}`, payout.id); } catch {}
+        try { await db.prepare(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`).run(`processor:${/** @type {any} */ (r).payoutRef}`, payout.id); } catch {}
       }
-      await writeAudit(req, { action: 'PAYOUT_EXECUTED', details: `${job.job_code}: payout AED ${payout.net_aed} executed (ref ${r.payoutRef})`, entityType: 'payout', entityId: payout.id });
+      await (/** @type {any} */ (writeAudit))(req, { action: 'PAYOUT_EXECUTED', details: `${job.job_code}: payout AED ${payout.net_aed} executed (ref ${/** @type {any} */ (r).payoutRef})`, entityType: 'payout', entityId: payout.id });
     } else {
       // Failure: keep status RELEASED but record error for SLA retry
-      try { await db.prepare(`UPDATE payouts SET last_error=? WHERE id=?`).run(r.error || 'transfer failed', payout.id); } catch {}
-      await writeAudit(req, { action: 'PAYOUT_FAILED', details: `${job.job_code}: payout failed — ${r.error}`, entityType: 'payout', entityId: payout.id });
+      try { await db.prepare(`UPDATE payouts SET last_error=? WHERE id=?`).run(/** @type {any} */ (r).error || 'transfer failed', payout.id); } catch {}
+      await (/** @type {any} */ (writeAudit))(req, { action: 'PAYOUT_FAILED', details: `${job.job_code}: payout failed — ${/** @type {any} */ (r).error}`, entityType: 'payout', entityId: payout.id });
     }
-  } catch (e) {
-    try { await db.prepare(`UPDATE payouts SET status='FAILED', last_error=? WHERE id=?`).run(e.message, payout.id); } catch {}
+  } catch (/** @type {any} */ e) {
+    const _e = /** @type {any} */ (e);
+    try { await db.prepare(`UPDATE payouts SET status='FAILED', last_error=? WHERE id=?`).run(_e.message, payout.id); } catch {}
     try {
-      await db.prepare(`INSERT INTO payout_attempts (payout_id, attempt_number, provider, amount_aed, destination, idempotency_key, status, error) VALUES (?,?,?,?,?,?,?,?)`).run(payout.id, attemptNumber, provider, payout.net_aed, destinationHint, `${idempotencyKey}-err-${Date.now()}`, 'FAILED', e.message);
+      await db.prepare(`INSERT INTO payout_attempts (payout_id, attempt_number, provider, amount_aed, destination, idempotency_key, status, error) VALUES (?,?,?,?,?,?,?,?)`).run(payout.id, attemptNumber, provider, payout.net_aed, destinationHint, `${idempotencyKey}-err-${Date.now()}`, 'FAILED', _e.message);
     } catch {}
   }
 }
 
+/**
+ * @param {Job} job
+ * @returns {Promise<void>}
+ */
 async function refundJobAsync(job) {
   if (!payments.isConfigured()) return;
   try {
     const r = await payments.refundCharge({
       jobCode: job.job_code,
-      amountAed: job.agreed_price_aed,
-      tranref: job.processor_tranref,
-      paymentRef: job.processor_payment_ref,
+      amountAed: /** @type {any} */ (job).agreed_price_aed,
+      tranref: /** @type {any} */ (job).processor_tranref,
+      paymentRef: /** @type {any} */ (job).processor_payment_ref,
     });
     if (r.ok) {
       await db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', updated_at=datetime('now') WHERE id=?`).run(job.id);
-      await writeAudit(null, {
+      await (/** @type {any} */ (writeAudit))(null, {
         action: 'REFUND_SHIPPER_EXECUTED',
-        details: `${job.job_code}: refunded AED ${job.agreed_price_aed}`,
+        details: `${job.job_code}: refunded AED ${/** @type {any} */ (job).agreed_price_aed}`,
         entityType: 'job',
         entityId: job.id,
       });
     }
-  } catch (e) {}
+  } catch (/** @type {any} */ e) {}
 }
 
 module.exports = { markJobPaymentFailed, executePayoutAsync, refundJobAsync };

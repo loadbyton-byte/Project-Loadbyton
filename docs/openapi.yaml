@@ -347,6 +347,101 @@ paths:
       security: [{ cookieAuth: [] }]
       responses:
         '200': { description: ok }
+  /api/location:
+    get:
+      tags: [jobs]
+      summary: Location lookup / reverse geocode
+      parameters:
+        - { name: lat, in: query, schema: { type: number } }
+        - { name: lng, in: query, schema: { type: number } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200': { description: ok }
+    post:
+      tags: [jobs]
+      summary: Update driver live location
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lat, lng]
+              properties:
+                lat: { type: number }
+                lng: { type: number }
+                speed: { type: number }
+                heading: { type: number }
+      responses:
+        '200': { description: ok }
+        '400': { description: validation }
+  /api/location/search:
+    get:
+      tags: [jobs]
+      summary: Search locations (Nominatim/Mapbox)
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+  /api/notifications:
+    get:
+      tags: [admin]
+      summary: List notifications for current user
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: offset, in: query, schema: { type: integer } }
+        - { name: unreadOnly, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: ok }
+    post:
+      tags: [admin]
+      summary: Create notification (admin/system)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, title]
+              properties:
+                userId: { type: integer }
+                title: { type: string }
+                body: { type: string }
+      responses:
+        '201': { description: created }
+        '400': { description: validation }
+  /api/notifications/{id}/read:
+    post:
+      tags: [admin]
+      summary: Mark notification as read
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+        '404': { description: not found }
+  /api/notifications/{id}:
+    get:
+      tags: [admin]
+      summary: Get single notification
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+        '404': { description: not found }
+    delete:
+      tags: [admin]
+      summary: Dismiss notification
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
 components:
   schemas:
     Register:

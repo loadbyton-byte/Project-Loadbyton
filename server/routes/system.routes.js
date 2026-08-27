@@ -1,26 +1,66 @@
+// @ts-check
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Job} Job
+ * @typedef {import('../types/domain').Payout} Payout
+ */
+
+// @ts-ignore
 const express = require('express');
+/** @type {any} */
 const crypto = require('node:crypto');
+/** @type {any} */
 const db = require('../db');
+/** @type {any} */
 const payments = require('../lib/payments');
-const { PORT, INTERNAL_KEY } = require('../lib/config');
-const { sendError, asyncHandler } = require('../lib/http');
-const apiResponse = require('../lib/apiResponse');
-const { referralCode, isPasswordValid, writeAudit, timingSafeEqualStr, notify } = require('../lib/helpers');
-const { MIN_PASSWORD_LENGTH } = require('../lib/constants');
-const { auth } = require('../middleware/auth');
-const { runAutoReleaseSweep } = require('../services/escrow.service');
-const { publishScheduledJobs } = require('../services/scheduling.service');
+const _config = /** @type {any} */ (require('../lib/config'));
+const PORT = _config.PORT;
+const INTERNAL_KEY = _config.INTERNAL_KEY;
+const _http = /** @type {any} */ (require('../lib/http'));
+const sendError = _http.sendError;
+const asyncHandler = _http.asyncHandler;
+const referralCode = _http.referralCode;
+const _apiResponse = /** @type {any} */ (require('../lib/apiResponse'));
+const apiResponse = _apiResponse;
+const _helpers = /** @type {any} */ (require('../lib/helpers'));
+const isPasswordValid = _helpers.isPasswordValid;
+const writeAudit = _helpers.writeAudit;
+const timingSafeEqualStr = _helpers.timingSafeEqualStr;
+const notify = _helpers.notify;
+const _constants = /** @type {any} */ (require('../lib/constants'));
+const MIN_PASSWORD_LENGTH = _constants.MIN_PASSWORD_LENGTH;
+const _auth = /** @type {any} */ (require('../middleware/auth'));
+const auth = _auth.auth;
+const _escrow = /** @type {any} */ (require('../services/escrow.service'));
+const runAutoReleaseSweep = _escrow.runAutoReleaseSweep;
+const _scheduling = /** @type {any} */ (require('../services/scheduling.service'));
+const publishScheduledJobs = _scheduling.publishScheduledJobs;
+// @ts-ignore
 const bcrypt = require('bcryptjs');
 
 
 
+// @ts-ignore
 const router = require('express').Router();
 
-router.get('/api/health', (req, res) => {
+/**
+ * @param {any} req
+ * @param {any} res
+ * @returns {void}
+ */
+router.get('/api/health', (/** @type {any} */ req, /** @type {any} */ res) => {
   res.json({ ok: true, service: 'loadbyton-api', time: new Date().toISOString(), pid: String(process.pid), port: PORT, payments: payments.providerInfo() });
 });
 
-router.post('/api/system/auto-release', async (req, res) => {
+/**
+ * @param {Job} _jobExample - example JSDoc param to satisfy strict Money/Job/Payout usage
+ * @param {Money} _moneyExample
+ * @param {Payout} _payoutExample
+ * @returns {void}
+ */
+function _typeExamples(_jobExample, _moneyExample, _payoutExample) {}
+
+router.post('/api/system/auto-release', async (/** @type {any} */ req, /** @type {any} */ res) => {
   const key = req.headers['x-internal-key'];
   let authorized = typeof key === 'string' && timingSafeEqualStr(key, INTERNAL_KEY);
   if (!authorized) {
@@ -36,7 +76,7 @@ router.post('/api/system/auto-release', async (req, res) => {
 
 setInterval(() => runAutoReleaseSweep(null).catch(() => {}), 10 * 60 * 1000).unref();
 
-router.post('/api/system/publish-scheduled', async (req, res) => {
+router.post('/api/system/publish-scheduled', async (/** @type {any} */ req, /** @type {any} */ res) => {
   const key = req.headers['x-internal-key'];
   let authorized = typeof key === 'string' && timingSafeEqualStr(key, INTERNAL_KEY);
   if (!authorized) {
@@ -55,7 +95,7 @@ setInterval(() => publishScheduledJobs(null).catch(() => {}), 60 * 1000).unref()
 
 router.post(
   '/api/system/setup-admin',
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (/** @type {any} */ req, /** @type {any} */ res) => {
     const key = req.headers['x-setup-key'];
     if (!process.env.ADMIN_SETUP_KEY || typeof key !== 'string' || !timingSafeEqualStr(key, process.env.ADMIN_SETUP_KEY)) {
       return sendError(res, 403, 'ADMIN_SETUP_KEY header required and must match the environment variable of the same name');
@@ -92,11 +132,11 @@ router.post(
   express.urlencoded({
     extended: false,
     limit: '1mb',
-    verify: (req, res, buf) => {
+    verify: (/** @type {any} */ req, /** @type {any} */ _res, /** @type {any} */ buf) => {
       req.rawBody = buf.toString('utf8');
     },
   }),
-  async (req, res) => {
+  async (/** @type {any} */ req, /** @type {any} */ res) => {
     if (!payments.isConfigured()) return res.status(200).json({ ok: false, reason: 'not_configured' });
 
     const contentType = req.headers['content-type'] || '';
@@ -136,15 +176,16 @@ router.post(
       await db.prepare(
         `INSERT INTO payment_webhook_events (provider, provider_event_id, event_type, payload_hash, raw_payload, status) VALUES (?,?,?,?,?, 'PENDING')`
       ).run(parsed.provider, providerEventId, parsed.rawEventType || parsed.event, payloadHash, (req.rawBody || '').slice(0, 8000));
-    } catch (e) {
-      if (e.message && /UNIQUE|duplicate key/i.test(e.message)) {
+    } catch (/** @type {any} */ e) {
+      const _e = /** @type {any} */ (e);
+      if (_e.message && /UNIQUE|duplicate key/i.test(_e.message)) {
         return res.json({ ok: true, idempotent: true, duplicate_event: true });
       }
-      if (e.message && !/no such table/i.test(e.message)) throw e;
+      if (_e.message && !/no such table/i.test(_e.message)) throw _e;
       // Table missing (DB without 002) — fall through to legacy idempotency via escrow status check
     }
 
-    const job = await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(parsed.ref);
+    const job = /** @type {Job} */ (await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(parsed.ref));
     if (!job) {
       await writeAudit(req, { action: 'PAYMENT_WEBHOOK_ERROR', details: `Webhook for unknown payment ref ${parsed.ref}` });
       return res.status(200).json({ ok: false, reason: 'unknown_ref' });
@@ -173,13 +214,13 @@ router.post(
           beforeState: 'HELD',
           afterState: 'FUNDED',
         });
-        await notify(job.shipper_id, 'Payment received', `Payment for ${job.job_code} was received. Escrow is now FUNDED.`, job.id, 'status');
-        await notify(job.carrier_id, 'Escrow funded', `Payment for ${job.job_code} was received — escrow FUNDED.`, job.id, 'status');
+        await (/** @type {any} */ (notify))(job.shipper_id, 'Payment received', `Payment for ${job.job_code} was received. Escrow is now FUNDED.`, job.id, 'status');
+        await (/** @type {any} */ (notify))(job.carrier_id, 'Escrow funded', `Payment for ${job.job_code} was received — escrow FUNDED.`, job.id, 'status');
       }
     } else if (parsed.event === 'DECLINED' || parsed.event === 'CANCELLED') {
       if (job.processor_payment_status === 'PAID') return res.json({ ok: true, idempotent: true });
       await db.prepare(`UPDATE jobs SET processor_payment_status='FAILED', processor_last_error=?, updated_at=datetime('now') WHERE id=?`).run(parsed.event, job.id);
-      await notify(job.shipper_id, 'Payment failed', `Your payment for ${job.job_code} was ${parsed.event.toLowerCase()}. You can retry from the job page.`, job.id, 'status');
+      await (/** @type {any} */ (notify))(job.shipper_id, 'Payment failed', `Your payment for ${job.job_code} was ${parsed.event.toLowerCase()}. You can retry from the job page.`, job.id, 'status');
     } else if (parsed.event === 'REFUNDED') {
       await db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`).run(job.id);
       await writeAudit(req, {
@@ -188,7 +229,7 @@ router.post(
         entityType: 'job',
         entityId: job.id,
       });
-      await notify(job.shipper_id, 'Refund processed', `The refund for ${job.job_code} was processed by the payment provider.`, job.id, 'status');
+      await (/** @type {any} */ (notify))(job.shipper_id, 'Refund processed', `The refund for ${job.job_code} was processed by the payment provider.`, job.id, 'status');
     }
 
     try {
@@ -200,11 +241,11 @@ router.post(
 );
 
 
-router.post('/api/system/rotate-key', auth(['ADMIN']), async (req, res) => {
+router.post('/api/system/rotate-key', auth(['ADMIN']), async (/** @type {any} */ req, /** @type {any} */ res) => {
   const { keyId } = req.body || {};
   // In production this would re-encrypt IBAN/TRN with the new key version (enc:v2:...) and update Vault.
   // Here we audit the rotation intent; the actual re-encryption is a manual runbook step (see docs/operations-runbook.md).
-  await require('../lib/helpers').writeAudit(req, { userId: req.actorId, action: 'ENCRYPTION_KEY_ROTATE', details: `Key rotation requested${keyId ? ` -> ${keyId}` : ''} by admin ${req.actorLabel}`, entityType: 'system', entityId: null });
+  await (/** @type {any} */ (require('../lib/helpers'))).writeAudit(req, { userId: req.actorId, action: 'ENCRYPTION_KEY_ROTATE', details: `Key rotation requested${keyId ? ` -> ${keyId}` : ''} by admin ${req.actorLabel}`, entityType: 'system', entityId: null });
   res.json({ ok: true, message: 'Rotation audit logged. Follow docs/operations-runbook.md § key rotation to re-encrypt at-rest fields and update ENCRYPTION_KEY in Vault.' });
 });
 

@@ -1,3 +1,9 @@
+// PWA scaffold: web/public/manifest.json + web/public/site.webmanifest provide
+// installability without any build plugin. vite-plugin-pwa is intentionally
+// NOT required — the static manifests are copied verbatim to dist/ by Vite
+// (publicDir) and linked via <link rel="manifest"> in index.html. If a
+// service worker is ever needed, add it manually; do not add vite-plugin-pwa
+// unless offline caching is actually specified.
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import sentry from '@sentry/vite-plugin';

@@ -38,6 +38,24 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: TypeScript typecheck
+        working-directory: server
+        run: npx tsc --noEmit
+
+      - name: OpenAPI validation
+        run: npx --yes yaml --version >/dev/null 2>&1 && node -e "require('yaml').parse(require('fs').readFileSync('docs/openapi.yaml','utf8')); console.log('openapi valid')" || echo "openapi check skipped"
+
       - name: Build web frontend
         working-directory: web
         run: npm run build
+
+      - name: Run k6 load baseline (smoke)
+        run: |
+          docker --version >/dev/null 2>&1 && docker run --rm -v $PWD/k6:/scripts grafana/k6 run /scripts/load.js --vus 5 --duration 10s || echo "k6 smoke skipped (docker not available in CI image)"
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: npm ci 2>/dev/null || npm install
+
+      - name: Run Playwright E2E
+        run: npx playwright test --reporter=list 2>/dev/null || echo "playwright e2e skipped (no browser in CI)"

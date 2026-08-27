@@ -4,8 +4,8 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, TERMINALS, AREAS, DEPOTS, depotLabel } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, StatusTracker, ChatBubble } from '../components/ui.jsx';
-import { IconClock, IconMapPin, IconFile, IconMessage, IconStar, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
+import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, StatusTracker } from '../components/ui.jsx';
+import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
 import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
@@ -15,6 +15,7 @@ import JobHeader from '../features/job/JobHeader.jsx';
 import JobTimeline from '../features/job/JobTimeline.jsx';
 import MessagesPanel from '../features/job/MessagesPanel.jsx';
 import DriverPanel from '../features/job/DriverPanel.jsx';
+import RatingPanel from '../features/job/RatingPanel.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
 
@@ -340,7 +341,7 @@ export default function JobDetail() {
           </Section>
 
           {job.status === 'COMPLETED' && (isShipper || isAwardedCarrier) && (
-            <Section title="Rate your counterparty"><RatingForm jobId={job.id} onDone={load} /></Section>
+            <Section title="Rate your counterparty"><RatingPanel job={job} onSubmit={load} /></Section>
           )}
         </div>
 
@@ -835,45 +836,6 @@ function DocumentList({ documents, jobId, onAdd }) {
           <Button type="submit" variant="secondary" loading={busy}>Add</Button>
         </form>
       </div>
-    </div>
-  );
-}
-
-function RatingForm({ jobId, onDone }) {
-  const [score, setScore] = useState(5);
-  const [comment, setComment] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  const { addToast } = useToasts();
-  async function submit() {
-    setBusy(true);
-    try {
-      await api.rateJob(jobId, { score, comment });
-      setDone(true);
-      onDone();
-    } catch (err) {
-      // F14, fixed independently on both branches — kept main's toast
-      // (consistent with DocumentList/MessageThread above) over this
-      // branch's inline error state. This used to setDone(true) even on
-      // failure, so a rejected rating (e.g. already rated) silently
-      // displayed "Thanks for the rating" with no signal it didn't save.
-      addToast({ type: 'system_message', title: 'Rating not saved', body: err.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (done) return <p className="text-sm text-ink-muted">Thanks for the rating.</p>;
-  return (
-    <div className="space-y-3">
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} onClick={() => setScore(n)} aria-label={`${n} stars`}>
-            <IconStar size={22} style={{ color: n <= score ? 'var(--brand-accent)' : 'var(--border-strong)' }} />
-          </button>
-        ))}
-      </div>
-      <Textarea rows={2} placeholder="Optional comment" value={comment} onChange={(e) => setComment(e.target.value)} />
-      <Button onClick={submit} loading={busy}>Submit rating</Button>
     </div>
   );
 }

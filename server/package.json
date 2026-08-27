@@ -18,6 +18,8 @@
     "ioredis": "^6.0.0",
     "pg": "^8.23.0",
     "stripe": "^22.6.0",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
