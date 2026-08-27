@@ -55,8 +55,19 @@ function securityHeaders(req, res, next) {
   next();
 }
 
-function sendError(res, status, message) {
-  return res.status(status).json({ error: message });
+function sendError(res, status, message, code = 'ERROR') {
+  // Migrated to new envelope: adds success:false + _legacy + requestId while
+  // keeping legacy `error` as string so existing tests checking `body.error`
+  // (string) still pass. New clients should check `success` / `errorDetails`.
+  return res.status(status).json({
+    success: false,
+    error: message,
+    code,
+    message,
+    _legacy: { error: message },
+    errorDetails: { code, message },
+    requestId: null,
+  });
 }
 
 function asyncHandler(fn) {

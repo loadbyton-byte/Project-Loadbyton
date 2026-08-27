@@ -5,6 +5,7 @@ const { issueInvoice } = require('../lib/invoice');
 const { notifyDriverAsync } = require('../lib/whatsapp');
 const { FRONTEND_URL } = require('../lib/config');
 const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { DOC_TYPES, STATUS_ORDER, TRANSITIONS, DISPUTABLE_STATUSES } = require('../lib/constants');
 const { saveUploadedFile, normalizeUaeMobile, getSettings, writeAudit, notify, notifyAdmins, isPartyOnJob, isParticipantOrBidder, canViewJob } = require('../lib/helpers');
 const { auth, requireSeatRole, writeLimiter } = require('../middleware/auth');
@@ -56,12 +57,13 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
 
 router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
-  if (job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');
-  if (job.status !== 'AWARDED') return sendError(res, 409, 'Only AWARDED jobs can be paid');
-  if (job.escrow_status !== 'HELD') return sendError(res, 409, 'Escrow is not in HELD state');
-  if (job.processor_payment_status === 'PAID') return sendError(res, 409, 'This job is already paid');
-  if (!payments.isConfigured()) return sendError(res, 400, 'Payments are not configured — escrow is internal bookkeeping (see docs/PAYMENTS.md)');
+  // Migrated to new envelope: payment-checkout errors use apiResponse.error (adds success:false + _legacy)
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (job.shipper_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
+  if (job.status !== 'AWARDED') return apiResponse.error(req, res, 'JOB_NOT_OPEN', 'Only AWARDED jobs can be paid');
+  if (job.escrow_status !== 'HELD') return apiResponse.error(req, res, 'ESCROW_NOT_HELD', 'Escrow is not in HELD state');
+  if (job.processor_payment_status === 'PAID') return apiResponse.error(req, res, 'JOB_ALREADY_AWARDED', 'This job is already paid');
+  if (!payments.isConfigured()) return apiResponse.error(req, res, 'PAYMENT_NOT_CONFIGURED', 'Payments are not configured — escrow is internal bookkeeping (see docs/PAYMENTS.md)');
 
   const payRef = job.processor_payment_ref || `lb_${job.job_code.toLowerCase()}_${crypto.randomUUID().slice(0, 8)}`;
   const returnBase = `${FRONTEND_URL}/jobs/${job.id}`;
@@ -75,7 +77,7 @@ router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole
     });
     if (!r.ok) {
       markJobPaymentFailed(job.id, `${r.error}${r.detail ? `: ${r.detail}` : ''}`);
-      return sendError(res, 502, 'Payment provider unavailable — please try again');
+      return apiResponse.error(req, res, 'INTERNAL', 'Payment provider unavailable — please try again', { status: 502 });
     }
     await db.prepare(
       `UPDATE jobs SET processor_payment_ref=?, processor_payment_status='REQUIRES_PAYMENT', processor_amount_aed=?, processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`
@@ -92,7 +94,7 @@ router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole
     res.json({ ok: true, paymentUrl: r.url, ref: payRef, provider: payments.provider(), testMode: payments.providerInfo().testMode });
   } catch (e) {
     markJobPaymentFailed(job.id, e.message);
-    sendError(res, 502, 'Payment provider unavailable — please try again');
+    return apiResponse.error(req, res, 'INTERNAL', 'Payment provider unavailable — please try again', { status: 502 });
   }
 });
 
@@ -137,9 +139,10 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
 
 router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), idempotency, async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
-  if (!job) return sendError(res, 404, 'Job not found');
-  if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
-  if (job.status !== 'IN_TRANSIT') return sendError(res, 403, 'Job must be IN_TRANSIT to submit proof of delivery');
+  // Migrated POD errors to new envelope (apiResponse.error preserves _legacy)
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (job.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
+  if (job.status !== 'IN_TRANSIT') return apiResponse.error(req, res, 'FORBIDDEN', 'Job must be IN_TRANSIT to submit proof of delivery');
 
   const doc = (req.body || {}).document;
   let storagePath = null;
@@ -148,7 +151,7 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
     try {
       ({ storagePath, mimeType } = await saveUploadedFile(job.id, doc.mimeType, doc.fileBase64));
     } catch (e) {
-      return sendError(res, e.status || 400, e.message || 'Upload failed');
+      return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
     }
   }
   await db.prepare(`UPDATE jobs SET status='DELIVERED', delivered_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);

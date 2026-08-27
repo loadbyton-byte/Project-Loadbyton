@@ -1,8 +1,25 @@
 // Double-entry ledger — immutable accounting foundation.
 // All money movements create a ledger_transaction with balanced entries.
 // Balances are derived, never mutated directly.
+// @ts-check — strict JSDoc types (checkJs covers this file when enabled)
+
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Currency} Currency
+ * @typedef {import('../types/domain').LedgerAccountCode} LedgerAccountCode
+ * @typedef {import('../types/domain').LedgerSide} LedgerSide
+ * @typedef {{ account: LedgerAccountCode | string, side: LedgerSide, amountMinor: number, currency?: Currency }} LedgerEntry
+ * @typedef {{ idempotencyKey: string, jobId?: number|null, payoutId?: number|null, description?: string|null, entries: LedgerEntry[] }} CreateTransactionOptions
+ * @typedef {{ query: (sql: string, params?: unknown[]) => Promise<{rows: any[], rowCount?: number}>, prepare?: (sql: string) => any, exec?: (sql: string) => Promise<void> }} DbTrx
+ */
+
 const crypto = require('node:crypto');
 
+/**
+ * Convert AED (major units, may be float) to fils (minor, integer).
+ * @param {number} aed
+ * @returns {number}
+ */
 function toMinor(aed) {
   return Math.round(Number(aed) * 100);
 }
@@ -10,6 +27,11 @@ function toMinor(aed) {
 // Create a balanced transaction inside an existing db transaction.
 // `trx` is the transaction client from db.transaction (has query/prepare).
 // Returns { id, idempotency_key }
+/**
+ * @param {DbTrx} trx
+ * @param {CreateTransactionOptions} opts
+ * @returns {Promise<{ id: number, idempotency_key: string, duplicate?: boolean }>}
+ */
 async function createTransaction(trx, { idempotencyKey, jobId = null, payoutId = null, description = null, entries }) {
   if (!idempotencyKey) throw new Error('idempotencyKey required');
   if (!Array.isArray(entries) || entries.length < 2) throw new Error('at least 2 entries required');
@@ -17,7 +39,8 @@ async function createTransaction(trx, { idempotencyKey, jobId = null, payoutId =
   // Validate balance: sum(DEBIT positive, CREDIT negative) == 0
   // We store amount_minor as signed integer: DEBIT positive, CREDIT negative? Or separate side?
   // Our schema stores amount_minor !=0 and side enum, so we validate debit total == credit total.
-  let debit = 0, credit = 0;
+  /** @type {number} */ let debit = 0;
+  /** @type {number} */ let credit = 0;
   for (const e of entries) {
     if (!e.account || !e.side || !Number.isFinite(e.amountMinor) || e.amountMinor <= 0) {
       throw new Error(`invalid entry: ${JSON.stringify(e)}`);
@@ -68,6 +91,11 @@ async function createTransaction(trx, { idempotencyKey, jobId = null, payoutId =
 }
 
 // Helper to derive current balance for an account (sum)
+/**
+ * @param {DbTrx} db
+ * @param {string} accountCode
+ * @returns {Promise<number>}
+ */
 async function getAccountBalance(db, accountCode) {
   const r = await db.query(
     `SELECT COALESCE(SUM(CASE WHEN side='DEBIT' THEN amount_minor ELSE -amount_minor END), 0) as balance FROM ledger_entries WHERE account_code=?`,

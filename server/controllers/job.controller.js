@@ -8,6 +8,31 @@ const jobService = require('../services/job.service');
 const jobRepository = require('../repositories/job.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
+
+// Map HTTP status + message to canonical error codes for new envelope
+function mapErrorCode(status, message) {
+  const msg = (message || '').toLowerCase();
+  if (status === 400) return 'VALIDATION_FAILED';
+  if (status === 401) return 'NOT_AUTHENTICATED';
+  if (status === 403) {
+    if (msg.includes('not authenticated') || msg.includes('session')) return 'NOT_AUTHENTICATED';
+    return 'FORBIDDEN';
+  }
+  if (status === 404) {
+    if (msg.includes('job')) return 'JOB_NOT_FOUND';
+    if (msg.includes('bid')) return 'BID_NOT_FOUND';
+    return 'NOT_FOUND';
+  }
+  if (status === 409) {
+    if (msg.includes('already awarded')) return 'JOB_ALREADY_AWARDED';
+    if (msg.includes('not open')) return 'JOB_NOT_OPEN';
+    if (msg.includes('bid')) return 'BID_NOT_PENDING';
+    return 'CONFLICT';
+  }
+  if (status === 429) return 'RATE_LIMITED';
+  return 'INTERNAL';
+}
 
 /**
  * POST /api/jobs — create a new job
@@ -17,7 +42,11 @@ async function createJob(req, res) {
     const job = await jobService.createJob(req.body || {}, req);
     return res.status(201).json({ job });
   } catch (e) {
-    if (e.status) return sendError(res, e.status, e.message);
+    if (e.status) {
+      // Migrated to new envelope: apiResponse.error adds success:false + structured error + _legacy
+      const code = mapErrorCode(e.status, e.message);
+      return apiResponse.error(req, res, code, e.message, { status: e.status });
+    }
     throw e;
   }
 }

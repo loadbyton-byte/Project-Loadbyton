@@ -11,7 +11,16 @@ function validate(schema) {
           return path ? `${path}: ${e.message}` : e.message;
         })
         .join('; ');
-      return res.status(400).json({ error: msg || 'Validation failed' });
+      const message = msg || 'Validation failed';
+      // Migrated to new envelope: keep _legacy for old clients checking body.error as string
+      return res.status(400).json({
+        success: false,
+        error: { code: 'VALIDATION_FAILED', message },
+        _legacy: { error: message },
+        message,
+        code: 'VALIDATION_FAILED',
+        requestId: req.requestId || null,
+      });
     }
     req.body = result.data;
     next();

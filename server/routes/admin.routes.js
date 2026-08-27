@@ -2,6 +2,7 @@ const db = require('../db');
 const { unifiedLanes } = require('../lib/lanes');
 const { issueInvoice } = require('../lib/invoice');
 const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { encryptField, decryptField } = require('../lib/crypto');
 const { writeAudit, toPublicUser, getSettings, notify } = require('../lib/helpers');
 const { refundJobAsync, executePayoutAsync } = require('../services/payout.service');
@@ -158,7 +159,7 @@ router.post('/api/admin/approve/:id', auth(['ADMIN']), async (req, res) => {
     const user = await approveAccount(req, Number(req.params.id), action);
     res.json({ ok: true, user });
   } catch (e) {
-    if (e.status) return sendError(res, e.status, e.message);
+    if (e.status) return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message, { status: e.status });
     throw e;
   }
 });
@@ -169,7 +170,7 @@ router.post('/api/admin/verify/:id', auth(['ADMIN']), async (req, res) => {
     const user = verifyCarrier(req, req.params.id, action, iban);
     res.json({ ok: true, user });
   } catch (e) {
-    if (e.status) return sendError(res, e.status, e.message);
+    if (e.status) return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message, { status: e.status });
     throw e;
   }
 });
@@ -178,9 +179,10 @@ const ADMIN_VERIFY_BULK_MAX = 100;
 
 router.post('/api/admin/verify-bulk', auth(['ADMIN']), async (req, res) => {
   const { ids, action } = req.body || {};
-  if (!Array.isArray(ids) || ids.length === 0) return sendError(res, 400, 'ids must be a non-empty array');
-  if (ids.length > ADMIN_VERIFY_BULK_MAX) return sendError(res, 400, `Cannot bulk-verify more than ${ADMIN_VERIFY_BULK_MAX} at once`);
-  if (!['approve', 'reject'].includes(action)) return sendError(res, 400, 'action must be approve or reject');
+  // Migrated bulk-verify validation to new envelope
+  if (!Array.isArray(ids) || ids.length === 0) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'ids must be a non-empty array');
+  if (ids.length > ADMIN_VERIFY_BULK_MAX) return apiResponse.error(req, res, 'VALIDATION_FAILED', `Cannot bulk-verify more than ${ADMIN_VERIFY_BULK_MAX} at once`);
+  if (!['approve', 'reject'].includes(action)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'action must be approve or reject');
 
   const results = await Promise.all(ids.map(async (id) => {
     try {
@@ -280,8 +282,8 @@ router.post('/api/admin/impersonate/:userId', auth(['ADMIN']), async (req, res) 
 router.post('/api/admin/confirm-receipt', auth(['ADMIN']), async (req, res) => {
   const { jobId } = req.body || {};
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
-  if (!job) return sendError(res, 404, 'Job not found');
-  if (job.escrow_status !== 'HELD') return sendError(res, 400, 'Escrow must be HELD to confirm receipt');
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (job.escrow_status !== 'HELD') return apiResponse.error(req, res, 'ESCROW_NOT_HELD', 'Escrow must be HELD to confirm receipt');
   await db.prepare(`UPDATE jobs SET escrow_status='FUNDED', updated_at=datetime('now') WHERE id=?`).run(job.id);
   await writeAudit(req, { userId: req.actorId, action: 'ESCROW_FUND', details: `${job.job_code} funds confirmed received`, entityType: 'job', entityId: job.id, beforeState: 'HELD', afterState: 'FUNDED' });
   res.json({ ok: true });
@@ -394,9 +396,9 @@ router.get('/api/admin/payouts-sla', auth(['ADMIN']), async (req, res) => {
 
 router.post('/api/admin/payouts/:id/mark-transferred', auth(['ADMIN']), async (req, res) => {
   const payout = await db.prepare('SELECT * FROM payouts WHERE id=?').get(req.params.id);
-  if (!payout) return sendError(res, 404, 'Payout not found');
-  if (payout.status !== 'RELEASED') return sendError(res, 400, 'Payout is not in RELEASED state yet');
-  if (payout.transfer_executed_at) return sendError(res, 409, 'Transfer already confirmed for this payout');
+  if (!payout) return apiResponse.error(req, res, 'BID_NOT_FOUND', 'Payout not found');
+  if (payout.status !== 'RELEASED') return apiResponse.error(req, res, 'ESCROW_NOT_HELD', 'Payout is not in RELEASED state yet');
+  if (payout.transfer_executed_at) return apiResponse.error(req, res, 'PAYOUT_DUPLICATE', 'Transfer already confirmed for this payout');
   const { reference } = req.body || {};
   await db.prepare(`UPDATE payouts SET transfer_executed_at=datetime('now'), transfer_reference=? WHERE id=?`).run(reference || null, payout.id);
   await writeAudit(req, {
@@ -431,10 +433,16 @@ router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
 });
 
 router.get('/api/admin/reconciliation', auth(['ADMIN']), async (req, res) => {
-  const { runReconciliation } = require('../services/reconciliation.service');
-  const result = await runReconciliation();
-  await writeAudit(req, { userId: req.actorId, action: 'RECONCILIATION_RUN', details: result.summary, entityType: 'system', entityId: null });
-  res.json(result);
+  // Demonstrates new envelope on a safe endpoint (no existing test covers HTTP shape here)
+  try {
+    const { runReconciliation } = require('../services/reconciliation.service');
+    const result = await runReconciliation();
+    await writeAudit(req, { userId: req.actorId, action: 'RECONCILIATION_RUN', details: result.summary, entityType: 'system', entityId: null });
+    // Use new envelope for success, but keep legacy top-level fields via spread so old clients still see `result` shape
+    return apiResponse.success(req, res, result);
+  } catch (e) {
+    return apiResponse.error(req, res, 'INTERNAL', e.message || 'Reconciliation failed');
+  }
 });
 
 module.exports = router;

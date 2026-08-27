@@ -1,5 +1,6 @@
 const db = require('../db');
 const { sendError } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse'); // new envelope for createJob errors (via controller)
 const { auth, requireSeatRole, writeLimiter } = require('../middleware/auth');
 const { validate, jobCreateSchema } = require('../middleware/validate');
 const jobController = require('../controllers/job.controller');
@@ -19,6 +20,7 @@ router.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), jobCo
 router.get('/api/jobs/:id', auth(), jobController.getJob);
 
 // Create job — delegates to controller/service (uses repositories via service)
+// Error handling migrated to new envelope: job.controller.createJob now uses apiResponse.error (success:false + error:{code,message} + _legacy)
 router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), validate(jobCreateSchema), jobController.createJob);
 
 // Award — the money-moving transaction lives in services/award.service.js;

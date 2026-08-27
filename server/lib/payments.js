@@ -43,16 +43,37 @@
 //     failure leaves escrow untouched and surfaces via Sentry + the audit
 //     log; the job/refund/release never silently assumes success.
 
+/**
+ * @typedef {import('../types/domain').Money} Money
+ * @typedef {import('../types/domain').Currency} Currency
+ * @typedef {import('../types/domain').JobStatus} JobStatus
+ * @typedef {import('../types/domain').PaymentStatus} PaymentStatus
+ * @typedef {import('../types/domain').PayoutStatus} PayoutStatus
+ * @typedef {'internal'|'mock'|'telr'|'stripe'} PaymentsProvider
+ * @typedef {{ jobCode: string, amountAed: number, currency?: Currency|string, description?: string, returnUrls?: {auth?: string, cancel?: string, decline?: string}, paymentRef: string }} CreateCheckoutOrderParams
+ * @typedef {{ ok: boolean, ref?: string, url?: string|null, error?: string, provider?: string, detail?: string, mock?: boolean }} CreateCheckoutOrderResult
+ * @typedef {{ ok: boolean, event?: 'AUTHORISED'|'DECLINED'|'CANCELLED'|'REFUNDED', ref?: string, tranref?: string|null, amountAed?: number|null, error?: string, provider?: string, providerEventId?: string, rawEventType?: string, detail?: string }} ParseWebhookResult
+ * @typedef {{ tranref: string, amountAed: number, paymentRef?: string }} RefundChargeParams
+ * @typedef {{ paymentRef: string, jobCode?: string, amountAed: number, carrierAccountId?: string|null, carrierIban?: string|null, reference?: string }} ExecutePayoutParams
+ */
+
 const crypto = require('node:crypto');
+/** @type {any} */
 let stripeLib;
 try { stripeLib = require('./stripe'); } catch {}
 
 const TELR_GATEWAY = 'https://secure.telr.com/gateway';
 
+/**
+ * @returns {PaymentsProvider|string}
+ */
 function provider() {
   return (process.env.PAYMENTS_PROVIDER || 'internal').toLowerCase();
 }
 
+/**
+ * @returns {boolean}
+ */
 function isConfigured() {
   const p = provider();
   if (p === 'mock') return !!process.env.PAYMENTS_WEBHOOK_SECRET;
@@ -61,6 +82,9 @@ function isConfigured() {
   return false;
 }
 
+/**
+ * @returns {{ provider: string, configured: boolean, testMode: boolean }}
+ */
 function providerInfo() {
   const p = provider();
   return {
@@ -73,10 +97,20 @@ function providerInfo() {
   };
 }
 
+/**
+ * @param {string} secret
+ * @param {string} data
+ * @returns {string}
+ */
 function hmac(secret, data) {
   return crypto.createHmac('sha256', secret).update(data).digest('hex');
 }
 
+/**
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
 function timingSafeEqualStr(a, b) {
   const ab = Buffer.from(String(a));
   const bb = Buffer.from(String(b));
@@ -104,6 +138,10 @@ function mockEntry(ref) {
 // reference, so the webhook can always find the job).
 // ---------------------------------------------------------------------------
 
+/**
+ * @param {CreateCheckoutOrderParams} params
+ * @returns {Promise<CreateCheckoutOrderResult>}
+ */
 async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', description, returnUrls, paymentRef }) {
   const p = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured', provider: p };
@@ -196,6 +234,12 @@ async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', descr
 //        header; constructEvent() rejects tampered bodies.
 // ---------------------------------------------------------------------------
 
+/**
+ * @param {string} rawBody
+ * @param {string} signature
+ * @param {string} [_contentType]
+ * @returns {boolean}
+ */
 function verifyWebhookSignature(rawBody, signature, _contentType) {
   if (!isConfigured() || !signature) return false;
   const p = provider();
@@ -223,6 +267,11 @@ function verifyWebhookSignature(rawBody, signature, _contentType) {
 //   ref:   our processor_payment_ref (job lookup key)
 // ---------------------------------------------------------------------------
 
+/**
+ * @param {any} body
+ * @param {string} [_contentType]
+ * @returns {ParseWebhookResult}
+ */
 function parseWebhook(body, _contentType) {
   const p = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured' };
@@ -296,6 +345,10 @@ function parseWebhook(body, _contentType) {
 // AUTHORISED/PAID; call sites guard on processor_payment_status='PAID'.
 // ---------------------------------------------------------------------------
 
+/**
+ * @param {RefundChargeParams} params
+ * @returns {Promise<{ok: boolean, refundRef?: string, error?: string, detail?: string, provider?: string}>}
+ */
 async function refundCharge({ tranref, amountAed, paymentRef }) {
   const p = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured' };
@@ -358,6 +411,10 @@ async function refundCharge({ tranref, amountAed, paymentRef }) {
 //        confirms the real-world transfer, exactly as before.
 // ---------------------------------------------------------------------------
 
+/**
+ * @param {ExecutePayoutParams} params
+ * @returns {Promise<{ok: boolean, payoutRef?: string, error?: string, detail?: string, provider?: string}>}
+ */
 async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId, carrierIban, reference }) {
   const p = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured' };

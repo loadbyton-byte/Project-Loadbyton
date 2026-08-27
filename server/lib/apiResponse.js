@@ -36,9 +36,15 @@ function error(req, res, code, customMessage, extra = {}) {
   const catalog = ERROR_CATALOG[code] || ERROR_CATALOG.INTERNAL;
   const status = extra.status || catalog.status;
   const message = customMessage || catalog.message;
+  // New envelope: success:false + structured error + _legacy for old clients
+  // that still do `assert.equal(body.error, "Job not found")`. The _legacy
+  // field preserves the string shape while `error` is the canonical object.
   return res.status(status).json({
     success: false,
     error: { code, message, ...extra },
+    _legacy: { error: message },
+    message,
+    code,
     requestId: req.requestId || null,
   });
 }

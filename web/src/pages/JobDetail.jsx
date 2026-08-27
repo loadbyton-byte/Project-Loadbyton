@@ -13,6 +13,8 @@ import { EirChecklist } from '../components/EirChecklist.jsx';
 import { DetentionAlarm } from '../components/DetentionAlarm.jsx';
 import JobHeader from '../features/job/JobHeader.jsx';
 import JobTimeline from '../features/job/JobTimeline.jsx';
+import MessagesPanel from '../features/job/MessagesPanel.jsx';
+import DriverPanel from '../features/job/DriverPanel.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
 
@@ -334,7 +336,7 @@ export default function JobDetail() {
           </Section>
 
           <Section title="Messages">
-            <MessageThread messages={messages} jobId={job.id} onSent={load} />
+            <MessagesPanel messages={messages} jobId={job.id} onSent={load} />
           </Section>
 
           {job.status === 'COMPLETED' && (isShipper || isAwardedCarrier) && (
@@ -413,7 +415,7 @@ export default function JobDetail() {
           </Card>
 
           {isAwardedCarrier && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status) && (
-            <DriverUpdateForm job={job} onDone={load} />
+            <DriverPanel job={job} onDone={load} />
           )}
         </div>
       </div>
@@ -742,69 +744,6 @@ function BackloadMatches({ jobId }) {
   );
 }
 
-// PATCH /api/jobs/:id/driver — the ONLY place driver details are captured,
-// and only after the bid is confirmed. The awarded carrier enters the
-// driver here; the shipper then sees the driver on the job. Before award
-// (job OPEN) there is no driver anywhere — that's the point of the privacy
-// rule. Also the audited reassignment path (anti-theft trail).
-function DriverUpdateForm({ job, onDone }) {
-  const { addToast } = useToasts();
-  const [open, setOpen] = useState(false);
-  const [driverName, setDriverName] = useState(job.assigned_driver_name || '');
-  const [driverPhone, setDriverPhone] = useState(job.assigned_driver_phone || '');
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await api.updateDriver(job.id, { driverName, driverPhone });
-      addToast({ type: 'status_change', title: job.assigned_driver_name ? 'Driver updated' : 'Driver added', body: `${driverName} is now the assigned driver — the shipper can see it on this job.` });
-      setOpen(false);
-      onDone();
-    } catch (err) {
-      addToast({ type: 'system_message', title: 'Could not update driver', body: err.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!open) {
-    return (
-      <Card className="mb-6">
-        <Card.Content className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-ink-muted">Assigned driver</p>
-            <p className="font-medium text-ink">{job.assigned_driver_name || (job.status === 'AWARDED' ? 'Add the driver — required before pickup' : 'Not set')}</p>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>{job.assigned_driver_name ? 'Update' : 'Add driver'}</Button>
-        </Card.Content>
-      </Card>
-    );
-  }
-  return (
-    <Card className="mb-6">
-      <Card.Header><Card.Title>Update driver</Card.Title></Card.Header>
-      <form onSubmit={submit}>
-        <Card.Content className="space-y-3">
-          <div>
-            <Label>Driver name</Label>
-            <Input required value={driverName} onChange={(e) => setDriverName(e.target.value)} />
-          </div>
-          <div>
-            <Label>Driver mobile (UAE)</Label>
-            <Input required placeholder="05XXXXXXXX" value={driverPhone} onChange={(e) => setDriverPhone(e.target.value)} />
-          </div>
-        </Card.Content>
-        <Card.Footer>
-          <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button type="submit" loading={busy}>Save</Button>
-        </Card.Footer>
-      </form>
-    </Card>
-  );
-}
-
 function PodForm({ jobId, onDone, busy, setBusy, setError }) {
   const [file, setFile] = useState(null);
   async function submit() {
@@ -896,46 +835,6 @@ function DocumentList({ documents, jobId, onAdd }) {
           <Button type="submit" variant="secondary" loading={busy}>Add</Button>
         </form>
       </div>
-    </div>
-  );
-}
-
-function MessageThread({ messages, jobId, onSent }) {
-  const { user } = useAuth();
-  const { addToast } = useToasts();
-  const [content, setContent] = useState('');
-  const [busy, setBusy] = useState(false);
-  async function submit(e) {
-    e.preventDefault();
-    if (!content.trim()) return;
-    setBusy(true);
-    try {
-      await api.sendMessage(jobId, content);
-      setContent('');
-      onSent();
-    } catch (err) {
-      // F17, fixed independently on both branches: same missing catch as
-      // DocumentList — a failed send silently vanished with no feedback.
-      addToast({ type: 'system_message', title: 'Message not sent', body: err.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div>
-      {messages.length === 0 ? (
-        <p className="text-sm text-ink-muted">No messages yet.</p>
-      ) : (
-        <div className="flex max-h-72 flex-col gap-3 overflow-y-auto pr-1">
-          {messages.map((m) => (
-            <ChatBubble key={m.id} body={m.content} mine={m.sender_id === user.id} />
-          ))}
-        </div>
-      )}
-      <form onSubmit={submit} className="mt-4 flex gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-        <Input placeholder="Write a message…" value={content} onChange={(e) => setContent(e.target.value)} className="flex-1" />
-        <Button type="submit" variant="secondary" loading={busy}><IconMessage size={16} /></Button>
-      </form>
     </div>
   );
 }

@@ -4,6 +4,7 @@ const db = require('../db');
 const totp = require('../lib/totp');
 const { FRONTEND_URL, DUMMY_PASSWORD_HASH } = require('../lib/config');
 const { sendError, asyncHandler, randomToken, referralCode } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { encryptField } = require('../lib/crypto');
 const { sendEmailAsync } = require('../lib/email');
 const {
@@ -14,6 +15,7 @@ const {
 const { auth, requireSeatRole, isThrottled, recordFailure, clearThrottle } = require('../middleware/auth');
 const { rateLimiter, byIp } = require('../lib/rateLimit');
 const { validate, registerSchema } = require('../middleware/validate');
+const { MIN_PASSWORD_LENGTH } = require('../lib/constants');
 
 const router = require('express').Router();
 const authIpLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20, keyFn: byIp, message: 'Too many auth requests. Please slow down.' });
@@ -24,18 +26,19 @@ router.post(
   validate(registerSchema),
   asyncHandler(async (req, res) => {
     const { email, password, role, companyName, phone, trnNumber, tradeLicenseNumber, referralCode: incomingReferral } = req.body || {};
-    if (!email || !password || !companyName) return sendError(res, 400, 'email, password and companyName are required');
-    if (!isPasswordValid(password)) return sendError(res, 400, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-    if (!['SHIPPER', 'CARRIER'].includes(role)) return sendError(res, 422, 'role must be SHIPPER or CARRIER');
+    // Migrated register errors to new envelope (apiResponse.error preserves _legacy for old tests)
+    if (!email || !password || !companyName) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'email, password and companyName are required');
+    if (!isPasswordValid(password)) return apiResponse.error(req, res, 'VALIDATION_FAILED', `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+    if (!['SHIPPER', 'CARRIER'].includes(role)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'role must be SHIPPER or CARRIER', { status: 422 });
     const existing = await db.prepare('SELECT id FROM users WHERE email=?').get(email);
-    if (existing) return sendError(res, 400, 'An account with that email already exists');
+    if (existing) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'An account with that email already exists');
 
     // UAE-format business identifiers — the signup gate that makes a random
     // string unusable for creating an account (see the regexes above).
-    if (!normalizeUaeMobile(phone)) return sendError(res, 400, 'phone must be a valid UAE mobile number (05XXXXXXXX or +9715XXXXXXXX)');
-    if (!isValidUaeTrn(trnNumber)) return sendError(res, 400, 'trnNumber must be a valid UAE TRN — exactly 15 digits');
+    if (!normalizeUaeMobile(phone)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'phone must be a valid UAE mobile number (05XXXXXXXX or +9715XXXXXXXX)');
+    if (!isValidUaeTrn(trnNumber)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'trnNumber must be a valid UAE TRN — exactly 15 digits');
     if (!isValidUaeTradeLicence(tradeLicenseNumber)) {
-      return sendError(res, 400, 'tradeLicenseNumber must be a valid UAE trade licence number (5-15 uppercase letters/digits/dashes, at least one digit)');
+      return apiResponse.error(req, res, 'VALIDATION_FAILED', 'tradeLicenseNumber must be a valid UAE trade licence number (5-15 uppercase letters/digits/dashes, at least one digit)');
     }
 
     let referredBy = null;
@@ -160,8 +163,9 @@ router.post(
   authIpLimiter,
   asyncHandler(async (req, res) => {
     const { email, password, totpCode } = req.body || {};
-    if (!email || !password) return sendError(res, 400, 'email and password are required');
-    if (isThrottled(email)) return sendError(res, 429, 'Too many failed attempts. Try again in a few minutes.');
+    // Migrated login errors to new envelope
+    if (!email || !password) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'email and password are required');
+    if (isThrottled(email)) return apiResponse.error(req, res, 'RATE_LIMITED', 'Too many failed attempts. Try again in a few minutes.');
 
     const user = await db.prepare('SELECT * FROM users WHERE email=?').get(email);
     // past the bcrypt call entirely when the email doesn't exist, so a
@@ -171,19 +175,19 @@ router.post(
     const passwordOk = bcrypt.compareSync(password, user ? user.password_hash : DUMMY_PASSWORD_HASH);
     if (!user || !passwordOk) {
       recordFailure(email);
-      return sendError(res, 403, 'Invalid email or password');
+      return apiResponse.error(req, res, 'FORBIDDEN', 'Invalid email or password', { status: 403 });
     }
     if (!user.is_active) {
       recordFailure(email);
-      return sendError(res, 403, 'This account has been deactivated');
+      return apiResponse.error(req, res, 'FORBIDDEN', 'This account has been deactivated', { status: 403 });
     }
     if (user.role === 'ADMIN' && !user.mfa_enabled && process.env.ADMIN_MFA_ENFORCE === '1') {
-      return sendError(res, 403, 'Admin MFA is required — set up TOTP via POST /api/auth/mfa/setup after logging in with ADMIN_MFA_ENFORCE=0, then re-enable enforcement.');
+      return apiResponse.error(req, res, 'FORBIDDEN', 'Admin MFA is required — set up TOTP via POST /api/auth/mfa/setup after logging in with ADMIN_MFA_ENFORCE=0, then re-enable enforcement.', { status: 403 });
     }
     if (user.mfa_enabled) {
       if (!totp.verifyCode(user.mfa_secret, totpCode)) {
         recordFailure(email);
-        return sendError(res, 403, 'Invalid or missing authentication code');
+        return apiResponse.error(req, res, 'FORBIDDEN', 'Invalid or missing authentication code', { status: 403 });
       }
     }
     clearThrottle(email);

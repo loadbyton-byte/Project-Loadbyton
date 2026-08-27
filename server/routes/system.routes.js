@@ -4,7 +4,9 @@ const db = require('../db');
 const payments = require('../lib/payments');
 const { PORT, INTERNAL_KEY } = require('../lib/config');
 const { sendError, asyncHandler } = require('../lib/http');
+const apiResponse = require('../lib/apiResponse');
 const { referralCode, isPasswordValid, writeAudit, timingSafeEqualStr, notify } = require('../lib/helpers');
+const { MIN_PASSWORD_LENGTH } = require('../lib/constants');
 const { auth } = require('../middleware/auth');
 const { runAutoReleaseSweep } = require('../services/escrow.service');
 const { publishScheduledJobs } = require('../services/scheduling.service');
@@ -112,7 +114,8 @@ router.post(
         action: 'PAYMENT_WEBHOOK_REJECTED',
         details: `Webhook signature verification failed (ip ${req.ip || 'unknown'}, provider ${payments.provider()})`,
       });
-      return sendError(res, 401, 'Signature verification failed');
+      // Migrated webhook error to new envelope (preserves _legacy for old clients)
+      return apiResponse.error(req, res, 'FORBIDDEN', 'Signature verification failed', { status: 401 });
     }
 
     const parsed = payments.parseWebhook(req.body, contentType);
