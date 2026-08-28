@@ -43,10 +43,20 @@ if (isPostgres) {
     }
   }
   
+  // For Prisma PostgreSQL, use the connection string directly to preserve all params
   const pgConfig = parseDatabaseUrl(process.env.DATABASE_URL);
+  
+  // If the URL contains pgbouncer=true or is a Prisma pooled URL, use connectionString directly
+  const useConnectionString = process.env.DATABASE_URL.includes('pgbouncer=true') || 
+                              process.env.DATABASE_URL.includes('prisma') ||
+                              process.env.DATABASE_URL.includes('pooler');
+  
+  const poolConfig = useConnectionString 
+    ? { connectionString: process.env.DATABASE_URL }
+    : { ...pgConfig, max: Number(process.env.DB_POOL_MAX) || 20 };
+    
   const pool = new Pool({
-    ...pgConfig,
-    max: Number(process.env.DB_POOL_MAX) || 20,
+    ...poolConfig,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 30000,
     statement_timeout: 60000,
