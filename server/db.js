@@ -106,6 +106,28 @@ if (isPostgres) {
   };
 
   console.log('[db] Postgres mode — DATABASE_URL detected');
+
+  // Auto-run migration on startup if tables don't exist
+  (async () => {
+    try {
+      const check = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'users'
+        )
+      `);
+      if (!check.rows[0].exists) {
+        console.log('[db] Tables missing — running migration...');
+        const fs = require('fs');
+        const path = require('path');
+        const sql = fs.readFileSync(path.join(__dirname, 'migrations', 'postgres_init.sql'), 'utf8');
+        await pool.query(sql);
+        console.log('[db] Migration completed');
+      }
+    } catch (e) {
+      console.error('[db] Auto-migration failed:', e.message);
+    }
+  })();
 } else {
   // -----------------------------------------------------------------------
   // SQLite path — synchronous node:sqlite with async wrapper methods
