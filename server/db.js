@@ -28,7 +28,9 @@ if (isPostgres) {
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     max: Number(process.env.DB_POOL_MAX) || 20,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 30000,
+    statement_timeout: 60000,
+    query_timeout: 60000,
   });
 
   pool.on('error', (err) => {
@@ -107,27 +109,38 @@ if (isPostgres) {
 
   console.log('[db] Postgres mode — DATABASE_URL detected');
 
-  // Run migration synchronously before any queries
-  let migrationPromise = (async () => {
-    try {
-      const check = await pool.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables 
-          WHERE table_schema = 'public' AND table_name = 'users'
-        )
-      `);
-      if (!check.rows[0].exists) {
-        console.log('[db] Tables missing — running migration...');
-        const fs = require('fs');
-        const path = require('path');
-        const sql = fs.readFileSync(path.join(__dirname, 'migrations', 'postgres_init.sql'), 'utf8');
-        await pool.query(sql);
-        console.log('[db] Migration completed');
+  // Run migration with retry logic
+  async function runMigrationWithRetry(maxRetries = 5) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const check = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'users'
+          )
+        `);
+        if (!check.rows[0].exists) {
+          console.log('[db] Tables missing — running migration...');
+          const fs = require('fs');
+          const path = require('path');
+          const sql = fs.readFileSync(path.join(__dirname, 'migrations', 'postgres_init.sql'), 'utf8');
+          await pool.query(sql);
+          console.log('[db] Migration completed');
+        }
+        return;
+      } catch (e) {
+        console.error(`[db] Migration attempt ${attempt}/${maxRetries} failed:`, e.message);
+        if (attempt === maxRetries) {
+          console.error('[db] All migration attempts failed');
+          throw e;
+        }
+        // Wait before retry with exponential backoff
+        await new Promise(r => setTimeout(r, Math.min(1000 * Math.pow(2, attempt), 30000)));
       }
-    } catch (e) {
-      console.error('[db] Auto-migration failed:', e.message);
     }
-  })();
+  }
+
+  let migrationPromise = runMigrationWithRetry(5);
 
   // Wrap query/exec to wait for migration if needed
   const originalQuery = db.query;
