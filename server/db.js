@@ -23,9 +23,29 @@ if (isPostgres) {
   // Postgres path — async pg.Pool with SQLite-compatible prepare() shim
   // -----------------------------------------------------------------------
   const { Pool } = require('pg');
+  
+  // Parse DATABASE_URL to handle Prisma PostgreSQL format
+  function parseDatabaseUrl(url) {
+    try {
+      const parsed = new URL(url);
+      const config = {
+        host: parsed.hostname,
+        port: parseInt(parsed.port) || 5432,
+        database: parsed.pathname.slice(1), // Remove leading '/'
+        user: parsed.username,
+        password: parsed.password,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      };
+      return config;
+    } catch (e) {
+      console.warn('[db] Failed to parse DATABASE_URL, using as-is:', e.message);
+      return { connectionString: process.env.DATABASE_URL };
+    }
+  }
+  
+  const pgConfig = parseDatabaseUrl(process.env.DATABASE_URL);
   const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ...pgConfig,
     max: Number(process.env.DB_POOL_MAX) || 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 30000,
