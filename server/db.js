@@ -24,8 +24,8 @@ if (isPostgres) {
   // -----------------------------------------------------------------------
   const { Pool } = require('pg');
   
-  // For Prisma PostgreSQL (pooled), we MUST use connectionString directly
-  // to preserve pgbouncer=true and other query parameters
+  // For Prisma PostgreSQL (pooled via PgBouncer), we MUST use connectionString directly
+  // with pgbouncer=true to work with Prisma's pooled PostgreSQL proxy
   const poolConfig = { 
     connectionString: process.env.DATABASE_URL,
     max: Number(process.env.DB_POOL_MAX) || 20,
@@ -33,6 +33,7 @@ if (isPostgres) {
     connectionTimeoutMillis: 30000,
     statement_timeout: 60000,
     query_timeout: 60000,
+    pgbouncer: true,
   };
   
   const pool = new Pool(poolConfig);
