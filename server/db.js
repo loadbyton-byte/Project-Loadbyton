@@ -24,44 +24,18 @@ if (isPostgres) {
   // -----------------------------------------------------------------------
   const { Pool } = require('pg');
   
-  // Parse DATABASE_URL to handle Prisma PostgreSQL format
-  function parseDatabaseUrl(url) {
-    try {
-      const parsed = new URL(url);
-      const config = {
-        host: parsed.hostname,
-        port: parseInt(parsed.port) || 5432,
-        database: parsed.pathname.slice(1), // Remove leading '/'
-        user: parsed.username,
-        password: parsed.password,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      };
-      return config;
-    } catch (e) {
-      console.warn('[db] Failed to parse DATABASE_URL, using as-is:', e.message);
-      return { connectionString: process.env.DATABASE_URL };
-    }
-  }
-  
-  // For Prisma PostgreSQL, use the connection string directly to preserve all params
-  const pgConfig = parseDatabaseUrl(process.env.DATABASE_URL);
-  
-  // If the URL contains pgbouncer=true or is a Prisma pooled URL, use connectionString directly
-  const useConnectionString = process.env.DATABASE_URL.includes('pgbouncer=true') || 
-                              process.env.DATABASE_URL.includes('prisma') ||
-                              process.env.DATABASE_URL.includes('pooler');
-  
-  const poolConfig = useConnectionString 
-    ? { connectionString: process.env.DATABASE_URL }
-    : { ...pgConfig, max: Number(process.env.DB_POOL_MAX) || 20 };
-    
-  const pool = new Pool({
-    ...poolConfig,
+  // For Prisma PostgreSQL (pooled), we MUST use connectionString directly
+  // to preserve pgbouncer=true and other query parameters
+  const poolConfig = { 
+    connectionString: process.env.DATABASE_URL,
+    max: Number(process.env.DB_POOL_MAX) || 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 30000,
     statement_timeout: 60000,
     query_timeout: 60000,
-  });
+  };
+  
+  const pool = new Pool(poolConfig);
 
   pool.on('error', (err) => {
     console.error('[db] Postgres pool error:', err.message);
