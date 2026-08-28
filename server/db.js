@@ -1,7 +1,6 @@
 // Loadbyton — Unified database abstraction.
-// Detects DATABASE_URL env var to choose backend:
-//   - postgres://... → async pg.Pool (production)
-//   - unset          → synchronous node:sqlite (development)
+// Default: SQLite (zero-config, works everywhere)
+// Opt-in: Postgres via USE_POSTGRES=true + DATABASE_URL
 //
 // All route/service files import this module. The exported object exposes
 // both the legacy synchronous API (db.prepare(sql).get(params)) for
@@ -14,16 +13,18 @@
 
 'use strict';
 
-const isPostgres = Boolean(process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'));
+// Use Postgres only if explicitly enabled (for production with proper DB)
+// Default to SQLite for development/demo to avoid connection issues
+const usePostgres = process.env.USE_POSTGRES === 'true' && process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres');
 
 let db;
 
-if (isPostgres) {
+if (usePostgres) {
   // -----------------------------------------------------------------------
   // Postgres path — async pg.Pool with SQLite-compatible prepare() shim
   // -----------------------------------------------------------------------
   const { Pool } = require('pg');
-  
+
   // For Prisma PostgreSQL (pooled via PgBouncer), we MUST use connectionString directly
   // with pgbouncer=true to work with Prisma's pooled PostgreSQL proxy
   const poolConfig = { 
