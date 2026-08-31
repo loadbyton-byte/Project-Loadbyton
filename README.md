@@ -2,9 +2,10 @@
 
 **UAE Road Freight & Container Drayage Marketplace** — a full-stack platform that connects **shippers** who need a container, a flatbed load, or a multi-truck job moved across Dubai, Abu Dhabi, Sharjah, or Fujairah with **carriers** who truck them (across 13 equipment types, from a container chassis to a genset trailer to custom loads), and gives **admins** a verification, escrow and dispute console.
 
-Built as a monorepo: an Express API (Node 22 + `node:sqlite`) and a React + Vite + Tailwind single-page app. Runs locally with zero external dependencies. Production deploys support Postgres via Docker Compose.
+Built as a monorepo: an Express API (Node 22, dual DB — `node:sqlite` for dev + Postgres `pg` for production) and a React + Vite + Tailwind single-page app. Runs locally with `npm install` only; production uses Postgres + Redis + S3 via `docker-compose.yml`.
+Deps: `express`, `pg` (opt-in via `USE_POSTGRES`), `ioredis` (rate limiting), `stripe` (Connect payouts), `@aws-sdk/client-s3` (uploads), `zod` (validation), `bcryptjs`, `swagger-ui-express`.
 
-> Escrow + payouts are ledger-backed with Stripe Connect integration (mock mode available without keys). Ready for licensed payment rails.
+> Escrow + payouts are double-entry ledger-backed (`server/lib/ledger.js` + `ledger_*` tables) with Stripe Connect + Telr + mock providers (`server/lib/payments.js`). Mock mode runs end-to-end without keys; licensed rails activate via env.
 
 ---
 
@@ -167,11 +168,21 @@ Plus 22 code-quality fixes (Tailwind classes, SVG paths, fragment keys, console.
 
 ---
 
-## Known limits
+## Production readiness — enterprise checklist
 
-- SQLite default for development; Postgres recommended for production (`DATABASE_URL` env var).
-- Payout execution requires Stripe Connect keys or manual admin confirmation in mock mode.
-- WhatsApp notification provider requires Business API approval for production templates.
+| Area | Status | Detail |
+|---|---|---|
+| **DB** | ✅ Dual | SQLite (dev) + Postgres (prod, `USE_POSTGRES=true` + `DATABASE_URL`, WAL + FK, auto-migrate `server/migrations/postgres_init.sql`) |
+| **Ledger** | ✅ | Double-entry, idempotent `idempotency_key`, append-only `audit_log` triggers `server/schema.js:340`, outbox `workers/outbox.worker.js` |
+| **Auth** | ✅ | HttpOnly `lb_session` 7d, bcrypt, TOTP, per-email throttle 8/15m, RBAC + seat roles, re-auth for IBAN/payout |
+| **Rate limit** | ✅ | `server/lib/rateLimit.js` — Redis-distributed when `REDIS_URL` set, in-memory fallback with warning |
+| **Crypto** | ✅ | AES-256-GCM field encryption `server/lib/crypto.js` for TRN/IBAN (`enc:v1:`), `ENCRYPTION_KEY` required in prod |
+| **Payments** | ✅ | Provider abstraction `internal/mock/telr/stripe` + webhook idempotency + payout attempts ledger |
+| **Storage** | ✅ | S3 when `S3_BUCKET` set, local fallback `server/data/uploads/` |
+| **CI** | ✅ | `/.github/workflows/ci.yml` — tests + tsc + build + k6 smoke + Playwright |
+| **Deploy** | ✅ | `Dockerfile` (monolith) + `docker-compose.yml` (postgres+redis+app) + `render.yaml` + `vercel.json` + Terraform `infra/` |
+
+Known limits: WhatsApp Business API needs approval for production templates; `mock` payments forbidden in `NODE_ENV=production` by `server/lib/config.js:22`.
 
 ## Quick navigation
 

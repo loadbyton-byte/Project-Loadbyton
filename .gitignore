@@ -1,6 +1,12 @@
 node_modules/
-server/data/loadbyton.db*
+server/data/*.db*
+server/data/uploads/
 web/dist/
 .env
+.env.local
 *.log
 .DS_Store
+coverage/
+.nyc_output/
+.prisma/
+dist/

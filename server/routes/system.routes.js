@@ -48,8 +48,28 @@ const router = require('express').Router();
  * @param {any} res
  * @returns {void}
  */
-router.get('/api/health', (/** @type {any} */ req, /** @type {any} */ res) => {
-  res.json({ ok: true, service: 'loadbyton-api', time: new Date().toISOString(), pid: String(process.pid), port: PORT, payments: payments.providerInfo() });
+router.get('/api/health', async (/** @type {any} */ req, /** @type {any} */ res) => {
+  let dbOk = false;
+  let dbLatencyMs = null;
+  try {
+    const start = Date.now();
+    await db.prepare('SELECT 1 as ok').get();
+    dbOk = true;
+    dbLatencyMs = Date.now() - start;
+  } catch (e) {
+    dbOk = false;
+  }
+  res.json({
+    ok: dbOk,
+    service: 'loadbyton-api',
+    version: process.env.npm_package_version || '1.0.0',
+    time: new Date().toISOString(),
+    pid: String(process.pid),
+    port: PORT,
+    db: { ok: dbOk, latencyMs: dbLatencyMs, mode: db.isPostgres ? 'postgres' : 'sqlite' },
+    payments: payments.providerInfo(),
+    uptimeSec: Math.floor(process.uptime()),
+  });
 });
 
 /**

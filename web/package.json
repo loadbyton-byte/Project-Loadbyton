@@ -2,7 +2,6 @@
   "name": "loadbyton-web",
   "version": "1.0.0",
   "private": true,
-  "type": "commonjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/prerender.mjs",

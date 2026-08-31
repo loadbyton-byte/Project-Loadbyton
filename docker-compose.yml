@@ -16,13 +16,19 @@ services:
     image: redis:7-alpine
     ports: ["6379:6379"]
     healthcheck: { test: ["CMD","redis-cli","ping"], interval: 5s, retries: 10 }
+  # NOTE: Microservice split (auth/marketplace/escrow) is ROADMAP, not current runtime.
+  # Current production is the monolith `app` below. The 3 extra Dockerfiles exist
+  # for future decomposition — they intentionally reuse the same build today so
+  # `docker compose up --profile microservices` doesn't break. See docs/ARCHITECTURE.md §1.
   auth-service:
     build: { context: ., dockerfile: Dockerfile.auth }
+    profiles: ["microservices"]
     environment:
       DATABASE_URL: postgres://loadbyton:loadbyton@postgres:5432/loadbyton
       REDIS_URL: redis://redis:6379
       PORT: 4001
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-key-not-for-prod}
+      USE_POSTGRES: "true"
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set — see .env.example}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     ports: ["4001:4001"]
@@ -30,28 +36,32 @@ services:
     restart: unless-stopped
   marketplace-service:
     build: { context: ., dockerfile: Dockerfile.marketplace }
+    profiles: ["microservices"]
     environment:
       DATABASE_URL: postgres://loadbyton:loadbyton@postgres:5432/loadbyton
       REDIS_URL: redis://redis:6379
       PORT: 4002
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-key-not-for-prod}
+      USE_POSTGRES: "true"
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
     ports: ["4002:4002"]
     depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
     restart: unless-stopped
   escrow-service:
     build: { context: ., dockerfile: Dockerfile.escrow }
+    profiles: ["microservices"]
     environment:
       DATABASE_URL: postgres://loadbyton:loadbyton@postgres:5432/loadbyton
       REDIS_URL: redis://redis:6379
       PORT: 4003
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-dev-key-not-for-prod}
+      USE_POSTGRES: "true"
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       INTERNAL_KEY: ${INTERNAL_KEY:-}
     ports: ["4003:4003"]
     depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
     restart: unless-stopped
-  # Optional: monolith fallback (single Express serving SPA+API as today)
+  # Primary production service — single Express serving API + built SPA (see server/app.js:71)
   app:
     build: { context: ., dockerfile: Dockerfile }
     environment:

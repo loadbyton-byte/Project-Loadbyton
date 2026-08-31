@@ -5,7 +5,10 @@
   "description": "Loadbyton — UAE road freight marketplace API",
   "scripts": {
     "start": "node index.js",
-    "test": "node --test server/test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:vitest": "vitest run --config ../vitest.config.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .js"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -23,6 +26,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.2"
   }

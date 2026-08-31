@@ -16,13 +16,16 @@ if (process.env.NODE_ENV === 'production' && !process.env.INTERNAL_KEY) {
   console.warn('[config] WARNING: INTERNAL_KEY not set in production — generated ephemeral key. Set INTERNAL_KEY env for stable cron auth.');
 }
 if (process.env.NODE_ENV === 'production' && !process.env.ENCRYPTION_KEY) {
-  throw new Error('ENCRYPTION_KEY must be set in production');
+  throw new Error('ENCRYPTION_KEY must be set in production. Generate with: openssl rand -hex 32');
 }
 if (process.env.NODE_ENV === 'production' && process.env.PAYMENTS_PROVIDER === 'mock') {
   throw new Error('PAYMENTS_PROVIDER=mock is forbidden in production');
 }
 if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
-  console.warn('[config] WARNING: DATABASE_URL not set in production — falling back to SQLite (ephemeral). Set DATABASE_URL for durable storage.');
+  console.warn('[config] WARNING: DATABASE_URL not set in production — falling back to SQLite (ephemeral). Set USE_POSTGRES=true + DATABASE_URL for durable storage. See docs/DEVELOPER_GUIDE.md');
+}
+if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL && process.env.USE_POSTGRES !== 'true') {
+  console.warn('[config] WARNING: DATABASE_URL set but USE_POSTGRES!=true — SQLite still active. Set USE_POSTGRES=true to use Postgres.');
 }
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync('no-such-user-timing-guard', 10);
 const DIST_DIR = path.join(__dirname, '..', '..', 'web', 'dist');

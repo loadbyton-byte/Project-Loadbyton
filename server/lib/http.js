@@ -36,22 +36,19 @@ function securityHeaders(req, res, next) {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-XSS-Protection', '0');
-  // req.secure reflects the real client-facing protocol, not the internal
-  // hop to this process, because app.set('trust proxy', ...) makes Express
-  // read it off X-Forwarded-Proto. Gated so a plain-HTTP local dev server
-  // never emits it — browsers ignore HSTS over HTTP anyway, but there's no
-  // reason to send a header that doesn't apply.
   if (req.secure) {
     res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
   }
   res.setHeader(
     'Content-Security-Policy',
-    // Added Mapbox + telematics carve-outs (Phase 3/5) alongside OSM/Nominatim
     "default-src 'self'; img-src 'self' data: https://*.tile.openstreetmap.org https://api.mapbox.com https://*.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self' https://api.mapbox.com https://js.stripe.com; connect-src 'self' https://nominatim.openstreetmap.org https://api.mapbox.com https://api.stripe.com https://*.sentry.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
-  // Loadbyton never asks for any of these browser capabilities — deny them
-  // outright rather than leaving the default (permissive) policy in place.
   res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()');
+  // Cache control: API responses must not be cached by intermediaries
+  if (req.path && req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+  }
   next();
 }
 

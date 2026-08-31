@@ -3,6 +3,9 @@ WORKDIR /app
 COPY server/package*.json ./server/
 RUN cd server && npm ci --omit=dev
 COPY server ./server
+COPY web/dist ./web/dist
+ENV NODE_ENV=production
 ENV SERVICE=escrow PORT=4003
 EXPOSE 4003
-CMD ["node","server/services/escrow.service.js"]
+# NOTE: Microservice split is roadmap. Currently boots monolith (same as Dockerfile).
+CMD ["node","server/index.js"]

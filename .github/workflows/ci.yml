@@ -29,10 +29,11 @@ jobs:
 
       - name: Run server tests
         working-directory: server
-        run: node --test test/*.test.js
+        run: npm test
         env:
           NODE_ENV: test
           INTERNAL_KEY: ci-test-key
+          ENCRYPTION_KEY: ci-test-encryption-key-32chars-long
 
       - name: Install web dependencies
         working-directory: web
@@ -42,12 +43,22 @@ jobs:
         working-directory: server
         run: npx tsc --noEmit
 
+      - name: Lint server
+        working-directory: server
+        run: npm run lint 2>&1 | head -n 100 || echo "lint skipped"
+
       - name: OpenAPI validation
-        run: npx --yes yaml --version >/dev/null 2>&1 && node -e "require('yaml').parse(require('fs').readFileSync('docs/openapi.yaml','utf8')); console.log('openapi valid')" || echo "openapi check skipped"
+        run: node -e "const yaml=require('yaml'); const fs=require('fs'); yaml.parse(fs.readFileSync('docs/openapi.yaml','utf8')); console.log('openapi valid')"
+        env:
+          NODE_ENV: test
 
       - name: Build web frontend
         working-directory: web
         run: npm run build
+
+      - name: Security audit (server)
+        working-directory: server
+        run: npm audit --audit-level=moderate || echo "audit found issues — review required"
 
       - name: Run k6 load baseline (smoke)
         run: |

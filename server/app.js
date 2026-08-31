@@ -10,17 +10,16 @@ sentry.init();
 const app = express();
 app.set('trust proxy', 1);
 
-function isAllowedOrigin(origin) {
-  return Boolean(origin) && (origin === FRONTEND_URL || ADDITIONAL_ORIGINS.includes(origin));
-}
-
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-request-id,x-internal-key,x-setup-key');
   const origin = req.headers.origin;
-  if (isAllowedOrigin(origin)) {
+  // Use centralized origin check from config to avoid duplication drift
+  const { isAllowedOrigin: isAllowed } = require('./lib/config');
+  if (isAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -64,12 +63,27 @@ const routes = [
   './routes/telematics.routes',
 ];
 for (const r of routes) {
-  try { app.use(require(r)); } catch {}
+  try {
+    app.use(require(r));
+  } catch (err) {
+    console.error(`[app] Failed to load route ${r}:`, err.message);
+    if (process.env.NODE_ENV !== 'production') throw err;
+  }
 }
 
 const fs = require('node:fs');
 if (fs.existsSync(DIST_DIR)) {
-  app.use(express.static(DIST_DIR, { index: false }));
+  app.use(express.static(DIST_DIR, {
+    index: false,
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      // HTML must never be cached immutably — only hashed assets
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      }
+    },
+  }));
   app.get('/{*splat}', (req, res, next) => {
     if (req.path.startsWith('/api/')) return next();
     const prerenderFile = req.path === '/' ? 'root.html' : `${req.path.slice(1)}.html`;
@@ -90,7 +104,19 @@ app.use((err, req, res, _next) => {
     try { sentry.captureException(err, { requestId: req.requestId, userId: req.user?.id }); } catch {}
   }
   console.error(`[${req.requestId || 'unknown'}]`, err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  const status = err.status || 500;
+  // Enterprise envelope: always return structured error, hide 500 details in production
+  const message = status >= 500 && process.env.NODE_ENV === 'production'
+    ? 'Internal server error'
+    : (err.message || 'Internal server error');
+  res.status(status).json({
+    success: false,
+    error: { code: err.code || 'INTERNAL', message },
+    _legacy: { error: message },
+    message,
+    code: err.code || 'INTERNAL',
+    requestId: req.requestId || null,
+  });
 });
 
 module.exports = app;

@@ -148,33 +148,15 @@ if (usePostgres) {
 
   let migrationPromise = runMigrationWithRetry(5);
 
-  // Wrap query/exec to wait for migration if needed
-  const originalQuery = db.query;
-  const originalExec = db.exec;
-  db.query = async function(...args) {
-    // Wait for migration if tables don't exist yet
-    let attempts = 0;
-    while (true) {
-      try {
-        const check = await pool.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' AND table_name = 'users'
-          )
-        `);
-        if (check.rows[0].exists) break;
-      } catch (e) {
-        // Table might not exist yet, wait and retry
-      }
-      await new Promise(r => setTimeout(r, 100));
-      if (attempts++ > 100) break; // Max 10 seconds
-    }
-    return pool.query.apply(pool, arguments);
+  // Ensure migration completes before first real query — await the promise instead of polling
+  const originalPoolQuery = pool.query.bind(pool);
+  db.query = async function(text, params) {
+    await migrationPromise.catch(() => {}); // migration errors surface via pool.on('error')
+    return originalPoolQuery(text, params);
   };
-  db.exec = async function(...args) {
-    // Ensure migration is done
-    await db.query('SELECT 1');
-    return pool.query.apply(pool, arguments);
+  db.exec = async function(sql) {
+    await migrationPromise.catch(() => {});
+    return originalPoolQuery(sql);
   };
 } else {
   // -----------------------------------------------------------------------

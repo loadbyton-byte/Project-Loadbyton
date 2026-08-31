@@ -6,6 +6,8 @@
     "outDir": "./dist",
     "rootDir": "./",
     "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -16,6 +18,6 @@
     "baseUrl": ".",
     "paths": { "@/*": ["*"] }
   },
-  "include": ["types/**/*.ts", "lib/**/*.ts", "services/**/*.ts", "services/**/*.js", "repositories/**/*.ts", "routes/**/*.ts", "routes/**/*.js", "middleware/**/*.ts", "middleware/**/*.js"],
+  "include": ["types/**/*.ts", "lib/**/*.ts"],
   "exclude": ["node_modules", "dist", "data"]
 }

@@ -3,6 +3,9 @@ WORKDIR /app
 COPY server/package*.json ./server/
 RUN cd server && npm ci --omit=dev
 COPY server ./server
+COPY web/dist ./web/dist
+ENV NODE_ENV=production
 ENV SERVICE=marketplace PORT=4002
 EXPOSE 4002
-CMD ["node","server/services/marketplace.service.js"]
+# NOTE: Microservice split is roadmap. Currently boots monolith (same as Dockerfile).
+CMD ["node","server/index.js"]
