@@ -80,15 +80,16 @@
         "areaServed": "AE"
       }
     </script>
-    <!-- Google Analytics (GA4) — no-ops entirely until VITE_GA_MEASUREMENT_ID
-         is set as a build-time env var (see .env.example / Vercel project
-         settings); an unset/placeholder value never matches the "G-" guard,
-         so gtag.js is simply never requested in dev or an unconfigured
-         deploy. -->
+    <!-- Google Analytics (GA4) — defaults to the live Loadbyton property so
+         it works with no deploy-platform config; VITE_GA_MEASUREMENT_ID
+         (Vercel project env var) overrides it, e.g. for a separate staging
+         property. Any local/dev build with neither set falls through to the
+         same real ID, matching production — set VITE_GA_MEASUREMENT_ID to a
+         throwaway value locally if you don't want dev traffic in GA4. -->
     <script>
       (function () {
-        var GA_ID = '%VITE_GA_MEASUREMENT_ID%';
-        if (!GA_ID || GA_ID.indexOf('G-') !== 0) return;
+        var envId = '%VITE_GA_MEASUREMENT_ID%';
+        var GA_ID = (envId && envId.indexOf('G-') === 0) ? envId : 'G-2TP4Z3QKH2';
         var s = document.createElement('script');
         s.async = true;
         s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
