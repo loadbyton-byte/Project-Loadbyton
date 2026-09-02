@@ -6,7 +6,12 @@ const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
-const UPLOADS_DIR = path.join(path.dirname(process.env.DB_PATH || path.join(__dirname, 'data', 'loadbyton.db')), 'uploads');
+// Default DB_PATH here must match server/db.js's own default
+// (path.join(__dirname, 'data', ...) from server/, i.e. server/data/) —
+// this file lives in server/lib/, so it needs an extra '..' to land on the
+// same directory rather than a sibling server/lib/data/ that .gitignore's
+// server/data/uploads/ rule doesn't cover.
+const UPLOADS_DIR = path.join(path.dirname(process.env.DB_PATH || path.join(__dirname, '..', 'data', 'loadbyton.db')), 'uploads');
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 let s3Client = null;
@@ -15,8 +20,15 @@ if (process.env.S3_BUCKET) {
   s3Bucket = process.env.S3_BUCKET;
   try {
     const { S3Client } = require('@aws-sdk/client-s3');
-    const region = process.env.AWS_REGION || 'me-central-1';
+    // Cloudflare R2 (and most S3-compatible providers) require region
+    // 'auto' and their own endpoint + path-style addressing — real AWS S3
+    // needs neither. S3_ENDPOINT being set is what distinguishes the two.
+    const region = process.env.AWS_REGION || (process.env.S3_ENDPOINT ? 'auto' : 'me-central-1');
     const cfg = { region };
+    if (process.env.S3_ENDPOINT) {
+      cfg.endpoint = process.env.S3_ENDPOINT;
+      cfg.forcePathStyle = true;
+    }
     // Explicit credentials only if provided; otherwise SDK falls back to
     // instance/profile credentials (EC2/ECS IRSA) as per AWS default chain.
     if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
@@ -27,7 +39,7 @@ if (process.env.S3_BUCKET) {
       if (process.env.AWS_SESSION_TOKEN) cfg.credentials.sessionToken = process.env.AWS_SESSION_TOKEN;
     }
     s3Client = new S3Client(cfg);
-    console.log(`[storage] S3 enabled: s3://${s3Bucket} (${region})`);
+    console.log(`[storage] S3 enabled: s3://${s3Bucket} (${region}${process.env.S3_ENDPOINT ? `, endpoint ${process.env.S3_ENDPOINT}` : ''})`);
   } catch (e) {
     console.warn('[storage] @aws-sdk/client-s3 not available, falling back to local disk:', e.message);
     s3Client = null;
@@ -42,6 +54,26 @@ function isS3Enabled() {
 
 const ALLOWED_UPLOAD_MIME_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+// Raw put, no mime/size validation — for server-internal writes (DB
+// backups) rather than user-facing uploads. saveUploadedFile below layers
+// its own validation on top of this for the user-upload path.
+async function putObject(key, buffer, contentType) {
+  if (isS3Enabled()) {
+    const { PutObjectCommand } = require('@aws-sdk/client-s3');
+    await s3Client.send(new PutObjectCommand({
+      Bucket: s3Bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType || 'application/octet-stream',
+    }));
+    return { storagePath: key, s3: true };
+  }
+  const filePath = path.join(UPLOADS_DIR, key);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, buffer);
+  return { storagePath: key, s3: false };
+}
 
 async function saveUploadedFile(jobId, mimeType, base64) {
   const ext = ALLOWED_UPLOAD_MIME_TYPES[mimeType];
@@ -58,22 +90,8 @@ async function saveUploadedFile(jobId, mimeType, base64) {
   }
   const filename = `${crypto.randomUUID()}.${ext}`;
   const key = `${jobId}/${filename}`;
-
-  if (isS3Enabled()) {
-    const { PutObjectCommand } = require('@aws-sdk/client-s3');
-    await s3Client.send(new PutObjectCommand({
-      Bucket: s3Bucket,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-    }));
-    return { storagePath: key, mimeType, s3: true };
-  }
-
-  const jobDir = path.join(UPLOADS_DIR, String(jobId));
-  fs.mkdirSync(jobDir, { recursive: true });
-  fs.writeFileSync(path.join(jobDir, filename), buffer);
-  return { storagePath: key, mimeType, s3: false };
+  const { s3 } = await putObject(key, buffer, mimeType);
+  return { storagePath: key, mimeType, s3 };
 }
 
 // Retrieve a stored object. For S3 this streams the GetObject result;
@@ -108,6 +126,7 @@ module.exports = {
   ALLOWED_UPLOAD_MIME_TYPES,
   MAX_UPLOAD_BYTES,
   isS3Enabled,
+  putObject,
   saveUploadedFile,
   getFile,
   fileExists,
