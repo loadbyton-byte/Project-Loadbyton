@@ -1,6 +1,6 @@
 const db = require('../db');
 const { randomToken, jobCode } = require('../lib/http');
-const { EQUIPMENT_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT } = require('../lib/constants');
+const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT } = require('../lib/constants');
 const { isValidUaeLatLng } = require('../lib/helpers');
 
 async function createJobFromBody(body, req) {
@@ -11,7 +11,7 @@ async function createJobFromBody(body, req) {
     truckCount, cargoWeightTons,
     pickupLat, pickupLng, pickupAddressDetail,
     deliveryLat, deliveryLng, deliveryAddressDetail,
-    equipmentType, loadingLocation, deliveryLocation,
+    equipmentType, cargoType, loadingLocation, deliveryLocation,
     importPickupTerminal, importUnloadingLocation, importEmptyReturnLocation,
     exportEmptyPickupLocation, exportLoadingLocation, exportDepositTerminal,
     scheduledPostAt,
@@ -26,6 +26,7 @@ async function createJobFromBody(body, req) {
   if (!effectiveDeliveryArea && !deliveryAddress) throw { status: 400, message: 'deliveryArea or deliveryAddress is required' };
 
   const eqType = EQUIPMENT_TYPES.includes(equipmentType) ? equipmentType : 'CONTAINER_CHASSIS';
+  const cgType = CARGO_TYPES.includes(cargoType) ? cargoType : 'GENERAL_GOODS';
 
   if (!SHIPMENT_TYPES.includes(shipType)) throw { status: 400, message: `shipmentType must be one of: ${SHIPMENT_TYPES.join(', ')}` };
 
@@ -42,20 +43,21 @@ async function createJobFromBody(body, req) {
   const code = jobCode();
   const initialStatus = scheduledPostAt && new Date(scheduledPostAt) > new Date() ? 'DRAFT' : 'OPEN';
   const result = await db.prepare(
-    `INSERT INTO jobs (job_code, shipper_id, status, shipment_type, equipment_type, container_size, container_type, container_count,
+    `INSERT INTO jobs (job_code, shipper_id, status, shipment_type, equipment_type, cargo_type, container_size, container_type, container_count,
        pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, notes,
        truck_count, cargo_weight_tons, pickup_lat, pickup_lng, pickup_address_detail,
        delivery_lat, delivery_lng, delivery_address_detail, loading_location, delivery_location,
        import_pickup_terminal, import_unloading_location, import_empty_return_location,
        export_empty_pickup_location, export_loading_location, export_deposit_terminal,
        scheduled_post_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(
     code,
     req.user.id,
     initialStatus,
     shipType,
     eqType,
+    cgType,
     effectiveContainerSize,
     effectiveContainerType,
     Math.max(1, Number(containerCount) || 1),

@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="Loadbyton mark">
-  <!-- Loadbyton Brand Kit icon mark: navy rounded tile, "LB" monogram in
+  <!-- Loadbyton Brand Kit icon mark: navy circle, "LT" monogram in
        Loadbyton Red. Fixed navy/red on every surface, like the wordmark's
        divider bars — not a recolorable currentColor glyph. -->
-  <rect width="80" height="80" rx="16" fill="#0F2B3D" />
-  <text x="40" y="52" font-family="sans-serif" font-weight="900" font-size="40" text-anchor="middle" fill="#E53935">LB</text>
+  <circle cx="40" cy="40" r="40" fill="#0F2B3D" />
+  <text x="40" y="52" font-family="sans-serif" font-weight="900" font-size="34" text-anchor="middle" fill="#E53935">LT</text>
 </svg>

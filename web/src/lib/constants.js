@@ -64,6 +64,30 @@ export function equipmentLabel(value) {
   return EQUIPMENT_TYPE_LABELS[value] || formatLabel(value);
 }
 
+// What's inside the load, independent of the equipment moving it — shown
+// next to equipment type on the job-post form and on job listings/details
+// so a carrier can see e.g. hazmat or cold-chain cargo before bidding.
+export const CARGO_TYPES = [
+  'GENERAL_GOODS', 'ELECTRONICS', 'FOODSTUFF_PERISHABLES', 'MACHINERY_EQUIPMENT',
+  'CHEMICALS_HAZMAT', 'TEXTILES_GARMENTS', 'AUTOMOTIVE_PARTS', 'CONSTRUCTION_MATERIALS',
+  'FURNITURE_FIXTURES', 'OTHER',
+];
+export const CARGO_TYPE_LABELS = {
+  GENERAL_GOODS: 'General goods',
+  ELECTRONICS: 'Electronics',
+  FOODSTUFF_PERISHABLES: 'Foodstuff / perishables',
+  MACHINERY_EQUIPMENT: 'Machinery & equipment',
+  CHEMICALS_HAZMAT: 'Chemicals / hazmat',
+  TEXTILES_GARMENTS: 'Textiles & garments',
+  AUTOMOTIVE_PARTS: 'Automotive parts',
+  CONSTRUCTION_MATERIALS: 'Construction materials',
+  FURNITURE_FIXTURES: 'Furniture & fixtures',
+  OTHER: 'Other',
+};
+export function cargoTypeLabel(value) {
+  return CARGO_TYPE_LABELS[value] || formatLabel(value);
+}
+
 export function formatLabel(value) {
   return value ? value.replaceAll('_', ' ') : '';
 }

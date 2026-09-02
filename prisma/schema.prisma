@@ -104,6 +104,7 @@ model Job {
   containerCount              Int     @default(1) @map("container_count")
   truckCount                  Int     @default(1) @map("truck_count")
   equipmentType               String  @default("CONTAINER_CHASSIS") @map("equipment_type")
+  cargoType                   String  @default("GENERAL_GOODS") @map("cargo_type")
   cargoWeightTons             Float?  @map("cargo_weight_tons")
   assignedDriverName          String? @map("assigned_driver_name")
   assignedDriverPhone         String? @map("assigned_driver_phone")

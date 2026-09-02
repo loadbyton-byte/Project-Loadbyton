@@ -68,14 +68,6 @@ export default function Login() {
         <p className="mt-5 text-center text-sm text-ink-muted">
           New to Loadbyton? <Link to="/register" className="font-medium text-brand-secondary hover:underline">Create an account</Link>
         </p>
-
-        <div className="mt-6 rounded-md border px-4 py-3 text-xs text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
-          <p className="mb-1 font-medium text-ink-secondary">Demo accounts (password: demo1234)</p>
-          {/* Admin is deliberately not seeded/advertised here — it can decrypt
-              carrier IBAN/TRN, impersonate users, and release escrow, so it's
-              never one of the publicly-invited demo logins (see server/seed.js). */}
-          <p>shipper@jebelalilogistics.ae · carrier@dubaidrayage.com</p>
-        </div>
       </Card>
     </div>
   );

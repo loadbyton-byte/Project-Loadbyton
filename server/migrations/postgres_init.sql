@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   container_count INTEGER NOT NULL DEFAULT 1,
   truck_count INTEGER NOT NULL DEFAULT 1,
   equipment_type TEXT NOT NULL DEFAULT 'CONTAINER_CHASSIS',
+  cargo_type TEXT NOT NULL DEFAULT 'GENERAL_GOODS',
   cargo_weight_tons REAL,
   assigned_driver_name TEXT,
   assigned_driver_phone TEXT,

@@ -4,8 +4,8 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import {
-  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, STATUS_FLOW, shipmentTypeLabel,
-  equipmentLabel, formatAED, formatDate, formatLabel, depotLabel,
+  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
+  equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel, depotLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet, IconClose } from '../components/icons.jsx';
@@ -24,7 +24,7 @@ const SORT_OPTIONS = [
 const emptyJob = {
   shipmentType: 'IMPORT',
   loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
-  equipmentType: 'CONTAINER_CHASSIS',
+  equipmentType: 'CONTAINER_CHASSIS', cargoType: 'GENERAL_GOODS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
   deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
   containerCount: 1, truckCount: 1,
@@ -202,6 +202,13 @@ export default function Dashboard() {
                     ? 'Container-carrying equipment — set the container size and type below.'
                     : 'General freight — describe the cargo in the notes field below instead of a container size.'}
                 </p>
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Cargo type</Label>
+                <Select value={form.cargoType} onChange={(e) => setForm({ ...form, cargoType: e.target.value })}>
+                  {CARGO_TYPES.map((t) => <option key={t} value={t}>{cargoTypeLabel(t)}</option>)}
+                </Select>
+                <p className="mt-1 text-xs text-ink-muted">What's inside the load — helps carriers judge handling requirements before bidding.</p>
               </div>
               {CONTAINER_EQUIPMENT.includes(form.equipmentType) ? (
                 <>

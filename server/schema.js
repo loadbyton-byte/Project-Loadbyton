@@ -257,6 +257,7 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'container_count', 'container_count INTEGER NOT NULL DEFAULT 1');
   addColumn('jobs', 'truck_count', 'truck_count INTEGER NOT NULL DEFAULT 1');
   addColumn('jobs', 'equipment_type', "equipment_type TEXT NOT NULL DEFAULT 'CONTAINER_CHASSIS'");
+  addColumn('jobs', 'cargo_type', "cargo_type TEXT NOT NULL DEFAULT 'GENERAL_GOODS'");
   addColumn('jobs', 'cargo_weight_tons', 'cargo_weight_tons REAL');
 
   addColumn('sessions', 'impersonating_admin_id', 'impersonating_admin_id INTEGER');

@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { EmptyState, StatusBadge, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
 import { IconPackage, IconSearch } from '../components/icons.jsx';
-import { formatLabel, CONTAINER_EQUIPMENT, STATUS_FLOW, equipmentLabel } from '../lib/constants.js';
+import { formatLabel, CONTAINER_EQUIPMENT, STATUS_FLOW, equipmentLabel, cargoTypeLabel } from '../lib/constants.js';
 
 const ACTIVE_STATUSES = ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'];
 const PAGE_SIZE = 20;
@@ -76,7 +76,10 @@ export default function WonJobs() {
                   topRight={<StatusBadge status={j.status} />}
                   origin={formatLabel(j.pickup_terminal)}
                   destination={formatLabel(j.delivery_area)}
-                  chips={[CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type)]}
+                  chips={[
+                    CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
+                    ...(j.cargo_type ? [cargoTypeLabel(j.cargo_type)] : []),
+                  ]}
                   meta={
                     <div className="flex items-center justify-between gap-3">
                       <ProgressDots status={j.status} />

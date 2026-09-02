@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { formatAED, formatDate, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, SHIPMENT_TYPES, depotLabel } from '../lib/constants.js';
+import { formatAED, formatDate, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel } from '../lib/constants.js';
 import { EmptyState, Badge, Select, Input, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconAlert, IconPackage, IconSearch } from '../components/icons.jsx';
 
@@ -115,6 +115,7 @@ export default function OpenLoads() {
                   chips={[
                     j.shipment_type || 'IMPORT',
                     CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
+                    ...(j.cargo_type ? [cargoTypeLabel(j.cargo_type)] : []),
                     ...(j.cargo_weight_tons != null ? [`${j.cargo_weight_tons} t`] : []),
                     ...(j.container_count > 1 ? [`×${j.container_count} containers`] : []),
                     ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
