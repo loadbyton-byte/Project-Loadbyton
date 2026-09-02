@@ -23,6 +23,15 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Loadbyton — UAE Road Freight & Container Drayage Marketplace" />
     <meta name="twitter:description" content="Post a freight job, get verified-carrier bids from across the UAE, and move it under escrow — with live tracking and payout on delivery." />
+    <!-- Default/root canonical — overwritten per-route by
+         scripts/vercel-static-seo.mjs and server/app.js's catch-all so every
+         indexed page points at its own URL, never the SPA shell's. -->
+    <link rel="canonical" href="https://loadbyton.com/" />
+    <!-- Search Console domain verification — content is set once the
+         property exists (see docs/DEVELOPER_GUIDE.md "Search Console"
+         section); harmless placeholder until then, verification just won't
+         pass. -->
+    <meta name="google-site-verification" content="%VITE_GSC_VERIFICATION%" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
@@ -57,6 +66,40 @@
     <noscript>
       <style>.reveal { opacity: 1 !important; transform: none !important; }</style>
     </noscript>
+    <!-- Organization structured data — static, applies to every route since
+         only <title>/meta/canonical are swapped per-page by
+         scripts/vercel-static-seo.mjs / server/app.js. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Loadbyton",
+        "url": "https://loadbyton.com/",
+        "logo": "https://loadbyton.com/brand/logo-mark.svg",
+        "description": "UAE road freight & container drayage marketplace connecting shippers with verified carriers across Dubai, Abu Dhabi, Sharjah and Fujairah.",
+        "areaServed": "AE"
+      }
+    </script>
+    <!-- Google Analytics (GA4) — no-ops entirely until VITE_GA_MEASUREMENT_ID
+         is set as a build-time env var (see .env.example / Vercel project
+         settings); an unset/placeholder value never matches the "G-" guard,
+         so gtag.js is simply never requested in dev or an unconfigured
+         deploy. -->
+    <script>
+      (function () {
+        var GA_ID = '%VITE_GA_MEASUREMENT_ID%';
+        if (!GA_ID || GA_ID.indexOf('G-') !== 0) return;
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { window.dataLayer.push(arguments); }
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', GA_ID);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

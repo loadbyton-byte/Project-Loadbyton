@@ -40,28 +40,27 @@ const PUBLIC_APP_PATHS_DISALLOWED = [
   '/templates', '/contracts', '/notifications', '/admin', '/verify-email', '/reset-password', '/forgot-password',
 ];
 
-// Set this to the real production domain once it's known (Vercel exposes
-// it as VERCEL_PROJECT_PRODUCTION_URL at build time on the platform, no
-// manual config needed for the common case).
-const SITE_ORIGIN =
-  process.env.SITE_ORIGIN ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`) ||
-  (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`) ||
-  'https://example.com';
+// Always canonicalize to the real production domain, even on a preview
+// deployment — a leaked/crawled preview URL should still point search
+// engines at the one production URL, not a throwaway *.vercel.app one.
+// SITE_ORIGIN remains overridable (e.g. a staging domain) via env.
+const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://loadbyton.com';
 
 function loadPrerendered(slug) {
   const file = path.join(prerenderDir, `${slug}.html`);
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
 }
 
-function renderSeoHtml(baseHtml, meta) {
+function renderSeoHtml(baseHtml, meta, route) {
   let html = baseHtml.replace(/<title>.*?<\/title>/, `<title>${meta.title}</title>`);
+  const canonicalUrl = `${SITE_ORIGIN}${route === '/' ? '/' : route}`;
   const replacements = [
     [/(<meta name="description" content=")[^"]*(")/, `$1${meta.description}$2`],
     [/(<meta property="og:title" content=")[^"]*(")/, `$1${meta.title}$2`],
     [/(<meta property="og:description" content=")[^"]*(")/, `$1${meta.description}$2`],
     [/(<meta name="twitter:title" content=")[^"]*(")/, `$1${meta.title}$2`],
     [/(<meta name="twitter:description" content=")[^"]*(")/, `$1${meta.description}$2`],
+    [/(<link rel="canonical" href=")[^"]*(")/, `$1${canonicalUrl}$2`],
   ];
   for (const [pattern, replacement] of replacements) html = html.replace(pattern, replacement);
   const prerendered = meta.slug ? loadPrerendered(meta.slug) : null;
@@ -77,7 +76,7 @@ function main() {
   const baseHtml = fs.readFileSync(indexPath, 'utf8');
 
   for (const [route, meta] of Object.entries(SEO_META)) {
-    const html = renderSeoHtml(baseHtml, meta);
+    const html = renderSeoHtml(baseHtml, meta, route);
     if (route === '/') {
       // Overwrite the root index.html in place — Vercel serves this for "/"
       // by default, so the root route needs no extra rewrite.

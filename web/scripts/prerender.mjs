@@ -8,11 +8,13 @@
 // config, so this file opts into ESM on its own instead.
 //
 // Output: one static HTML fragment per public route, written to
-// dist/__prerendered__/<slug>.html. server/index.js's renderSeoPage reads
-// these and splices them into <div id="root"> for a session-less request.
-// If this script never ran (or a route's fragment is missing), that splice
-// is a no-op and the site serves exactly what it did before this existed —
-// no crawlability upgrade, but nothing breaks either.
+// dist/__prerendered__/<slug>.html. Two consumers splice these into
+// <div id="root">: web/scripts/vercel-static-seo.mjs at build time (the
+// live Vercel deploy path) and server/app.js's catch-all route at request
+// time (the Express-serves-the-SPA deploy path — docker-compose/Oracle
+// Cloud). If this script never ran (or a route's fragment is missing), that
+// splice is a no-op and the site serves exactly what it did before this
+// existed — no crawlability upgrade, but nothing breaks either.
 
 import { createServer } from 'vite';
 import fs from 'node:fs';
