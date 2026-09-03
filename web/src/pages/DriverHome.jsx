@@ -4,8 +4,9 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
 import { Card, StatusBadge, EmptyState, Button } from '../components/ui.jsx';
-import { IconTruck } from '../components/icons.jsx';
+import { IconTruck, IconMapPin } from '../components/icons.jsx';
 import ChatPopup from '../features/job/ChatPopup.jsx';
+import { directionsUrl } from '../lib/googleMaps.js';
 
 // The entire driver-seat experience — see server/middleware/auth.js's
 // DRIVER_SEAT_ALLOWED_ROUTES for the matching backend boundary. Deliberately
@@ -45,18 +46,29 @@ export default function DriverHome() {
               </div>
 
               <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Pickup</p>
-                  <p className="mt-1 text-sm font-medium text-ink">{job.pickup_terminal?.replace(/_/g, ' ')}</p>
+                <a
+                  href={directionsUrl({ destLat: job.pickup_lat, destLng: job.pickup_lng, destAddress: job.pickup_terminal?.replace(/_/g, ' ') })}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-lg p-3 -m-3 transition hover:bg-surface-container"
+                >
+                  <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted"><IconMapPin size={12} /> Pickup</p>
+                  <p className="mt-1 text-sm font-medium text-brand-secondary underline-offset-2 hover:underline">{job.pickup_terminal?.replace(/_/g, ' ')}</p>
                   <p className="mt-0.5 font-mono text-xs text-ink-muted">Ready {formatDateTime(job.ready_at)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Delivery</p>
-                  <p className="mt-1 text-sm font-medium text-ink">{job.delivery_area?.replace(/_/g, ' ')}</p>
+                </a>
+                <a
+                  href={directionsUrl({ originLat: job.pickup_lat, originLng: job.pickup_lng, destLat: job.delivery_lat, destLng: job.delivery_lng, destAddress: job.delivery_address || job.delivery_area?.replace(/_/g, ' ') })}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-lg p-3 -m-3 transition hover:bg-surface-container"
+                >
+                  <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted"><IconMapPin size={12} /> Delivery</p>
+                  <p className="mt-1 text-sm font-medium text-brand-secondary underline-offset-2 hover:underline">{job.delivery_area?.replace(/_/g, ' ')}</p>
                   <p className="mt-0.5 text-sm text-ink-secondary">{job.delivery_address}</p>
                   <p className="mt-0.5 font-mono text-xs text-ink-muted">Due {formatDateTime(job.deadline)}</p>
-                </div>
+                </a>
               </div>
+              <p className="mt-3 text-xs text-ink-muted">Tap pickup or delivery to open directions in Google Maps.</p>
             </Card.Content>
           </Card>
         )}

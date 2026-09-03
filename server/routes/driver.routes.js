@@ -15,7 +15,8 @@ router.get('/api/driver/job', auth(['CARRIER']), async (req, res) => {
 
   const job = await db
     .prepare(
-      `SELECT id, job_code, status, pickup_terminal, delivery_area, delivery_address, ready_at, deadline, cargo_type, equipment_type, updated_at
+      `SELECT id, job_code, status, pickup_terminal, delivery_area, delivery_address, ready_at, deadline, cargo_type, equipment_type,
+              pickup_lat, pickup_lng, delivery_lat, delivery_lng, updated_at
        FROM jobs WHERE assigned_driver_id=? ORDER BY updated_at DESC LIMIT 1`
     )
     .get(driver.id);

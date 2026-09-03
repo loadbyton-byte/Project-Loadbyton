@@ -26,10 +26,16 @@ export function loadGoogleMapsScript() {
 }
 
 // Free Google Maps deep-link — opens the viewer's own Maps app with live
-// traffic, no API call and no key required.
-export function directionsUrl({ originLat, originLng, destLat, destLng }) {
+// traffic, no API call and no key required. destLat/destLng win when
+// present (precise, e.g. from Places Autocomplete); destAddress is the
+// fallback for jobs with no coordinates yet — a fixed terminal/depot name,
+// or any job posted before Stage G's address search — since Maps' deep
+// link accepts a plain place/address string as the destination just as
+// well as "lat,lng".
+export function directionsUrl({ originLat, originLng, destLat, destLng, destAddress }) {
   const params = new URLSearchParams({ api: '1' });
   if (originLat != null && originLng != null) params.set('origin', `${originLat},${originLng}`);
-  params.set('destination', `${destLat},${destLng}`);
+  if (destLat != null && destLng != null) params.set('destination', `${destLat},${destLng}`);
+  else if (destAddress) params.set('destination', destAddress);
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }

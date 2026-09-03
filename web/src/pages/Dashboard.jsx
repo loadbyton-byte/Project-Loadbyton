@@ -12,6 +12,7 @@ import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck,
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
+import SearchableSelect from '../components/SearchableSelect.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -298,23 +299,35 @@ export default function Dashboard() {
                 <>
                   <div>
                     <Label>Container pickup at terminal <span className="text-status-danger">*</span></Label>
-                    <Select value={form.importPickupTerminal} onChange={(e) => setForm({ ...form, importPickupTerminal: e.target.value, pickupTerminal: e.target.value })}>
-                      {TERMINALS.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
-                    </Select>
+                    <SearchableSelect
+                      options={TERMINALS}
+                      value={form.importPickupTerminal}
+                      labelFn={formatLabel}
+                      placeholder="Search terminals…"
+                      onChange={(v) => setForm({ ...form, importPickupTerminal: v, pickupTerminal: v })}
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — where the laden container is picked up.</p>
                   </div>
                   <div>
                     <Label>Unloading location (delivery) <span className="text-status-danger">*</span></Label>
-                    <Select value={form.importUnloadingLocation} onChange={(e) => setForm({ ...form, importUnloadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value })}>
-                      {AREAS.map((a) => <option key={a} value={a}>{formatLabel(a)}</option>)}
-                    </Select>
+                    <PlaceAutocomplete
+                      required
+                      value={form.importUnloadingLocation}
+                      onChange={(e) => setForm({ ...form, importUnloadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, importUnloadingLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
+                      placeholder="Search delivery address…"
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — where cargo is unloaded.</p>
                   </div>
                   <div className="sm:col-span-2">
                     <Label>Empty container return location <span className="text-status-danger">*</span></Label>
-                    <Select value={form.importEmptyReturnLocation} onChange={(e) => setForm({ ...form, importEmptyReturnLocation: e.target.value })}>
-                      {DEPOTS.map((d) => <option key={d} value={d}>{depotLabel(d)}</option>)}
-                    </Select>
+                    <SearchableSelect
+                      options={DEPOTS}
+                      value={form.importEmptyReturnLocation}
+                      labelFn={depotLabel}
+                      placeholder="Search depots…"
+                      onChange={(v) => setForm({ ...form, importEmptyReturnLocation: v })}
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — depot where empty is returned (detention clock stops here).</p>
                   </div>
                 </>
@@ -322,23 +335,35 @@ export default function Dashboard() {
                 <>
                   <div>
                     <Label>Empty pickup location <span className="text-status-danger">*</span></Label>
-                    <Select value={form.exportEmptyPickupLocation} onChange={(e) => setForm({ ...form, exportEmptyPickupLocation: e.target.value })}>
-                      {DEPOTS.map((d) => <option key={d} value={d}>{depotLabel(d)}</option>)}
-                    </Select>
+                    <SearchableSelect
+                      options={DEPOTS}
+                      value={form.exportEmptyPickupLocation}
+                      labelFn={depotLabel}
+                      placeholder="Search depots…"
+                      onChange={(v) => setForm({ ...form, exportEmptyPickupLocation: v })}
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — depot where empty container is picked up.</p>
                   </div>
                   <div>
                     <Label>Loading location <span className="text-status-danger">*</span></Label>
-                    <Select value={form.exportLoadingLocation} onChange={(e) => setForm({ ...form, exportLoadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value })}>
-                      {AREAS.map((a) => <option key={a} value={a}>{formatLabel(a)}</option>)}
-                    </Select>
+                    <PlaceAutocomplete
+                      required
+                      value={form.exportLoadingLocation}
+                      onChange={(e) => setForm({ ...form, exportLoadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, exportLoadingLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
+                      placeholder="Search shipper site address…"
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — shipper site where container is stuffed.</p>
                   </div>
                   <div className="sm:col-span-2">
                     <Label>Deposit location (port/terminal) <span className="text-status-danger">*</span></Label>
-                    <Select value={form.exportDepositTerminal} onChange={(e) => setForm({ ...form, exportDepositTerminal: e.target.value, pickupTerminal: e.target.value })}>
-                      {TERMINALS.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
-                    </Select>
+                    <SearchableSelect
+                      options={TERMINALS}
+                      value={form.exportDepositTerminal}
+                      labelFn={formatLabel}
+                      placeholder="Search terminals…"
+                      onChange={(v) => setForm({ ...form, exportDepositTerminal: v, pickupTerminal: v })}
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — terminal where laden container is deposited.</p>
                   </div>
                 </>
