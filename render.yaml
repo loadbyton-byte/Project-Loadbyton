@@ -44,6 +44,33 @@ services:
         value: '1'
       - key: DB_PATH
         value: /data/loadbyton.db
+      # Phase 1 durable-storage cutover (docs/DEVELOPER_GUIDE.md §5/§7b) —
+      # values set directly in the Render dashboard (Environment tab), never
+      # committed here. USE_POSTGRES=true + both DATABASE_URL variants moves
+      # off the ephemeral/free-tier disk DB onto managed Supabase Postgres;
+      # REDIS_URL moves rate limiting off the single-process in-memory
+      # fallback (lib/rateLimit.js) onto real distributed Redis.
+      - key: USE_POSTGRES
+        value: 'true'
+      - key: DATABASE_URL
+        sync: false   # Supabase pooled (Supavisor, port 6543) connection string — the app's normal query path
+      - key: DIRECT_DATABASE_URL
+        sync: false   # Supabase direct (port 5432) connection string — used only by scripts/backup-db.js's pg_dump
+      - key: REDIS_URL
+        sync: false   # Upstash rediss:// connection string
+      # Document/PDF storage — set once Cloudflare R2 is provisioned
+      # (Stage 2's storage leg, currently pending). Until S3_BUCKET is set,
+      # server/lib/storage.js safely falls back to local disk.
+      # - key: S3_BUCKET
+      #   value: loadbyton-documents
+      # - key: S3_ENDPOINT
+      #   sync: false   # https://<account-id>.r2.cloudflarestorage.com
+      # - key: AWS_ACCESS_KEY_ID
+      #   sync: false
+      # - key: AWS_SECRET_ACCESS_KEY
+      #   sync: false
+      # - key: AWS_REGION
+      #   value: auto
       # Before real data: replace generateValue with a FIXED secret you
       # generate once (openssl rand -base64 32) and paste in the Render
       # dashboard — a regenerated key would orphan every AES-encrypted
