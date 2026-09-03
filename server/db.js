@@ -81,19 +81,28 @@ if (usePostgres) {
       }
     },
 
-    // SQLite-compatible prepare() shim — returns async callables
+    // SQLite-compatible prepare() shim — returns async callables. Every
+    // path here awaits migrationPromise first (assigned below, after this
+    // object exists) — this is the API nearly the entire codebase actually
+    // uses (db.query/exec are the minority path), so without this guard
+    // any request that lands early in boot races the schema migration
+    // directly against the raw pool and can hit "relation does not exist"
+    // on a fresh database.
     prepare(sql) {
       const pgSql = toPg(sql);
       return {
         get: async (...params) => {
+          await migrationPromise.catch(() => {});
           const r = await pool.query(pgSql, params);
           return r.rows[0] || null;
         },
         all: async (...params) => {
+          await migrationPromise.catch(() => {});
           const r = await pool.query(pgSql, params);
           return r.rows;
         },
         run: async (...params) => {
+          await migrationPromise.catch(() => {});
           // For INSERT RETURNING, capture the inserted row
           const sqlUpper = sql.trim().toUpperCase();
           if (!sqlUpper.includes('RETURNING')) {
@@ -119,10 +128,21 @@ if (usePostgres) {
   async function runMigrationWithRetry(maxRetries = 5) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        // Check the LAST table postgres_init.sql creates (outbox_events),
+        // not the first (users) — the whole file runs as one explicit
+        // BEGIN/COMMIT transaction so this "should" be all-or-nothing, but
+        // checking the first table is still the wrong signal if 'users' can
+        // ever exist without the rest (a differently-provisioned database,
+        // an interrupted/partial run from before this fix, etc.): it makes
+        // this check falsely conclude migration is done and skip it
+        // forever, permanently missing every later table. Every statement
+        // in the file is IF NOT EXISTS / ON CONFLICT DO NOTHING, so
+        // re-running it when some — but not all — tables exist is always
+        // safe and fills in exactly what's missing.
         const check = await pool.query(`
           SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' AND table_name = 'users'
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'outbox_events'
           )
         `);
         if (!check.rows[0].exists) {
