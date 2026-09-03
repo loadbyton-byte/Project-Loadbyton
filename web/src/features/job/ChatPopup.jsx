@@ -79,20 +79,23 @@ export default function ChatPopup({ jobId, initialMessages = [] }) {
     <div className="fixed bottom-5 right-5 z-40" dir="ltr">
       {isOpen && (
         <div
-          className="mb-3 flex h-[420px] w-[340px] flex-col overflow-hidden rounded-xl border shadow-2xl"
+          className="animate-chat-in mb-3 flex h-[440px] w-[350px] flex-col overflow-hidden rounded-2xl border shadow-2xl"
           style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}
           role="dialog"
           aria-label="Job messages"
         >
-          <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
-            <p className="font-display text-sm font-semibold text-ink">Messages</p>
-            <button type="button" onClick={() => setIsOpen(false)} className="rounded-full p-1 text-ink-muted hover:bg-surface-container hover:text-ink" aria-label="Close messages">
+          <div
+            className="flex items-center justify-between px-4 py-3.5"
+            style={{ background: 'linear-gradient(135deg, var(--brand-accent), color-mix(in srgb, var(--brand-accent) 78%, black))' }}
+          >
+            <p className="font-display text-sm font-semibold text-white">Messages</p>
+            <button type="button" onClick={() => setIsOpen(false)} className="rounded-full p-1 text-white/80 transition hover:bg-white/15 hover:text-white" aria-label="Close messages">
               <IconClose size={16} />
             </button>
           </div>
           <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4" role="log" aria-live="polite">
             {messages.length === 0 ? (
-              <p className="text-sm text-ink-muted">No messages yet.</p>
+              <p className="text-sm text-ink-muted">No messages yet — say hello.</p>
             ) : (
               messages.map((m) => <ChatBubble key={m.id} body={m.content} mine={m.sender_id === user.id} />)
             )}
@@ -114,15 +117,15 @@ export default function ChatPopup({ jobId, initialMessages = [] }) {
       <button
         type="button"
         onClick={() => setIsOpen((v) => !v)}
-        className="relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-xl transition hover:opacity-90"
-        style={{ background: 'var(--brand-accent)' }}
+        className={`relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-xl transition-all duration-200 hover:scale-105 hover:shadow-2xl active:scale-95 ${!isOpen && unread > 0 ? 'animate-chat-glow' : ''}`}
+        style={{ background: 'linear-gradient(135deg, var(--brand-accent), color-mix(in srgb, var(--brand-accent) 78%, black))' }}
         aria-label={isOpen ? 'Close messages' : 'Open messages'}
       >
         {isOpen ? <IconClose size={22} /> : <IconMessage size={22} />}
         {!isOpen && unread > 0 && (
           <span
-            className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-bold text-white"
-            style={{ background: 'var(--status-danger)' }}
+            className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-bold text-white ring-2"
+            style={{ background: 'var(--status-danger)', '--tw-ring-color': 'var(--bg-surface)' }}
           >
             {unread > 9 ? '9+' : unread}
           </span>

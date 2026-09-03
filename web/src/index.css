@@ -318,6 +318,28 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   animation: panel-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* ChatPopup.jsx — same mount-triggered-entrance-only convention as
+   .animate-menu-in above, just anchored bottom-right (the FAB's corner)
+   instead of top-right. */
+@keyframes chat-in {
+  from { opacity: 0; transform: scale(0.94) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-chat-in {
+  animation: chat-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: bottom right;
+}
+
+/* Unread-message cue on the chat FAB — a soft expanding ring, not a harsh
+   blink, so it reads as "something happened" without being alarming. */
+@keyframes chat-fab-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand-accent) 55%, transparent); }
+  50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--brand-accent) 0%, transparent); }
+}
+.animate-chat-glow {
+  animation: chat-fab-glow 2s ease-out infinite;
+}
+
 /* DocumentScanner.jsx's viewfinder — a thin line sweeping top-to-bottom
    inside the corner-bracket frame, the "actively scanning" cue. */
 .scanner-laser {
