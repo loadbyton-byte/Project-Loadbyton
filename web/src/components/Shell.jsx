@@ -6,7 +6,7 @@ import { api } from '../lib/api.js';
 import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
-  IconTrendUp, IconSettings, IconTruck, IconMessage,
+  IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 
@@ -53,6 +53,7 @@ function navByRole(t) {
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
+      { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],
     ADMIN: [
