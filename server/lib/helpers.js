@@ -211,6 +211,8 @@ async function toPublicUser(row) {
           fleet_size: profile.fleet_size,
           owned_chassis: profile.owned_chassis,
           insurance_uploaded: !!profile.insurance_uploaded,
+          trade_license_doc_storage_path: profile.trade_license_doc_storage_path,
+          insurance_doc_storage_path: profile.insurance_doc_storage_path,
           rating_avg: profile.rating_avg,
           completed_jobs: profile.completed_jobs,
           verified_at: profile.verified_at,

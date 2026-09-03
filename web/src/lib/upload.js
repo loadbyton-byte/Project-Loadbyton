@@ -50,3 +50,7 @@ export function documentFileUrl(jobId, doc) {
 export function driverDocumentUrl(driverId, docType) {
   return `/api/fleet/drivers/${driverId}/documents/${docType}`;
 }
+
+export function profileDocumentUrl(docType, userId) {
+  return userId ? `/api/profile/documents/${docType}/${userId}` : `/api/profile/documents/${docType}`;
+}

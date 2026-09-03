@@ -591,6 +591,13 @@ module.exports = function initSchema(db) {
   // needs the table to already exist.
   addColumn('drivers', 'seat_user_id', 'seat_user_id INTEGER REFERENCES users(id)');
 
+  // Real company registration documents — profiles.insurance_uploaded was
+  // previously just a self-reported boolean with no file behind it.
+  addColumn('profiles', 'trade_license_doc_storage_path', 'trade_license_doc_storage_path TEXT');
+  addColumn('profiles', 'trade_license_doc_mime_type', 'trade_license_doc_mime_type TEXT');
+  addColumn('profiles', 'insurance_doc_storage_path', 'insurance_doc_storage_path TEXT');
+  addColumn('profiles', 'insurance_doc_mime_type', 'insurance_doc_mime_type TEXT');
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

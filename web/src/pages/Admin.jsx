@@ -13,8 +13,9 @@ const PayoutsSlaTab = lazy(() => import('./admin/PayoutsSlaTab.jsx'));
 const AuditTab = lazy(() => import('./admin/AuditTab.jsx'));
 const RevenueTab = lazy(() => import('./admin/RevenueTab.jsx'));
 const SettingsTab = lazy(() => import('./admin/SettingsTab.jsx'));
+const DocumentsTab = lazy(() => import('./admin/DocumentsTab.jsx'));
 
-const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
+const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Documents', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
 const TAB_COMPONENTS = {
   Health: HealthTab,
   'Live activity': LiveActivityTab,
@@ -22,6 +23,7 @@ const TAB_COMPONENTS = {
   'Account approvals': AccountApprovalsTab,
   Members: MembersTab,
   Disputes: DisputesTab,
+  Documents: DocumentsTab,
   Registrations: RegistrationsTab,
   'Payout SLA': PayoutsSlaTab,
   'Audit log': AuditTab,

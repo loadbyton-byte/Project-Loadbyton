@@ -42,6 +42,7 @@ function navByRole(t) {
       { to: '/templates', label: t('nav.templates', 'Templates'), icon: <IconHistory size={20} /> },
       { to: '/contracts', label: t('nav.contracts', 'Contract lanes'), icon: <IconFile size={20} /> },
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
+      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],
     CARRIER: [
@@ -50,6 +51,7 @@ function navByRole(t) {
       { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} /> },
       { to: '/drivers', label: t('nav.drivers', 'My drivers'), icon: <IconTruck size={20} /> },
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
+      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],

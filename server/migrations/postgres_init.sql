@@ -492,6 +492,13 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS assigned_driver_id INTEGER REFERENCES 
 -- under the carrier's account).
 ALTER TABLE drivers ADD COLUMN IF NOT EXISTS seat_user_id INTEGER REFERENCES users(id);
 
+-- Real company registration documents — profiles.insurance_uploaded was
+-- previously just a self-reported boolean with no file behind it.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS trade_license_doc_storage_path TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS trade_license_doc_mime_type TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS insurance_doc_storage_path TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS insurance_doc_mime_type TEXT;
+
 -- ---------------------------------------------------------------------------
 -- Seed default settings (Postgres-compatible upsert)
 -- ---------------------------------------------------------------------------

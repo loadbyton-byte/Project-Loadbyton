@@ -104,6 +104,15 @@ export const api = {
   // driver seat's own view
   driverJob: () => get('/driver/job'),
 
+  // company (profile-level) documents
+  getProfileDocumentUploadUrl: (docType, mimeType) => post('/profile/documents/upload-url', { docType, mimeType }),
+  uploadProfileDocument: (body) => post('/profile/documents', body),
+  myDocumentedJobs: () => get('/documents/my-jobs'),
+
+  // admin document visibility
+  adminDocumentCompanies: () => get('/admin/documents'),
+  adminDocumentCompany: (userId) => get(`/admin/documents/${userId}`),
+
   // retention
   listTemplates: () => get('/templates'),
   createTemplate: (body) => post('/templates', body),

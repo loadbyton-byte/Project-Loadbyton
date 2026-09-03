@@ -50,6 +50,7 @@ const routes = [
   './routes/compliance.routes',
   './routes/currency.routes',
   './routes/docs.routes',
+  './routes/documents.routes',
   './routes/driver.routes',
   './routes/edi.routes',
   './routes/enterprise.routes',

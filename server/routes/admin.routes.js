@@ -216,6 +216,76 @@ router.get('/api/admin/users', auth(['ADMIN']), async (req, res) => {
   });
 });
 
+// Admin document visibility — browse any company's registration documents
+// (trade licence/insurance, uploaded via server/routes/documents.routes.js)
+// and any of its drivers' documents, plus which jobs have attachments.
+// Read-only; the actual files are served by the existing owner/admin-gated
+// endpoints (profile/documents/:docType/:userId, fleet/drivers/:id/documents/:docType,
+// jobs/:id/documents/:docId/file) rather than a parallel file-serving path.
+router.get('/api/admin/documents', auth(['ADMIN']), async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT u.id, u.role, u.is_verified, p.company_name, p.trade_license_doc_storage_path, p.insurance_doc_storage_path
+       FROM users u JOIN profiles p ON p.user_id = u.id
+       WHERE u.role IN ('SHIPPER','CARRIER') ORDER BY p.company_name ASC`
+    )
+    .all();
+  res.json({
+    companies: rows.map((r) => ({
+      id: r.id,
+      role: r.role,
+      companyName: r.company_name,
+      verified: !!r.is_verified,
+      tradeLicenseDocPresent: !!r.trade_license_doc_storage_path,
+      insuranceDocPresent: !!r.insurance_doc_storage_path,
+    })),
+  });
+});
+
+router.get('/api/admin/documents/:userId', auth(['ADMIN']), async (req, res) => {
+  const userId = Number(req.params.userId);
+  const user = await db.prepare('SELECT * FROM users WHERE id=?').get(userId);
+  if (!user || !['SHIPPER', 'CARRIER'].includes(user.role)) return sendError(res, 404, 'Company not found');
+  const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(userId);
+
+  let drivers = [];
+  if (user.role === 'CARRIER') {
+    const driverRows = await db
+      .prepare('SELECT id, name, phone, license_number, license_doc_storage_path, vehicle_doc_storage_path FROM drivers WHERE carrier_id=? AND is_active=1 ORDER BY name')
+      .all(userId);
+    drivers = driverRows.map((d) => ({
+      id: d.id,
+      name: d.name,
+      phone: d.phone,
+      licenseNumber: d.license_number,
+      licenseDocPresent: !!d.license_doc_storage_path,
+      vehicleDocPresent: !!d.vehicle_doc_storage_path,
+    }));
+  }
+
+  const column = user.role === 'SHIPPER' ? 'shipper_id' : 'carrier_id';
+  const jobRows = await db
+    .prepare(
+      `SELECT j.id, j.job_code, j.status, COUNT(jd.id) as doc_count
+       FROM jobs j JOIN job_documents jd ON jd.job_id = j.id
+       WHERE j.${column}=? GROUP BY j.id, j.job_code, j.status ORDER BY j.id DESC`
+    )
+    .all(userId);
+
+  res.json({
+    company: {
+      id: user.id,
+      role: user.role,
+      companyName: profile ? profile.company_name : null,
+      verified: !!user.is_verified,
+      tradeLicenseDocPresent: !!(profile && profile.trade_license_doc_storage_path),
+      insuranceDocPresent: !!(profile && profile.insurance_doc_storage_path),
+    },
+    drivers,
+    jobs: jobRows.map((r) => ({ id: r.id, jobCode: r.job_code, status: r.status, docCount: Number(r.doc_count) })),
+  });
+});
+
 router.get('/api/admin/referrals', auth(['ADMIN']), async (req, res) => {
   const rows = await db
     .prepare(
