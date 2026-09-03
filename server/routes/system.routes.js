@@ -35,6 +35,9 @@ const _escrow = /** @type {any} */ (require('../services/escrow.service'));
 const runAutoReleaseSweep = _escrow.runAutoReleaseSweep;
 const _scheduling = /** @type {any} */ (require('../services/scheduling.service'));
 const publishScheduledJobs = _scheduling.publishScheduledJobs;
+const _rateLimit = /** @type {any} */ (require('../lib/rateLimit'));
+const getRedis = _rateLimit.getRedis;
+const pingRedis = _rateLimit.pingRedis;
 // @ts-ignore
 const bcrypt = require('bcryptjs');
 
@@ -59,6 +62,25 @@ router.get('/api/health', async (/** @type {any} */ req, /** @type {any} */ res)
   } catch (e) {
     dbOk = false;
   }
+
+  // configured: REDIS_URL is set at all. connected: a real PING round-trip
+  // succeeded — the distinction matters because rate limiting silently
+  // falls back to in-memory-per-process on any Redis failure (see
+  // lib/rateLimit.js), so "configured but not connected" is the state
+  // that most needs surfacing here.
+  let redisStatus = { configured: !!process.env.REDIS_URL, connected: false, latencyMs: null };
+  if (process.env.REDIS_URL) {
+    try {
+      const redis = getRedis();
+      const start = Date.now();
+      await pingRedis(redis);
+      redisStatus.connected = true;
+      redisStatus.latencyMs = Date.now() - start;
+    } catch (e) {
+      redisStatus.connected = false;
+    }
+  }
+
   res.json({
     ok: dbOk,
     service: 'loadbyton-api',
@@ -67,6 +89,7 @@ router.get('/api/health', async (/** @type {any} */ req, /** @type {any} */ res)
     pid: String(process.pid),
     port: PORT,
     db: { ok: dbOk, latencyMs: dbLatencyMs, mode: db.isPostgres ? 'postgres' : 'sqlite' },
+    redis: redisStatus,
     payments: payments.providerInfo(),
     uptimeSec: Math.floor(process.uptime()),
   });

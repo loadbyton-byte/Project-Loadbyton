@@ -95,4 +95,22 @@ function rateLimiter({ windowMs, max, keyFn, message }) {
 // Cloudflare.
 const byIp = (req) => req.headers['cf-connecting-ip'] || req.ip;
 
-module.exports = { rateLimiter, byIp };
+// The shared client is constructed with enableOfflineQueue:false so a slow/
+// down Redis can never make a live request hang — correct for rate
+// limiting, but it means a command fired the instant the client is created
+// (before its TCP handshake + auth finish) rejects immediately even though
+// Redis is perfectly healthy. A health-check ping needs an honest answer,
+// not that race, so wait briefly for 'ready' before pinging rather than
+// disabling the offline queue (which would reintroduce the hang risk for
+// real traffic).
+async function pingRedis(redis, timeoutMs = 500) {
+  if (redis.status !== 'ready') {
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, timeoutMs);
+      redis.once('ready', () => { clearTimeout(timer); resolve(undefined); });
+    });
+  }
+  return redis.ping();
+}
+
+module.exports = { rateLimiter, byIp, getRedis, pingRedis };
