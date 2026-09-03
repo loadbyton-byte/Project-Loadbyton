@@ -1,59 +1,115 @@
 import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { api } from '../lib/api.js';
+import { directionsUrl } from '../lib/googleMaps.js';
 
-// Lightweight geolocation → 3-min location_logs + Mapbox display
-// Uses browser Geolocation API (Phase 3) — no native SDK needed.
-// Mapbox token via VITE_MAPBOX_TOKEN env, falls back to OSM static map if unset.
-export function useLiveTracking(jobId, isCarrier, status){
-  useEffect(()=>{
-    if(!isCarrier || status!=='IN_TRANSIT' || !jobId) return;
+// Lightweight geolocation → 3-min location_logs, rendered on free
+// OpenStreetMap tiles via Leaflet (no Mapbox/Google map-load billing —
+// see docs/GOOGLE_MAPS_SETUP.md for why only address search uses Google).
+export function useLiveTracking(jobId, isCarrier, status) {
+  useEffect(() => {
+    if (!isCarrier || status !== 'IN_TRANSIT' || !jobId) return;
     let timer;
-    async function post(){
-      if(!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition(async pos=>{
-        try{ await api.postLocation(jobId, { lat: pos.coords.latitude, lng: pos.coords.longitude, speed: pos.coords.speed, heading: pos.coords.heading }); }catch{}
-      }, ()=>{});
+    async function post() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        try { await api.postLocation(jobId, { lat: pos.coords.latitude, lng: pos.coords.longitude, speed: pos.coords.speed, heading: pos.coords.heading }); } catch {}
+      }, () => {});
     }
     post();
-    timer=setInterval(post, 3*60*1000);
-    return ()=> clearInterval(timer);
-  },[jobId,isCarrier,status]);
+    timer = setInterval(post, 3 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [jobId, isCarrier, status]);
 }
 
-export function LiveMap({ jobId, fallbackLat, fallbackLng }){
-  const [locs,setLocs]=useState([]);
-  const mapRef=useRef(null);
-  useEffect(()=>{
+// Plain colored-dot markers via L.divIcon rather than Leaflet's default
+// image-based marker — sidesteps the well-known broken-icon-path problem
+// under bundlers (the default marker's PNGs resolve relative to leaflet's
+// own package, not the app's asset pipeline) with zero extra assets.
+function dotIcon(color) {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.45)"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+  });
+}
+
+export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, deliveryLng }) {
+  const [locs, setLocs] = useState([]);
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef({});
+
+  useEffect(() => {
     let t;
-    async function load(){
-      try{ const d=await api.getLocations(jobId); setLocs(d.locations||[]);}catch{}
+    async function load() {
+      try { const d = await api.getLocations(jobId); setLocs(d.locations || []); } catch {}
     }
     load();
-    t=setInterval(load, 30000);
-    return ()=>clearInterval(t);
-  },[jobId]);
-  const last=locs[0];
-  const lat=last?.lat ?? fallbackLat;
-  const lng=last?.lng ?? fallbackLng;
-  const token=import.meta.env.VITE_MAPBOX_TOKEN;
-  if(!token){
-    // OSM fallback — static map via OSM tiles without Mapbox
-    if(!lat||!lng) return <p className="text-sm text-ink-muted">No live location yet — carrier location appears every 3 min when IN_TRANSIT.</p>;
-    return (
-      <div className="rounded-lg border overflow-hidden" style={{borderColor:'var(--border-default)'}}>
-        <div className="h-[240px] w-full flex items-center justify-center bg-slate-100 text-sm text-ink-secondary">
-          Live: {lat.toFixed(5)}, {lng.toFixed(5)} · {locs.length} points · {new Date(last.recorded_at).toLocaleTimeString()}
-        </div>
-        <p className="px-3 py-2 text-xs text-ink-muted">Mapbox token not set — showing coordinates. Set VITE_MAPBOX_TOKEN for live Mapbox GL.</p>
-      </div>
-    );
+    t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [jobId]);
+
+  const last = locs[0];
+  const liveLat = last?.lat;
+  const liveLng = last?.lng;
+  const pickupLat = fallbackLat;
+  const pickupLng = fallbackLng;
+  const hasAnyPoint = [liveLat, pickupLat, deliveryLat].some((v) => v != null);
+
+  useEffect(() => {
+    if (!hasAnyPoint || !containerRef.current) return;
+    if (!mapRef.current) {
+      mapRef.current = L.map(containerRef.current);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
+      }).addTo(mapRef.current);
+    }
+    const map = mapRef.current;
+    const bounds = [];
+    function setMarker(key, lat, lng, color, label) {
+      if (lat == null || lng == null) {
+        if (markersRef.current[key]) { map.removeLayer(markersRef.current[key]); delete markersRef.current[key]; }
+        return;
+      }
+      bounds.push([lat, lng]);
+      if (markersRef.current[key]) markersRef.current[key].setLatLng([lat, lng]);
+      else markersRef.current[key] = L.marker([lat, lng], { icon: dotIcon(color) }).addTo(map).bindTooltip(label);
+    }
+    setMarker('pickup', pickupLat, pickupLng, '#2563eb', 'Pickup');
+    setMarker('delivery', deliveryLat, deliveryLng, '#16a34a', 'Delivery');
+    setMarker('live', liveLat, liveLng, '#dc2626', 'Carrier — live');
+    if (bounds.length === 1) map.setView(bounds[0], 13);
+    else if (bounds.length > 1) map.fitBounds(bounds, { padding: [32, 32] });
+  }, [hasAnyPoint, pickupLat, pickupLng, deliveryLat, deliveryLng, liveLat, liveLng]);
+
+  // Cleanup on unmount only — a fresh map per mount, not per prop change.
+  useEffect(() => () => { mapRef.current?.remove(); mapRef.current = null; markersRef.current = {}; }, []);
+
+  if (!hasAnyPoint) {
+    return <p className="text-sm text-ink-muted">No live location yet — carrier location appears every 3 min when IN_TRANSIT.</p>;
   }
-  // Mapbox GL would mount here — simplified to avoid adding mapbox-gl dep in one shot
+
+  const hasDest = deliveryLat != null && deliveryLng != null;
   return (
-    <div className="rounded-lg border p-3" style={{borderColor:'var(--border-default)'}}>
-      <p className="text-sm font-medium text-ink">Live tracking · {locs.length} points</p>
-      {last ? <p className="text-xs text-ink-muted">{last.lat.toFixed(5)}, {last.lng.toFixed(5)} · {new Date(last.recorded_at).toLocaleString()}</p> : <p className="text-xs text-ink-muted">Waiting for first ping…</p>}
-      <div className="mt-2 h-[240px] w-full rounded bg-slate-100 flex items-center justify-center text-xs text-ink-muted">Mapbox GL map — token configured, mount point ready (add mapbox-gl dep for full tiles).</div>
+    <div className="overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border-default)' }}>
+      <div ref={containerRef} className="h-[280px] w-full" />
+      <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-ink-muted">
+        <span>{last ? `Live · ${locs.length} point${locs.length === 1 ? '' : 's'} · ${new Date(last.recorded_at).toLocaleTimeString()}` : 'Waiting for first ping…'}</span>
+        {hasDest && (
+          <a
+            href={directionsUrl({ originLat: liveLat ?? pickupLat, originLng: liveLng ?? pickupLng, destLat: deliveryLat, destLng: deliveryLng })}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 font-semibold text-brand-secondary hover:underline"
+          >
+            Get directions
+          </a>
+        )}
+      </div>
     </div>
   );
 }

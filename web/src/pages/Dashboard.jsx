@@ -11,6 +11,7 @@ import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, 
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet, IconClose } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
+import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -29,6 +30,7 @@ const SORT_OPTIONS = [
 const emptyJob = {
   shipmentType: 'IMPORT',
   loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
+  pickupLat: undefined, pickupLng: undefined, deliveryLat: undefined, deliveryLng: undefined,
   equipmentType: 'CONTAINER_CHASSIS', cargoType: 'GENERAL_GOODS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
   deliveryAddress: '', readyAt: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
@@ -271,12 +273,24 @@ export default function Dashboard() {
                 <>
                   <div>
                     <Label>Loading location <span className="text-status-danger">*</span></Label>
-                    <Input required value={form.loadingLocation} onChange={(e) => setForm({ ...form, loadingLocation: e.target.value, pickupTerminal: e.target.value })} placeholder="Warehouse, yard, site — e.g. Al Quoz Industrial 3" />
+                    <PlaceAutocomplete
+                      required
+                      value={form.loadingLocation}
+                      onChange={(e) => setForm({ ...form, loadingLocation: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, loadingLocation: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
+                      placeholder="Warehouse, yard, site — e.g. Al Quoz Industrial 3"
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Where the truck loads your cargo.</p>
                   </div>
                   <div>
                     <Label>Delivery location <span className="text-status-danger">*</span></Label>
-                    <Input required value={form.deliveryLocation} onChange={(e) => setForm({ ...form, deliveryLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value })} placeholder="Drop-off address or area" />
+                    <PlaceAutocomplete
+                      required
+                      value={form.deliveryLocation}
+                      onChange={(e) => setForm({ ...form, deliveryLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, deliveryLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
+                      placeholder="Drop-off address or area"
+                    />
                     <p className="mt-1 text-xs text-ink-muted">Where the cargo is unloaded.</p>
                   </div>
                 </>

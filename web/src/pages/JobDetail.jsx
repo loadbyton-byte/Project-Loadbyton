@@ -367,7 +367,7 @@ export default function JobDetail() {
 
           {/* Phase 3: live map when IN_TRANSIT */}
           {['PICKED_UP','IN_TRANSIT','DELIVERED'].includes(job.status) && (
-            <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
+            <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} deliveryLat={job.delivery_lat} deliveryLng={job.delivery_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
           )}
           {/* Phase 4: EIR for carrier at pickup */}
           {isAwardedCarrier && ['PICKED_UP','IN_TRANSIT'].includes(job.status) && <div className="mb-6"><EirChecklist jobId={job.id} onDone={load} /></div>}
