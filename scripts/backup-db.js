@@ -15,7 +15,10 @@ const { spawnSync } = require('node:child_process');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'server', 'data', 'loadbyton.db');
 const OUTPUT_DIR = process.argv[2] || path.join(__dirname, '..', 'backups');
-const USE_POSTGRES = process.env.USE_POSTGRES === 'true' && !!process.env.DATABASE_URL;
+// backupPostgres() below actually dumps via DIRECT_DATABASE_URL (falling
+// back to DATABASE_URL only with a warning) — so either one being set is
+// enough to select the Postgres branch here, not just DATABASE_URL.
+const USE_POSTGRES = process.env.USE_POSTGRES === 'true' && !!(process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL);
 
 function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
@@ -64,13 +67,28 @@ function backupPostgres() {
   if (!process.env.DIRECT_DATABASE_URL) {
     console.warn('[backup] DIRECT_DATABASE_URL not set — using DATABASE_URL for pg_dump. If that\'s a pooled (pgbouncer/Supavisor) connection string, this will likely fail; set DIRECT_DATABASE_URL to the non-pooled connection string instead.');
   }
-  const outputFile = path.join(OUTPUT_DIR, `loadbyton-${timestamp()}.pgdump`);
-  const result = spawnSync('pg_dump', ['--format=custom', '--file', outputFile, dumpUrl], { shell: false });
+  // Plain SQL, not --format=custom: custom format is a binary form with a
+  // version-stamped header, and a newer pg_dump's output can be flatly
+  // unreadable to an older pg_restore ("unsupported version in file
+  // header") — confirmed by hand: a dump made with pg_dump 17 against a
+  // Postgres 16 server failed to restore with exactly that error. Plain
+  // SQL has no such trap: any psql can replay it. Compress ourselves
+  // (custom format's other selling point) to keep the same .gz pattern as
+  // the SQLite branch.
+  const sqlFile = path.join(OUTPUT_DIR, `loadbyton-${timestamp()}.sql`);
+  const result = spawnSync('pg_dump', ['--format=plain', '--file', sqlFile, dumpUrl], { shell: false });
   if (result.status !== 0) {
     console.error(`[backup] pg_dump failed: ${result.stderr?.toString() || 'unknown error'}`);
     process.exit(1);
   }
-  return outputFile;
+  const gzFile = `${sqlFile}.gz`;
+  const gzipResult = spawnSync('gzip', ['-c', sqlFile], { shell: true });
+  if (gzipResult.status === 0) {
+    fs.writeFileSync(gzFile, gzipResult.stdout);
+    fs.unlinkSync(sqlFile);
+    return gzFile;
+  }
+  return sqlFile;
 }
 
 async function pushOffsite(localFile) {
@@ -123,7 +141,7 @@ async function main() {
 
   await pushOffsite(localFile);
 
-  pruneLocal(USE_POSTGRES ? /\.pgdump$/ : /\.sqlite3\.gz$/);
+  pruneLocal(USE_POSTGRES ? /\.sql\.gz$/ : /\.sqlite3\.gz$/);
   console.log('[backup] Done');
 }
 
