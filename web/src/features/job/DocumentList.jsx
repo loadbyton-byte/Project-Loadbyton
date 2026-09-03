@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useToasts } from '../../components/Toast.jsx';
 import { api } from '../../lib/api.js';
-import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../../lib/upload.js';
+import { uploadFile, UPLOAD_ACCEPT, documentFileUrl } from '../../lib/upload.js';
 import { Button, Input, Select, Badge } from '../../components/ui.jsx';
 import { IconFile } from '../../components/icons.jsx';
 
@@ -18,8 +18,8 @@ export default function DocumentList({ documents, jobId, onAdd }) {
     if (!title || !file) return;
     setBusy(true);
     try {
-      const { base64, mimeType } = await fileToBase64(file);
-      await api.addDocument(jobId, { docType, title, fileBase64: base64, mimeType });
+      const uploaded = await uploadFile(file, (mimeType) => api.getJobDocumentUploadUrl(jobId, mimeType));
+      await api.addDocument(jobId, { docType, title, ...uploaded });
       setDocType('CUSTOMS');
       setTitle('');
       setFile(null);
@@ -39,7 +39,7 @@ export default function DocumentList({ documents, jobId, onAdd }) {
           {documents.map((d) => (
             <li key={d.id} className="flex items-center gap-2.5 text-sm">
               <svg size={15} className="text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-              <a href={`/api/jobs/${jobId}/documents/${d.id}/file`} target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">{d.title}</a>
+              <a href={documentFileUrl(jobId, d)} target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">{d.title}</a>
               <span className="rounded-full border px-2 py-0.5 text-xs font-medium" style={{ borderColor: 'var(--border-default)', color: 'var(--ink-muted)' }}>{d.doc_type}</span>
             </li>
           ))}

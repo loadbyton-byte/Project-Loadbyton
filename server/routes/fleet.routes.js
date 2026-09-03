@@ -5,7 +5,7 @@
 const db = require('../db');
 const { auth, requireSeatRole } = require('../middleware/auth');
 const { sendError, asyncHandler } = require('../lib/http');
-const { normalizeUaeMobile } = require('../lib/helpers');
+const { normalizeUaeMobile, resolveUploadedFile } = require('../lib/helpers');
 const storage = require('../lib/storage');
 const router = require('express').Router();
 
@@ -79,13 +79,26 @@ router.delete('/api/fleet/drivers/:id', auth(['CARRIER']), requireSeatRole(['OPS
   res.json({ ok: true });
 }));
 
+// Direct-to-R2 upload, step 1 of 2: mint a presigned PUT URL scoped to this
+// driver. Same auth as the registration endpoint below — a client can only
+// ever get a URL for a driver they actually own. Returns null (server/lib/
+// storage.js) when S3 isn't configured, which the client reads as "use the
+// inline base64 path instead" (still fully functional against local disk).
+router.post('/api/fleet/drivers/:id/documents/upload-url', auth(['CARRIER']), requireSeatRole(['OPS']), asyncHandler(async (req, res) => {
+  const driver = await db.prepare('SELECT * FROM drivers WHERE id=? AND carrier_id=?').get(req.params.id, req.user.id);
+  if (!driver) return sendError(res, 404, 'Driver not found');
+  const { mimeType } = req.body || {};
+  const presigned = await storage.getPresignedUploadUrl(`drivers/${driver.id}`, mimeType);
+  res.json(presigned || { useBase64: true });
+}));
+
 router.post('/api/fleet/drivers/:id/documents', auth(['CARRIER']), requireSeatRole(['OPS']), asyncHandler(async (req, res) => {
   const driver = await db.prepare('SELECT * FROM drivers WHERE id=? AND carrier_id=?').get(req.params.id, req.user.id);
   if (!driver) return sendError(res, 404, 'Driver not found');
-  const { docType, mimeType, fileBase64 } = req.body || {};
+  const { docType, mimeType, fileBase64, storageKey } = req.body || {};
   if (!['LICENSE', 'VEHICLE'].includes(docType)) return sendError(res, 400, "docType must be 'LICENSE' or 'VEHICLE'");
 
-  const saved = await storage.saveUploadedFile(`drivers/${driver.id}`, mimeType, fileBase64);
+  const saved = await resolveUploadedFile(`drivers/${driver.id}`, { mimeType, fileBase64, storageKey });
   const column = docType === 'LICENSE' ? 'license_doc' : 'vehicle_doc';
   await db.prepare(`UPDATE drivers SET ${column}_storage_path=?, ${column}_mime_type=?, updated_at=datetime('now') WHERE id=?`)
     .run(saved.storagePath, saved.mimeType, driver.id);

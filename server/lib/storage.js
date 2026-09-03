@@ -75,6 +75,35 @@ async function putObject(key, buffer, contentType) {
   return { storagePath: key, s3: false };
 }
 
+// Presigned direct-to-bucket upload — the fix for docs/DISASTER_RECOVERY.md's
+// "upload/IOPS pressure" scenario: the browser PUTs the file straight to R2
+// using this URL, so a burst of concurrent uploads never touches the app
+// server's CPU/memory at all (today's saveUploadedFile path routes every
+// byte through this Node process as base64 in the request body). Returns
+// null when S3 isn't configured — callers fall back to the base64 path,
+// which is the only option that makes sense against local disk anyway.
+async function getPresignedUploadUrl(prefix, mimeType) {
+  if (!isS3Enabled()) return null;
+  const ext = ALLOWED_UPLOAD_MIME_TYPES[mimeType];
+  if (!ext) throw { status: 400, message: `mimeType must be one of: ${Object.keys(ALLOWED_UPLOAD_MIME_TYPES).join(', ')}` };
+  const { PutObjectCommand } = require('@aws-sdk/client-s3');
+  const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+  const key = `${prefix}/${crypto.randomUUID()}.${ext}`;
+  // A presigned PUT signs method+path+headers, not a size policy — MAX_UPLOAD_BYTES
+  // isn't enforceable here the way it is on the base64 path (that would need
+  // presigned POST + a content-length-range condition, a different API and
+  // an extra package). Accepted trade-off for a first version: the uploader
+  // is always an authenticated user acting on their own account, and R2's
+  // free tier caps total bucket size regardless — a single oversized file
+  // is a storage-hygiene concern, not a security one, unlike an
+  // unauthenticated write path would be.
+  const command = new PutObjectCommand({ Bucket: s3Bucket, Key: key, ContentType: mimeType });
+  // 5 minutes — long enough for a slow mobile upload, short enough that a
+  // leaked URL isn't a standing write hole into the bucket.
+  const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+  return { key, uploadUrl, mimeType };
+}
+
 async function saveUploadedFile(jobId, mimeType, base64) {
   const ext = ALLOWED_UPLOAD_MIME_TYPES[mimeType];
   if (!ext) throw { status: 400, message: `mimeType must be one of: ${Object.keys(ALLOWED_UPLOAD_MIME_TYPES).join(', ')}` };
@@ -127,6 +156,7 @@ module.exports = {
   MAX_UPLOAD_BYTES,
   isS3Enabled,
   putObject,
+  getPresignedUploadUrl,
   saveUploadedFile,
   getFile,
   fileExists,

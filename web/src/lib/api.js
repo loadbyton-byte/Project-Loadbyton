@@ -84,6 +84,7 @@ export const api = {
   getDispute: (id) => get(`/jobs/${id}/dispute`),
   backloadMatches: (id) => get(`/jobs/${id}/backload-matches`),
   addDocument: (id, body) => post(`/jobs/${id}/documents`, body),
+  getJobDocumentUploadUrl: (id, mimeType) => post(`/jobs/${id}/documents/upload-url`, { mimeType }),
   rateJob: (id, body) => post(`/jobs/${id}/rating`, body),
   getMessages: (id) => get(`/jobs/${id}/messages`),
   sendMessage: (id, content) => post(`/jobs/${id}/messages`, { content }),
@@ -94,6 +95,7 @@ export const api = {
   updateDriverProfile: (id, body) => patch(`/fleet/drivers/${id}`, body),
   deleteDriver: (id) => del(`/fleet/drivers/${id}`),
   uploadDriverDocument: (id, body) => post(`/fleet/drivers/${id}/documents`, body),
+  getDriverDocumentUploadUrl: (id, mimeType) => post(`/fleet/drivers/${id}/documents/upload-url`, { mimeType }),
 
   // retention
   listTemplates: () => get('/templates'),

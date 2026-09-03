@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
-import { fileToBase64, UPLOAD_ACCEPT, driverDocumentUrl } from '../lib/upload.js';
+import { uploadFile, UPLOAD_ACCEPT, driverDocumentUrl } from '../lib/upload.js';
 import { Button, Card, Input, Label, EmptyState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconTruck, IconFile, IconCheckCircle } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -52,8 +52,8 @@ export default function Drivers() {
     if (!file) return;
     setUploadingFor({ driverId: driver.id, docType });
     try {
-      const { base64, mimeType } = await fileToBase64(file);
-      await api.uploadDriverDocument(driver.id, { docType, mimeType, fileBase64: base64 });
+      const uploaded = await uploadFile(file, (mimeType) => api.getDriverDocumentUploadUrl(driver.id, mimeType));
+      await api.uploadDriverDocument(driver.id, { docType, ...uploaded });
       load();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Could not upload document', body: err.message });

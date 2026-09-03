@@ -58,6 +58,37 @@ const MAX_UPLOAD_BYTES = /** @type {any} */ (getStorage().MAX_UPLOAD_BYTES);
 async function saveUploadedFile(jobId, mimeType, base64) {
   return getStorage().saveUploadedFile(jobId, mimeType, base64);
 }
+/**
+ * @param {string} prefix
+ * @param {string} mimeType
+ * @returns {Promise<any>}
+ */
+async function getPresignedUploadUrl(prefix, mimeType) {
+  return getStorage().getPresignedUploadUrl(prefix, mimeType);
+}
+/**
+ * One call for either upload path a client might use: storageKey when it
+ * already PUT the file directly to R2 via a presigned URL (verified to
+ * actually exist — a client can't just claim an arbitrary key), or
+ * fileBase64 for the inline path (local disk, or S3 configured but the
+ * client hasn't been updated to presign yet). Every one of the four upload
+ * call sites (job documents, driver documents, POD, enterprise) had this
+ * exact branch duplicated inline; centralized here instead.
+ * @param {string} prefix
+ * @param {{mimeType: string, fileBase64?: string, storageKey?: string}} body
+ * @returns {Promise<any>}
+ */
+async function resolveUploadedFile(prefix, { mimeType, fileBase64, storageKey }) {
+  if (storageKey) {
+    if (!storageKey.startsWith(`${prefix}/`)) {
+      throw { status: 400, message: 'storageKey does not match this upload context' };
+    }
+    const exists = await getStorage().fileExists(storageKey);
+    if (!exists) throw { status: 400, message: 'storageKey not found — upload may have failed or the presigned URL expired' };
+    return { storagePath: storageKey, mimeType, s3: getStorage().isS3Enabled() };
+  }
+  return saveUploadedFile(prefix, mimeType, fileBase64);
+}
 
 const UAE_MOBILE_RE = /^(\+?971|0)?5\d{8}$/;
 /**
@@ -331,7 +362,7 @@ function canSeeDocument(job, doc, user) {
 }
 
 module.exports = {
-  saveUploadedFile, UPLOADS_DIR, ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_BYTES,
+  saveUploadedFile, getPresignedUploadUrl, resolveUploadedFile, UPLOADS_DIR, ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_BYTES,
   normalizeUaeMobile, isValidUaeTrn, isValidUaeTradeLicence, isValidUaeLatLng, haversineKm,
   isPasswordValid, timingSafeEqualStr, hashToken,
   getSettings, toPublicUser, writeAudit, unreadNotificationCount, notify, notifyAdmins,

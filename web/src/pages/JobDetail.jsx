@@ -7,7 +7,7 @@ import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, C
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
-import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
+import { documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
 import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
 import { EirChecklist } from '../components/EirChecklist.jsx';
 import { DetentionAlarm } from '../components/DetentionAlarm.jsx';

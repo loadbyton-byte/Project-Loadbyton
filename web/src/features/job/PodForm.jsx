@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useToasts } from '../../components/Toast.jsx';
 import { api } from '../../lib/api.js';
-import { fileToBase64, UPLOAD_ACCEPT } from '../../lib/upload.js';
+import { uploadFile, UPLOAD_ACCEPT } from '../../lib/upload.js';
 import { Button, Card, Input, Label } from '../../components/ui.jsx';
 
 export default function PodForm({ jobId, onDone, busy, setBusy, setError }) {
@@ -12,8 +12,8 @@ export default function PodForm({ jobId, onDone, busy, setBusy, setError }) {
     try {
       let document;
       if (file) {
-        const { base64, mimeType } = await fileToBase64(file);
-        document = { docType: 'POD', title: file.name, fileBase64: base64, mimeType };
+        const uploaded = await uploadFile(file, (mimeType) => api.getJobDocumentUploadUrl(jobId, mimeType));
+        document = { docType: 'POD', title: file.name, ...uploaded };
       }
       await api.submitPod(jobId, document ? { document } : {});
       onDone();

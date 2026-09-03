@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const db = require('../db');
 const apiResponse = require('../lib/apiResponse');
 const { BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM, TERMINAL_EMIRATE, AREA_EMIRATE, DOC_TYPES } = require('../lib/constants');
-const { saveUploadedFile, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify } = require('../lib/helpers');
+const { resolveUploadedFile, getPresignedUploadUrl, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();
@@ -57,6 +57,17 @@ router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), async (req, res)
   res.json({ matches: matches.slice(0, 10) });
 });
 
+// Direct-to-R2 upload, step 1 of 2 — see fleet.routes.js's sibling endpoint
+// for the full explanation. Same party check as the registration endpoint.
+router.post('/api/jobs/:id/documents/upload-url', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (!(await isPartyOnJob(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Only the shipper and the awarded carrier can attach documents');
+  const { mimeType } = req.body || {};
+  const presigned = await getPresignedUploadUrl(String(job.id), mimeType);
+  res.json(presigned || { useBase64: true });
+});
+
 router.post('/api/jobs/:id/documents', auth(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
@@ -64,12 +75,12 @@ router.post('/api/jobs/:id/documents', auth(), async (req, res) => {
   // bidding carrier has no business attaching files to a job they may lose.
   if (!(await isPartyOnJob(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Only the shipper and the awarded carrier can attach documents');
   const b = req.body || {};
-  if (!b.title || !(b.fileUrl || b.fileBase64)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'title and (fileUrl or fileBase64+mimeType) are required');
+  if (!b.title || !(b.fileUrl || b.fileBase64 || b.storageKey)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'title and (fileUrl, fileBase64+mimeType, or storageKey+mimeType) are required');
   let storagePath = null;
   let mimeType = null;
-  if (b.fileBase64) {
+  if (b.fileBase64 || b.storageKey) {
     try {
-      ({ storagePath, mimeType } = await saveUploadedFile(job.id, b.mimeType, b.fileBase64));
+      ({ storagePath, mimeType } = await resolveUploadedFile(String(job.id), { mimeType: b.mimeType, fileBase64: b.fileBase64, storageKey: b.storageKey }));
     } catch (e) {
       return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
     }

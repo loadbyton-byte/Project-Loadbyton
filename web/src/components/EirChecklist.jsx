@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../lib/api.js';
+import { uploadFile } from '../lib/upload.js';
 import { Button } from './ui.jsx';
 export function EirChecklist({ jobId, onDone }){
   const [files,setFiles]=useState([null,null,null]);
@@ -9,8 +10,10 @@ export function EirChecklist({ jobId, onDone }){
     for(let i=0;i<3;i++){
       const f=files[i];
       if(!f) return alert(`Photo ${i+1} (${labels[i]}) required`);
-      const b64=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(f); });
-      photos.push({ fileBase64: b64, mimeType: f.type||'image/jpeg' });
+      // Reuses the job-documents upload-url endpoint — same job-scoped
+      // prefix and party check as every other document attached to this job.
+      const uploaded = await uploadFile(f, (mimeType) => api.getJobDocumentUploadUrl(jobId, mimeType));
+      photos.push(uploaded);
     }
     await api.postEir(jobId, photos);
     onDone?.();

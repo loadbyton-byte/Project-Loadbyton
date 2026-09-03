@@ -28,15 +28,15 @@ router.post('/api/jobs/:id/eir', auth(['CARRIER']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
   if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
-  const { photos } = req.body||{}; // [{title, fileBase64, mimeType}]
+  const { photos } = req.body||{}; // [{title, fileBase64|storageKey, mimeType}]
   if(!Array.isArray(photos)||photos.length!==3) return apiResponse.error(req,res,'VALIDATION_FAILED','EIR requires exactly 3 photos: Seal, Right Side, Left Side');
   const labels=['Seal','Right Side','Left Side'];
-  const { saveUploadedFile } = require('../lib/helpers');
+  const { resolveUploadedFile } = require('../lib/helpers');
   const stored=[];
   for(let i=0;i<3;i++){
     const p=photos[i];
-    if(!p.fileBase64||!p.mimeType) return apiResponse.error(req,res,'VALIDATION_FAILED',`Photo ${i+1} missing fileBase64/mimeType`);
-    const { storagePath } = await saveUploadedFile(job.id, p.mimeType, p.fileBase64);
+    if(!(p.fileBase64||p.storageKey)||!p.mimeType) return apiResponse.error(req,res,'VALIDATION_FAILED',`Photo ${i+1} missing fileBase64/storageKey or mimeType`);
+    const { storagePath } = await resolveUploadedFile(String(job.id), { mimeType: p.mimeType, fileBase64: p.fileBase64, storageKey: p.storageKey });
     const title = `EIR ${labels[i]} — ${job.job_code}`;
     await db.prepare(`INSERT INTO job_documents (job_id,uploader_id,doc_type,title,file_url,storage_path,mime_type) VALUES (?,?,?,?,?,?,?)`).run(job.id, req.user.id, 'EIR', title, storagePath, storagePath, p.mimeType);
     stored.push(storagePath);

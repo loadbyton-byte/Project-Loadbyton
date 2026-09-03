@@ -41,7 +41,7 @@ const TRANSITIONS = /** @type {any} */ (constantsMod).TRANSITIONS;
 const DISPUTABLE_STATUSES = /** @type {any} */ (constantsMod).DISPUTABLE_STATUSES;
 /** @type {any} */
 const helpersMod = require('../lib/helpers');
-const saveUploadedFile = /** @type {any} */ (helpersMod).saveUploadedFile;
+const resolveUploadedFile = /** @type {any} */ (helpersMod).resolveUploadedFile;
 const normalizeUaeMobile = /** @type {any} */ (helpersMod).normalizeUaeMobile;
 const getSettings = /** @type {any} */ (helpersMod).getSettings;
 const writeAudit = /** @type {any} */ (helpersMod).writeAudit;
@@ -229,10 +229,10 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
   const doc = /** @type {any} */ ((/** @type {any} */ (req.body) || {}).document);
   let storagePath = null;
   let mimeType = null;
-  if (doc && doc.fileBase64) {
+  if (doc && (doc.fileBase64 || doc.storageKey)) {
     try {
       // @ts-ignore
-      ({ storagePath, mimeType } = await saveUploadedFile(job.id, doc.mimeType, doc.fileBase64));
+      ({ storagePath, mimeType } = await resolveUploadedFile(String(job.id), { mimeType: doc.mimeType, fileBase64: doc.fileBase64, storageKey: doc.storageKey }));
     } catch (/** @type {any} */ e) {
       return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
     }
