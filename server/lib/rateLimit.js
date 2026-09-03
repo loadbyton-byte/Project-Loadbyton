@@ -13,13 +13,25 @@
 // instance — move this to Redis at the same time as the Postgres port.
 
 let sharedRedis = null;
+let loggedFirstError = false;
 function getRedis() {
   if (sharedRedis) return sharedRedis;
   if (!process.env.REDIS_URL) return null;
   try {
     const IORedis = require('ioredis');
     sharedRedis = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: 1, enableOfflineQueue: false });
-    sharedRedis.on('error', () => {});
+    // Previously a fully silent no-op — meant a misconfigured/unreachable
+    // Redis (wrong URL, network block, auth failure) had zero visibility
+    // anywhere: /api/health could report connected:false forever with no
+    // way to tell why. Log the *first* error only (ioredis retries and
+    // re-emits 'error' repeatedly on a persistent failure — logging every
+    // one would flood the log) so the actual cause shows up once.
+    sharedRedis.on('error', (e) => {
+      if (loggedFirstError) return;
+      loggedFirstError = true;
+      console.error('[rateLimit] Redis connection error (further errors suppressed):', e.message);
+    });
+    sharedRedis.on('ready', () => { loggedFirstError = false; });
     if (process.env.NODE_ENV === 'production') console.log('[rateLimit] Redis enabled — distributed rate limiting active');
     return sharedRedis;
   } catch (e) {
