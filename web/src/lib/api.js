@@ -89,6 +89,8 @@ export const api = {
   getMessages: (id) => get(`/jobs/${id}/messages`),
   getThreads: (id) => get(`/jobs/${id}/threads`),
   sendMessage: (id, content, withRole) => post(`/jobs/${id}/messages`, withRole ? { content, withRole } : { content }),
+  messageThreads: () => get('/messages/threads'),
+  markThreadRead: (threadId) => post(`/messages/threads/${threadId}/read`),
 
   // fleet / driver roster
   listDrivers: () => get('/fleet/drivers'),

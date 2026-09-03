@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth, roleHome } from '../lib/auth.jsx';
+import { useAuth, homePath } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
 import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
-  IconTrendUp, IconSettings, IconTruck,
+  IconTrendUp, IconSettings, IconTruck, IconMessage,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 
@@ -41,6 +41,7 @@ function navByRole(t) {
       { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} /> },
       { to: '/templates', label: t('nav.templates', 'Templates'), icon: <IconHistory size={20} /> },
       { to: '/contracts', label: t('nav.contracts', 'Contract lanes'), icon: <IconFile size={20} /> },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],
     CARRIER: [
@@ -48,11 +49,13 @@ function navByRole(t) {
       { to: '/my-bids', label: t('nav.myBids', 'My bids'), icon: <IconGavel size={20} /> },
       { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} /> },
       { to: '/drivers', label: t('nav.drivers', 'My drivers'), icon: <IconTruck size={20} /> },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],
     ADMIN: [
       { to: '/admin', label: t('nav.admin', 'Admin console'), icon: <IconSettings size={20} /> },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
     ],
   };
 }
@@ -68,7 +71,11 @@ function ShellInner({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [endingImpersonation, setEndingImpersonation] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
-  const navItems = user ? navByRole(t)[user.role] || [] : [];
+  // A DRIVER seat's user.role is still its owner's role (CARRIER — see
+  // auth.jsx's session model), so it would otherwise get the full carrier
+  // nav despite RequireAuth (App.jsx) redirecting every one of those routes
+  // straight back to /driver. Its whole app is that one page — no sidebar.
+  const navItems = actingAs?.seatRole === 'DRIVER' ? [] : (user ? navByRole(t)[user.role] || [] : []);
   const { addToast } = useToasts();
 
   function closeDrawer() {
@@ -158,7 +165,7 @@ function ShellInner({ children }) {
             <IconMenu size={22} />
           </button>
 
-          <Logo to={user ? roleHome(user.role) : '/'} />
+          <Logo to={user ? homePath(user, actingAs) : '/'} />
 
           {user ? (
             <Link to="/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label="Notifications">

@@ -56,6 +56,7 @@ const routes = [
   './routes/fleet.routes',
   './routes/ledger.routes',
   './routes/location.routes',
+  './routes/messages.routes',
   './routes/ml.routes',
   './routes/org.routes',
   './routes/retention.routes',

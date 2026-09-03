@@ -45,6 +45,7 @@ const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const DocumentCompliance = lazy(() => import('./pages/DocumentCompliance.jsx'));
 const DriverHome = lazy(() => import('./pages/DriverHome.jsx'));
+const Messages = lazy(() => import('./pages/Messages.jsx'));
 
 // Every navigation lands at the top of the new page — a long page left
 // scrolled midway (a job list, a document thread) must never hand off
@@ -140,6 +141,7 @@ export default function App() {
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
           <Route path="/documents" element={<RequireAuth roles={['SHIPPER', 'CARRIER']}><DocumentCompliance /></RequireAuth>} />
+          <Route path="/messages" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'ADMIN']}><Messages /></RequireAuth>} />
           <Route path="/driver" element={<DriverOnly><DriverHome /></DriverOnly>} />
 
           <Route path="*" element={<NotFound />} />

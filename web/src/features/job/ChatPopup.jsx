@@ -2,11 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
-import { Button, Input, ChatBubble } from '../../components/ui.jsx';
+import { Button, Input } from '../../components/ui.jsx';
 import { IconMessage, IconClose } from '../../components/icons.jsx';
 import { useToasts } from '../../components/Toast.jsx';
-
-const ROLE_LABELS = { SHIPPER: 'Shipper', CARRIER: 'Carrier', ADMIN: 'Admin', DRIVER: 'Driver' };
+import { ROLE_LABELS, ThreadMessageList } from './ThreadPane.jsx';
 
 // Floating chat — real-time via Socket.IO (server/lib/socket.js), one room
 // per thread (job + role-pair), with the REST send
@@ -149,17 +148,7 @@ export default function ChatPopup({ jobId }) {
             </div>
           )}
 
-          <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4" role="log" aria-live="polite">
-            {!loaded ? (
-              <p className="text-sm text-ink-muted">Loading…</p>
-            ) : !activeRole ? (
-              <p className="text-sm text-ink-muted">No one to message on this job yet.</p>
-            ) : messages.length === 0 ? (
-              <p className="text-sm text-ink-muted">No messages with {ROLE_LABELS[activeRole] || activeRole} yet — say hello.</p>
-            ) : (
-              messages.map((m) => <ChatBubble key={m.id} body={m.content} mine={m.sender_id === myId} />)
-            )}
-          </div>
+          <ThreadMessageList listRef={listRef} loaded={loaded} activeRole={activeRole} messages={messages} myId={myId} />
           <form onSubmit={submit} className="flex gap-2 border-t p-3" style={{ borderColor: 'var(--border-subtle)' }}>
             <Input
               placeholder={activeRole ? `Message ${ROLE_LABELS[activeRole] || activeRole}…` : 'Write a message…'}
