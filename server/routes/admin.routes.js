@@ -307,7 +307,7 @@ router.post('/api/admin/disputes', auth(['ADMIN']), async (req, res) => {
   if (!job) return sendError(res, 404, 'Job not found');
   if (!reason) return sendError(res, 400, 'reason is required');
 
-  const result = await db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\')').run(job.id, req.user.id, reason);
+  const result = await db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\') RETURNING id').run(job.id, req.user.id, reason);
   await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
   await writeAudit(req, { userId: req.actorId, action: 'DISPUTE_OPEN', details: reason, entityType: 'job', entityId: job.id, beforeState: job.status, afterState: 'DISPUTED' });
   await notify(job.shipper_id, 'Dispute opened', `A dispute was opened on ${job.job_code}. Escrow is frozen.`, job.id, 'dispute');
@@ -331,7 +331,7 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
     refundJobAsync(job);
   } else {
     await db.prepare(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
-    issueInvoice(db, job.id);
+    try { await issueInvoice(db, job.id); } catch {}
     // TODO-3: with a processor configured this moves the money; in
     // internal mode it is a no-op and the admin SLA flow applies.
     executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);

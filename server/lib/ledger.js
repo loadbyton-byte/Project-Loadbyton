@@ -55,14 +55,21 @@ async function createTransaction(trx, { idempotencyKey, jobId = null, payoutId =
   let txId;
   try {
     if (trx.prepare) {
-      const res = await trx.prepare(`INSERT INTO ledger_transactions (idempotency_key, job_id, payout_id, description) VALUES (?,?,?,?)`).run(idempotencyKey, jobId, payoutId, description);
+      // RETURNING id makes this take the fast path on Postgres too (both
+      // db.js's SQLite and Postgres transaction() helpers expose .prepare,
+      // so this branch runs on either dialect) — without it, lastInsertRowid
+      // is always null on Postgres and every call fell through to the
+      // idempotency_key re-SELECT below. That fallback is correct (the key
+      // is UNIQUE, so it can only ever find this exact row) but costs an
+      // extra round trip on every single ledger transaction.
+      const res = await trx.prepare(`INSERT INTO ledger_transactions (idempotency_key, job_id, payout_id, description) VALUES (?,?,?,?) RETURNING id`).run(idempotencyKey, jobId, payoutId, description);
       txId = res.lastInsertRowid;
       if (!txId) {
         const row = await trx.query(`SELECT id FROM ledger_transactions WHERE idempotency_key=?`, [idempotencyKey]);
         txId = row.rows[0]?.id;
       }
     } else {
-      const r = await trx.query(`INSERT INTO ledger_transactions (idempotency_key, job_id, payout_id, description) VALUES (?,?,?,?)`, [idempotencyKey, jobId, payoutId, description]);
+      const r = await trx.query(`INSERT INTO ledger_transactions (idempotency_key, job_id, payout_id, description) VALUES (?,?,?,?) RETURNING id`, [idempotencyKey, jobId, payoutId, description]);
       txId = r.rows?.[0]?.id;
       if (!txId) {
         const row = await trx.query(`SELECT id FROM ledger_transactions WHERE idempotency_key=?`, [idempotencyKey]);

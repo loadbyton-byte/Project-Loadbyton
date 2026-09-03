@@ -97,7 +97,7 @@ async function updateJobStatus(jobId, nextStatus, req) {
   if (nextStatus === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
     await db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(id);
     await db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(id);
-    try { issueInvoice(db, id); } catch {}
+    try { await issueInvoice(db, id); } catch {}
     if (job.carrier_id) {
       try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
     }

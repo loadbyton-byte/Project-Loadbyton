@@ -10,7 +10,7 @@ async function findById(id) {
 
 async function create({ jobId, carrierId, grossAed, platformFeeAed, netAed, idempotencyKey }) {
   const r = await db.prepare(
-    `INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status, idempotency_key) VALUES (?,?,?,?,?, 'PENDING', ?)`
+    `INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status, idempotency_key) VALUES (?,?,?,?,?, 'PENDING', ?) RETURNING id`
   ).run(jobId, carrierId, grossAed, platformFeeAed, netAed, idempotencyKey);
   return findById(Number(r.lastInsertRowid));
 }

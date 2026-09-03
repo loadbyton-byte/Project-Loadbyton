@@ -136,7 +136,11 @@ router.post('/api/jobs/:id/rating', auth(), async (req, res) => {
   try {
     await db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment) VALUES (?,?,?,?,?)').run(job.id, req.user.id, rateeId, score, b.comment || null);
   } catch (e) {
-    if (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message)) {
+    // 23505 is Postgres's unique_violation code — the ERR_SQLITE_ERROR
+    // check alone left this dead on Postgres (any real double-submit threw
+    // a raw 500 instead of this clean 409).
+    const isUniqueViolation = e.code === '23505' || (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message));
+    if (isUniqueViolation) {
       return apiResponse.error(req, res, 'VALIDATION_FAILED', 'You already rated this job', { status: 409 });
     }
     throw e;
@@ -173,7 +177,7 @@ router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
   if (!permitted) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
   const { content } = req.body || {};
   if (!content || !content.trim()) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'content is required');
-  const result = await db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?)').run(job.id, req.actorId, content.trim());
+  const result = await db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?) RETURNING id').run(job.id, req.actorId, content.trim());
   // Sender may be neither party (an admin replying in a dispute thread) —
   // notify both shipper and carrier in that case rather than defaulting to
   // the shipper, which previously left the carrier silently un-notified.

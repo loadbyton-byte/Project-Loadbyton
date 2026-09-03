@@ -155,7 +155,8 @@ router.post(
     const userResult = await db
       .prepare(
         `INSERT INTO users (email, password_hash, role, is_verified, tier, referral_code, email_verified_at)
-         VALUES (?,?,?,?,?,?,datetime('now'))`
+         VALUES (?,?,?,?,?,?,datetime('now'))
+         RETURNING id`
       )
       .run(email, passwordHash, 'ADMIN', 1, 'GOLD', referralCode('ADM', companyName || 'LOADBYTON'));
     const userId = Number(userResult.lastInsertRowid);

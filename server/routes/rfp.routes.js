@@ -8,7 +8,7 @@ const router = require('express').Router();
 router.post('/api/rfps', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req,res)=>{
   const { title, description, origin, destination, totalContainers, durationMonths, budgetAed } = req.body||{};
   if(!title||!origin||!destination||!totalContainers||!durationMonths||!budgetAed) return sendError(res,400,'Missing RFP fields');
-  const r = await db.prepare(`INSERT INTO contract_rfps (shipper_id,title,description,origin,destination,total_containers,duration_months,budget_aed) VALUES (?,?,?,?,?,?,?,?)`).run(req.user.id,title,description||null,origin,destination,Number(totalContainers),Number(durationMonths),Number(budgetAed));
+  const r = await db.prepare(`INSERT INTO contract_rfps (shipper_id,title,description,origin,destination,total_containers,duration_months,budget_aed) VALUES (?,?,?,?,?,?,?,?) RETURNING id`).run(req.user.id,title,description||null,origin,destination,Number(totalContainers),Number(durationMonths),Number(budgetAed));
   const id = Number(r.lastInsertRowid);
   // auto-create monthly milestones
   const months = Number(durationMonths);

@@ -14,7 +14,7 @@ async function findPendingByJob(jobId) {
 
 async function create({ jobId, carrierId, amountAed, etaMinutes, truckType, notes }) {
   const r = await db.prepare(
-    `INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, notes) VALUES (?,?,?,?,?,?)`
+    `INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, truck_type, notes) VALUES (?,?,?,?,?,?) RETURNING id`
   ).run(jobId, carrierId, amountAed, etaMinutes || 0, truckType || null, notes || null);
   return findById(Number(r.lastInsertRowid));
 }

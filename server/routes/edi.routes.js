@@ -30,7 +30,13 @@ router.post('/api/edi/ingest', async (req,res)=>{
   if(!source||!data) return sendError(res,400,'source and data required');
   if(!['EDI_304','EDI_310','CARGO_XML'].includes(source)) return sendError(res,400,'source must be EDI_304/EDI_310/CARGO_XML');
   const m = mapEdiToConsignment(data, source);
-  await db.prepare(`INSERT OR REPLACE INTO global_consignments (id, source, mode, status, origin, destination, payload, linked_job_id, updated_at) VALUES (?,?,?,?,?,?,?, ?, datetime('now'))`).run(m.id, source, m.mode||mode||'DRAYAGE', 'CREATED', m.origin, m.destination, m.payload, linkedJobId?Number(linkedJobId):null);
+  // ON CONFLICT ... DO UPDATE, not INSERT OR REPLACE — the latter is
+  // SQLite-only syntax (a hard Postgres error); ON CONFLICT is standard
+  // and portable across both (SQLite 3.24+, which node:sqlite satisfies).
+  await db.prepare(
+    `INSERT INTO global_consignments (id, source, mode, status, origin, destination, payload, linked_job_id, updated_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'))
+     ON CONFLICT (id) DO UPDATE SET source=excluded.source, mode=excluded.mode, status=excluded.status, origin=excluded.origin, destination=excluded.destination, payload=excluded.payload, linked_job_id=excluded.linked_job_id, updated_at=excluded.updated_at`
+  ).run(m.id, source, m.mode||mode||'DRAYAGE', 'CREATED', m.origin, m.destination, m.payload, linkedJobId?Number(linkedJobId):null);
   // state machine: CREATED -> IN_TRANSIT -> DELIVERED -> COMPLETED, link to job if drayage
   const cons=await db.prepare('SELECT * FROM global_consignments WHERE id=?').get(m.id);
   res.status(201).json({ consignment: cons });

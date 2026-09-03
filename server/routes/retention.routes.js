@@ -21,7 +21,8 @@ router.post('/api/templates', auth(['SHIPPER']), async (req, res) => {
   const result = await db
     .prepare(
       `INSERT INTO templates (shipper_id, name, pickup_terminal, delivery_area, delivery_address, container_size, container_type, cadence, notes)
-       VALUES (?,?,?,?,?,?,?,?,?)`
+       VALUES (?,?,?,?,?,?,?,?,?)
+       RETURNING id`
     )
     .run(req.user.id, b.name, b.pickupTerminal, b.deliveryArea, b.deliveryAddress, b.containerSize, b.containerType || 'DRY', b.cadence || 'ONCE', b.notes || null);
   const template = await db.prepare('SELECT * FROM templates WHERE id=?').get(Number(result.lastInsertRowid));
@@ -39,7 +40,8 @@ router.post('/api/templates/:id/rerun', auth(['SHIPPER']), async (req, res) => {
     .prepare(
       `INSERT INTO jobs (job_code, shipper_id, template_id, container_size, container_type, pickup_terminal, delivery_area, delivery_address,
          ready_at, deadline, status, escrow_status, notes)
-       VALUES (?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?)`
+       VALUES (?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?)
+       RETURNING id`
     )
     .run(code, req.user.id, tpl.id, tpl.container_size, tpl.container_type, tpl.pickup_terminal, tpl.delivery_area, tpl.delivery_address, readyAt, deadline, tpl.notes);
   await writeAudit(req, { userId: req.actorId, action: 'JOB_CREATE', details: `${code} posted from template "${tpl.name}"`, entityType: 'job', entityId: Number(result.lastInsertRowid) });
@@ -58,7 +60,7 @@ router.post('/api/contracts', auth(['SHIPPER']), async (req, res) => {
     return sendError(res, 400, 'pickupTerminal, deliveryArea, deliveryAddress and monthlyLoads are required');
   }
   const result = await db
-    .prepare(`INSERT INTO contract_lanes (shipper_id, pickup_terminal, delivery_area, delivery_address, monthly_loads, target_price_aed, status) VALUES (?,?,?,?,?,?,?)`)
+    .prepare(`INSERT INTO contract_lanes (shipper_id, pickup_terminal, delivery_area, delivery_address, monthly_loads, target_price_aed, status) VALUES (?,?,?,?,?,?,?) RETURNING id`)
     .run(req.user.id, b.pickupTerminal, b.deliveryArea, b.deliveryAddress, b.monthlyLoads, b.targetPriceAed || null, 'ACTIVE');
   const contract = await db.prepare('SELECT * FROM contract_lanes WHERE id=?').get(Number(result.lastInsertRowid));
   res.status(201).json({ contract });

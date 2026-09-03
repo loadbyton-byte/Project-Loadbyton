@@ -98,10 +98,16 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   let result;
   try {
     result = /** @type {any} */ (await db
-      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, eta_at, truck_type, notes) VALUES (?,?,?,?,?,?,?)')
+      .prepare('INSERT INTO bids (job_id, carrier_id, amount_aed, eta_minutes, eta_at, truck_type, notes) VALUES (?,?,?,?,?,?,?) RETURNING id')
       .run(job.id, req.user.id, amount, legacyEtaMinutes, /** @type {any} */ (etaAt).toISOString(), b.truckType || null, b.notes || null));
   } catch (/** @type {any} */ e) {
-    if (/** @type {any} */ (e).code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(/** @type {any} */ (e).message)) {
+    // 23505 is Postgres's unique_violation code; ERR_SQLITE_ERROR + message
+    // sniff is node:sqlite's. Only the SQLite check existed before, so this
+    // friendly-error path was silently dead on Postgres — any real-world
+    // race (double-click, retry) would throw a raw 500 instead.
+    const isUniqueViolation = /** @type {any} */ (e).code === '23505' ||
+      (/** @type {any} */ (e).code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(/** @type {any} */ (e).message));
+    if (isUniqueViolation) {
       return sendError(res, 409, 'You already have a pending bid on this job — withdraw it before placing another.');
     }
     throw e;
@@ -251,7 +257,7 @@ router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRo
   const { reason } = /** @type {any} */ (req.body) || {};
   if (!reason || !String(reason).trim()) return sendError(res, 400, 'reason is required');
 
-  const result = /** @type {any} */ (await db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\')').run(job.id, req.user.id, String(reason).trim()));
+  const result = /** @type {any} */ (await db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\') RETURNING id').run(job.id, req.user.id, String(reason).trim()));
   await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
   await writeAudit(req, {
     userId: req.actorId,

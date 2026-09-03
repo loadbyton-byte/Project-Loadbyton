@@ -36,9 +36,16 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
-function nextInvoiceNumber(db) {
+// db.prepare(sql).get/all/run() is synchronous on SQLite but returns a
+// Promise on Postgres (server/db.js's top-of-file contract). Every call
+// below is awaited and both functions are async as a result — unawaited,
+// a returned row is a pending Promise object (always truthy, no real
+// fields), which previously made issueInvoice always take its "already
+// exists" early-return path and silently never create an invoice at all
+// on Postgres.
+async function nextInvoiceNumber(db) {
   const year = new Date().getUTCFullYear();
-  const { c } = db.prepare(`SELECT COUNT(*) c FROM invoices WHERE invoice_number LIKE ?`).get(`LBT-INV-${year}-%`);
+  const { c } = await db.prepare(`SELECT COUNT(*) c FROM invoices WHERE invoice_number LIKE ?`).get(`LBT-INV-${year}-%`);
   const seq = String(c + 1).padStart(6, '0');
   return `LBT-INV-${year}-${seq}`;
 }
@@ -46,25 +53,26 @@ function nextInvoiceNumber(db) {
 // Issues an invoice for a job's payout if one doesn't already exist for it
 // (idempotent — safe to call from any release path without double-invoicing
 // a job that somehow gets touched twice).
-function issueInvoice(db, jobId) {
-  const existing = db.prepare('SELECT * FROM invoices WHERE job_id=?').get(jobId);
+async function issueInvoice(db, jobId) {
+  const existing = await db.prepare('SELECT * FROM invoices WHERE job_id=?').get(jobId);
   if (existing) return existing;
 
-  const payout = db.prepare('SELECT * FROM payouts WHERE job_id=?').get(jobId);
+  const payout = await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(jobId);
   if (!payout) return null;
-  const _job = db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
-  const carrierProfile = db.prepare('SELECT * FROM profiles WHERE user_id=?').get(payout.carrier_id);
+  const _job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
+  const carrierProfile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(payout.carrier_id);
 
   const { taxableAed, vatAed, totalAed } = vatBreakdown(payout.platform_fee_aed);
-  const invoiceNumber = nextInvoiceNumber(db);
+  const invoiceNumber = await nextInvoiceNumber(db);
   const supplierTrn = process.env.PLATFORM_TRN || null;
 
-  const result = db
+  const result = await db
     .prepare(
       `INSERT INTO invoices
          (invoice_number, payout_id, job_id, carrier_id, supplier_trn, customer_trn,
           gross_aed, commission_aed, vat_rate_bps, taxable_aed, vat_aed, total_aed)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+       RETURNING id`
     )
     .run(
       invoiceNumber,

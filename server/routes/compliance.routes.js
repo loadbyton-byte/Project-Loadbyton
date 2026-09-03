@@ -23,7 +23,7 @@ router.post('/api/jobs/:id/compliance', auth(['SHIPPER','ADMIN']), async (req,re
   if(!validateHsCode(hs)) return sendError(res,400,'hsCode must be 6-10 digit HS classification');
   const m=manifest||{ job: job.job_code, hs, origin: job.pickup_terminal, dest: job.delivery_area };
   const { manifestHash, zkProof } = zkCommit(m);
-  const r=await db.prepare(`INSERT INTO compliance_declarations (job_id, hs_code, manifest_hash, zk_proof, status) VALUES (?,?,?,?, 'PENDING')`).run(job.id, String(hs), manifestHash, zkProof);
+  const r=await db.prepare(`INSERT INTO compliance_declarations (job_id, hs_code, manifest_hash, zk_proof, status) VALUES (?,?,?,?, 'PENDING') RETURNING id`).run(job.id, String(hs), manifestHash, zkProof);
   // simulate sovereign tax webhook async
   setTimeout(()=>{
     try{

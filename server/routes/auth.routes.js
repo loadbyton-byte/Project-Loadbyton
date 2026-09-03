@@ -63,7 +63,8 @@ router.post(
     const userResult = await db
       .prepare(
         `INSERT INTO users (email, password_hash, role, tier, referral_code, referred_by, email_verify_token_hash, email_verify_expires, account_approval_status)
-         VALUES (?,?,?,?,?,?,?,?, 'PENDING')`
+         VALUES (?,?,?,?,?,?,?,?, 'PENDING')
+         RETURNING id`
       )
       .run(email, passwordHash, role, 'BRONZE', code, referredBy, hashToken(verifyToken), verifyExpires);
     const userId = Number(userResult.lastInsertRowid);

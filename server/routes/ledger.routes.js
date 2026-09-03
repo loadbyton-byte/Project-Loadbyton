@@ -38,7 +38,7 @@ router.post('/api/jobs/:id/tokenize', auth(['SHIPPER','ADMIN']), async (req,res)
   const score=await riskScore({ carrierId: job.carrier_id||job.shipper_id, laneKey, countryCode: job.country_code||'AE' });
   const rate=rateForRisk(score);
   const tokenId=`BLT-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
-  const r=await db.prepare(`INSERT INTO debt_instruments (job_id, bl_number, face_value_aed, interest_rate_bps, risk_score, token_id) VALUES (?,?,?,?,?,?)`).run(job.id, String(bl), face, rate, score, tokenId);
+  const r=await db.prepare(`INSERT INTO debt_instruments (job_id, bl_number, face_value_aed, interest_rate_bps, risk_score, token_id) VALUES (?,?,?,?,?,?) RETURNING id`).run(job.id, String(bl), face, rate, score, tokenId);
   const inst=await db.prepare('SELECT * FROM debt_instruments WHERE id=?').get(Number(r.lastInsertRowid));
   res.status(201).json({ instrument: inst, risk:{ score, rateBps: rate, lane: laneKey }});
 });

@@ -43,10 +43,25 @@ if (usePostgres) {
     console.error('[db] Postgres pool error:', err.message);
   });
 
-  // Convert ? placeholders to $1, $2, ... for pg
+  // Convert ? placeholders to $1, $2, ... for pg, and translate SQLite's
+  // datetime('now'[, '+N unit'|'-N unit']) — used across ~20 files
+  // (award/escrow/payout services, most route files, seed.js) — into a
+  // Postgres equivalent. datetime() isn't a Postgres function at all
+  // ("function datetime(unknown) does not exist", confirmed against a
+  // real Postgres instance), so every one of those call sites hard-failed
+  // on first use. to_char(...,'YYYY-MM-DD HH24:MI:SS') matches SQLite's
+  // datetime('now') text output exactly (UTC, no offset, no fractional
+  // seconds), so every existing string comparison/parse of these TEXT
+  // date columns keeps working unchanged on both engines.
   const toPg = (sql) => {
     let i = 0;
-    return sql.replace(/\?/g, () => `$${++i}`);
+    let out = sql.replace(/\?/g, () => `$${++i}`);
+    out = out.replace(/datetime\(\s*'now'\s*(?:,\s*'([+-]\d+)\s+(\w+)'\s*)?\)/gi, (_m, amount, unit) => {
+      const base = `(NOW() AT TIME ZONE 'UTC')`;
+      const expr = amount && unit ? `${base} ${amount[0]} INTERVAL '${amount.slice(1)} ${unit}'` : base;
+      return `to_char(${expr}, 'YYYY-MM-DD HH24:MI:SS')`;
+    });
+    return out;
   };
 
   db = {
