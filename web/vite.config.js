@@ -37,6 +37,11 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router', 'react-router-dom'],
           query: ['@tanstack/react-query'],
+          // Own chunk rather than bundled into JobDetail (the only importer
+          // today) — it's sizable, rarely changes, and this way it's
+          // cached independently of app-code deploys instead of inflating
+          // JobDetail's chunk every time either changes.
+          socket: ['socket.io-client'],
         },
       },
     },

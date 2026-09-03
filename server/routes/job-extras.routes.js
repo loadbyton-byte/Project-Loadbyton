@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const db = require('../db');
 const apiResponse = require('../lib/apiResponse');
 const { BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM, TERMINAL_EMIRATE, AREA_EMIRATE, DOC_TYPES } = require('../lib/constants');
-const { saveUploadedFile, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob } = require('../lib/helpers');
+const { saveUploadedFile, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();
@@ -190,6 +190,7 @@ router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
     await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
   }
   const message = await db.prepare('SELECT * FROM messages WHERE id=?').get(Number(result.lastInsertRowid));
+  try { require('../lib/socket').emitNewMessage(job.id, message); } catch {}
   res.status(201).json({ message });
 });
 

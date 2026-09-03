@@ -13,7 +13,7 @@ import { EirChecklist } from '../components/EirChecklist.jsx';
 import { DetentionAlarm } from '../components/DetentionAlarm.jsx';
 import JobHeader from '../features/job/JobHeader.jsx';
 import JobTimeline from '../features/job/JobTimeline.jsx';
-import MessagesPanel from '../features/job/MessagesPanel.jsx';
+import ChatPopup from '../features/job/ChatPopup.jsx';
 import DriverPanel from '../features/job/DriverPanel.jsx';
 import RatingPanel from '../features/job/RatingPanel.jsx';
 import BidForm from '../features/job/BidForm.jsx';
@@ -335,10 +335,6 @@ export default function JobDetail() {
             <DocumentList documents={documents} jobId={job.id} onAdd={load} />
           </Section>
 
-          <Section title="Messages">
-            <MessagesPanel messages={messages} jobId={job.id} onSent={load} />
-          </Section>
-
           {job.status === 'COMPLETED' && (isShipper || isAwardedCarrier) && (
             <Section title="Rate your counterparty"><RatingPanel job={job} onSubmit={load} /></Section>
           )}
@@ -450,6 +446,13 @@ export default function JobDetail() {
           )}
         </div>
       </div>
+
+      {/* Floating, not inline — per the product ask, messaging is a popped-up
+          live channel between the two parties once a carrier is actually
+          assigned, not part of the page's normal reading flow. */}
+      {(isShipper || isAwardedCarrier) && !['OPEN', 'DRAFT'].includes(job.status) && (
+        <ChatPopup jobId={job.id} initialMessages={messages} />
+      )}
     </div>
   );
 }
