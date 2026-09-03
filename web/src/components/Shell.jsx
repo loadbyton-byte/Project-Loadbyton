@@ -6,7 +6,7 @@ import { api } from '../lib/api.js';
 import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
-  IconTrendUp, IconSettings,
+  IconTrendUp, IconSettings, IconTruck,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 
@@ -47,6 +47,7 @@ function navByRole(t) {
       { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} /> },
       { to: '/my-bids', label: t('nav.myBids', 'My bids'), icon: <IconGavel size={20} /> },
       { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} /> },
+      { to: '/drivers', label: t('nav.drivers', 'My drivers'), icon: <IconTruck size={20} /> },
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],

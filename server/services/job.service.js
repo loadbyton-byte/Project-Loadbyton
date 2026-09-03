@@ -223,7 +223,24 @@ async function getJob(jobId, user) {
     );
   }
   const shipperProfile = await db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
-  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null };
+  // Driver info for whoever can already see this job (shipper/carrier/admin
+  // per canViewJob above) — license number + whether docs exist, not the
+  // raw storage paths (the frontend fetches actual files through
+  // /api/fleet/drivers/:id/documents/:docType, which re-checks authorization
+  // itself rather than trusting a path handed back here).
+  let driverInfo = null;
+  if (job.assigned_driver_id) {
+    const driver = await db.prepare('SELECT license_number, license_expiry, license_doc_storage_path, vehicle_doc_storage_path FROM drivers WHERE id=?').get(job.assigned_driver_id);
+    if (driver) {
+      driverInfo = {
+        licenseNumber: driver.license_number,
+        licenseExpiry: driver.license_expiry,
+        hasLicenseDoc: !!driver.license_doc_storage_path,
+        hasVehicleDoc: !!driver.vehicle_doc_storage_path,
+      };
+    }
+  }
+  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null, driver_info: driverInfo };
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
   const payout = await payoutRepository.findByJobId(job.id) || null;

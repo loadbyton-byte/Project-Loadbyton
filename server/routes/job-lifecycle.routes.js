@@ -172,14 +172,31 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
   if (!['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status)) {
     return sendError(res, 403, 'Driver can only be reassigned before delivery');
   }
-  const { driverName, driverPhone } = /** @type {any} */ (req.body) || {};
-  if (!driverName) return sendError(res, 400, 'driverName is required');
-  const normalizedPhone = /** @type {any} */ (normalizeUaeMobile(driverPhone));
-  if (!normalizedPhone) return sendError(res, 400, 'driverPhone is required and must be a valid UAE mobile number');
+  const { driverId, driverName: rawDriverName, driverPhone: rawDriverPhone } = /** @type {any} */ (req.body) || {};
+  let driverName = rawDriverName;
+  let normalizedPhone = /** @type {any} */ (normalizeUaeMobile(rawDriverPhone));
 
-  await db.prepare(`UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone=?, updated_at=datetime('now') WHERE id=?`).run(
+  // Preferred path: pick from the carrier's saved roster (server/routes/fleet.routes.js)
+  // — name/phone still get written to jobs.assigned_driver_name/_phone too
+  // (existing readers of those columns, e.g. WonJobs/OpenLoads cards, keep
+  // working unchanged) alongside the new assigned_driver_id link that lets
+  // the shipper see the driver's license/vehicle docs.
+  let resolvedDriverId = null;
+  if (driverId) {
+    const driver = await db.prepare('SELECT * FROM drivers WHERE id=? AND carrier_id=? AND is_active=1').get(driverId, req.user.id);
+    if (!driver) return sendError(res, 404, 'Driver not found in your roster');
+    resolvedDriverId = driver.id;
+    driverName = driver.name;
+    normalizedPhone = driver.phone;
+  } else {
+    if (!driverName) return sendError(res, 400, 'driverId or driverName is required');
+    if (!normalizedPhone) return sendError(res, 400, 'driverPhone is required and must be a valid UAE mobile number');
+  }
+
+  await db.prepare(`UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone=?, assigned_driver_id=?, updated_at=datetime('now') WHERE id=?`).run(
     driverName,
     normalizedPhone,
+    resolvedDriverId,
     job.id
   );
   await writeAudit(req, {

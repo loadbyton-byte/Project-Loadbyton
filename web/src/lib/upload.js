@@ -24,3 +24,7 @@ export function fileToBase64(file) {
 export function documentFileUrl(jobId, doc) {
   return doc.storage_path ? `/api/jobs/${jobId}/documents/${doc.id}/file` : doc.file_url;
 }
+
+export function driverDocumentUrl(driverId, docType) {
+  return `/api/fleet/drivers/${driverId}/documents/${docType}`;
+}

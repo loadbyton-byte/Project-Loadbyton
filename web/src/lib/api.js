@@ -33,6 +33,7 @@ async function request(method, path, body) {
 const get = (path) => request('GET', path);
 const post = (path, body) => request('POST', path, body ?? {});
 const patch = (path, body) => request('PATCH', path, body ?? {});
+const del = (path) => request('DELETE', path);
 
 export const api = {
   // auth
@@ -86,6 +87,13 @@ export const api = {
   rateJob: (id, body) => post(`/jobs/${id}/rating`, body),
   getMessages: (id) => get(`/jobs/${id}/messages`),
   sendMessage: (id, content) => post(`/jobs/${id}/messages`, { content }),
+
+  // fleet / driver roster
+  listDrivers: () => get('/fleet/drivers'),
+  createDriver: (body) => post('/fleet/drivers', body),
+  updateDriverProfile: (id, body) => patch(`/fleet/drivers/${id}`, body),
+  deleteDriver: (id) => del(`/fleet/drivers/${id}`),
+  uploadDriverDocument: (id, body) => post(`/fleet/drivers/${id}/documents`, body),
 
   // retention
   listTemplates: () => get('/templates'),

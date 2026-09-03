@@ -7,7 +7,7 @@ import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, C
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
-import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl } from '../lib/upload.js';
+import { fileToBase64, UPLOAD_ACCEPT, documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
 import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
 import { EirChecklist } from '../components/EirChecklist.jsx';
 import { DetentionAlarm } from '../components/DetentionAlarm.jsx';
@@ -416,6 +416,37 @@ export default function JobDetail() {
 
           {isAwardedCarrier && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status) && (
             <DriverPanel job={job} onDone={load} />
+          )}
+
+          {/* Read-only for the shipper — the carrier's DriverPanel above is
+              where the driver/roster actually gets assigned. */}
+          {isShipper && job.assigned_driver_name && (
+            <Card className="mb-6">
+              <Card.Content>
+                <p className="text-xs text-ink-muted">Assigned driver</p>
+                <p className="font-medium text-ink">{job.assigned_driver_name}</p>
+                <p className="text-xs text-ink-muted">{job.assigned_driver_phone}</p>
+                {job.driver_info?.licenseNumber && (
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Licence {job.driver_info.licenseNumber}{job.driver_info.licenseExpiry ? ` · expires ${job.driver_info.licenseExpiry}` : ''}
+                  </p>
+                )}
+                {(job.driver_info?.hasLicenseDoc || job.driver_info?.hasVehicleDoc) && (
+                  <div className="mt-3 flex flex-wrap gap-2 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {job.driver_info.hasLicenseDoc && (
+                      <a href={driverDocumentUrl(job.assigned_driver_id, 'license')} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-brand-secondary hover:underline">
+                        <IconFile size={13} /> License document
+                      </a>
+                    )}
+                    {job.driver_info.hasVehicleDoc && (
+                      <a href={driverDocumentUrl(job.assigned_driver_id, 'vehicle')} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs font-medium text-brand-secondary hover:underline">
+                        <IconFile size={13} /> Vehicle document
+                      </a>
+                    )}
+                  </div>
+                )}
+              </Card.Content>
+            </Card>
           )}
         </div>
       </div>

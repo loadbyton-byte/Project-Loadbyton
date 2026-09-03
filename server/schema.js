@@ -268,6 +268,7 @@ module.exports = function initSchema(db) {
   addColumn('bids', 'driver_phone', 'driver_phone TEXT');
   addColumn('jobs', 'assigned_driver_name', 'assigned_driver_name TEXT');
   addColumn('jobs', 'assigned_driver_phone', 'assigned_driver_phone TEXT');
+  addColumn('jobs', 'assigned_driver_id', 'assigned_driver_id INTEGER REFERENCES drivers(id)');
 
   addColumn('payouts', 'sla_deadline', 'sla_deadline TEXT');
   addColumn('payouts', 'transfer_executed_at', 'transfer_executed_at TEXT');
@@ -545,6 +546,27 @@ module.exports = function initSchema(db) {
   CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_job_unique ON payouts(job_id);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_idempotency_key ON payouts(idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+  -- Carrier driver roster — registered once per carrier org, picked from
+  -- (not retyped) when assigning to a job. One license doc + one vehicle
+  -- doc slot per driver, matching the ask exactly rather than a general
+  -- multi-document table this feature doesn't need.
+  CREATE TABLE IF NOT EXISTS drivers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    license_number TEXT,
+    license_expiry TEXT,
+    license_doc_storage_path TEXT,
+    license_doc_mime_type TEXT,
+    vehicle_doc_storage_path TEXT,
+    vehicle_doc_mime_type TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_drivers_carrier ON drivers(carrier_id);
   `);
 
   // Seed canonical ledger accounts — idempotent

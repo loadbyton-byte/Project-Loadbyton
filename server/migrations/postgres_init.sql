@@ -451,6 +451,31 @@ CREATE TABLE IF NOT EXISTS fuel_advances (
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 
+-- Carrier driver roster — registered once per carrier org, picked from (not
+-- retyped) when assigning to a job. One license doc + one vehicle doc slot
+-- per driver, matching the ask exactly rather than a general multi-document
+-- table this feature doesn't need.
+CREATE TABLE IF NOT EXISTS drivers (
+  id SERIAL PRIMARY KEY,
+  carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  license_number TEXT,
+  license_expiry TEXT,
+  license_doc_storage_path TEXT,
+  license_doc_mime_type TEXT,
+  vehicle_doc_storage_path TEXT,
+  vehicle_doc_mime_type TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  updated_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_drivers_carrier ON drivers(carrier_id);
+
+-- jobs was created above, before drivers existed — added via ALTER rather
+-- than reordering the file.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS assigned_driver_id INTEGER REFERENCES drivers(id);
+
 -- ---------------------------------------------------------------------------
 -- Seed default settings (Postgres-compatible upsert)
 -- ---------------------------------------------------------------------------
