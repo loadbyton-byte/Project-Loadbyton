@@ -13,6 +13,11 @@ import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 
 const PAGE_SIZE = 20;
+// jobs.deadline is a required DB column (sort options, detention/demurrage
+// alarms, and job-card displays all read it) — removing the manual picker
+// from the post form doesn't remove the need for a value, so this fills it
+// in automatically instead of asking the shipper to think about it.
+const DEFAULT_DEADLINE_HOURS = 48;
 const SORT_OPTIONS = [
   { value: 'date_desc', label: 'Newest first' },
   { value: 'date_asc', label: 'Oldest first' },
@@ -26,7 +31,7 @@ const emptyJob = {
   loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
   equipmentType: 'CONTAINER_CHASSIS', cargoType: 'GENERAL_GOODS',
   containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
-  deliveryAddress: '', readyAt: '', deadline: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
+  deliveryAddress: '', readyAt: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
   containerCount: 1, truckCount: 1,
   importPickupTerminal: TERMINALS[0], importUnloadingLocation: AREAS[0], importEmptyReturnLocation: DEPOTS[0],
   exportEmptyPickupLocation: DEPOTS[0], exportLoadingLocation: AREAS[0], exportDepositTerminal: TERMINALS[0],
@@ -94,8 +99,10 @@ export default function Dashboard() {
       // F11, fixed independently on both branches — kept main's optional
       // chaining (form never had a job_code field; the server generates it,
       // so the toast always fell back to a placeholder before this).
+      const deadline = new Date(new Date(form.readyAt).getTime() + DEFAULT_DEADLINE_HOURS * 3600 * 1000).toISOString();
       const created = await api.createJob({
         ...form,
+        deadline,
         targetPriceAed: form.targetPriceAed ? Number(form.targetPriceAed) : undefined,
         cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
         containerCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.containerCount) || 1,
@@ -332,13 +339,12 @@ export default function Dashboard() {
                 <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
                 <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <Label>{form.shipmentType === 'LOCAL' ? 'Loading date & time' : 'Ready at'}</Label>
                 <Input type="datetime-local" required value={form.readyAt} onChange={(e) => setForm({ ...form, readyAt: e.target.value })} />
-              </div>
-              <div>
-                <Label>Deadline</Label>
-                <Input type="datetime-local" required value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
+                <p className="mt-1 text-xs text-ink-muted">
+                  No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from your ready time.
+                </p>
               </div>
               {form.shipmentType !== 'LOCAL' && (
                 <div className="sm:col-span-2 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
