@@ -87,7 +87,8 @@ export const api = {
   getJobDocumentUploadUrl: (id, mimeType) => post(`/jobs/${id}/documents/upload-url`, { mimeType }),
   rateJob: (id, body) => post(`/jobs/${id}/rating`, body),
   getMessages: (id) => get(`/jobs/${id}/messages`),
-  sendMessage: (id, content) => post(`/jobs/${id}/messages`, { content }),
+  getThreads: (id) => get(`/jobs/${id}/threads`),
+  sendMessage: (id, content, withRole) => post(`/jobs/${id}/messages`, withRole ? { content, withRole } : { content }),
 
   // fleet / driver roster
   listDrivers: () => get('/fleet/drivers'),

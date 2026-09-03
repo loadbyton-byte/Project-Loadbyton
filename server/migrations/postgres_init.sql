@@ -170,15 +170,27 @@ CREATE TABLE IF NOT EXISTS job_documents (
 );
 CREATE INDEX IF NOT EXISTS idx_docs_job ON job_documents(job_id);
 
+CREATE TABLE IF NOT EXISTS message_threads (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  party_a_role TEXT NOT NULL,
+  party_b_role TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_job_parties ON message_threads(job_id, party_a_role, party_b_role);
+CREATE INDEX IF NOT EXISTS idx_threads_job ON message_threads(job_id);
+
 CREATE TABLE IF NOT EXISTS messages (
   id SERIAL PRIMARY KEY,
   job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
   sender_id INTEGER NOT NULL REFERENCES users(id),
+  thread_id INTEGER REFERENCES message_threads(id),
   content TEXT NOT NULL,
   is_read INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 CREATE INDEX IF NOT EXISTS idx_messages_job ON messages(job_id);
+CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id);
 
 CREATE TABLE IF NOT EXISTS ratings (
   id SERIAL PRIMARY KEY,

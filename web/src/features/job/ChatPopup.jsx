@@ -6,74 +6,106 @@ import { Button, Input, ChatBubble } from '../../components/ui.jsx';
 import { IconMessage, IconClose } from '../../components/icons.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 
-// Floating chat — real-time via Socket.IO (server/lib/socket.js), with the
-// REST send (job-extras.routes.js POST /messages, unchanged) as the only
-// write path; the socket is push-only. Sending relies on the server
-// broadcasting the new message back to everyone in the room, including the
-// sender's own connection, rather than optimistically appending locally —
-// one update path, no dedupe-by-id logic needed to avoid double-showing a
-// just-sent message.
-export default function ChatPopup({ jobId, initialMessages = [] }) {
+const ROLE_LABELS = { SHIPPER: 'Shipper', CARRIER: 'Carrier', ADMIN: 'Admin', DRIVER: 'Driver' };
+
+// Floating chat — real-time via Socket.IO (server/lib/socket.js), one room
+// per thread (job + role-pair), with the REST send
+// (job-extras.routes.js POST /messages, unchanged as the only write path)
+// as the source of truth; the socket is push-only. Sending relies on the
+// server broadcasting the new message back to everyone in the room,
+// including the sender's own connection — one update path, no
+// dedupe-by-id logic needed to avoid double-showing a just-sent message.
+export default function ChatPopup({ jobId }) {
   const { user } = useAuth();
   const { addToast } = useToasts();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState(initialMessages);
+  const [loaded, setLoaded] = useState(false);
+  const [threads, setThreads] = useState([]); // [{id, otherRole, messages}]
+  const [availableRoles, setAvailableRoles] = useState([]);
+  const [activeRole, setActiveRole] = useState(null); // otherRole of the selected conversation
   const [unread, setUnread] = useState(0);
   const [content, setContent] = useState('');
   const [busy, setBusy] = useState(false);
   const listRef = useRef(null);
-
-  useEffect(() => { setMessages(initialMessages); }, [initialMessages]);
-
-  // Read inside the socket effect below without making isOpen a dependency
-  // of it (that would tear down and rejoin the room on every open/close).
   const isOpenRef = useRef(isOpen);
+  const activeThreadIdRef = useRef(null);
+
   useEffect(() => { isOpenRef.current = isOpen; if (isOpen) setUnread(0); }, [isOpen]);
 
+  const activeThread = threads.find((t) => t.otherRole === activeRole) || null;
+  activeThreadIdRef.current = activeThread?.id ?? null;
+
+  function loadThreads() {
+    api.getThreads(jobId).then((d) => {
+      setThreads(d.threads);
+      setAvailableRoles(d.availableRecipientRoles);
+      setActiveRole((prev) => prev || d.threads[0]?.otherRole || d.availableRecipientRoles[0] || null);
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
+  }
+
+  // Load once the popup is opened for the first time, not on mount — most
+  // job views never open the widget at all.
+  useEffect(() => { if (isOpen && !loaded) loadThreads(); }, [isOpen, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Socket: join every thread this user already has on this job (so a
+  // message arriving in a thread that isn't currently selected still
+  // increments the unread badge), rejoining whenever the thread list changes.
   useEffect(() => {
+    if (!loaded) return;
     const socket = getSocket();
     if (!socket.connected) socket.connect();
+    const threadIds = threads.map((t) => t.id);
 
-    function join() {
-      socket.emit('join_job', jobId);
-    }
-    if (socket.connected) join();
-    socket.on('connect', join);
+    function joinAll() { threadIds.forEach((id) => socket.emit('join_thread', id)); }
+    if (socket.connected) joinAll();
+    socket.on('connect', joinAll);
 
     function onNewMessage(message) {
-      if (message.job_id !== jobId) return;
-      setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
-      if (message.sender_id !== user.id) {
-        setUnread((n) => (isOpenRef.current ? 0 : n + 1));
+      setThreads((prev) => prev.map((t) => (
+        t.id === message.thread_id && !t.messages.some((m) => m.id === message.id)
+          ? { ...t, messages: [...t.messages, message] }
+          : t
+      )));
+      const isActiveThread = message.thread_id === activeThreadIdRef.current;
+      if (message.sender_id !== user.id && !(isOpenRef.current && isActiveThread)) {
+        setUnread((n) => n + 1);
       }
     }
     socket.on('new_message', onNewMessage);
 
     return () => {
-      socket.emit('leave_job', jobId);
-      socket.off('connect', join);
+      threadIds.forEach((id) => socket.emit('leave_thread', id));
+      socket.off('connect', joinAll);
       socket.off('new_message', onNewMessage);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId, user.id]);
+  }, [loaded, threads.map((t) => t.id).join(','), user.id]);
 
   useEffect(() => {
     if (isOpen && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages, isOpen]);
+  }, [activeThread?.messages, isOpen]);
 
   async function submit(e) {
     e.preventDefault();
-    if (!content.trim()) return;
+    if (!content.trim() || !activeRole) return;
     setBusy(true);
     try {
-      await api.sendMessage(jobId, content);
+      const { threadId } = await api.sendMessage(jobId, content, activeRole);
       setContent('');
+      // A brand-new conversation (no thread existed yet) needs a reload to
+      // pick up the newly-created thread id and join its socket room —
+      // an existing thread's own message arrives via the socket broadcast
+      // above and needs nothing further here.
+      if (threadId && !threads.some((t) => t.id === threadId)) loadThreads();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Message not sent', body: err.message });
     } finally {
       setBusy(false);
     }
   }
+
+  const messages = activeThread?.messages || [];
 
   return (
     <div className="fixed bottom-5 right-5 z-40" dir="ltr">
@@ -93,22 +125,46 @@ export default function ChatPopup({ jobId, initialMessages = [] }) {
               <IconClose size={16} />
             </button>
           </div>
+
+          {availableRoles.length > 1 && (
+            <div className="flex gap-1 border-b p-2" style={{ borderColor: 'var(--border-subtle)' }}>
+              {availableRoles.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setActiveRole(role)}
+                  className="rounded-full px-3 py-1 text-xs font-semibold transition"
+                  style={activeRole === role
+                    ? { background: 'var(--brand-accent)', color: 'white' }
+                    : { background: 'var(--surface-container-high)', color: 'var(--ink-secondary)' }}
+                >
+                  {ROLE_LABELS[role] || role}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4" role="log" aria-live="polite">
-            {messages.length === 0 ? (
-              <p className="text-sm text-ink-muted">No messages yet — say hello.</p>
+            {!loaded ? (
+              <p className="text-sm text-ink-muted">Loading…</p>
+            ) : !activeRole ? (
+              <p className="text-sm text-ink-muted">No one to message on this job yet.</p>
+            ) : messages.length === 0 ? (
+              <p className="text-sm text-ink-muted">No messages with {ROLE_LABELS[activeRole] || activeRole} yet — say hello.</p>
             ) : (
               messages.map((m) => <ChatBubble key={m.id} body={m.content} mine={m.sender_id === user.id} />)
             )}
           </div>
           <form onSubmit={submit} className="flex gap-2 border-t p-3" style={{ borderColor: 'var(--border-subtle)' }}>
             <Input
-              placeholder="Write a message…"
+              placeholder={activeRole ? `Message ${ROLE_LABELS[activeRole] || activeRole}…` : 'Write a message…'}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              disabled={!activeRole}
               className="flex-1"
               aria-label="Message content"
             />
-            <Button type="submit" variant="secondary" loading={busy} aria-label="Send message">
+            <Button type="submit" variant="secondary" loading={busy} disabled={!activeRole} aria-label="Send message">
               <IconMessage size={16} />
             </Button>
           </form>

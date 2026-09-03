@@ -6,7 +6,7 @@
 // gate who can receive that push. No new way to create a message exists.
 const db = require('../db');
 const { parseCookies } = require('./http');
-const { isParticipantOrBidder } = require('./helpers');
+const { isThreadParticipant } = require('./messaging');
 const { isAllowedOrigin } = require('./config');
 
 let io = null;
@@ -56,24 +56,31 @@ function initSocket(httpServer) {
   });
 
   io.on('connection', (socket) => {
-    // One job room per join — a client viewing job N only receives pushes
-    // for job N, not every message on the platform.
-    socket.on('join_job', async (jobId, ack) => {
+    // One room per thread (job + role-pair), not per job — a shipper's
+    // socket only receives pushes for threads they're actually a party to
+    // (their SHIPPER-CARRIER and SHIPPER-ADMIN threads on that job), never
+    // e.g. the CARRIER-ADMIN thread on the same job. Disputed jobs' flat
+    // correspondence (job-extras.routes.js) has no socket path at all —
+    // JobDispute.jsx has never used one, it's plain REST — so there's no
+    // legacy job-room case to keep alive here.
+    socket.on('join_thread', async (threadId, ack) => {
       try {
-        const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(Number(jobId));
-        if (!job || !(await isParticipantOrBidder(job, socket.user))) {
+        const thread = await db.prepare('SELECT * FROM message_threads WHERE id=?').get(Number(threadId));
+        if (!thread) { if (typeof ack === 'function') ack({ ok: false }); return; }
+        const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(thread.job_id);
+        if (!job || !isThreadParticipant(job, thread, socket.user)) {
           if (typeof ack === 'function') ack({ ok: false });
           return;
         }
-        socket.join(`job:${job.id}`);
+        socket.join(`thread:${thread.id}`);
         if (typeof ack === 'function') ack({ ok: true });
       } catch {
         if (typeof ack === 'function') ack({ ok: false });
       }
     });
 
-    socket.on('leave_job', (jobId) => {
-      socket.leave(`job:${Number(jobId)}`);
+    socket.on('leave_thread', (threadId) => {
+      socket.leave(`thread:${Number(threadId)}`);
     });
   });
 
@@ -82,10 +89,12 @@ function initSocket(httpServer) {
 }
 
 // Called by job-extras.routes.js right after a message is inserted via the
-// normal REST path — the only place this fires from.
-function emitNewMessage(jobId, message) {
-  if (!io) return;
-  io.to(`job:${jobId}`).emit('new_message', message);
+// normal REST path — the only place this fires from. threadId is null for
+// the disputed-job flat-correspondence case, which has no socket room to
+// push to (see the comment above) — a no-op, not an error.
+function emitNewMessage(threadId, message) {
+  if (!io || !threadId) return;
+  io.to(`thread:${threadId}`).emit('new_message', message);
 }
 
 module.exports = { initSocket, emitNewMessage };

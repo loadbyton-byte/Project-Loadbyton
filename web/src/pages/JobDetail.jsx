@@ -71,21 +71,20 @@ export default function JobDetail() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editingJob, setEditingJob] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [jobData, trackData, msgs] = await Promise.all([
+      // ChatPopup fetches its own thread data (GET .../threads) lazily when
+      // opened, not eagerly here — most job views never open the widget.
+      const [jobData, trackData] = await Promise.all([
         api.getJob(id),
         api.track(id).catch(() => null),
-        api.getMessages(id).catch(() => ({ messages: [] })),
       ]);
       setData(jobData);
       setTrack(trackData);
-      setMessages(msgs.messages);
     } catch (err) {
       setError(err.message);
     }
@@ -451,7 +450,7 @@ export default function JobDetail() {
           live channel between the two parties once a carrier is actually
           assigned, not part of the page's normal reading flow. */}
       {(isShipper || isAwardedCarrier) && !['OPEN', 'DRAFT'].includes(job.status) && (
-        <ChatPopup jobId={job.id} initialMessages={messages} />
+        <ChatPopup jobId={job.id} />
       )}
     </div>
   );

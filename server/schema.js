@@ -118,6 +118,21 @@ module.exports = function initSchema(db) {
   );
   CREATE INDEX IF NOT EXISTS idx_messages_job ON messages(job_id);
 
+  -- One row per (job, role-pair) that has ever exchanged a message — created
+  -- on demand, not pre-created for every job (most jobs never talk to
+  -- admin). party_a_role/party_b_role are always stored in canonical order
+  -- (server/lib/messaging.js's ROLE_ORDER) so "SHIPPER+ADMIN" and
+  -- "ADMIN+SHIPPER" can never become two different rows for the same thread.
+  CREATE TABLE IF NOT EXISTS message_threads (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    party_a_role TEXT NOT NULL,
+    party_b_role TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_job_parties ON message_threads(job_id, party_a_role, party_b_role);
+  CREATE INDEX IF NOT EXISTS idx_threads_job ON message_threads(job_id);
+
   CREATE TABLE IF NOT EXISTS ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
@@ -269,6 +284,7 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'assigned_driver_name', 'assigned_driver_name TEXT');
   addColumn('jobs', 'assigned_driver_phone', 'assigned_driver_phone TEXT');
   addColumn('jobs', 'assigned_driver_id', 'assigned_driver_id INTEGER REFERENCES drivers(id)');
+  addColumn('messages', 'thread_id', 'thread_id INTEGER REFERENCES message_threads(id)');
 
   addColumn('payouts', 'sla_deadline', 'sla_deadline TEXT');
   addColumn('payouts', 'transfer_executed_at', 'transfer_executed_at TEXT');

@@ -9,7 +9,8 @@ const fs = require('node:fs');
 const db = require('../db');
 const apiResponse = require('../lib/apiResponse');
 const { BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM, TERMINAL_EMIRATE, AREA_EMIRATE, DOC_TYPES } = require('../lib/constants');
-const { resolveUploadedFile, getPresignedUploadUrl, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify } = require('../lib/helpers');
+const { resolveUploadedFile, getPresignedUploadUrl, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify, notifyAdmins } = require('../lib/helpers');
+const { isThreadParticipant, availableRecipientRoles, resolveOrCreateThread } = require('../lib/messaging');
 const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();
@@ -181,28 +182,81 @@ router.get('/api/jobs/:id/messages', auth(), async (req, res) => {
   res.json({ messages });
 });
 
+// GET /api/jobs/:id/threads — multi-party view: one entry per thread this
+// user is actually a party to on this job, each with its own message list
+// and who's available to newly message. Separate from GET .../messages
+// above (which stays flat/unchanged — JobDispute.jsx depends on that exact
+// shape) rather than repurposing it, since a DISPUTED job's correspondence
+// is deliberately NOT threaded (three-way transparency, not private
+// side-channels) and has no thread rows at all.
+router.get('/api/jobs/:id/threads', auth(), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+
+  const allThreads = await db.prepare('SELECT * FROM message_threads WHERE job_id=? ORDER BY id').all(job.id);
+  const myThreads = allThreads.filter((t) => isThreadParticipant(job, t, req.user));
+
+  const threads = [];
+  for (const t of myThreads) {
+    const messages = await db.prepare('SELECT * FROM messages WHERE thread_id=? ORDER BY created_at ASC').all(t.id);
+    const otherRole = t.party_a_role === req.user.role ? t.party_b_role : t.party_a_role;
+    threads.push({ id: t.id, partyARole: t.party_a_role, partyBRole: t.party_b_role, otherRole, messages });
+  }
+
+  res.json({ threads, availableRecipientRoles: availableRecipientRoles(job, req.user) });
+});
+
 router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
-  const permitted = job.status === 'DISPUTED' ? await isPartyOnJob(job, req.user) : await isParticipantOrBidder(job, req.user);
-  if (!permitted) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
-  const { content } = req.body || {};
+  const { content, withRole } = req.body || {};
   if (!content || !content.trim()) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'content is required');
-  const result = await db.prepare('INSERT INTO messages (job_id, sender_id, content) VALUES (?,?,?) RETURNING id').run(job.id, req.actorId, content.trim());
-  // Sender may be neither party (an admin replying in a dispute thread) —
-  // notify both shipper and carrier in that case rather than defaulting to
-  // the shipper, which previously left the carrier silently un-notified.
-  if (req.user.id === job.shipper_id) {
-    await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
-  } else if (req.user.id === job.carrier_id) {
-    await notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+
+  let threadId = null;
+  if (job.status === 'DISPUTED') {
+    // Unchanged from before threading existed: flat, three-way-visible
+    // dispute correspondence — see the comment on GET .../threads above.
+    if (!(await isPartyOnJob(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
   } else {
-    await notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
-    await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    if (!(await isParticipantOrBidder(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
+    // withRole is who the sender wants to reach; default to the obvious
+    // counterparty so any caller that hasn't been updated to send it yet
+    // (or a job with no ADMIN/DRIVER thread ever opened) keeps working.
+    const targetRole = withRole || (req.user.role === 'SHIPPER' ? 'CARRIER' : req.user.role === 'CARRIER' ? 'SHIPPER' : null);
+    if (!targetRole) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'withRole is required');
+    const available = availableRecipientRoles(job, req.user);
+    if (!available.includes(targetRole)) return apiResponse.error(req, res, 'FORBIDDEN', `Cannot message ${targetRole} on this job right now`);
+    const thread = await resolveOrCreateThread(job.id, req.user.role, targetRole);
+    threadId = thread.id;
   }
+
+  const result = await db.prepare('INSERT INTO messages (job_id, sender_id, thread_id, content) VALUES (?,?,?,?) RETURNING id').run(job.id, req.actorId, threadId, content.trim());
+
+  if (job.status === 'DISPUTED') {
+    // Unchanged notify-both-parties behavior for dispute correspondence.
+    if (req.user.id === job.shipper_id) {
+      await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    } else if (req.user.id === job.carrier_id) {
+      await notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    } else {
+      await notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+      await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    }
+  } else {
+    // Threaded case: notify whichever real user(s) the target role resolves to.
+    const targetRole = withRole || (req.user.role === 'SHIPPER' ? 'CARRIER' : 'SHIPPER');
+    if (targetRole === 'ADMIN') {
+      await notifyAdmins('New message', `New message on ${job.job_code}`, job.id, 'message');
+    } else if (targetRole === 'SHIPPER') {
+      await notify(job.shipper_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    } else if (targetRole === 'CARRIER') {
+      await notify(job.carrier_id, 'New message', `New message on ${job.job_code}`, job.id, 'message');
+    }
+  }
+
   const message = await db.prepare('SELECT * FROM messages WHERE id=?').get(Number(result.lastInsertRowid));
-  try { require('../lib/socket').emitNewMessage(job.id, message); } catch {}
-  res.status(201).json({ message });
+  try { require('../lib/socket').emitNewMessage(threadId, message); } catch {}
+  res.status(201).json({ message, threadId });
 });
 
 module.exports = router;
