@@ -4,7 +4,30 @@ const { parseCookies } = require('../lib/http');
 const { SEAT_ROLES } = require('../lib/constants');
 const { rateLimiter } = require('../lib/rateLimit');
 const { hasPermission } = require('../lib/permissions');
+const { resolveActingSeat } = require('../lib/helpers');
 const totp = require('../lib/totp');
+
+// A DRIVER seat is deliberately the most restricted account this platform
+// has — its req.user is still the carrier owner's full row (see the
+// session model comment on auth() below), so without an explicit allowlist
+// it would inherit every read the owner or an OPS/FINANCE/VIEWER seat can
+// do (fleet, earnings, every job the carrier has ever touched). This is
+// the single default-deny boundary for that: every route a DRIVER seat may
+// reach at all is listed here; everything else 403s before the route
+// handler runs. Per-job ownership (only *their* assigned job, not every
+// job the carrier has) is enforced separately, inside
+// isParticipantOrBidder/isPartyOnJob/canViewJob (lib/helpers.js) and
+// messaging.js, which the routes below already call.
+const DRIVER_SEAT_ALLOWED_ROUTES = [
+  { method: 'GET', pattern: /^\/api\/auth\/me$/ },
+  { method: 'POST', pattern: /^\/api\/auth\/logout$/ },
+  { method: 'GET', pattern: /^\/api\/driver\/job$/ },
+  { method: 'GET', pattern: /^\/api\/jobs\/\d+\/threads$/ },
+  { method: 'GET', pattern: /^\/api\/jobs\/\d+\/messages$/ },
+  { method: 'POST', pattern: /^\/api\/jobs\/\d+\/messages$/ },
+  { method: 'GET', pattern: /^\/api\/notifications$/ },
+  { method: 'POST', pattern: /^\/api\/notifications\/read$/ },
+];
 
 const writeLimiter = rateLimiter({
   windowMs: 60 * 1000,
@@ -57,7 +80,8 @@ function auth(allowedRoles) {
     if (!user) return res.status(401).json({ error: 'Account not found or deactivated' });
 
     const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(user.id);
-    req.user = { ...user, profile };
+    const { actingSeatId, actingSeatRole } = await resolveActingSeat(session);
+    req.user = { ...user, profile, actingSeatId, actingSeatRole };
     req.session = session;
     req.actorId = session.acting_seat_id || user.id;
     req.actorLabel = session.acting_seat_id
@@ -70,17 +94,23 @@ function auth(allowedRoles) {
       }
     }
 
+    if (actingSeatRole === 'DRIVER') {
+      const permitted = DRIVER_SEAT_ALLOWED_ROUTES.some((r) => r.method === req.method && r.pattern.test(req.path));
+      if (!permitted) return res.status(403).json({ error: 'Driver accounts can only view their assigned job and messages' });
+    }
+
     next();
   };
 }
 
 function requireSeatRole(allowedSeatRoles) {
   return async (req, res, next) => {
-    if (!req.session || !req.session.acting_seat_id) return next();
-    const seat = await db.prepare('SELECT seat_role FROM users WHERE id=?').get(req.session.acting_seat_id);
-    if (!seat) return res.status(403).json({ error: 'Seat account not found' });
-    if (allowedSeatRoles && !allowedSeatRoles.includes(seat.seat_role)) {
-      return res.status(403).json({ error: `Seat role ${seat.seat_role} not in [${allowedSeatRoles}]` });
+    // auth() (always run first in every route chain that uses this) has
+    // already resolved and attached the acting seat's role — no need to
+    // hit the users table a second time.
+    if (!req.user || !req.user.actingSeatId) return next();
+    if (allowedSeatRoles && !allowedSeatRoles.includes(req.user.actingSeatRole)) {
+      return res.status(403).json({ error: `Seat role ${req.user.actingSeatRole} not in [${allowedSeatRoles}]` });
     }
     next();
   };

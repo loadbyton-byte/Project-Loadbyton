@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth, roleHome } from '../lib/auth.jsx';
+import { useAuth, homePath } from '../lib/auth.jsx';
 import { ApiError } from '../lib/api.js';
 import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
@@ -22,8 +22,11 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const user = await login({ email: form.email, password: form.password, totpCode: form.totpCode || undefined });
-      const dest = location.state?.from?.pathname || roleHome(user.role);
+      const { user, actingAs } = await login({ email: form.email, password: form.password, totpCode: form.totpCode || undefined });
+      // A driver seat always lands on its own minimal view, ignoring any
+      // deep link it was bounced here from — RequireAuth would send it
+      // there anyway, this just skips the extra redirect.
+      const dest = actingAs?.seatRole === 'DRIVER' ? '/driver' : (location.state?.from?.pathname || homePath(user, actingAs));
       navigate(dest, { replace: true });
     } catch (err) {
       if (err instanceof ApiError && /authentication code/i.test(err.message)) setNeedsMfa(true);

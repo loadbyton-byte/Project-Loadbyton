@@ -53,7 +53,7 @@ const DEPOTS = ['JAFZA_DEPOT', 'AL_QUSAIS_DEPOT', 'KHALIFA_DEPOT', 'SHARJAH_DEPO
 // not mutable — account-level notices shouldn't be silenceable.
 const NOTIFICATION_TYPES = ['bid', 'award', 'status', 'payout', 'dispute', 'verification', 'message'];
 
-const SEAT_ROLES = ['OPS', 'FINANCE', 'VIEWER'];
+const SEAT_ROLES = ['OPS', 'FINANCE', 'VIEWER', 'DRIVER'];
 
 const BID_SORT_COLUMNS = {
   date_desc: 'b.created_at DESC',

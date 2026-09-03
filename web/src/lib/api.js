@@ -97,6 +97,10 @@ export const api = {
   deleteDriver: (id) => del(`/fleet/drivers/${id}`),
   uploadDriverDocument: (id, body) => post(`/fleet/drivers/${id}/documents`, body),
   getDriverDocumentUploadUrl: (id, mimeType) => post(`/fleet/drivers/${id}/documents/upload-url`, { mimeType }),
+  addDriverSeat: (id, password) => post(`/fleet/drivers/${id}/seat`, password ? { password } : {}),
+
+  // driver seat's own view
+  driverJob: () => get('/driver/job'),
 
   // retention
   listTemplates: () => get('/templates'),

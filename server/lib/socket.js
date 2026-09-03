@@ -8,14 +8,18 @@ const db = require('../db');
 const { parseCookies } = require('./http');
 const { isThreadParticipant } = require('./messaging');
 const { isAllowedOrigin } = require('./config');
+const { resolveActingSeat } = require('./helpers');
 
 let io = null;
 
 // Mirrors middleware/auth.js's session resolution (session lookup, expiry,
-// active-user check) rather than importing it directly — that middleware is
-// built around (req, res, next), and a socket handshake isn't an Express
-// request; duplicating these few lines is simpler and lower-risk than
-// reshaping the HTTP middleware to serve both.
+// active-user check, acting-seat resolution) rather than importing it
+// directly — that middleware is built around (req, res, next), and a
+// socket handshake isn't an Express request; duplicating these few lines
+// is simpler and lower-risk than reshaping the HTTP middleware to serve
+// both. actingSeatId/actingSeatRole are attached the same way auth.js
+// attaches them to req.user, so isThreadParticipant's DRIVER-seat check
+// (messaging.js) works identically for sockets and REST.
 async function resolveUserFromCookie(cookieHeader) {
   const cookies = parseCookies(cookieHeader);
   const token = cookies.lb_session;
@@ -24,7 +28,9 @@ async function resolveUserFromCookie(cookieHeader) {
   if (!session) return null;
   if (new Date(session.expires_at) < new Date()) return null;
   const user = await db.prepare('SELECT * FROM users WHERE id=? AND is_active=1').get(session.user_id);
-  return user || null;
+  if (!user) return null;
+  const { actingSeatId, actingSeatRole } = await resolveActingSeat(session);
+  return { ...user, actingSeatId, actingSeatRole };
 }
 
 function initSocket(httpServer) {
@@ -68,7 +74,7 @@ function initSocket(httpServer) {
         const thread = await db.prepare('SELECT * FROM message_threads WHERE id=?').get(Number(threadId));
         if (!thread) { if (typeof ack === 'function') ack({ ok: false }); return; }
         const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(thread.job_id);
-        if (!job || !isThreadParticipant(job, thread, socket.user)) {
+        if (!job || !(await isThreadParticipant(job, thread, socket.user))) {
           if (typeof ack === 'function') ack({ ok: false });
           return;
         }

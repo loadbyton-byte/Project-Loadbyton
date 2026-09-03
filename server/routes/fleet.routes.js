@@ -2,10 +2,12 @@
 // assigning to a job (see job-lifecycle.routes.js's PATCH /:id/driver).
 // Addresses docs/STRATEGIC_REVIEW.md's flagged gap: "driver identity not
 // bound to the bid."
+const bcrypt = require('bcryptjs');
+const crypto = require('node:crypto');
 const db = require('../db');
 const { auth, requireSeatRole } = require('../middleware/auth');
 const { sendError, asyncHandler } = require('../lib/http');
-const { normalizeUaeMobile, resolveUploadedFile } = require('../lib/helpers');
+const { normalizeUaeMobile, resolveUploadedFile, writeAudit } = require('../lib/helpers');
 const storage = require('../lib/storage');
 const router = require('express').Router();
 
@@ -77,6 +79,40 @@ router.delete('/api/fleet/drivers/:id', auth(['CARRIER']), requireSeatRole(['OPS
   if (!driver) return sendError(res, 404, 'Driver not found');
   await db.prepare(`UPDATE drivers SET is_active=0, updated_at=datetime('now') WHERE id=?`).run(driver.id);
   res.json({ ok: true });
+}));
+
+// Gives a roster driver their own login — a DRIVER seat under the
+// carrier's account (server/lib/constants.js's SEAT_ROLES), reusing the
+// existing multi-user seat system rather than a separate auth mechanism.
+// Owner-only (requireSeatRole([])), same as org/members's seat management —
+// an OPS seat shouldn't be able to mint other accounts. The seat has no
+// real email of its own: one is derived from the roster phone purely as an
+// internal login identifier (never shown to the driver, who signs in with
+// their phone-linked password the carrier shares directly). The generated
+// password is returned exactly once here and never stored or retrievable
+// again — the carrier is responsible for passing it on (call/WhatsApp from
+// their own phone, zero platform messaging cost).
+router.post('/api/fleet/drivers/:id/seat', auth(['CARRIER']), requireSeatRole([]), asyncHandler(async (req, res) => {
+  const driver = await db.prepare('SELECT * FROM drivers WHERE id=? AND carrier_id=?').get(req.params.id, req.user.id);
+  if (!driver) return sendError(res, 404, 'Driver not found');
+  if (driver.seat_user_id) return sendError(res, 400, 'This driver already has a login');
+
+  const { password } = req.body || {};
+  const finalPassword = password && String(password).length >= 8 ? String(password) : crypto.randomBytes(9).toString('base64url');
+  const email = `${driver.phone.replace(/[^0-9]/g, '')}@drivers.loadbyton.internal`;
+  if (await db.prepare('SELECT id FROM users WHERE email=?').get(email)) {
+    return sendError(res, 400, 'A login already exists for this phone number');
+  }
+
+  const passwordHash = bcrypt.hashSync(finalPassword, 10);
+  const result = await db
+    .prepare('INSERT INTO users (email, password_hash, role, tier, org_owner_id, seat_role, display_name, is_verified) VALUES (?,?,?,?,?,?,?,?) RETURNING id')
+    .run(email, passwordHash, req.user.role, 'BRONZE', req.user.id, 'DRIVER', driver.name, req.user.is_verified ? 1 : 0);
+  const seatUserId = Number(result.lastInsertRowid);
+  await db.prepare(`UPDATE drivers SET seat_user_id=?, updated_at=datetime('now') WHERE id=?`).run(seatUserId, driver.id);
+
+  await writeAudit(req, { userId: req.actorId, action: 'DRIVER_SEAT_ADD', details: `Login created for driver ${driver.name} (${driver.phone})`, entityType: 'user', entityId: seatUserId });
+  res.status(201).json({ email, password: finalPassword });
 }));
 
 // Direct-to-R2 upload, step 1 of 2: mint a presigned PUT URL scoped to this

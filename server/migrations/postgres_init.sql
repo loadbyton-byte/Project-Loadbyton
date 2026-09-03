@@ -488,6 +488,10 @@ CREATE INDEX IF NOT EXISTS idx_drivers_carrier ON drivers(carrier_id);
 -- than reordering the file.
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS assigned_driver_id INTEGER REFERENCES drivers(id);
 
+-- Links a roster row to the driver's own login identity (a DRIVER seat
+-- under the carrier's account).
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS seat_user_id INTEGER REFERENCES users(id);
+
 -- ---------------------------------------------------------------------------
 -- Seed default settings (Postgres-compatible upsert)
 -- ---------------------------------------------------------------------------

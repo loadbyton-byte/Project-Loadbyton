@@ -16,7 +16,12 @@ const ROLE_LABELS = { SHIPPER: 'Shipper', CARRIER: 'Carrier', ADMIN: 'Admin', DR
 // including the sender's own connection — one update path, no
 // dedupe-by-id logic needed to avoid double-showing a just-sent message.
 export default function ChatPopup({ jobId }) {
-  const { user } = useAuth();
+  const { user, actingAs } = useAuth();
+  // A seat's sent messages are stored under the seat's own id
+  // (server/middleware/auth.js's req.actorId), not the owner's — user.id
+  // here is always the owner (see auth.jsx's session model), so "mine"
+  // must compare against the acting seat's id when one is logged in.
+  const myId = actingAs?.id ?? user.id;
   const { addToast } = useToasts();
   const [isOpen, setIsOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -68,7 +73,7 @@ export default function ChatPopup({ jobId }) {
           : t
       )));
       const isActiveThread = message.thread_id === activeThreadIdRef.current;
-      if (message.sender_id !== user.id && !(isOpenRef.current && isActiveThread)) {
+      if (message.sender_id !== myId && !(isOpenRef.current && isActiveThread)) {
         setUnread((n) => n + 1);
       }
     }
@@ -80,7 +85,7 @@ export default function ChatPopup({ jobId }) {
       socket.off('new_message', onNewMessage);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, threads.map((t) => t.id).join(','), user.id]);
+  }, [loaded, threads.map((t) => t.id).join(','), myId]);
 
   useEffect(() => {
     if (isOpen && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
@@ -152,7 +157,7 @@ export default function ChatPopup({ jobId }) {
             ) : messages.length === 0 ? (
               <p className="text-sm text-ink-muted">No messages with {ROLE_LABELS[activeRole] || activeRole} yet — say hello.</p>
             ) : (
-              messages.map((m) => <ChatBubble key={m.id} body={m.content} mine={m.sender_id === user.id} />)
+              messages.map((m) => <ChatBubble key={m.id} body={m.content} mine={m.sender_id === myId} />)
             )}
           </div>
           <form onSubmit={submit} className="flex gap-2 border-t p-3" style={{ borderColor: 'var(--border-subtle)' }}>

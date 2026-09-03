@@ -270,12 +270,42 @@ async function notifyAdmins(title, body, jobId = null, type = 'dispute') {
 }
 
 /**
+ * A DRIVER seat's req.user is always the carrier owner's row (see
+ * middleware/auth.js's session model), so `user.id === job.carrier_id`
+ * would otherwise grant it every one of that carrier's jobs. This resolves
+ * the one job (if any) a DRIVER seat is actually scoped to, via the
+ * drivers.seat_user_id link set by POST /api/fleet/drivers/:id/seat.
+ * @param {any} job
+ * @returns {Promise<number|null>}
+ */
+async function getAssignedDriverSeatId(job) {
+  if (!job.assigned_driver_id) return null;
+  const driver = /** @type {any} */ (await db.prepare('SELECT seat_user_id FROM drivers WHERE id=?').get(job.assigned_driver_id));
+  return driver ? driver.seat_user_id : null;
+}
+
+/**
+ * The role a request is actually acting as — a DRIVER seat inherits its
+ * owner's `role` (e.g. CARRIER) on `user.role`, but for messaging/thread
+ * purposes it must be treated as its own party, not the carrier.
+ * @param {any} user
+ * @returns {string}
+ */
+function effectiveRole(user) {
+  return user.actingSeatRole === 'DRIVER' ? 'DRIVER' : user.role;
+}
+
+/**
  * @param {any} job
  * @param {any} user
  * @returns {Promise<boolean>}
  */
 async function isParticipantOrBidder(job, user) {
   if (user.role === 'ADMIN') return true;
+  if (user.actingSeatRole === 'DRIVER') {
+    const seatId = await getAssignedDriverSeatId(job);
+    return seatId != null && seatId === user.actingSeatId;
+  }
   if (user.id === job.shipper_id) return true;
   if (user.id === job.carrier_id) return true;
   if (user.role === 'CARRIER') {
@@ -288,10 +318,14 @@ async function isParticipantOrBidder(job, user) {
 /**
  * @param {any} job
  * @param {any} user
- * @returns {boolean}
+ * @returns {Promise<boolean>}
  */
-function isPartyOnJob(job, user) {
+async function isPartyOnJob(job, user) {
   if (user.role === 'ADMIN') return true;
+  if (user.actingSeatRole === 'DRIVER') {
+    const seatId = await getAssignedDriverSeatId(job);
+    return seatId != null && seatId === user.actingSeatId;
+  }
   if (user.id === job.shipper_id) return true;
   if (user.id === job.carrier_id) return true;
   return false;
@@ -304,7 +338,7 @@ function isPartyOnJob(job, user) {
  */
 async function canViewJob(job, user) {
   if (await isParticipantOrBidder(job, user)) return true;
-  if (user.role === 'CARRIER' && job.status === 'OPEN') return true;
+  if (user.role === 'CARRIER' && user.actingSeatRole !== 'DRIVER' && job.status === 'OPEN') return true;
   return false;
 }
 
@@ -361,8 +395,23 @@ function canSeeDocument(job, doc, user) {
   return user.id === job.shipper_id || user.id === job.carrier_id;
 }
 
+/**
+ * Resolves a session's acting seat (if any) to that seat's own seat_role —
+ * shared by middleware/auth.js (HTTP requests) and lib/socket.js (socket
+ * handshakes), the two places a session gets turned into a request-scoped
+ * user.
+ * @param {any} session
+ * @returns {Promise<{actingSeatId: number|null, actingSeatRole: string|null}>}
+ */
+async function resolveActingSeat(session) {
+  if (!session || !session.acting_seat_id) return { actingSeatId: null, actingSeatRole: null };
+  const seat = /** @type {any} */ (await db.prepare('SELECT seat_role FROM users WHERE id=?').get(session.acting_seat_id));
+  return { actingSeatId: session.acting_seat_id, actingSeatRole: seat ? seat.seat_role : null };
+}
+
 module.exports = {
   saveUploadedFile, getPresignedUploadUrl, resolveUploadedFile, UPLOADS_DIR, ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_BYTES,
+  getAssignedDriverSeatId, effectiveRole, resolveActingSeat,
   normalizeUaeMobile, isValidUaeTrn, isValidUaeTradeLicence, isValidUaeLatLng, haversineKm,
   isPasswordValid, timingSafeEqualStr, hashToken,
   getSettings, toPublicUser, writeAudit, unreadNotificationCount, notify, notifyAdmins,

@@ -21,6 +21,12 @@ router.post('/api/org/members', auth(['SHIPPER', 'CARRIER']), requireSeatRole([]
   const { email, password, seatRole, displayName } = req.body || {};
   if (!email || !password) return sendError(res, 400, 'email and password are required');
   if (!SEAT_ROLES.includes(seatRole)) return sendError(res, 422, `seatRole must be one of ${SEAT_ROLES.join(', ')}`);
+  // DRIVER seats must be created via POST /api/fleet/drivers/:id/seat, which
+  // links the seat to a roster row (drivers.seat_user_id) — the link every
+  // DRIVER-seat authorization check (lib/helpers.js's
+  // getAssignedDriverSeatId) depends on. A seat created here would have no
+  // roster row and, correctly, no access to anything.
+  if (seatRole === 'DRIVER') return sendError(res, 422, 'DRIVER seats are created from the driver roster (Fleet), not here');
   if (await db.prepare('SELECT id FROM users WHERE email=?').get(email)) return sendError(res, 400, 'An account with that email already exists');
 
   const passwordHash = bcrypt.hashSync(password, 10);
@@ -38,6 +44,12 @@ router.patch('/api/org/members/:id', auth(['SHIPPER', 'CARRIER']), requireSeatRo
   if (!seat || seat.org_owner_id !== req.user.id) return sendError(res, 404, 'Seat not found');
   const { seatRole, isActive } = req.body || {};
   if (seatRole !== undefined && !SEAT_ROLES.includes(seatRole)) return sendError(res, 422, `seatRole must be one of ${SEAT_ROLES.join(', ')}`);
+  // A DRIVER seat's role is tied to its drivers.seat_user_id roster link —
+  // changing it here (either direction) would desync that link. isActive
+  // (e.g. deactivating a driver's login) still works fine below.
+  if (seatRole !== undefined && (seatRole === 'DRIVER' || seat.seat_role === 'DRIVER')) {
+    return sendError(res, 422, 'Driver seat roles are managed from the driver roster (Fleet), not here');
+  }
 
   const sets = [];
   const params = [];

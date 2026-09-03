@@ -16,6 +16,8 @@ export default function Drivers() {
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [uploadingFor, setUploadingFor] = useState(null); // { driverId, docType }
+  const [seatBusyFor, setSeatBusyFor] = useState(null); // driverId
+  const [revealedSeat, setRevealedSeat] = useState(null); // { driverName, email, password } — shown once
 
   function load() {
     api.listDrivers().then((d) => setDrivers(d.drivers)).catch(() => setDrivers([]));
@@ -48,6 +50,19 @@ export default function Drivers() {
     }
   }
 
+  async function createLogin(driver) {
+    setSeatBusyFor(driver.id);
+    try {
+      const { email, password } = await api.addDriverSeat(driver.id);
+      setRevealedSeat({ driverName: driver.name, email, password });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not create login', body: err.message });
+    } finally {
+      setSeatBusyFor(null);
+    }
+  }
+
   async function uploadDoc(driver, docType, file) {
     if (!file) return;
     setUploadingFor({ driverId: driver.id, docType });
@@ -75,6 +90,24 @@ export default function Drivers() {
           <IconPlus size={18} /> Add driver
         </Button>
       </div>
+
+      {revealedSeat && (
+        <Card className="mt-5" style={{ borderColor: 'var(--brand-accent)' }}>
+          <Card.Content>
+            <p className="text-sm font-semibold text-ink">Login created for {revealedSeat.driverName}</p>
+            <p className="mt-1 text-sm text-ink-muted">
+              Share these with {revealedSeat.driverName} yourself (call or WhatsApp) — this password is shown only once and can't be retrieved again.
+            </p>
+            <div className="mt-3 grid gap-2 rounded-lg p-3 font-mono text-sm" style={{ background: 'var(--surface-container-high)' }}>
+              <div><span className="text-ink-muted">Sign-in ID: </span>{revealedSeat.email}</div>
+              <div><span className="text-ink-muted">Password: </span>{revealedSeat.password}</div>
+            </div>
+          </Card.Content>
+          <Card.Footer>
+            <Button variant="secondary" onClick={() => setRevealedSeat(null)}>Done, I've saved it</Button>
+          </Card.Footer>
+        </Card>
+      )}
 
       {showForm && (
         <Card className="mt-5">
@@ -125,6 +158,16 @@ export default function Drivers() {
                     Licence {d.license_number}{d.license_expiry ? ` · expires ${d.license_expiry}` : ''}
                   </p>
                 )}
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <span className="text-ink-secondary">App access</span>
+                  {d.seat_user_id ? (
+                    <Badge color="success" dot={false}><IconCheckCircle size={12} /> Login active</Badge>
+                  ) : (
+                    <Button size="sm" variant="secondary" loading={seatBusyFor === d.id} onClick={() => createLogin(d)}>
+                      Create login
+                    </Button>
+                  )}
+                </div>
                 <div className="mt-4 flex flex-col gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
                   <DocRow
                     label="License document"

@@ -585,6 +585,12 @@ module.exports = function initSchema(db) {
   CREATE INDEX IF NOT EXISTS idx_drivers_carrier ON drivers(carrier_id);
   `);
 
+  // Links a roster row to the driver's own login identity (a DRIVER seat
+  // under the carrier's account, see server/routes/fleet.routes.js's
+  // POST /:id/seat) — added after CREATE TABLE drivers above since addColumn
+  // needs the table to already exist.
+  addColumn('drivers', 'seat_user_id', 'seat_user_id INTEGER REFERENCES users(id)');
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

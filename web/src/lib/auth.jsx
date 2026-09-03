@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
     const d = await api.login(body);
     setUser(d.user);
     setActingAs(d.actingAs || null);
-    return d.user;
+    return { user: d.user, actingAs: d.actingAs || null };
   }, []);
 
   const register = useCallback(async (body) => {
@@ -123,4 +123,13 @@ export function roleHome(role) {
   if (role === 'CARRIER') return '/open-loads';
   if (role === 'ADMIN') return '/admin';
   return '/';
+}
+
+// A DRIVER seat's user.role is still its owner's role (CARRIER — see
+// server/middleware/auth.js's session model), so roleHome(user.role) alone
+// would send a driver to the full carrier dashboard. actingAs.seatRole is
+// the one place that distinction actually shows up on the client.
+export function homePath(user, actingAs) {
+  if (actingAs?.seatRole === 'DRIVER') return '/driver';
+  return roleHome(user.role);
 }

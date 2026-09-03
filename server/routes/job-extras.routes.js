@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const db = require('../db');
 const apiResponse = require('../lib/apiResponse');
 const { BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM, TERMINAL_EMIRATE, AREA_EMIRATE, DOC_TYPES } = require('../lib/constants');
-const { resolveUploadedFile, getPresignedUploadUrl, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify, notifyAdmins } = require('../lib/helpers');
+const { resolveUploadedFile, getPresignedUploadUrl, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify, notifyAdmins, effectiveRole } = require('../lib/helpers');
 const { isThreadParticipant, availableRecipientRoles, resolveOrCreateThread } = require('../lib/messaging');
 const { auth } = require('../middleware/auth');
 
@@ -194,16 +194,17 @@ router.get('/api/jobs/:id/threads', auth(), async (req, res) => {
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
 
   const allThreads = await db.prepare('SELECT * FROM message_threads WHERE job_id=? ORDER BY id').all(job.id);
-  const myThreads = allThreads.filter((t) => isThreadParticipant(job, t, req.user));
+  const myRole = effectiveRole(req.user);
 
   const threads = [];
-  for (const t of myThreads) {
+  for (const t of allThreads) {
+    if (!(await isThreadParticipant(job, t, req.user))) continue;
     const messages = await db.prepare('SELECT * FROM messages WHERE thread_id=? ORDER BY created_at ASC').all(t.id);
-    const otherRole = t.party_a_role === req.user.role ? t.party_b_role : t.party_a_role;
+    const otherRole = t.party_a_role === myRole ? t.party_b_role : t.party_a_role;
     threads.push({ id: t.id, partyARole: t.party_a_role, partyBRole: t.party_b_role, otherRole, messages });
   }
 
-  res.json({ threads, availableRecipientRoles: availableRecipientRoles(job, req.user) });
+  res.json({ threads, availableRecipientRoles: await availableRecipientRoles(job, req.user) });
 });
 
 router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
@@ -219,14 +220,16 @@ router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
     if (!(await isPartyOnJob(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
   } else {
     if (!(await isParticipantOrBidder(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Not permitted');
+    const myRole = effectiveRole(req.user);
     // withRole is who the sender wants to reach; default to the obvious
     // counterparty so any caller that hasn't been updated to send it yet
     // (or a job with no ADMIN/DRIVER thread ever opened) keeps working.
-    const targetRole = withRole || (req.user.role === 'SHIPPER' ? 'CARRIER' : req.user.role === 'CARRIER' ? 'SHIPPER' : null);
+    // No default for DRIVER — its frontend always sends withRole explicitly.
+    const targetRole = withRole || (myRole === 'SHIPPER' ? 'CARRIER' : myRole === 'CARRIER' ? 'SHIPPER' : null);
     if (!targetRole) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'withRole is required');
-    const available = availableRecipientRoles(job, req.user);
+    const available = await availableRecipientRoles(job, req.user);
     if (!available.includes(targetRole)) return apiResponse.error(req, res, 'FORBIDDEN', `Cannot message ${targetRole} on this job right now`);
-    const thread = await resolveOrCreateThread(job.id, req.user.role, targetRole);
+    const thread = await resolveOrCreateThread(job.id, myRole, targetRole);
     threadId = thread.id;
   }
 
@@ -244,7 +247,7 @@ router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
     }
   } else {
     // Threaded case: notify whichever real user(s) the target role resolves to.
-    const targetRole = withRole || (req.user.role === 'SHIPPER' ? 'CARRIER' : 'SHIPPER');
+    const targetRole = withRole || (effectiveRole(req.user) === 'SHIPPER' ? 'CARRIER' : 'SHIPPER');
     if (targetRole === 'ADMIN') {
       await notifyAdmins('New message', `New message on ${job.job_code}`, job.id, 'message');
     } else if (targetRole === 'SHIPPER') {

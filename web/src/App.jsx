@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAuth, roleHome } from './lib/auth.jsx';
+import { useAuth, roleHome, homePath } from './lib/auth.jsx';
 import { Shell } from './components/Shell.jsx';
 import { Spinner } from './components/ui.jsx';
 
@@ -44,6 +44,7 @@ const Notifications = lazy(() => import('./pages/Notifications.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 const DocumentCompliance = lazy(() => import('./pages/DocumentCompliance.jsx'));
+const DriverHome = lazy(() => import('./pages/DriverHome.jsx'));
 
 // Every navigation lands at the top of the new page — a long page left
 // scrolled midway (a job list, a document thread) must never hand off
@@ -66,18 +67,36 @@ function FullScreenSpinner() {
 }
 
 function RequireAuth({ roles, children }) {
-  const { user, loading } = useAuth();
+  const { user, actingAs, loading } = useAuth();
   const location = useLocation();
   if (loading) return <FullScreenSpinner />;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  // A driver seat's user.role is still its owner's role (CARRIER), so it
+  // would otherwise pass every roles=['CARRIER'] check below and reach the
+  // full carrier dashboard — the backend already blocks its API calls
+  // (middleware/auth.js's DRIVER_SEAT_ALLOWED_ROUTES), but it should never
+  // even render those pages. Checked before the roles check so it applies
+  // uniformly regardless of what a route asks for.
+  if (actingAs?.seatRole === 'DRIVER') return <Navigate to="/driver" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={roleHome(user.role)} replace />;
   return children;
 }
 
-function GuestOnly({ children }) {
-  const { user, loading } = useAuth();
+// Wraps the driver-only view itself — anyone who isn't a driver seat is
+// sent to their normal home instead (mirrors RequireAuth's role redirect).
+function DriverOnly({ children }) {
+  const { user, actingAs, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <FullScreenSpinner />;
-  if (user) return <Navigate to={roleHome(user.role)} replace />;
+  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (actingAs?.seatRole !== 'DRIVER') return <Navigate to={homePath(user, actingAs)} replace />;
+  return children;
+}
+
+function GuestOnly({ children }) {
+  const { user, actingAs, loading } = useAuth();
+  if (loading) return <FullScreenSpinner />;
+  if (user) return <Navigate to={homePath(user, actingAs)} replace />;
   return children;
 }
 
@@ -121,6 +140,7 @@ export default function App() {
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
           <Route path="/documents" element={<RequireAuth roles={['SHIPPER', 'CARRIER']}><DocumentCompliance /></RequireAuth>} />
+          <Route path="/driver" element={<DriverOnly><DriverHome /></DriverOnly>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

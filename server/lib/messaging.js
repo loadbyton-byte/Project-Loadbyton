@@ -5,6 +5,7 @@
 // without naming users. ADMIN is a role any admin can answer (a queue, like
 // the existing dispute/verification consoles), not a specific admin user.
 const db = require('../db');
+const { getAssignedDriverSeatId } = require('./helpers');
 
 // Position in this array = canonical rank. Lower rank always becomes
 // party_a_role, so (SHIPPER, ADMIN) and (ADMIN, SHIPPER) requests resolve
@@ -39,10 +40,18 @@ async function resolveOrCreateThread(jobId, roleA, roleB) {
 
 // Does this user sit on either side of this thread, for this specific job?
 // SHIPPER/CARRIER must actually be the job's shipper/awarded carrier, not
-// just anyone holding that role platform-wide; ADMIN is any admin.
-function isThreadParticipant(job, thread, user) {
+// just anyone holding that role platform-wide; ADMIN is any admin. A
+// DRIVER seat's user.role is still its owner's role (CARRIER) — checked
+// first and returned early so it never falls into the CARRIER branch below,
+// which would otherwise grant it every thread on every job that carrier has.
+async function isThreadParticipant(job, thread, user) {
   const roles = [thread.party_a_role, thread.party_b_role];
   if (user.role === 'ADMIN') return roles.includes('ADMIN');
+  if (user.actingSeatRole === 'DRIVER') {
+    if (!roles.includes('DRIVER')) return false;
+    const seatId = await getAssignedDriverSeatId(job);
+    return seatId != null && seatId === user.actingSeatId;
+  }
   if (user.role === 'SHIPPER') return roles.includes('SHIPPER') && job.shipper_id === user.id;
   if (user.role === 'CARRIER') return roles.includes('CARRIER') && job.carrier_id === user.id;
   return false;
@@ -50,15 +59,24 @@ function isThreadParticipant(job, thread, user) {
 
 // Which roles can this user open a new thread with, on this job, right now?
 // Matches the existing isPartyOnJob gate messaging already had (no
-// messaging on an OPEN job with no counterparty yet).
-function availableRecipientRoles(job, user) {
+// messaging on an OPEN job with no counterparty yet). DRIVER checked ahead
+// of CARRIER for the same inherited-role reason as isThreadParticipant above.
+async function availableRecipientRoles(job, user) {
   const NOT_YET = ['OPEN', 'DRAFT'];
   if (NOT_YET.includes(job.status)) return [];
+  if (user.actingSeatRole === 'DRIVER') {
+    const seatId = await getAssignedDriverSeatId(job);
+    return seatId != null && seatId === user.actingSeatId ? ['CARRIER', 'ADMIN'] : [];
+  }
   if (user.role === 'SHIPPER' && job.shipper_id === user.id) {
     return job.carrier_id ? ['CARRIER', 'ADMIN'] : ['ADMIN'];
   }
   if (user.role === 'CARRIER' && job.carrier_id === user.id) {
-    return ['SHIPPER', 'ADMIN'];
+    // Only offered once the assigned driver actually has a seat (login) —
+    // messaging a driver with no account to read it is pointless, and
+    // job.assigned_driver_id alone doesn't guarantee one exists yet.
+    const driverSeatId = await getAssignedDriverSeatId(job);
+    return driverSeatId != null ? ['SHIPPER', 'ADMIN', 'DRIVER'] : ['SHIPPER', 'ADMIN'];
   }
   if (user.role === 'ADMIN') {
     return job.carrier_id ? ['SHIPPER', 'CARRIER'] : ['SHIPPER'];
