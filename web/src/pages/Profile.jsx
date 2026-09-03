@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
-import { api } from '../lib/api.js';
+import { api, ApiError } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { Button, Card, Input, Label, Select, Badge, EmptyState } from '../components/ui.jsx';
 import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
@@ -130,6 +130,14 @@ export default function Profile() {
   const [saveError, setSaveError] = useState('');
   const [mfa, setMfa] = useState(null);
   const [mfaBusy, setMfaBusy] = useState(false);
+  // Changing the payout IBAN re-authenticates — see server/middleware/auth.js's
+  // requireReauth, wired up specifically (and only) for that field. reauthNeeded
+  // tracks which step the confirm-password prompt is on: null (not asked),
+  // 'password', or 'mfa' (password accepted, TOTP code needed too).
+  const originalIban = user.profile?.iban || '';
+  const [reauthNeeded, setReauthNeeded] = useState(null);
+  const [reauthPassword, setReauthPassword] = useState('');
+  const [reauthTotp, setReauthTotp] = useState('');
 
   async function save(e) {
     e.preventDefault();
@@ -137,11 +145,31 @@ export default function Profile() {
     setSaved(false);
     setSaveError('');
     try {
-      await api.updateProfile(form);
+      const payload = { ...form };
+      const ibanChanging = form.iban.trim() !== originalIban.trim();
+      if (ibanChanging && reauthPassword) {
+        payload.password = reauthPassword;
+        if (reauthTotp) payload.totpCode = reauthTotp;
+      }
+      await api.updateProfile(payload);
       await refresh();
       setSaved(true);
+      setReauthNeeded(null);
+      setReauthPassword('');
+      setReauthTotp('');
     } catch (err) {
-      setSaveError(err.message);
+      if (err instanceof ApiError && err.code === 'REAUTH_REQUIRED') {
+        setReauthNeeded('password');
+        setSaveError('Confirm your password to change the payout IBAN.');
+      } else if (err instanceof ApiError && err.code === 'MFA_REQUIRED') {
+        setReauthNeeded('mfa');
+        setSaveError('Enter your authenticator code to confirm this change.');
+      } else if (err instanceof ApiError && (err.code === 'REAUTH_FAILED' || err.code === 'MFA_FAILED')) {
+        setSaveError(err.message);
+      } else {
+        setSaveError(err.message);
+        setReauthNeeded(null);
+      }
     } finally {
       setBusy(false);
     }
@@ -224,9 +252,27 @@ export default function Profile() {
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Payout IBAN</Label>
-                  <Input value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} placeholder="AE070331234567890123456" />
+                  <Input
+                    value={form.iban}
+                    onChange={(e) => { setForm({ ...form, iban: e.target.value }); if (reauthNeeded) { setReauthNeeded(null); setReauthPassword(''); setReauthTotp(''); } }}
+                    placeholder="AE070331234567890123456"
+                  />
                   <p className="mt-1 text-xs text-ink-muted">Required before an admin can approve verification. Stored encrypted.</p>
                 </div>
+                {form.iban.trim() !== originalIban.trim() && (
+                  <div className="sm:col-span-2 rounded-lg border p-3" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
+                    <p className="text-xs text-ink-muted">
+                      Changing your payout IBAN needs your password to confirm — this protects your payouts if your
+                      session were ever compromised.
+                    </p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <Input type="password" value={reauthPassword} onChange={(e) => setReauthPassword(e.target.value)} placeholder="Current password" autoComplete="current-password" />
+                      {reauthNeeded === 'mfa' && (
+                        <Input value={reauthTotp} onChange={(e) => setReauthTotp(e.target.value)} placeholder="6-digit authenticator code" inputMode="numeric" maxLength={6} />
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="sm:col-span-2">
                   <label className="flex items-center gap-2 text-sm text-ink-secondary">
                     <input type="checkbox" checked={form.insuranceUploaded} onChange={(e) => setForm({ ...form, insuranceUploaded: e.target.checked })} />

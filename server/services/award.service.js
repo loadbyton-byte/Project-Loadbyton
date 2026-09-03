@@ -91,24 +91,30 @@ async function awardJob(req, res, jobId, bidId) {
         } else throw e;
       }
 
-      // Double-entry ledger: escrow liability created (funds expected)
-      try {
-        const ledger = require('../lib/ledger');
-        await ledger.createTransaction(trx, {
-          idempotencyKey,
-          jobId,
-          description: `Award ${preJob.job_code} AED ${agreedPrice}`,
-          entries: [
-            { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
-            { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
-          ],
-        });
-      } catch (/** @type {any} */ e) {
-        const _e = /** @type {any} */ (e);
-        if (_e.status === 409) throw _e;
-        // Missing tables on DBs without 002 migration — log and continue; financial integrity still holds via payouts
-        console.warn('[award] ledger insert skipped:', _e.message);
-      }
+      // Double-entry ledger: escrow liability created (funds expected).
+      // Deliberately NOT try/catch-swallowed — this DB's ledger_accounts/
+      // ledger_entries tables are unconditionally created by both
+      // schema.js and postgres_init.sql, so a failure here is a real
+      // error, not a "table doesn't exist yet" case. Swallowing it left a
+      // subtler bug: Postgres marks a transaction ABORTED after any failed
+      // statement, and every later statement in it (including the audit
+      // log insert below) would then also fail — except when a swallowed
+      // error happened to be the LAST statement before commit, in which
+      // case db.js's COMMIT on an aborted transaction silently becomes a
+      // no-op ROLLBACK with no thrown error, undoing the whole award
+      // (status, bid updates, payout row) while the caller believes it
+      // succeeded. Letting it throw lets db.transaction's own catch
+      // rollback and report a real error instead.
+      const ledger = require('../lib/ledger');
+      await ledger.createTransaction(trx, {
+        idempotencyKey,
+        jobId,
+        description: `Award ${preJob.job_code} AED ${agreedPrice}`,
+        entries: [
+          { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
+          { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
+        ],
+      });
 
       // Audit atomically with the financial writes
       await trx.query(
@@ -116,14 +122,14 @@ async function awardJob(req, res, jobId, bidId) {
         [req.actorId, 'AWARD', `${preJob.job_code}: awarded to bid #${bidId} (AED ${agreedPrice})`, 'job', jobId, 'OPEN', 'AWARDED', req.requestId || null]
       );
 
-      try {
-        await trx.query(
-          `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, status) VALUES (?,?,?,?,?)`,
-          ['job', jobId, 'JOB_AWARDED', JSON.stringify({ jobId, bidId, carrierId: bid.carrier_id, amount: agreedPrice }), 'PENDING']
-        );
-      } catch (/** @type {any} */ e) {
-        console.warn('[award] outbox insert skipped:', /** @type {any} */ (e).message);
-      }
+      // Also not swallowed — same reasoning as the ledger insert above,
+      // and this one is the LAST statement before commit, exactly the
+      // case where a swallowed error would have silently discarded the
+      // whole award with no exception anywhere.
+      await trx.query(
+        `INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, status) VALUES (?,?,?,?,?)`,
+        ['job', jobId, 'JOB_AWARDED', JSON.stringify({ jobId, bidId, carrierId: bid.carrier_id, amount: agreedPrice }), 'PENDING']
+      );
     });
   } catch (/** @type {any} */ e) {
     const _e = /** @type {any} */ (e);

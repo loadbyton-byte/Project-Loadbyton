@@ -8,7 +8,10 @@ function ledgerHash(prevHash, jobId, action, amount, timestamp) {
 }
 function sign(payload, key) { return crypto.createHmac('sha256', key).update(payload).digest('hex'); }
 function verifyMultiSig(payload, sigs, keys) {
-  if (!keys || keys.length < 2) return true; // dev mode: no HSM configured → auto-pass
+  if (!keys || keys.length === 0) return true; // dev mode: no HSM configured at all → auto-pass
+  // 1 key present is a misconfigured/mid-rotation state, not "unconfigured"
+  // — fail closed rather than silently skipping the multi-sig check.
+  if (keys.length < 2) return false;
   let valid = 0;
   for (const k of keys) { const s = sign(payload, k); if (sigs.includes(s)) valid++; }
   return valid >= 2; // 2-of-3

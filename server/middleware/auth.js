@@ -135,7 +135,11 @@ function requireReauth({ requireMfa = true } = {}) {
     if (!password) {
       return res.status(403).json({ error: 'Re-authentication required: password needed for sensitive operation', code: 'REAUTH_REQUIRED' });
     }
-    const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
+    // req.user is always the org owner's row for a seat login (see auth()
+    // above) — re-auth must verify the actually-acting identity's own
+    // password (req.actorId), or a seat could never pass this with their
+    // own credentials, and would silently need the owner's password instead.
+    const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.actorId);
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {
       return res.status(403).json({ error: 'Re-authentication failed: invalid password', code: 'REAUTH_FAILED' });
     }

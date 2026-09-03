@@ -54,13 +54,15 @@ async function executePayoutAsync(job, payout, req) {
   }
 
   const provider = payments.provider();
-  const idempotencyKey = `payout-${payout.id}-${provider}`;
   const destinationHint = payout.carrier_id ? String(payout.carrier_id) : 'unknown';
 
-  // Idempotency: if already has a successful attempt or transfer_executed_at, don't double-transfer
+  // Idempotency pre-check: if already has a successful attempt or
+  // transfer_executed_at, don't do redundant work. This alone is NOT the
+  // safety boundary against a concurrent duplicate transfer — see the
+  // claim-before-call insert below, which is.
   try {
-    const existing = await db.prepare('SELECT * FROM payout_attempts WHERE idempotency_key=?').get(idempotencyKey);
-    if (existing && ['SUBMITTED', 'SENT', 'SETTLED'].includes(existing.status)) return;
+    const existingOk = await db.prepare(`SELECT 1 FROM payout_attempts WHERE payout_id=? AND status IN ('SUBMITTED','SENT','SETTLED')`).get(payout.id);
+    if (existingOk) return;
     if (/** @type {any} */ (payout).transfer_executed_at) return;
   } catch (/** @type {any} */ e) {
     const _e = /** @type {any} */ (e);
@@ -73,12 +75,35 @@ async function executePayoutAsync(job, payout, req) {
     attemptNumber = (/** @type {any} */ (cnt)?.c || 0) + 1;
   } catch {}
 
+  // Numbered per attempt (not a single fixed key) so a legitimate retry
+  // after a failed transfer can still claim a fresh attempt, while a true
+  // concurrent race for the SAME attempt number collides on this exact
+  // key and is rejected by the UNIQUE constraint.
+  const idempotencyKey = `payout-${payout.id}-${provider}-attempt${attemptNumber}`;
+
+  let carrierAccountId = null;
   try {
-    let carrierAccountId = null;
-    try {
-      const prof = job.carrier_id ? await db.prepare('SELECT processor_account_id FROM profiles WHERE user_id=?').get(job.carrier_id) : null;
-      carrierAccountId = /** @type {any} */ (prof)?.processor_account_id || null;
-    } catch {}
+    const prof = job.carrier_id ? await db.prepare('SELECT processor_account_id FROM profiles WHERE user_id=?').get(job.carrier_id) : null;
+    carrierAccountId = /** @type {any} */ (prof)?.processor_account_id || null;
+  } catch {}
+
+  // Claim this attempt BEFORE calling the external processor — this insert
+  // (and its UNIQUE constraint on idempotency_key) is what actually
+  // prevents two concurrent callers from both sending a real transfer; the
+  // pre-check above only avoids redundant work once one has already won.
+  let attemptId;
+  try {
+    const claim = await db.prepare(
+      `INSERT INTO payout_attempts (payout_id, attempt_number, provider, amount_aed, destination, idempotency_key, status) VALUES (?,?,?,?,?,?, 'SUBMITTED') RETURNING id`
+    ).run(payout.id, attemptNumber, provider, payout.net_aed, carrierAccountId || destinationHint, idempotencyKey);
+    attemptId = /** @type {any} */ (claim).lastInsertRowid;
+  } catch (/** @type {any} */ e) {
+    const _e = /** @type {any} */ (e);
+    if (_e.message && /UNIQUE|duplicate key/i.test(_e.message)) return; // another caller already claimed this exact attempt
+    throw _e;
+  }
+
+  try {
     const r = await payments.executePayout({
       amountAed: payout.net_aed,
       jobCode: job.job_code,
@@ -89,50 +114,46 @@ async function executePayoutAsync(job, payout, req) {
 
     const attemptStatus = r.ok ? 'SUBMITTED' : 'FAILED';
     try {
-      await db.prepare(
-        `INSERT INTO payout_attempts (payout_id, attempt_number, provider, amount_aed, destination, idempotency_key, status, provider_response, error) VALUES (?,?,?,?,?,?,?,?,?)`
-      ).run(payout.id, attemptNumber, provider, payout.net_aed, carrierAccountId || destinationHint, idempotencyKey, attemptStatus, /** @type {any} */ (r).payoutRef || null, /** @type {any} */ (r).error || null);
-    } catch (/** @type {any} */ e) {
-      const _e = /** @type {any} */ (e);
-      if (_e.message && !/no such table|UNIQUE/i.test(_e.message)) throw _e;
-      // UNIQUE on idempotency_key means concurrent attempt raced — the other succeeded, treat as idempotent
-      if (_e.message && /UNIQUE/i.test(_e.message)) return;
-    }
+      await db.prepare(`UPDATE payout_attempts SET status=?, provider_response=?, error=? WHERE id=?`)
+        .run(attemptStatus, /** @type {any} */ (r).payoutRef || null, /** @type {any} */ (r).error || null, attemptId);
+    } catch {}
 
     if (r.ok) {
       // Successful transfer — keep payout status as RELEASED (set by job-lifecycle before calling), just record transfer
       // Add ledger entries for escrow release (idempotent on idempotencyKey)
       try {
+        // Not try/catch-swallowed inside the transaction — same reasoning
+        // as award.service.js: a swallowed error here can leave the
+        // transaction ABORTED at the Postgres level while the JS callback
+        // still returns normally, so db.js's unconditional COMMIT silently
+        // becomes a no-op ROLLBACK — undoing the transfer_executed_at
+        // update too, with no exception anywhere, right after a REAL
+        // external transfer already happened. Letting it throw here means
+        // the outer catch below (which already has a real fallback) is the
+        // one that runs instead of a silent no-op.
         await db.transaction(async (/** @type {any} */ trx) => {
           // Update transfer fields if not already set (preserve RELEASED status)
           await trx.query(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`, [`processor:${/** @type {any} */ (r).payoutRef}`, payout.id]);
-          try {
-            const ledger = require('../lib/ledger');
-            const grossMinor = ledger.toMinor(payout.gross_aed);
-            const feeMinor = ledger.toMinor(payout.platform_fee_aed);
-            const netMinor = ledger.toMinor(payout.net_aed);
-            await ledger.createTransaction(trx, {
-              idempotencyKey,
-              jobId: job.id,
-              payoutId: payout.id,
-              description: `Payout ${job.job_code} AED ${payout.net_aed}`,
-              entries: [
-                { account: 'escrow_liability', side: 'DEBIT', amountMinor: grossMinor },
-                { account: 'carrier_payable', side: 'CREDIT', amountMinor: netMinor },
-                { account: 'platform_revenue', side: 'CREDIT', amountMinor: feeMinor },
-              ],
-            });
-          } catch (/** @type {any} */ e) {
-            console.warn('[payout] ledger insert skipped:', /** @type {any} */ (e).message);
-          }
-          try {
-            await trx.query(`INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, status) VALUES (?,?,?,?,?)`, ['payout', payout.id, 'PAYOUT_SETTLED', JSON.stringify({ payoutId: payout.id, jobId: job.id, amount: payout.net_aed }), 'PENDING']);
-          } catch (/** @type {any} */ e) {
-            console.warn('[payout] outbox insert skipped:', /** @type {any} */ (e).message);
-          }
+          const ledger = require('../lib/ledger');
+          const grossMinor = ledger.toMinor(payout.gross_aed);
+          const feeMinor = ledger.toMinor(payout.platform_fee_aed);
+          const netMinor = ledger.toMinor(payout.net_aed);
+          await ledger.createTransaction(trx, {
+            idempotencyKey,
+            jobId: job.id,
+            payoutId: payout.id,
+            description: `Payout ${job.job_code} AED ${payout.net_aed}`,
+            entries: [
+              { account: 'escrow_liability', side: 'DEBIT', amountMinor: grossMinor },
+              { account: 'carrier_payable', side: 'CREDIT', amountMinor: netMinor },
+              { account: 'platform_revenue', side: 'CREDIT', amountMinor: feeMinor },
+            ],
+          });
+          await trx.query(`INSERT INTO outbox_events (aggregate_type, aggregate_id, event_type, payload, status) VALUES (?,?,?,?,?)`, ['payout', payout.id, 'PAYOUT_SETTLED', JSON.stringify({ payoutId: payout.id, jobId: job.id, amount: payout.net_aed }), 'PENDING']);
         });
       } catch (/** @type {any} */ e) {
-        // Fallback: at least mark transfer
+        // Fallback: at least mark transfer — money already moved for real,
+        // this must never be lost even if the ledger/outbox bookkeeping failed.
         try { await db.prepare(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`).run(`processor:${/** @type {any} */ (r).payoutRef}`, payout.id); } catch {}
       }
       await (/** @type {any} */ (writeAudit))(req, { action: 'PAYOUT_EXECUTED', details: `${job.job_code}: payout AED ${payout.net_aed} executed (ref ${/** @type {any} */ (r).payoutRef})`, entityType: 'payout', entityId: payout.id });
@@ -144,9 +165,11 @@ async function executePayoutAsync(job, payout, req) {
   } catch (/** @type {any} */ e) {
     const _e = /** @type {any} */ (e);
     try { await db.prepare(`UPDATE payouts SET status='FAILED', last_error=? WHERE id=?`).run(_e.message, payout.id); } catch {}
-    try {
-      await db.prepare(`INSERT INTO payout_attempts (payout_id, attempt_number, provider, amount_aed, destination, idempotency_key, status, error) VALUES (?,?,?,?,?,?,?,?)`).run(payout.id, attemptNumber, provider, payout.net_aed, destinationHint, `${idempotencyKey}-err-${Date.now()}`, 'FAILED', _e.message);
-    } catch {}
+    // Update the attempt claimed above, rather than inserting a second row
+    // for the same attempt — attemptId is always set here, since the only
+    // path that could leave it unset (the claim insert itself failing)
+    // already returns before this try block is reached.
+    try { await db.prepare(`UPDATE payout_attempts SET status='FAILED', error=? WHERE id=?`).run(_e.message, attemptId); } catch {}
   }
 }
 

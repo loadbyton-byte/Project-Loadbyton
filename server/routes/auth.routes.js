@@ -5,14 +5,14 @@ const totp = require('../lib/totp');
 const { FRONTEND_URL, DUMMY_PASSWORD_HASH } = require('../lib/config');
 const { sendError, asyncHandler, randomToken, referralCode } = require('../lib/http');
 const apiResponse = require('../lib/apiResponse');
-const { encryptField } = require('../lib/crypto');
+const { encryptField, decryptField } = require('../lib/crypto');
 const { sendEmailAsync } = require('../lib/email');
 const {
   isPasswordValid, hashToken, timingSafeEqualStr, normalizeUaeMobile, isValidUaeTrn,
   isValidUaeTradeLicence, writeAudit, toPublicUser, unreadNotificationCount,
   createSession, clearSessionCookie,
 } = require('../lib/helpers');
-const { auth, requireSeatRole, isThrottled, recordFailure, clearThrottle } = require('../middleware/auth');
+const { auth, requireSeatRole, requireReauth, isThrottled, recordFailure, clearThrottle } = require('../middleware/auth');
 const { rateLimiter, byIp } = require('../lib/rateLimit');
 const { validate, registerSchema } = require('../middleware/validate');
 const { MIN_PASSWORD_LENGTH } = require('../lib/constants');
@@ -245,7 +245,18 @@ router.post('/api/auth/mfa/disable', auth(), async (req, res) => {
   res.json({ ok: true });
 });
 
-router.patch('/api/profile', auth(), requireSeatRole(['OPS']), async (req, res) => {
+// A stolen session cookie alone must not be enough to redirect a carrier's
+// future payouts — only gates the IBAN field, and only when it's actually
+// changing, since the form resubmits the current value on every save.
+async function requireReauthIfIbanChanging(req, res, next) {
+  if (req.body?.iban === undefined) return next();
+  const profile = await db.prepare('SELECT iban FROM profiles WHERE user_id=?').get(req.user.id);
+  const currentIban = profile?.iban ? decryptField(profile.iban) : '';
+  if (String(req.body.iban).trim() === String(currentIban || '').trim()) return next();
+  return requireReauth()(req, res, next);
+}
+
+router.patch('/api/profile', auth(), requireSeatRole(['OPS']), requireReauthIfIbanChanging, async (req, res) => {
   const b = req.body || {};
   const fields = {
     company_name: b.companyName,

@@ -84,28 +84,47 @@ async function updateJobStatus(jobId, nextStatus, req) {
   // Use direct db for multi-column updates that repository.updateStatus also supports,
   // but keep explicit SQL to match original routes byte-for-byte semantics.
   if (nextStatus === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
-    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`).run(id);
-    await db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(id);
-    // Also ensure repository consistency — no-op if already done via SQL
-    // payoutRepository covers lookup but cancellation is via SQL to keep `WHERE job_id=?`
-    if (job.escrow_status === 'FUNDED') {
+    // Row-locked + idempotency-guarded — two concurrent cancel requests
+    // for the same job must not both fire a refund.
+    const cancelled = await db.transaction(async (trx) => {
+      const locked = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [id]);
+      const currentEscrow = locked.rows[0]?.escrow_status;
+      if (currentEscrow === 'RELEASED') return false; // already handled by a concurrent request
+      await trx.query(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`, [id]);
+      await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [id]);
+      return true;
+    });
+    if (cancelled && job.escrow_status === 'FUNDED') {
       // fire-and-forget refund (processor path) — do not await failure
       try { refundJobAsync(job); } catch {}
     }
   }
 
   if (nextStatus === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
-    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`).run(id);
-    await db.prepare(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(id);
-    try { await issueInvoice(db, id); } catch {}
-    if (job.carrier_id) {
-      try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
+    // Row-locked + idempotency-guarded — two concurrent completion
+    // requests (e.g. a client retry) must not both mark the payout
+    // RELEASED and both trigger a real payout execution. The lock also
+    // means this always checks the current DB state, not the possibly
+    // stale `job` object read at the top of this function.
+    const released = await db.transaction(async (trx) => {
+      const locked = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [id]);
+      const currentEscrow = locked.rows[0]?.escrow_status;
+      if (currentEscrow === 'RELEASED') return false; // already released by a concurrent request
+      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`, [id]);
+      await trx.query(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=? AND status != 'RELEASED'`, [id]);
+      return true;
+    });
+    if (released) {
+      try { await issueInvoice(db, id); } catch {}
+      if (job.carrier_id) {
+        try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
+      }
+      // Execute payout async (processor) — fetch payout via repository to show repository usage
+      try {
+        const payout = await payoutRepository.findByJobId(id) || await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(id);
+        await executePayoutAsync(job, payout, req);
+      } catch {}
     }
-    // Execute payout async (processor) — fetch payout via repository to show repository usage
-    try {
-      const payout = await payoutRepository.findByJobId(id) || await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(id);
-      await executePayoutAsync(job, payout, req);
-    } catch {}
   }
 
   await writeAudit(req, {

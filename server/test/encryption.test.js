@@ -35,7 +35,10 @@ test('IBAN and TRN are stored encrypted, and decrypt correctly through the API',
   assert.equal(registered.status, 201, registered.raw);
 
   const plaintextIban = 'AE070331234567890999888';
-  const updated = await shipper.patch('/api/profile', { iban: plaintextIban });
+  // Changing the IBAN re-authenticates (server/middleware/auth.js's
+  // requireReauth, wired up in auth.routes.js's requireReauthIfIbanChanging)
+  // — the same password used at registration confirms the change.
+  const updated = await shipper.patch('/api/profile', { iban: plaintextIban, password: 'demo1234' });
   assert.equal(updated.status, 200, updated.raw);
 
   // API boundary must return plaintext (the whole point of decrypting at

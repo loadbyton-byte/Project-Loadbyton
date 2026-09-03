@@ -8,10 +8,11 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, code) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -25,7 +26,19 @@ async function request(method, path, body) {
   const isJson = res.headers.get('content-type')?.includes('application/json');
   const data = isJson ? await res.json().catch(() => ({})) : null;
   if (!res.ok) {
-    throw new ApiError(data?.error || `Request failed (${res.status})`, res.status);
+    // Two error envelopes exist server-side: lib/http.js's sendError sends
+    // `error` as a plain string; lib/apiResponse.js's error() sends `error`
+    // as an object ({code, message, ...}) but always also includes a
+    // plain-string `message` field alongside it. Without this, an
+    // apiResponse-shaped response fed straight into `new Error(object)`
+    // silently became the literal string "[object Object]" everywhere
+    // (toasts, the admin MFA-code prompt's message-matching, etc).
+    const message =
+      typeof data?.error === 'string' ? data.error
+      : data?.message || data?.error?.message || data?._legacy?.error
+      || `Request failed (${res.status})`;
+    const code = data?.code || (typeof data?.error === 'object' ? data.error.code : undefined);
+    throw new ApiError(message, res.status, code);
   }
   return data;
 }
