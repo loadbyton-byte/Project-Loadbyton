@@ -82,6 +82,34 @@ DB abstraction (db.js:1)
 | Observability | Sentry `beforeSend` scrubs cookies/body/headers, `requestLogger` JSON, `x-request-id` | `lib/sentry.js:20`, `lib/logger.js:1` |
 | Supply chain | `npm audit` 0 vuln, `pg` 8.23, `express` 5.1, `zod` 4.4 | `server/package.json:13` |
 
+### 3a. Why there's no Postgres Row-Level Security here
+
+Worth stating explicitly, since RLS is the reflex answer to "harden the database"
+and a buyer/auditor will ask: **this app deliberately doesn't use it, and adding
+a shallow version would be worse than the current state.**
+
+RLS as Supabase (and most guides) present it assumes each end user connects to
+Postgres *as themselves* — issued via Supabase's own Auth/JWT layer, so the
+database can evaluate `auth.uid()` per row. This app has its own auth system
+(bcrypt + `lb_session` cookie, above) and talks to Postgres through one shared
+service-role connection pool (`server/db.js`) for every user. Postgres has no
+built-in way to know "which app user is asking" on that connection.
+
+Making that true would require every request to check out and hold a real
+transaction (`BEGIN; SET LOCAL app.user_id = ...; ...; COMMIT;`) instead of the
+current per-call `pool.query()` pattern — a query-layer rewrite touching every
+route file, not a policy you bolt on. Attempting a partial version (RLS
+"enabled" with policies only some code paths actually honor) would look
+protected in a schema dump while leaving real gaps — false confidence is a
+worse security posture than an honest one, especially over escrow money.
+
+**What actually protects this data today:** the RBAC allow-lists and explicit
+ownership checks on every route (`middleware/auth.js`, "RBAC" row above),
+audited as thorough and consistently applied across the codebase. That's the
+real control. If a future direction adopts Supabase Auth (or any per-user DB
+credential) as the primary login system, RLS becomes a natural fit at that
+point — not before.
+
 ---
 
 ## 4. Deployment — one-command buyer demo

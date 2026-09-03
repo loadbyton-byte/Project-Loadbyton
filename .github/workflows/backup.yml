@@ -1,0 +1,66 @@
+name: Database backup
+
+# Runs scripts/backup-db.js on a schedule, decoupled from the API server
+# entirely (a crashed/redeploying backend shouldn't mean a missed backup).
+#
+# Interim destination until Cloudflare R2 is set up: the dump is uploaded as
+# a GitHub Actions artifact (this repo's own storage, free, default 90-day
+# retention) via actions/upload-artifact — real off-server backup protection
+# today, no new account needed. Once R2 secrets exist below, the script
+# also pushes there automatically (server/lib/storage.js) — no workflow
+# change required, it Just Starts happening.
+#
+# Required repo secret (Settings -> Secrets and variables -> Actions):
+#   DIRECT_DATABASE_URL   Supabase's direct (non-pooled, port 5432) connection string
+# Optional, once Cloudflare R2 exists (see docs/DEVELOPER_GUIDE.md):
+#   S3_BUCKET, S3_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+
+on:
+  schedule:
+    # 02:17 UTC daily — off-peak, deliberately not on the hour (see
+    # scripts/backup-db.js's own 30-daily/12-monthly retention note; that
+    # retention logic is a no-op here since GitHub Actions runners are
+    # ephemeral, only the artifact upload's own retention matters).
+    - cron: '17 2 * * *'
+  workflow_dispatch: {} # manual "Run workflow" button, for testing
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Ensure pg_dump is available
+        run: pg_dump --version || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+
+      - name: Confirm DIRECT_DATABASE_URL is configured
+        run: |
+          if [ -z "${{ secrets.DIRECT_DATABASE_URL }}" ]; then
+            echo "::error::DIRECT_DATABASE_URL repo secret is not set — see this workflow's header comment."
+            exit 1
+          fi
+
+      - name: Run backup
+        env:
+          USE_POSTGRES: 'true'
+          DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: auto
+        run: node scripts/backup-db.js ./backup-output
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loadbyton-db-backup-${{ github.run_id }}
+          path: backup-output/*.sql.gz
+          retention-days: 90

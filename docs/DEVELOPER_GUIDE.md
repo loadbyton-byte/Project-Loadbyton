@@ -79,14 +79,10 @@ Now **http://localhost:4000** serves everything: the API, the built SPA, the SEO
 
 ### Backups (production)
 
-- The database file (`loadbyton.db`) + WAL/SHM siblings live on the persistent disk (`/data` on Render starter, `/data` on Oracle Cloud).
-- **Automated backup script:** `scripts/backup-db.js` — uses `sqlite3 .backup` for a consistent snapshot (handles WAL correctly), gzips, and enforces retention (30 daily + 12 monthly).
-- **Schedule (cron example):**
-  ```bash
-  # Daily at 02:00 UTC — adjust timezone as needed
-  0 2 * * * /usr/bin/node /opt/render/project/src/scripts/backup-db.js /mnt/backups/loadbyton
-  ```
-- **Restore:** Stop the API, replace `loadbyton.db*` files from the `.gz`, restart API.
+- **Automated backup script:** `scripts/backup-db.js` — SQLite path uses `sqlite3 .backup` for a consistent snapshot (handles WAL correctly); Postgres path uses `pg_dump --format=plain` (portable across pg_dump/pg_restore versions — see the script's own comment for why `--format=custom` was tried and rejected). Both gzip and, when `S3_BUCKET` is set, push a copy offsite to the same R2 bucket used for documents.
+- **Scheduled via GitHub Actions**, not server cron: `.github/workflows/backup.yml` runs daily (02:17 UTC) and on manual dispatch, decoupled from the API server entirely — a crashed or redeploying backend never means a missed backup. Set the `DIRECT_DATABASE_URL` repo secret (Settings → Secrets and variables → Actions) — Supabase's **direct** (non-pooled, port 5432) connection string, not the pooled `DATABASE_URL` the app itself uses (pooled connections don't support the session-based operations `pg_dump` needs). Until the `S3_*` secrets exist (Cloudflare R2, still pending as of this writing), the dump is uploaded as a GitHub Actions artifact instead — the repo's own free storage, 90-day retention — so backups are real today and start also landing in R2 automatically the moment those secrets are added, no workflow change needed.
+- **Restore (Postgres):** `gunzip -c backup.sql.gz | psql "$DIRECT_DATABASE_URL"` — verified end-to-end (dump → gzip → restore into a fresh database → data confirmed intact) as part of the Supabase cutover.
+- **Restore (SQLite):** stop the API, replace `loadbyton.db*` files from the `.gz`, restart.
 - **Test restores quarterly** — a backup you haven't restored is a backup you don't have.
 
 ## 6. Verification
