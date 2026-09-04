@@ -8,7 +8,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://claudeloadbyton.onrender.com/api/:path*"
+      "destination": "https://api.loadbyton.com/api/:path*"
     },
     {
       "source": "/(.*)",
