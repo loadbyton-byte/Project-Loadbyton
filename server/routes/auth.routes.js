@@ -31,7 +31,14 @@ router.post(
     if (!isPasswordValid(password)) return apiResponse.error(req, res, 'VALIDATION_FAILED', `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
     if (!['SHIPPER', 'CARRIER'].includes(role)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'role must be SHIPPER or CARRIER', { status: 422 });
     const existing = await db.prepare('SELECT id FROM users WHERE email=?').get(email);
-    if (existing) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'An account with that email already exists');
+    if (existing) {
+      // Deliberately generic — a distinct "this email already exists"
+      // message lets an attacker enumerate which companies have Loadbyton
+      // accounts by scripting registration attempts. Logged server-side
+      // (still detectable/auditable) without confirming it in the response.
+      console.warn(`[auth] registration attempted for an email already in use: ${email}`);
+      return apiResponse.error(req, res, 'VALIDATION_FAILED', 'Could not create this account — check your details and try again, or log in if you already have one.');
+    }
 
     // UAE-format business identifiers — the signup gate that makes a random
     // string unusable for creating an account (see the regexes above).

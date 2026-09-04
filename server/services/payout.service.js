@@ -179,23 +179,35 @@ async function executePayoutAsync(job, payout, req) {
  */
 async function refundJobAsync(job) {
   if (!payments.isConfigured()) return;
+  let r;
   try {
-    const r = await payments.refundCharge({
+    r = await payments.refundCharge({
       jobCode: job.job_code,
       amountAed: /** @type {any} */ (job).agreed_price_aed,
       tranref: /** @type {any} */ (job).processor_tranref,
       paymentRef: /** @type {any} */ (job).processor_payment_ref,
     });
-    if (r.ok) {
-      await db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', updated_at=datetime('now') WHERE id=?`).run(job.id);
-      await (/** @type {any} */ (writeAudit))(null, {
-        action: 'REFUND_SHIPPER_EXECUTED',
-        details: `${job.job_code}: refunded AED ${/** @type {any} */ (job).agreed_price_aed}`,
-        entityType: 'job',
-        entityId: job.id,
-      });
-    }
-  } catch (/** @type {any} */ e) {}
+  } catch (/** @type {any} */ e) {
+    console.error(`[payout] refundCharge threw for job ${job.id}:`, /** @type {any} */ (e).message);
+    return;
+  }
+  if (!r.ok) return;
+  // A real refund already happened at this point — recording it must
+  // never be silently lost. Previously any failure here (DB blip, audit
+  // write error) was swallowed by an empty catch, leaving no trace that
+  // money actually moved.
+  try {
+    await db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', updated_at=datetime('now') WHERE id=?`).run(job.id);
+    await (/** @type {any} */ (writeAudit))(null, {
+      action: 'REFUND_SHIPPER_EXECUTED',
+      details: `${job.job_code}: refunded AED ${/** @type {any} */ (job).agreed_price_aed}`,
+      entityType: 'job',
+      entityId: job.id,
+    });
+  } catch (/** @type {any} */ e) {
+    console.error(`[payout] REAL refund succeeded for job ${job.id} but recording it failed:`, /** @type {any} */ (e).message);
+    try { await db.prepare(`UPDATE jobs SET processor_payment_status='REFUNDED', updated_at=datetime('now') WHERE id=?`).run(job.id); } catch {}
+  }
 }
 
 module.exports = { markJobPaymentFailed, executePayoutAsync, refundJobAsync };

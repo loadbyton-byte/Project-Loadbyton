@@ -167,7 +167,7 @@ router.post('/api/admin/approve/:id', auth(['ADMIN']), async (req, res) => {
 router.post('/api/admin/verify/:id', auth(['ADMIN']), async (req, res) => {
   const { action, iban } = req.body || {};
   try {
-    const user = verifyCarrier(req, req.params.id, action, iban);
+    const user = await verifyCarrier(req, req.params.id, action, iban);
     res.json({ ok: true, user });
   } catch (e) {
     if (e.status) return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message, { status: e.status });
@@ -394,25 +394,39 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
   if (!['RELEASE_TO_CARRIER', 'REFUND_SHIPPER', 'SPLIT'].includes(decision)) return sendError(res, 400, 'Invalid decision');
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(dispute.job_id);
 
+  // All three writes (payouts, jobs, disputes) happen atomically — a crash
+  // between them used to leave the dispute row still OPEN despite the
+  // payout already having been marked CANCELLED/RELEASED, so a retry could
+  // re-pass the "already resolved" guard and fire a second real
+  // refund/payout. The fire-and-forget processor calls run only after this
+  // transaction has actually committed, so a crash before commit means
+  // nothing was dispatched at all.
+  await db.transaction(async (trx) => {
+    if (decision === 'REFUND_SHIPPER') {
+      await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`, [job.id]);
+    } else {
+      await trx.query(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`, [job.id]);
+    }
+    await trx.query(
+      `UPDATE jobs SET status='COMPLETED', escrow_status='RELEASED', processor_payment_status=CASE WHEN ?='REFUND_SHIPPER' THEN 'REFUNDED' ELSE processor_payment_status END, payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
+      [dispute.decision || decision, job.id]
+    );
+    await trx.query(
+      `UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now') WHERE id=?`,
+      [determination || null, decision, req.user.id, dispute.id]
+    );
+  });
+
   if (decision === 'REFUND_SHIPPER') {
-    await db.prepare(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`).run(job.id);
     // TODO-3: give the money back via the processor when it was taken.
     // No-op in internal mode / when the charge never went through.
     refundJobAsync(job);
   } else {
-    await db.prepare(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`).run(job.id);
     try { await issueInvoice(db, job.id); } catch {}
     // TODO-3: with a processor configured this moves the money; in
     // internal mode it is a no-op and the admin SLA flow applies.
     executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
   }
-  await db.prepare(`UPDATE jobs SET status='COMPLETED', escrow_status='RELEASED', processor_payment_status=CASE WHEN ?='REFUND_SHIPPER' THEN 'REFUNDED' ELSE processor_payment_status END, payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(dispute.decision || decision, job.id);
-  await db.prepare(`UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now') WHERE id=?`).run(
-    determination || null,
-    decision,
-    req.user.id,
-    dispute.id
-  );
   await writeAudit(req, { userId: req.actorId, action: 'DISPUTE_RESOLVE', details: `${decision}: ${determination || ''}`, entityType: 'dispute', entityId: dispute.id, beforeState: 'OPEN', afterState: 'RESOLVED' });
   await notify(job.shipper_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
   await notify(job.carrier_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
@@ -491,12 +505,20 @@ router.get('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
 router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
   const { commission_rate_bps, auto_release_hours } = req.body || {};
   if (commission_rate_bps !== undefined) {
-    if (commission_rate_bps < 0 || commission_rate_bps > 10000) return sendError(res, 400, 'commission_rate_bps must be 0-10000');
-    await db.prepare('UPDATE settings SET value=? WHERE key=\'commission_rate_bps\'').run(String(commission_rate_bps));
+    // Number.isFinite (not just a bounds comparison) rejects non-numeric
+    // input outright — "abc" < 0 and "abc" > 10000 are both false for a
+    // NaN-coercible string, which used to let it silently through and
+    // corrupt every payout computed off this setting afterward.
+    if (!Number.isFinite(Number(commission_rate_bps)) || Number(commission_rate_bps) < 0 || Number(commission_rate_bps) > 10000) {
+      return sendError(res, 400, 'commission_rate_bps must be a number between 0 and 10000');
+    }
+    await db.prepare('UPDATE settings SET value=? WHERE key=\'commission_rate_bps\'').run(String(Number(commission_rate_bps)));
   }
   if (auto_release_hours !== undefined) {
-    if (auto_release_hours < 1 || auto_release_hours > 168) return sendError(res, 400, 'auto_release_hours must be 1-168');
-    await db.prepare('UPDATE settings SET value=? WHERE key=\'auto_release_hours\'').run(String(auto_release_hours));
+    if (!Number.isFinite(Number(auto_release_hours)) || Number(auto_release_hours) < 1 || Number(auto_release_hours) > 168) {
+      return sendError(res, 400, 'auto_release_hours must be a number between 1 and 168');
+    }
+    await db.prepare('UPDATE settings SET value=? WHERE key=\'auto_release_hours\'').run(String(Number(auto_release_hours)));
   }
   await writeAudit(req, { userId: req.actorId, action: 'SETTINGS_UPDATE', details: JSON.stringify(req.body) });
   res.json({ settings: await getSettings() });

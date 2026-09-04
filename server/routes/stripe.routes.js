@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('node:crypto');
 const db = require('../db');
 const { auth } = require('../middleware/auth');
 const { sendError } = require('../lib/http');
@@ -81,6 +82,25 @@ router.post('/api/webhooks/stripe', express.raw({type:'*/*'}), async (req,res) =
   let event;
   try { event = await constructWebhookEvent(req.rawBody||req.body, req.headers['stripe-signature']); }
   catch(e){ return res.status(400).send(`Webhook error: ${e.message}`); }
+
+  // Idempotency — Stripe's delivery is at-least-once, so the same event id
+  // can arrive more than once. payment_webhook_events (system.routes.js's
+  // generic payments webhook already uses this table the same way) is the
+  // durable dedup boundary; the INSERT's UNIQUE constraint on
+  // (provider, provider_event_id) is what actually blocks a replay, not
+  // just a best-effort check.
+  const payloadHash = crypto.createHash('sha256').update(req.rawBody || JSON.stringify(req.body) || '').digest('hex');
+  const providerEventId = event.id || payloadHash;
+  try {
+    await db.prepare(
+      `INSERT INTO payment_webhook_events (provider, provider_event_id, event_type, payload_hash, raw_payload, status) VALUES ('stripe',?,?,?,?, 'PENDING')`
+    ).run(providerEventId, event.type || 'unknown', payloadHash, String(req.rawBody || '').slice(0, 8000));
+  } catch (e) {
+    if (e.message && /UNIQUE|duplicate key/i.test(e.message)) return res.json({ received:true, idempotent:true, duplicate_event:true });
+    if (!/no such table/i.test(e.message || '')) throw e;
+    // Table missing (DB without the payments-hardening migration) — fall through.
+  }
+
   if(event.type==='payment_intent.succeeded' || event.type==='payment_intent.succeeded_mock' || event.data?.object?.id?.startsWith('pi_')){
     const pi = event.data?.object || event;
     const piId = pi.id;
@@ -88,12 +108,20 @@ router.post('/api/webhooks/stripe', express.raw({type:'*/*'}), async (req,res) =
     if(job){
       const prev = job.ledger_hash || 'GENESIS';
       const hash = ledgerHash(prev, job.id, 'HELD', job.processor_amount_aed, new Date().toISOString());
-      await db.prepare(`UPDATE jobs SET escrow_status='HELD', processor_payment_status='PAID', ledger_hash=?, prev_ledger_hash=?, updated_at=datetime('now') WHERE id=?`).run(hash, prev, job.id);
-      await db.prepare(`UPDATE payouts SET status='HELD' WHERE job_id=?`).run(job.id);
+      // jobs + payouts updated atomically — previously two separate
+      // statements, so a crash between them could leave escrow HELD with
+      // the payout row never following.
+      await db.transaction(async (trx) => {
+        await trx.query(`UPDATE jobs SET escrow_status='HELD', processor_payment_status='PAID', ledger_hash=?, prev_ledger_hash=?, updated_at=datetime('now') WHERE id=?`, [hash, prev, job.id]);
+        await trx.query(`UPDATE payouts SET status='HELD' WHERE job_id=?`, [job.id]);
+      });
       await writeAudit({headers:{}, actorId:0, requestId:req.headers['x-request-id']},{userId:0, action:'ESCROW_HELD', details:`${job.job_code} held via Stripe ${piId}`, entityType:'job', entityId:job.id, beforeState:'PENDING', afterState:'HELD'});
       await notify(job.shipper_id, 'Escrow held', `${job.job_code} escrow is now HELD — carrier may pick up.`, job.id, 'payout');
     }
   }
+  try {
+    await db.prepare(`UPDATE payment_webhook_events SET status='PROCESSED', processed_at=datetime('now') WHERE provider='stripe' AND provider_event_id=?`).run(providerEventId);
+  } catch {}
   res.json({received:true});
 });
 
@@ -162,9 +190,15 @@ router.post('/api/jobs/:id/release-payout', auth(['SHIPPER','ADMIN']), async (re
     const tr = await createTransfer({ amountAed: netWithBuffer, destination: dest, jobCode: job.job_code });
     const prev = job.ledger_hash || 'GENESIS';
     const hash = ledgerHash(prev, job.id, 'RELEASED', netWithBuffer, new Date().toISOString());
-    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), ledger_hash=?, prev_ledger_hash=?, buffer_released=1, updated_at=datetime('now') WHERE id=?`).run(hash, prev, job.id);
-    await db.prepare(`UPDATE payouts SET status='RELEASED', released_at=datetime('now'), processor_payout_status='SENT', processor_payout_ref=?, transfer_reference=? WHERE id=? AND status != 'RELEASED'`).run(tr.id, tr.id, payout.id);
-    await db.prepare(`UPDATE payout_attempts SET status='SETTLED', provider_response=? WHERE idempotency_key=?`).run(tr.id, releaseKey);
+    // Real money already moved above — these three writes recording that
+    // must land together, not as separate statements a crash could split
+    // (e.g. jobs flips to RELEASED but payouts never follows, making the
+    // payout look unfulfilled and resubmittable for a second real transfer).
+    await db.transaction(async (trx) => {
+      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), ledger_hash=?, prev_ledger_hash=?, buffer_released=1, updated_at=datetime('now') WHERE id=?`, [hash, prev, job.id]);
+      await trx.query(`UPDATE payouts SET status='RELEASED', released_at=datetime('now'), processor_payout_status='SENT', processor_payout_ref=?, transfer_reference=? WHERE id=? AND status != 'RELEASED'`, [tr.id, tr.id, payout.id]);
+      await trx.query(`UPDATE payout_attempts SET status='SETTLED', provider_response=? WHERE idempotency_key=?`, [tr.id, releaseKey]);
+    });
     await writeAudit(req,{userId:req.actorId, action:'PAYOUT_RELEASED', details:`${job.job_code} ${netWithBuffer} AED → ${dest} via ${tr.id}`, entityType:'payout', entityId:payout.id});
     await notify(job.carrier_id, 'Payout sent', `Your payout for ${job.job_code} (${netWithBuffer} AED) is on the way.`, job.id, 'payout');
     res.json({ ok:true, transfer: tr, net: netWithBuffer, hash });

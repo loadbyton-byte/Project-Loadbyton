@@ -1,15 +1,21 @@
 const db = require('../db');
 const { sendError } = require('../lib/http');
 const { auth } = require('../middleware/auth');
+const { rateLimiter, byIp } = require('../lib/rateLimit');
 const router = require('express').Router();
+
+const ingestLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120, keyFn: byIp, message: 'Too many telematics pings.' });
 
 // Hardware telematics webhook — speed, lat, lng, temperature
 // Auth via x-device-token or INTERNAL_KEY
-router.post('/api/telematics/ingest', async (req,res)=>{
+router.post('/api/telematics/ingest', ingestLimiter, async (req,res)=>{
   const key = req.headers['x-device-token'] || req.headers['x-internal-key'] || req.headers['x-api-key'];
-  if(process.env.TELEMATICS_DEVICE_KEY && key!==process.env.TELEMATICS_DEVICE_KEY && key!==process.env.INTERNAL_KEY){
-    return sendError(res,401,'Invalid device token');
-  }
+  const configuredKeys = [process.env.TELEMATICS_DEVICE_KEY, process.env.INTERNAL_KEY].filter(Boolean);
+  // With neither key configured, this endpoint would otherwise accept
+  // anonymous writes from anyone for any job — fail closed rather than
+  // silently open just because ops never set the optional device key.
+  if (configuredKeys.length === 0) return sendError(res,401,'Telematics ingestion is not configured (set TELEMATICS_DEVICE_KEY or INTERNAL_KEY)');
+  if (!configuredKeys.includes(key)) return sendError(res,401,'Invalid device token');
   const { deviceId, device_id, jobId, job_id, latitude, longitude, lat, lng, speed, temperature, temp, fuelLevel, fuel_level } = req.body||{};
   const did = deviceId || device_id;
   const jid = jobId || job_id || null;

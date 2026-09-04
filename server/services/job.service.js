@@ -271,6 +271,7 @@ async function getJob(jobId, user) {
  */
 async function editJob(jobId, body, req) {
   const { isValidUaeLatLng } = require('../lib/helpers');
+  const { SHIPMENT_TYPES } = require('../lib/constants');
   const JOB_EDITABLE_FIELDS = {
     shipmentType: 'shipment_type',
     importPickupTerminal: 'import_pickup_terminal',
@@ -310,6 +311,12 @@ async function editJob(jobId, body, req) {
   if (hasPendingBid) { const e = new Error('Cannot edit a job that already has a pending bid — withdraw/reject bids first, or cancel and repost'); e.status = 403; throw e; }
 
   const b = body || {};
+  // Job creation validates shipmentType against this same allowlist;
+  // editing bypassed it entirely, letting a job's shipment_type drift to a
+  // value the rest of the app (labels, filters, lane-matching) doesn't recognize.
+  if (b.shipmentType !== undefined && !SHIPMENT_TYPES.includes(b.shipmentType)) {
+    const e = new Error(`shipmentType must be one of ${SHIPMENT_TYPES.join(', ')}`); e.status = 400; throw e;
+  }
   if ((b.pickupLat !== undefined || b.pickupLng !== undefined) && !isValidUaeLatLng(Number(b.pickupLat), Number(b.pickupLng))) {
     const e = new Error('pickupLat/pickupLng must be valid UAE coordinates'); e.status = 400; throw e;
   }

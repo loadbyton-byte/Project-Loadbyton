@@ -29,6 +29,7 @@ function rateForRisk(score){
 router.post('/api/jobs/:id/tokenize', auth(['SHIPPER','ADMIN']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return sendError(res,404,'Job not found');
+  if(req.user.role!=='ADMIN' && job.shipper_id!==req.user.id) return sendError(res,403,'Not your job');
   const { blNumber, bl_number, faceValueAed } = req.body||{};
   const bl=blNumber||bl_number;
   if(!bl) return sendError(res,400,'blNumber required');
@@ -42,11 +43,15 @@ router.post('/api/jobs/:id/tokenize', auth(['SHIPPER','ADMIN']), async (req,res)
   const inst=await db.prepare('SELECT * FROM debt_instruments WHERE id=?').get(Number(r.lastInsertRowid));
   res.status(201).json({ instrument: inst, risk:{ score, rateBps: rate, lane: laneKey }});
 });
-router.get('/api/ledger/instruments', auth(), async (req,res)=>{
+// Platform-wide, unfiltered — admin only, same reasoning as the audit chain.
+router.get('/api/ledger/instruments', auth(['ADMIN']), async (req,res)=>{
   const rows=await db.prepare('SELECT * FROM debt_instruments ORDER BY created_at DESC LIMIT 100').all();
   res.json({ instruments: rows });
 });
 router.get('/api/jobs/:id/instruments', auth(), async (req,res)=>{
+  const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if(!job) return sendError(res,404,'Job not found');
+  if(req.user.role!=='ADMIN' && job.shipper_id!==req.user.id && job.carrier_id!==req.user.id) return sendError(res,403,'Not permitted');
   const rows=await db.prepare('SELECT * FROM debt_instruments WHERE job_id=?').all(req.params.id);
   res.json({ instruments: rows });
 });

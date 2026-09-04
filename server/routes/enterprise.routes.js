@@ -50,6 +50,7 @@ router.post('/api/jobs/:id/eir', auth(['CARRIER']), async (req,res)=>{
 router.get('/api/jobs/:id/detention', auth(), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
+  if(req.user.role!=='ADMIN' && job.carrier_id!==req.user.id && job.shipper_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not permitted');
   const free = job.detention_free_days ?? job.free_time_days ?? 5;
   const rate = job.demurrage_rate_aed ?? 400;
   const deliveredAt = job.delivered_at ? new Date(job.delivered_at) : null;
@@ -97,6 +98,9 @@ router.post('/api/jobs/:id/fuel-advance', auth(['CARRIER']), async (req,res)=>{
   res.json({ ok:true, amount, type: t });
 });
 router.get('/api/jobs/:id/fuel-advances', auth(), async (req,res)=>{
+  const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
+  if(req.user.role!=='ADMIN' && job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not permitted');
   const rows=await db.prepare('SELECT * FROM fuel_advances WHERE job_id=?').all(req.params.id);
   res.json({ advances: rows });
 });

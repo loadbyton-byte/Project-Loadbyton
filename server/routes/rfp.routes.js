@@ -8,6 +8,13 @@ const router = require('express').Router();
 router.post('/api/rfps', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req,res)=>{
   const { title, description, origin, destination, totalContainers, durationMonths, budgetAed } = req.body||{};
   if(!title||!origin||!destination||!totalContainers||!durationMonths||!budgetAed) return sendError(res,400,'Missing RFP fields');
+  // durationMonths becomes the loop count for the monthly-milestone insert
+  // below — an unbounded value (or a non-numeric one, via the same
+  // Number.isFinite gap seen elsewhere) turns a single request into
+  // hundreds of thousands of sequential inserts.
+  if(!Number.isFinite(Number(durationMonths)) || Number(durationMonths)<1 || Number(durationMonths)>60) return sendError(res,400,'durationMonths must be a number between 1 and 60');
+  if(!Number.isFinite(Number(totalContainers)) || Number(totalContainers)<1) return sendError(res,400,'totalContainers must be a positive number');
+  if(!Number.isFinite(Number(budgetAed)) || Number(budgetAed)<=0) return sendError(res,400,'budgetAed must be a positive number');
   const r = await db.prepare(`INSERT INTO contract_rfps (shipper_id,title,description,origin,destination,total_containers,duration_months,budget_aed) VALUES (?,?,?,?,?,?,?,?) RETURNING id`).run(req.user.id,title,description||null,origin,destination,Number(totalContainers),Number(durationMonths),Number(budgetAed));
   const id = Number(r.lastInsertRowid);
   // auto-create monthly milestones
@@ -38,7 +45,7 @@ router.post('/api/rfps/:id/bids', auth(['CARRIER']), async (req,res)=>{
   const rfp = await db.prepare('SELECT * FROM contract_rfps WHERE id=?').get(req.params.id);
   if(!rfp||rfp.status!=='OPEN') return sendError(res,400,'RFP not open');
   const { amountAed, etaDays, proposal } = req.body||{};
-  if(!amountAed) return sendError(res,400,'amountAed required');
+  if(!Number.isFinite(Number(amountAed)) || Number(amountAed)<=0) return sendError(res,400,'amountAed must be a positive number');
   await db.prepare(`INSERT INTO rfp_bids (rfp_id,carrier_id,amount_aed,eta_days,proposal) VALUES (?,?,?,?,?)`).run(rfp.id, req.user.id, Number(amountAed), Number(etaDays)||30, proposal||null);
   await notify(rfp.shipper_id, 'RFP bid received', `New bid on ${rfp.title}`, null, 'bid');
   res.status(201).json({ ok:true });
