@@ -25,7 +25,7 @@ export function fileToBase64(file) {
 // fallback otherwise (local disk dev, or S3 not yet set up) — same
 // validation either way, decided entirely by what mintUploadUrl returns.
 // mintUploadUrl is one of the api.js *UploadUrl calls, e.g.
-// (mimeType) => api.getDriverUploadUrl(driverId, mimeType).
+// (mimeType) => api.getDriverDocumentUploadUrl(driverId, mimeType).
 export async function uploadFile(file, mintUploadUrl) {
   if (!ALLOWED_UPLOAD_MIME_TYPES.includes(file.type)) {
     throw new Error('File must be a JPEG, PNG, WEBP, or PDF.');

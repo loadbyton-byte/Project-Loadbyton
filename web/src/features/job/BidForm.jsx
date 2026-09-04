@@ -88,7 +88,7 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
         </div>
       </div>
       {error && <p className="mt-3 text-sm text-status-danger">{error}</p>}
-      <Button className="w-full" variant="accent" onClick={() => {}} loading={busy}>Submit bid</Button>
+      <Button type="submit" className="w-full" variant="accent" loading={busy}>Submit bid</Button>
     </form>
   );
 }

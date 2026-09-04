@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../lib/auth.jsx';
 import { api } from '../../lib/api.js';
-import { Button, Input, Textarea, Label, Badge } from '../../components/ui.jsx';
+import { Button, Textarea } from '../../components/ui.jsx';
 
 export default function DisputePanel({ jobId, onDone }) {
-  const { user } = useAuth();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -13,7 +11,7 @@ export default function DisputePanel({ jobId, onDone }) {
     setBusy(true);
     setError('');
     try {
-      await api.openDispute(jobId, reason);
+      await api.disputeJob(jobId, reason);
       onDone();
     } catch (err) {
       setError(err.message);
