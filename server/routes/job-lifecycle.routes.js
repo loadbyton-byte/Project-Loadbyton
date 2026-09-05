@@ -50,6 +50,7 @@ const notifyAdmins = /** @type {any} */ (helpersMod).notifyAdmins;
 const isPartyOnJob = /** @type {any} */ (helpersMod).isPartyOnJob;
 const isParticipantOrBidder = /** @type {any} */ (helpersMod).isParticipantOrBidder;
 const canViewJob = /** @type {any} */ (helpersMod).canViewJob;
+const parseDbDate = /** @type {any} */ (helpersMod).parseDbDate;
 /** @type {any} */
 const authMod = require('../middleware/auth');
 const auth = /** @type {any} */ (authMod).auth;
@@ -321,8 +322,9 @@ router.get('/api/jobs/:id/track', auth(), async (/** @type {any} */ req, /** @ty
 
   let hoursSinceDelivered = null;
   let autoReleaseAt = null;
-  if (job.delivered_at) {
-    const deliveredMs = new Date(String(job.delivered_at).replace(' ', 'T') + 'Z').getTime();
+  const deliveredDate = parseDbDate(job.delivered_at);
+  if (deliveredDate) {
+    const deliveredMs = deliveredDate.getTime();
     hoursSinceDelivered = Math.max(0, (Date.now() - deliveredMs) / 3600000);
     autoReleaseAt = new Date(deliveredMs + auto_release_hours * 3600000).toISOString();
   }
