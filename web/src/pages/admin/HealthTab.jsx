@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -13,7 +13,13 @@ const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'M
 
 function HealthTab() {
   const [health, setHealth] = useState(null);
-  useEffect(() => { api.adminHealth().then((d) => setHealth(d.health)).catch(() => {}); }, []);
+  const [healthError, setHealthError] = useState('');
+  function load() {
+    setHealthError('');
+    api.adminHealth().then((d) => setHealth(d.health)).catch((err) => setHealthError(err.message));
+  }
+  useEffect(load, []);
+  if (healthError) return <ErrorState title="Couldn't load platform health" description={healthError} onRetry={load} />;
   if (!health) return <p className="text-sm text-ink-muted">Loading…</p>;
   return (
     <div>
@@ -70,14 +76,16 @@ const ESCROW_PAGE_SIZE = 20;
 function EscrowConfirmationPanel() {
   const { addToast } = useToasts();
   const [jobs, setJobs] = useState(null);
+  const [jobsError, setJobsError] = useState('');
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [busyId, setBusyId] = useState(null);
 
   function load() {
+    setJobsError('');
     api.listJobs({ status: 'AWARDED,PICKED_UP,IN_TRANSIT,DELIVERED', escrowStatus: 'HELD', limit: ESCROW_PAGE_SIZE, offset })
       .then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); })
-      .catch(() => { setJobs([]); setTotal(0); });
+      .catch((err) => { setJobs([]); setTotal(0); setJobsError(err.message); });
   }
   useEffect(load, [offset]);
 
@@ -101,7 +109,9 @@ function EscrowConfirmationPanel() {
       <p className="mb-3 flex items-center gap-2 text-sm font-medium text-ink-secondary">
         <IconWallet size={16} /> Escrow awaiting fund confirmation ({total})
       </p>
-      {jobs.length === 0 ? (
+      {jobsError ? (
+        <ErrorState title="Couldn't load escrow queue" description={jobsError} onRetry={load} />
+      ) : jobs.length === 0 ? (
         <p className="text-sm text-ink-muted">Nothing HELD right now — every awarded job's funds have been confirmed as received.</p>
       ) : (
         <>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate } from '../lib/constants.js';
-import { Card, Input, EmptyState } from '../components/ui.jsx';
+import { Card, Input, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconReceipt } from '../components/icons.jsx';
 
 // Dedicated invoice history/search — Earnings.jsx keeps its existing
@@ -12,11 +12,14 @@ import { IconReceipt } from '../components/icons.jsx';
 export default function Invoices() {
   usePageTitle('Invoices');
   const [invoices, setInvoices] = useState(null);
+  const [error, setError] = useState('');
   const [filters, setFilters] = useState({ search: '', from: '', to: '' });
 
-  useEffect(() => {
-    api.invoices().then((d) => setInvoices(d.invoices)).catch(() => setInvoices([]));
-  }, []);
+  function load() {
+    setError('');
+    api.invoices().then((d) => setInvoices(d.invoices)).catch((err) => { setInvoices([]); setError(err.message); });
+  }
+  useEffect(load, []);
 
   const filtered = invoices?.filter((inv) => {
     const searchMatch = !filters.search
@@ -41,8 +44,10 @@ export default function Invoices() {
         </div>
       </Card>
 
-      {!filtered ? (
+      {!filtered && !error ? (
         <p className="mt-6 text-sm text-ink-muted">Loading…</p>
+      ) : error ? (
+        <ErrorState className="mt-6" title="Couldn't load invoices" description={error} onRetry={load} />
       ) : filtered.length === 0 ? (
         <EmptyState icon={<IconReceipt size={26} />} title="No invoices found" description="Invoices are issued automatically when a job's payout is released." />
       ) : (

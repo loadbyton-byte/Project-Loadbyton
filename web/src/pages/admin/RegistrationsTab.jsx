@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -13,9 +13,11 @@ const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Dispute
 
 function RegistrationsTab() {
   const [referrals, setReferrals] = useState(null);
+  const [referralsError, setReferralsError] = useState('');
 
   function load() {
-    api.adminReferrals().then((d) => setReferrals(d.referrals)).catch(() => setReferrals([]));
+    setReferralsError('');
+    api.adminReferrals().then((d) => setReferrals(d.referrals)).catch((err) => { setReferrals([]); setReferralsError(err.message); });
   }
   useEffect(load, []);
 
@@ -28,6 +30,8 @@ function RegistrationsTab() {
 
       {!referrals ? (
         <p className="mt-6 text-sm text-ink-muted">Loading…</p>
+      ) : referralsError ? (
+        <ErrorState className="mt-6" title="Couldn't load referrals" description={referralsError} onRetry={load} />
       ) : referrals.length === 0 ? (
         <EmptyState icon={<IconInfo size={26} />} title="No referrals yet" description="Sign-ups that used a referral code will show up here." />
       ) : (
