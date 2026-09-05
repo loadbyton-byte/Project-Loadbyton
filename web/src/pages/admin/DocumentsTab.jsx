@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { profileDocumentUrl, driverDocumentUrl } from '../../lib/upload.js';
-import { Card, Badge, Input, Select, EmptyState, StatusBadge } from '../../components/ui.jsx';
+import { Card, Badge, Input, Select, EmptyState, ErrorState, StatusBadge } from '../../components/ui.jsx';
 import { IconFile, IconUser, IconCheckCircle } from '../../components/icons.jsx';
 
 // Read-only browsing of what companies have on file — the actual files are
@@ -11,19 +11,25 @@ import { IconFile, IconUser, IconCheckCircle } from '../../components/icons.jsx'
 // parallel admin-only file path.
 function DocumentsTab() {
   const [companies, setCompanies] = useState(null);
+  const [companiesError, setCompaniesError] = useState('');
   const [filters, setFilters] = useState({ role: 'all', search: '' });
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
 
-  useEffect(() => {
-    api.adminDocumentCompanies().then((d) => setCompanies(d.companies)).catch(() => setCompanies([]));
-  }, []);
+  function loadCompanies() {
+    setCompaniesError('');
+    api.adminDocumentCompanies().then((d) => setCompanies(d.companies)).catch((err) => { setCompanies([]); setCompaniesError(err.message); });
+  }
+  useEffect(loadCompanies, []);
 
-  useEffect(() => {
+  const [detailError, setDetailError] = useState('');
+  function loadDetail() {
     if (!selectedId) { setDetail(null); return; }
     setDetail(undefined);
-    api.adminDocumentCompany(selectedId).then(setDetail).catch(() => setDetail(null));
-  }, [selectedId]);
+    setDetailError('');
+    api.adminDocumentCompany(selectedId).then(setDetail).catch((err) => setDetailError(err.message));
+  }
+  useEffect(loadDetail, [selectedId]);
 
   const filtered = companies?.filter((c) => {
     const roleMatch = filters.role === 'all' || c.role === filters.role;
@@ -45,8 +51,10 @@ function DocumentsTab() {
         </div>
       </Card>
 
-      {!filtered ? (
+      {!filtered && !companiesError ? (
         <p className="mt-6 text-sm text-ink-muted">Loading…</p>
+      ) : companiesError ? (
+        <ErrorState className="mt-6" title="Couldn't load companies" description={companiesError} onRetry={loadCompanies} />
       ) : filtered.length === 0 ? (
         <EmptyState icon={<IconUser size={26} />} title="No companies found" description="Try adjusting the filters above." />
       ) : (
@@ -83,7 +91,9 @@ function DocumentsTab() {
 
       {selectedId && (
         <Card className="mt-6 p-5">
-          {!detail ? (
+          {detailError ? (
+            <ErrorState title="Couldn't load this company's documents" description={detailError} onRetry={loadDetail} />
+          ) : !detail ? (
             <p className="text-sm text-ink-muted">Loading…</p>
           ) : (
             <>

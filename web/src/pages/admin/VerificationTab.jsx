@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -14,13 +14,15 @@ const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Dispute
 function VerificationTab() {
   const { addToast } = useToasts();
   const [queue, setQueue] = useState(null);
+  const [queueError, setQueueError] = useState('');
   const [ibanDrafts, setIbanDrafts] = useState({});
   const [busyId, setBusyId] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
   function load() {
-    api.adminVerificationQueue().then((d) => { setQueue(d.queue); setSelected(new Set()); }).catch(() => setQueue([]));
+    setQueueError('');
+    api.adminVerificationQueue().then((d) => { setQueue(d.queue); setSelected(new Set()); }).catch((err) => { setQueue([]); setQueueError(err.message); });
   }
   useEffect(load, []);
 
@@ -69,6 +71,7 @@ function VerificationTab() {
   }
 
   if (!queue) return <p className="text-sm text-ink-muted">Loading…</p>;
+  if (queueError) return <ErrorState title="Couldn't load the verification queue" description={queueError} onRetry={load} />;
   if (queue.length === 0) return <EmptyState icon={<IconShield size={26} />} title="Queue is empty" description="No carriers are waiting on verification right now." />
 
   return (

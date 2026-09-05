@@ -43,6 +43,7 @@ function navByRole(t) {
       { to: '/contracts', label: t('nav.contracts', 'Contract lanes'), icon: <IconFile size={20} /> },
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
+      { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
     ],
     CARRIER: [

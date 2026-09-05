@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -16,11 +16,13 @@ function MembersTab() {
   const { addToast } = useToasts();
   const navigate = useNavigate();
   const [users, setUsers] = useState(null);
+  const [usersError, setUsersError] = useState('');
   const [filters, setFilters] = useState({ role: 'all', verified: 'all', search: '' });
   const [impersonatingId, setImpersonatingId] = useState(null);
 
   function load() {
-    api.adminUsers().then((d) => setUsers(d.users)).catch(() => setUsers([]));
+    setUsersError('');
+    api.adminUsers().then((d) => setUsers(d.users)).catch((err) => { setUsers([]); setUsersError(err.message); });
   }
   useEffect(load, []);
 
@@ -64,8 +66,10 @@ function MembersTab() {
         </div>
       </Card>
 
-      {!filteredUsers ? (
+      {!filteredUsers && !usersError ? (
         <p className="mt-6 text-sm text-ink-muted">Loading…</p>
+      ) : usersError ? (
+        <ErrorState className="mt-6" title="Couldn't load members" description={usersError} onRetry={load} />
       ) : filteredUsers.length === 0 ? (
         <EmptyState icon={<IconUser size={26} />} title="No members found" description="Try adjusting the filters above." />
       ) : (

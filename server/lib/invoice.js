@@ -18,6 +18,7 @@
 // unilaterally. Flip TAX_INCLUSIVE below once that's settled.
 
 const { decryptField } = require('./crypto');
+const { renderDocumentShell, esc } = require('./documents/shell');
 
 const VAT_RATE_BPS = 500; // 5% UAE standard rate
 const TAX_INCLUSIVE = true;
@@ -92,49 +93,15 @@ async function issueInvoice(db, jobId) {
   return db.prepare('SELECT * FROM invoices WHERE id=?').get(Number(result.lastInsertRowid));
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 function renderInvoiceHtml({ invoice, job, carrierProfile }) {
   const supplierTrn = invoice.supplier_trn;
   const trnWarning = supplierTrn
     ? ''
-    : `<p style="color:#8f2f24;font:600 13px sans-serif;border:1px solid #8f2f24;padding:8px 12px;">
-         ⚠ PLATFORM_TRN is not configured (env var). This invoice is not FTA-compliant
-         until the platform's own TRN is set — see docs/DEVELOPER_GUIDE.md §7.
-       </p>`;
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Invoice ${esc(invoice.invoice_number)}</title>
-<style>
-  body{ font-family: Arial, Helvetica, sans-serif; color:#16211f; max-width:720px; margin:40px auto; padding:0 20px; }
-  h1{ font-size:20px; margin-bottom:2px; }
-  .muted{ color:#666; font-size:13px; }
-  table{ width:100%; border-collapse:collapse; margin-top:24px; }
-  th,td{ text-align:left; padding:8px 6px; border-bottom:1px solid #ddd; font-size:14px; }
-  th{ font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:#666; }
-  .totals td{ font-weight:600; }
-  .cols{ display:flex; justify-content:space-between; margin-top:20px; gap:24px; }
-  .cols div{ flex:1; }
-  .print-bar{ display:flex; justify-content:flex-end; margin-bottom:16px; }
-  .print-bar button{ font:600 13px Arial, sans-serif; padding:8px 16px; border-radius:6px; border:1px solid #16211f; background:#16211f; color:#fff; cursor:pointer; }
-  .print-bar button:hover{ opacity:0.85; }
-  @media print {
-    @page { margin: 16mm; }
-    body{ margin:0; max-width:none; }
-    .no-print{ display:none !important; }
-  }
-</style>
-</head>
-<body>
-  <div class="print-bar no-print"><button id="invoice-print-btn">Print / Save as PDF</button></div>
-  ${trnWarning}
-  <h1>Tax Invoice</h1>
-  <p class="muted">Invoice ${esc(invoice.invoice_number)} · Issued ${esc(invoice.issued_at)}</p>
+    : `<span class="doc-warning">⚠ PLATFORM_TRN is not configured (env var). This invoice is not FTA-compliant
+       until the platform's own TRN is set — see docs/DEVELOPER_GUIDE.md §7.</span>`;
 
+  const bodyHtml = `
+  ${trnWarning}
   <div class="cols">
     <div>
       <strong>Supplier</strong><br/>
@@ -149,21 +116,25 @@ function renderInvoiceHtml({ invoice, job, carrierProfile }) {
   </div>
 
   <table>
-    <thead><tr><th>Description</th><th>Job</th><th style="text-align:right">Amount (AED)</th></tr></thead>
+    <thead><tr><th>Description</th><th>Job</th><th class="num">Amount (AED)</th></tr></thead>
     <tbody>
-      <tr><td>Platform commission — facilitation service</td><td>${esc(job ? job.job_code : invoice.job_id)}</td><td style="text-align:right">${invoice.taxable_aed.toFixed(2)}</td></tr>
-      <tr><td>VAT @ ${(invoice.vat_rate_bps / 100).toFixed(0)}%</td><td></td><td style="text-align:right">${invoice.vat_aed.toFixed(2)}</td></tr>
-      <tr class="totals"><td>Total</td><td></td><td style="text-align:right">${invoice.total_aed.toFixed(2)}</td></tr>
+      <tr><td>Platform commission — facilitation service</td><td class="mono">${esc(job ? job.job_code : invoice.job_id)}</td><td class="num">${invoice.taxable_aed.toFixed(2)}</td></tr>
+      <tr><td>VAT @ ${(invoice.vat_rate_bps / 100).toFixed(0)}%</td><td></td><td class="num">${invoice.vat_aed.toFixed(2)}</td></tr>
+      <tr class="totals"><td>Total</td><td></td><td class="num">${invoice.total_aed.toFixed(2)}</td></tr>
     </tbody>
   </table>
 
   <p class="muted" style="margin-top:24px;">
     Freight amount (AED ${Number(invoice.gross_aed).toFixed(2)}) is a supply between shipper and
     carrier and is not part of this invoice — this invoice covers Loadbyton's commission only.
-  </p>
-  <script src="/api/invoices/print.js"></script>
-</body>
-</html>`;
+  </p>`;
+
+  return renderDocumentShell({
+    title: 'Tax Invoice',
+    subtitle: `Issued ${invoice.issued_at || ''}`,
+    docCode: invoice.invoice_number,
+    bodyHtml,
+  });
 }
 
 module.exports = { issueInvoice, renderInvoiceHtml, VAT_RATE_BPS };

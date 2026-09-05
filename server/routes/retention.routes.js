@@ -3,7 +3,7 @@ const { unifiedLanes } = require('../lib/lanes');
 const { issueInvoice, renderInvoiceHtml } = require('../lib/invoice');
 const { sendError, jobCode } = require('../lib/http');
 const { NOTIFICATION_TYPES } = require('../lib/constants');
-const { writeAudit } = require('../lib/helpers');
+const { writeAudit, parseDbDate } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();
@@ -39,11 +39,11 @@ router.post('/api/templates/:id/rerun', auth(['SHIPPER']), async (req, res) => {
   const result = await db
     .prepare(
       `INSERT INTO jobs (job_code, shipper_id, template_id, container_size, container_type, pickup_terminal, delivery_area, delivery_address,
-         ready_at, deadline, status, escrow_status, notes)
-       VALUES (?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?)
+         ready_at, deadline, status, escrow_status, notes, is_demo)
+       VALUES (?,?,?,?,?,?,?,?,?,?,'OPEN','PENDING',?,?)
        RETURNING id`
     )
-    .run(code, req.user.id, tpl.id, tpl.container_size, tpl.container_type, tpl.pickup_terminal, tpl.delivery_area, tpl.delivery_address, readyAt, deadline, tpl.notes);
+    .run(code, req.user.id, tpl.id, tpl.container_size, tpl.container_type, tpl.pickup_terminal, tpl.delivery_area, tpl.delivery_address, readyAt, deadline, tpl.notes, req.user.is_demo ? 1 : 0);
   await writeAudit(req, { userId: req.actorId, action: 'JOB_CREATE', details: `${code} posted from template "${tpl.name}"`, entityType: 'job', entityId: Number(result.lastInsertRowid) });
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(Number(result.lastInsertRowid));
   res.status(201).json({ job });
@@ -66,27 +66,92 @@ router.post('/api/contracts', auth(['SHIPPER']), async (req, res) => {
   res.status(201).json({ contract });
 });
 
+// Derived, in JS rather than SQL, from a small set of already-fetched rows
+// — cheap at this data volume and sidesteps SQLite/Postgres date-function
+// differences entirely. `rows` each need { dateField, amountField, status,
+// pickup_terminal, delivery_area }.
+function monthlyTrend(rows, dateField, amountField) {
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleString('en-US', { month: 'short' }), count: 0, amountAED: 0 });
+  }
+  const byKey = Object.fromEntries(months.map((m) => [m.key, m]));
+  for (const r of rows) {
+    const d = parseDbDate(r[dateField]);
+    if (!d) continue;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const bucket = byKey[key];
+    if (!bucket) continue;
+    bucket.count += 1;
+    bucket.amountAED += Number(r[amountField]) || 0;
+  }
+  return months;
+}
+function statusBreakdown(rows) {
+  const counts = {};
+  for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1;
+  return Object.entries(counts).map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count);
+}
+function topLanes(rows) {
+  const counts = {};
+  for (const r of rows) {
+    if (!r.pickup_terminal || !r.delivery_area) continue;
+    const key = `${r.pickup_terminal}|${r.delivery_area}`;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([key, count]) => { const [pickupTerminal, deliveryArea] = key.split('|'); return { pickupTerminal, deliveryArea, count }; });
+}
+
 router.get('/api/analytics/mine', auth(), async (req, res) => {
   const u = req.user;
   if (u.role === 'CARRIER') {
-    const totalBids = (await db.prepare('SELECT COUNT(*) c FROM bids WHERE carrier_id=?').get(u.id)).c;
-    const jobsWon = (await db.prepare(`SELECT COUNT(*) c FROM bids WHERE carrier_id=? AND status='ACCEPTED'`).get(u.id)).c;
-    const paidOutAED = (await db.prepare(`SELECT COALESCE(SUM(net_aed),0) s FROM payouts WHERE carrier_id=? AND status='RELEASED'`).get(u.id)).s;
-    const pendingAED = (await db.prepare(`SELECT COALESCE(SUM(net_aed),0) s FROM payouts WHERE carrier_id=? AND status NOT IN ('RELEASED','CANCELLED')`).get(u.id)).s;
-    const completed = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE carrier_id=? AND status='COMPLETED'`).get(u.id)).c;
-    const onTimeCount = (await db
-      .prepare(`SELECT COUNT(*) c FROM jobs WHERE carrier_id=? AND status='COMPLETED' AND delivered_at IS NOT NULL AND date(delivered_at) <= date(deadline)`)
-      .get(u.id)).c;
+    // These 6 are independent of each other — running them sequentially
+    // paid for 6 round trips per dashboard load for no reason. Promise.all
+    // fires them concurrently instead.
+    const [totalBidsRow, jobsWonRow, paidOutRow, pendingRow, completedRow, onTimeCountRow, historyRows] = await Promise.all([
+      db.prepare('SELECT COUNT(*) c FROM bids WHERE carrier_id=?').get(u.id),
+      db.prepare(`SELECT COUNT(*) c FROM bids WHERE carrier_id=? AND status='ACCEPTED'`).get(u.id),
+      db.prepare(`SELECT COALESCE(SUM(net_aed),0) s FROM payouts WHERE carrier_id=? AND status='RELEASED'`).get(u.id),
+      db.prepare(`SELECT COALESCE(SUM(net_aed),0) s FROM payouts WHERE carrier_id=? AND status NOT IN ('RELEASED','CANCELLED')`).get(u.id),
+      db.prepare(`SELECT COUNT(*) c FROM jobs WHERE carrier_id=? AND status='COMPLETED'`).get(u.id),
+      db.prepare(`SELECT COUNT(*) c FROM jobs WHERE carrier_id=? AND status='COMPLETED' AND delivered_at IS NOT NULL AND date(delivered_at) <= date(deadline)`).get(u.id),
+      db.prepare(`SELECT j.status, j.pickup_terminal, j.delivery_area, j.created_at, p.net_aed, p.released_at
+                    FROM jobs j LEFT JOIN payouts p ON p.job_id = j.id
+                    WHERE j.carrier_id=? ORDER BY j.created_at DESC LIMIT 500`).all(u.id),
+    ]);
+    const totalBids = totalBidsRow.c;
+    const jobsWon = jobsWonRow.c;
+    const paidOutAED = paidOutRow.s;
+    const pendingAED = pendingRow.s;
+    const completed = completedRow.c;
+    const onTimeCount = onTimeCountRow.c;
     const onTime = completed > 0 ? Math.round((onTimeCount / completed) * 100) : 100;
-    res.json({ analytics: { totalBids, jobsWon, paidOutAED, pendingAED, rating: u.profile.rating_avg, onTime, tier: u.tier } });
+    res.json({
+      analytics: {
+        totalBids, jobsWon, paidOutAED, pendingAED, rating: u.profile.rating_avg, onTime, tier: u.tier,
+        monthlyTrend: monthlyTrend(historyRows, 'released_at', 'net_aed'),
+        statusBreakdown: statusBreakdown(historyRows),
+        topLanes: topLanes(historyRows),
+      },
+    });
   } else if (u.role === 'SHIPPER') {
-    const jobsPosted = (await db.prepare('SELECT COUNT(*) c FROM jobs WHERE shipper_id=?').get(u.id)).c;
-    const jobsCompleted = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE shipper_id=? AND status='COMPLETED'`).get(u.id)).c;
-    const totalSpentAED = (await db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE shipper_id=? AND status='COMPLETED'`).get(u.id)).s;
-    const activeJobs = (await db
-      .prepare(`SELECT COUNT(*) c FROM jobs WHERE shipper_id=? AND status IN ('OPEN','AWARDED','PICKED_UP','IN_TRANSIT','DELIVERED')`)
-      .get(u.id)).c;
-    const paidJobs = await db.prepare(`SELECT pickup_terminal, delivery_area, agreed_price_aed FROM jobs WHERE shipper_id=? AND agreed_price_aed IS NOT NULL`).all(u.id);
+    const [jobsPostedRow, jobsCompletedRow, totalSpentRow, activeJobsRow, paidJobs, historyRows] = await Promise.all([
+      db.prepare('SELECT COUNT(*) c FROM jobs WHERE shipper_id=?').get(u.id),
+      db.prepare(`SELECT COUNT(*) c FROM jobs WHERE shipper_id=? AND status='COMPLETED'`).get(u.id),
+      db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE shipper_id=? AND status='COMPLETED'`).get(u.id),
+      db.prepare(`SELECT COUNT(*) c FROM jobs WHERE shipper_id=? AND status IN ('OPEN','AWARDED','PICKED_UP','IN_TRANSIT','DELIVERED')`).get(u.id),
+      db.prepare(`SELECT pickup_terminal, delivery_area, agreed_price_aed FROM jobs WHERE shipper_id=? AND agreed_price_aed IS NOT NULL`).all(u.id),
+      db.prepare(`SELECT status, pickup_terminal, delivery_area, created_at, agreed_price_aed FROM jobs WHERE shipper_id=? ORDER BY created_at DESC LIMIT 500`).all(u.id),
+    ]);
+    const jobsPosted = jobsPostedRow.c;
+    const jobsCompleted = jobsCompletedRow.c;
+    const totalSpentAED = totalSpentRow.s;
+    const activeJobs = activeJobsRow.c;
     let savingsPercent = 0;
     if (paidJobs.length) {
       const laneMap = Object.fromEntries(unifiedLanes.map((l) => [`${l.terminal}:${l.area}`, l.basePriceAed]));
@@ -99,7 +164,14 @@ router.get('/api/analytics/mine', auth(), async (req, res) => {
       }
       savingsPercent = baseSum > 0 ? Math.max(0, Math.round(((baseSum - paidSum) / baseSum) * 1000) / 10) : 0;
     }
-    res.json({ analytics: { jobsPosted, jobsCompleted, totalSpentAED, activeJobs, savingsPercent, tier: u.tier, rating: u.profile.rating_avg } });
+    res.json({
+      analytics: {
+        jobsPosted, jobsCompleted, totalSpentAED, activeJobs, savingsPercent, tier: u.tier, rating: u.profile.rating_avg,
+        monthlyTrend: monthlyTrend(historyRows, 'created_at', 'agreed_price_aed'),
+        statusBreakdown: statusBreakdown(historyRows),
+        topLanes: topLanes(historyRows),
+      },
+    });
   } else {
     res.json({ analytics: {} });
   }

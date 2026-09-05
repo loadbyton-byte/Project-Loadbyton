@@ -163,8 +163,13 @@ async function listJobs(query, user) {
     where = 'shipper_id = ?';
     params.push(user.id);
   } else if (user.role === 'CARRIER') {
-    where = mine ? 'carrier_id = ?' : "(status = 'OPEN' OR carrier_id = ?)";
+    // Demo accounts only ever see demo jobs and real accounts only ever see
+    // real jobs on the open-loads browse (not `mine`) — otherwise an
+    // investor-demo job would show up as a real bidding opportunity for a
+    // real carrier, or vice versa. See server/migrations/003_demo_data_flag.sql.
+    where = mine ? 'carrier_id = ?' : "(status = 'OPEN' OR carrier_id = ?) AND is_demo = ?";
     params.push(user.id);
+    if (!mine) params.push(user.is_demo ? 1 : 0);
   }
   if (status) {
     const statuses = String(status).split(',').map((s) => s.trim()).filter(Boolean);
@@ -263,7 +268,16 @@ async function getJob(jobId, user) {
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
   const payout = await payoutRepository.findByJobId(job.id) || null;
-  return { job: jobWithRating, bids, documents, payout };
+  // The rating form (RatingPanel) has no way to know it's already been
+  // submitted otherwise — POST /api/jobs/:id/rating rejects a second
+  // rating from the same user (idx_ratings_one_per_rater), but until now
+  // the frontend had no signal to stop re-showing the input form, so a
+  // resubmission attempt just failed with a confusing error instead of
+  // the form reflecting the rating already given.
+  const myRating = (job.shipper_id === user.id || job.carrier_id === user.id)
+    ? (await db.prepare('SELECT score, comment FROM ratings WHERE job_id=? AND rater_id=?').get(job.id, user.id)) || null
+    : null;
+  return { job: jobWithRating, bids, documents, payout, myRating };
 }
 
 /**

@@ -127,6 +127,22 @@ function isValidUaeLatLng(lat, lng) {
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= 22 && lat <= 27 && lng >= 51 && lng <= 57;
 }
 
+// A stored timestamp is SQLite-style ("YYYY-MM-DD HH:MM:SS", no timezone)
+// on local dev or Postgres-style (already full ISO 8601 with a trailing Z)
+// in production — blindly doing `.replace(' ', 'T') + 'Z'` (as several
+// call sites did) is only correct for the SQLite shape; on Postgres it
+// appends a second Z to an already-complete ISO string, producing an
+// unparseable date (silently wrong in a `<` comparison, or a thrown
+// RangeError from a later .toISOString() call). Detect which shape it
+// already is instead of assuming one.
+function parseDbDate(raw) {
+  if (raw == null) return null;
+  const s = String(raw);
+  const iso = s.includes('T') ? s : `${s.replace(' ', 'T')}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /**
  * @param {number} lat1
  * @param {number} lng1
@@ -414,7 +430,7 @@ async function resolveActingSeat(session) {
 module.exports = {
   saveUploadedFile, getPresignedUploadUrl, resolveUploadedFile, UPLOADS_DIR, ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_BYTES,
   getAssignedDriverSeatId, effectiveRole, resolveActingSeat,
-  normalizeUaeMobile, isValidUaeTrn, isValidUaeTradeLicence, isValidUaeLatLng, haversineKm,
+  normalizeUaeMobile, isValidUaeTrn, isValidUaeTradeLicence, isValidUaeLatLng, haversineKm, parseDbDate,
   isPasswordValid, timingSafeEqualStr, hashToken,
   getSettings, toPublicUser, writeAudit, unreadNotificationCount, notify, notifyAdmins,
   isParticipantOrBidder, isPartyOnJob, canViewJob, canSeeDocument,

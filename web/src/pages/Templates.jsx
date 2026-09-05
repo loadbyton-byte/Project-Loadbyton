@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, formatLabel } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, EmptyState, Badge } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconPackage } from '../components/icons.jsx';
 
 const empty = { name: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAddress: '', containerSize: '40HC', containerType: 'DRY', cadence: 'WEEKLY', notes: '' };
@@ -10,13 +10,15 @@ const empty = { name: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], 
 export default function Templates() {
   usePageTitle('Templates');
   const [templates, setTemplates] = useState([]);
+  const [templatesError, setTemplatesError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
   const [rerunning, setRerunning] = useState(null);
 
   function load() {
-    api.listTemplates().then((d) => setTemplates(d.templates)).catch(() => {});
+    setTemplatesError('');
+    api.listTemplates().then((d) => setTemplates(d.templates)).catch((err) => setTemplatesError(err.message));
   }
   useEffect(load, []);
 
@@ -111,7 +113,9 @@ export default function Templates() {
       )}
 
       <div className="mt-8">
-        {templates.length === 0 ? (
+        {templatesError ? (
+          <ErrorState title="Couldn't load templates" description={templatesError} onRetry={load} />
+        ) : templates.length === 0 ? (
           <EmptyState icon={<IconPackage size={28} />} title="No templates yet" description="Save your first recurring lane to skip re-entering the same job details." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

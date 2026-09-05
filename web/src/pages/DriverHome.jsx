@@ -3,7 +3,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
-import { Card, StatusBadge, EmptyState, Button } from '../components/ui.jsx';
+import { Card, StatusBadge, EmptyState, ErrorState, Button } from '../components/ui.jsx';
 import { IconTruck, IconMapPin } from '../components/icons.jsx';
 import ChatPopup from '../features/job/ChatPopup.jsx';
 import { directionsUrl } from '../lib/googleMaps.js';
@@ -17,10 +17,13 @@ export default function DriverHome() {
   usePageTitle('My job');
   const { logout } = useAuth();
   const [job, setJob] = useState(undefined); // undefined = loading, null = none assigned
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    api.driverJob().then((d) => setJob(d.job)).catch(() => setJob(null));
-  }, []);
+  function load() {
+    setError('');
+    api.driverJob().then((d) => setJob(d.job)).catch((err) => { setJob(null); setError(err.message); });
+  }
+  useEffect(load, []);
 
   return (
     <div className="container-page py-6" dir="ltr">
@@ -32,6 +35,8 @@ export default function DriverHome() {
       <div className="mt-5">
         {job === undefined ? (
           <p className="text-sm text-ink-muted">Loading…</p>
+        ) : error ? (
+          <ErrorState title="Couldn't load your job" description={error} onRetry={load} />
         ) : job === null ? (
           <EmptyState icon={<IconTruck size={26} />} title="No job assigned yet" description="Your dispatcher will assign you to a job — check back here once you're on one." />
         ) : (

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import { api, ApiError } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
-import { Button, Card, Input, Label, Select, Badge, EmptyState } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
 
 const SEAT_ROLE_HELP = {
@@ -14,12 +14,14 @@ const SEAT_ROLE_HELP = {
 
 function TeamSection() {
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [form, setForm] = useState({ email: '', password: '', seatRole: 'OPS', displayName: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   function load() {
-    api.orgMembers().then(setData).catch(() => {});
+    setLoadError('');
+    api.orgMembers().then(setData).catch((err) => setLoadError(err.message));
   }
   useEffect(load, []);
 
@@ -48,6 +50,7 @@ function TeamSection() {
     load();
   }
 
+  if (loadError) return <Card className="mt-6"><Card.Content><ErrorState title="Couldn't load your team" description={loadError} onRetry={load} /></Card.Content></Card>;
   if (!data) return null;
 
   return (

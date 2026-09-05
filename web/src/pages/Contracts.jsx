@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { TERMINALS, AREAS, formatAED, formatLabel } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, EmptyState, Badge } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, EmptyState, ErrorState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconShield } from '../components/icons.jsx';
 
 const empty = { pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAddress: '', monthlyLoads: '', targetPriceAed: '' };
@@ -10,12 +10,14 @@ const empty = { pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAd
 export default function Contracts() {
   usePageTitle('Contract lanes');
   const [contracts, setContracts] = useState([]);
+  const [contractsError, setContractsError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
 
   function load() {
-    api.listContracts().then((d) => setContracts(d.contracts)).catch(() => {});
+    setContractsError('');
+    api.listContracts().then((d) => setContracts(d.contracts)).catch((err) => setContractsError(err.message));
   }
   useEffect(load, []);
 
@@ -82,7 +84,9 @@ export default function Contracts() {
       )}
 
       <div className="mt-8">
-        {contracts.length === 0 ? (
+        {contractsError ? (
+          <ErrorState title="Couldn't load contract lanes" description={contractsError} onRetry={load} />
+        ) : contracts.length === 0 ? (
           <EmptyState icon={<IconShield size={28} />} title="No contract lanes yet" description="Commit to a monthly volume to get priority visibility from carriers and a lower take rate." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

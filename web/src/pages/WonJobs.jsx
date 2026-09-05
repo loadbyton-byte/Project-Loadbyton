@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { EmptyState, StatusBadge, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
+import { EmptyState, ErrorState, StatusBadge, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
 import { IconPackage, IconSearch } from '../components/icons.jsx';
 import { formatLabel, CONTAINER_EQUIPMENT, STATUS_FLOW, equipmentLabel, cargoTypeLabel } from '../lib/constants.js';
 
@@ -20,6 +20,7 @@ export default function WonJobs() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState(null);
+  const [jobsError, setJobsError] = useState('');
   const [total, setTotal] = useState(0);
   const [sort, setSort] = useState('date_desc');
   const [search, setSearch] = useState('');
@@ -32,14 +33,16 @@ export default function WonJobs() {
   }, [search]);
   useEffect(() => { setOffset(0); }, [sort, debouncedSearch]);
 
-  useEffect(() => {
+  function loadWonJobs() {
     // F19, fixed independently on both branches, now with real server-side
     // pagination (the status:"a,b,c" list support this needed) instead of
     // over-fetching 200 rows and filtering client-side.
+    setJobsError('');
     const params = { mine: 1, status: ACTIVE_STATUSES.join(','), sort, limit: PAGE_SIZE, offset };
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch(() => { setJobs([]); setTotal(0); });
-  }, [user.id, sort, debouncedSearch, offset]);
+    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch((err) => { setJobs([]); setTotal(0); setJobsError(err.message); });
+  }
+  useEffect(loadWonJobs, [user.id, sort, debouncedSearch, offset]);
 
   return (
     <div className="container-page py-6" dir="ltr">
@@ -59,6 +62,8 @@ export default function WonJobs() {
       <div className="mt-5">
         {jobs === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
+        ) : jobsError ? (
+          <ErrorState title="Couldn't load your jobs" description={jobsError} onRetry={loadWonJobs} />
         ) : jobs.length === 0 ? (
           <EmptyState
             icon={<IconPackage size={28} />}
