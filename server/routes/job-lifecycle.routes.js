@@ -120,7 +120,7 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   res.status(201).json({ bid });
 });
 
-router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
+router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
   const job = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id));
   // Migrated to new envelope: payment-checkout errors use apiResponse.error (adds success:false + _legacy)
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
