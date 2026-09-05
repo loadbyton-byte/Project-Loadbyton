@@ -7,7 +7,7 @@
 const db = require('../db');
 const apiResponse = require('../lib/apiResponse');
 const { auth, requireSeatRole } = require('../middleware/auth');
-const { writeAudit, notify } = require('../lib/helpers');
+const { writeAudit, notify, timingSafeEqualStr } = require('../lib/helpers');
 const router = require('express').Router();
 
 // DP World E-Token — carrier pastes/syncs token, shipper auto-notified
@@ -64,7 +64,11 @@ router.get('/api/jobs/:id/detention', auth(), async (req,res)=>{
 // Admin trigger for SMS alarms (24h before penalty)
 router.post('/api/system/detention-alarms', async (req,res)=>{
   const key=req.headers['x-internal-key'];
-  if(key!==process.env.INTERNAL_KEY && req.user?.role!=='ADMIN') return apiResponse.error(req,res,'NOT_AUTHENTICATED','Internal key required');
+  const internalKey = process.env.INTERNAL_KEY;
+  // Fail closed (unset INTERNAL_KEY must never mean "any key/no key passes")
+  // and compare timing-safely rather than with plain !==.
+  const validKey = !!internalKey && !!key && timingSafeEqualStr(key, internalKey);
+  if(!validKey && req.user?.role!=='ADMIN') return apiResponse.error(req,res,'NOT_AUTHENTICATED','Internal key required');
   const jobs=await db.prepare(`SELECT * FROM jobs WHERE status IN ('DELIVERED','IN_TRANSIT','PICKED_UP') AND delivered_at IS NOT NULL`).all();
   let alerted=0;
   for(const job of jobs){

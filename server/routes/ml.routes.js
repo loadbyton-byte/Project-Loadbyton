@@ -1,5 +1,6 @@
 const db = require('../db');
 const { sendError } = require('../lib/http');
+const { auth } = require('../middleware/auth');
 const router = require('express').Router();
 
 // Predictive pipeline — AIS vessel + NOAA weather + port delay → pETA + routing alternatives
@@ -16,7 +17,7 @@ function predictEta({ origin, destination, vesselLat, vesselLng, weatherSeverity
   ];
   return { baseHours, weatherPenalty, congestion: Math.round(congestion*10)/10, predictedHours: Math.round(total*10)/10, alternatives, inputs: { vesselLat, vesselLng, weatherSeverity } };
 }
-router.post('/api/ml/predict-eta', async (req,res)=>{
+router.post('/api/ml/predict-eta', auth(), async (req,res)=>{
   const { jobId, vesselLat, vesselLng, weatherSeverity, origin, destination } = req.body||{};
   let o=origin, d=destination;
   if(jobId){
@@ -28,14 +29,14 @@ router.post('/api/ml/predict-eta', async (req,res)=>{
   // optionally update job's pETA field (store in notes for demo)
   res.json({ prediction: result });
 });
-router.post('/api/ml/ingest/ais', (req,res)=>{
+router.post('/api/ml/ingest/ais', auth(['ADMIN']), (req,res)=>{
   // Accepts AIS batch: [{mmsi, lat,lng,speed,course}]
   const { positions } = req.body||{};
   if(!Array.isArray(positions)) return sendError(res,400,'positions array required');
   // store stub — real: TimescaleDB + PostGIS
   res.json({ ingested: positions.length, status: 'queued for pETA recomputation' });
 });
-router.post('/api/ml/ingest/noaa', (req,res)=>{
+router.post('/api/ml/ingest/noaa', auth(['ADMIN']), (req,res)=>{
   const { feeds } = req.body||{};
   res.json({ ingested: Array.isArray(feeds)?feeds.length:1, status: 'weather ingested' });
 });
