@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   account_approved_at TEXT,
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
+CREATE INDEX IF NOT EXISTS idx_users_org_owner ON users(org_owner_id);
 
 CREATE TABLE IF NOT EXISTS profiles (
   id SERIAL PRIMARY KEY,
@@ -381,6 +382,7 @@ CREATE TABLE IF NOT EXISTS telematics_logs (
   recorded_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
   raw_payload TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_telematics_job ON telematics_logs(job_id);
 
 CREATE TABLE IF NOT EXISTS global_consignments (
   id TEXT PRIMARY KEY,
@@ -404,6 +406,7 @@ CREATE TABLE IF NOT EXISTS compliance_declarations (
   cleared_at TEXT,
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
+CREATE INDEX IF NOT EXISTS idx_compliance_job ON compliance_declarations(job_id);
 
 CREATE TABLE IF NOT EXISTS debt_instruments (
   id SERIAL PRIMARY KEY,
@@ -416,6 +419,7 @@ CREATE TABLE IF NOT EXISTS debt_instruments (
   status TEXT NOT NULL DEFAULT 'ACTIVE',
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
+CREATE INDEX IF NOT EXISTS idx_debt_instruments_job ON debt_instruments(job_id);
 
 CREATE TABLE IF NOT EXISTS contract_rfps (
   id SERIAL PRIMARY KEY,
@@ -431,6 +435,7 @@ CREATE TABLE IF NOT EXISTS contract_rfps (
   awarded_carrier_id INTEGER REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
+CREATE INDEX IF NOT EXISTS idx_contract_rfps_shipper ON contract_rfps(shipper_id);
 
 CREATE TABLE IF NOT EXISTS rfp_bids (
   id SERIAL PRIMARY KEY,
@@ -442,6 +447,7 @@ CREATE TABLE IF NOT EXISTS rfp_bids (
   status TEXT NOT NULL DEFAULT 'PENDING',
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
+CREATE INDEX IF NOT EXISTS idx_rfp_bids_rfp ON rfp_bids(rfp_id);
 
 CREATE TABLE IF NOT EXISTS rfp_milestones (
   id SERIAL PRIMARY KEY,
@@ -452,6 +458,7 @@ CREATE TABLE IF NOT EXISTS rfp_milestones (
   status TEXT NOT NULL DEFAULT 'PENDING',
   invoice_id INTEGER REFERENCES invoices(id)
 );
+CREATE INDEX IF NOT EXISTS idx_rfp_milestones_rfp ON rfp_milestones(rfp_id);
 
 CREATE TABLE IF NOT EXISTS fuel_advances (
   id SERIAL PRIMARY KEY,
@@ -540,7 +547,7 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   id SERIAL PRIMARY KEY,
   transaction_id INTEGER NOT NULL REFERENCES ledger_transactions(id) ON DELETE CASCADE,
   account_code TEXT NOT NULL REFERENCES ledger_accounts(code),
-  amount_minor BIGINT NOT NULL CHECK (amount_minor != 0),
+  amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
   currency TEXT NOT NULL DEFAULT 'AED',
   side TEXT NOT NULL CHECK (side IN ('DEBIT','CREDIT')),
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
