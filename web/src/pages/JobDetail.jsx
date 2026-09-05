@@ -107,6 +107,22 @@ export default function JobDetail() {
     if (payNotice) window.history.replaceState({}, '', window.location.pathname);
   }, [payNotice]);
 
+  // Award confirmation popup: close on Escape, lock body scroll — same
+  // pattern as Dashboard.jsx's "post a job" popup. Must be called
+  // unconditionally on every render (before the loading/error early
+  // returns below) — placing it after them made it skip the first
+  // render while `data` is still null, then run on later renders once
+  // data loads, which is a "rendered more hooks than previous render"
+  // violation (React error #310) that crashed this page in production.
+  useEffect(() => {
+    if (!awardConfirm) return;
+    const onKey = (e) => { if (e.key === 'Escape') setAwardConfirm(null); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [awardConfirm]);
+
   if (error && !data) {
     return (
       <div className="container-page py-10">
@@ -153,17 +169,6 @@ export default function JobDetail() {
       setBusy(false);
     }
   }
-
-  // Award confirmation popup: close on Escape, lock body scroll — same
-  // pattern as Dashboard.jsx's "post a job" popup.
-  useEffect(() => {
-    if (!awardConfirm) return;
-    const onKey = (e) => { if (e.key === 'Escape') setAwardConfirm(null); };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [awardConfirm]);
 
   function confirmAward() {
     const bid = awardConfirm;
