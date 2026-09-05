@@ -48,7 +48,8 @@ jobs:
         run: npm run lint 2>&1 | head -n 100 || echo "lint skipped"
 
       - name: OpenAPI validation
-        run: node -e "const yaml=require('yaml'); const fs=require('fs'); yaml.parse(fs.readFileSync('docs/openapi.yaml','utf8')); console.log('openapi valid')"
+        working-directory: server
+        run: node -e "const yaml=require('yaml'); const fs=require('fs'); yaml.parse(fs.readFileSync('../docs/openapi.yaml','utf8')); console.log('openapi valid')"
         env:
           NODE_ENV: test
 
