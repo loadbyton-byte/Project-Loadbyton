@@ -3,7 +3,7 @@ const { unifiedLanes } = require('../lib/lanes');
 const { issueInvoice, renderInvoiceHtml } = require('../lib/invoice');
 const { sendError, jobCode } = require('../lib/http');
 const { NOTIFICATION_TYPES } = require('../lib/constants');
-const { writeAudit } = require('../lib/helpers');
+const { writeAudit, parseDbDate } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
 
 const router = require('express').Router();
@@ -79,10 +79,8 @@ function monthlyTrend(rows, dateField, amountField) {
   }
   const byKey = Object.fromEntries(months.map((m) => [m.key, m]));
   for (const r of rows) {
-    const raw = r[dateField];
-    if (!raw) continue;
-    const d = new Date(String(raw).replace(' ', 'T'));
-    if (Number.isNaN(d.getTime())) continue;
+    const d = parseDbDate(r[dateField]);
+    if (!d) continue;
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const bucket = byKey[key];
     if (!bucket) continue;

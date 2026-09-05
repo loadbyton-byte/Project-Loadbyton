@@ -4,7 +4,7 @@ const { issueInvoice } = require('../lib/invoice');
 const { sendError } = require('../lib/http');
 const apiResponse = require('../lib/apiResponse');
 const { encryptField, decryptField } = require('../lib/crypto');
-const { writeAudit, toPublicUser, getSettings, notify } = require('../lib/helpers');
+const { writeAudit, toPublicUser, getSettings, notify, parseDbDate } = require('../lib/helpers');
 const { refundJobAsync, executePayoutAsync } = require('../services/payout.service');
 const { approveAccount, verifyCarrier } = require('../services/verification.service');
 const { auth } = require('../middleware/auth');
@@ -476,10 +476,10 @@ router.get('/api/admin/payouts-sla', auth(['ADMIN']), async (req, res) => {
     )
     .all();
   const now = new Date();
-  const pending = rows.map((r) => ({
-    ...r,
-    overdue: r.sla_deadline ? new Date(r.sla_deadline.replace(' ', 'T') + 'Z') < now : false,
-  }));
+  const pending = rows.map((r) => {
+    const deadline = parseDbDate(r.sla_deadline);
+    return { ...r, overdue: deadline ? deadline < now : false };
+  });
   res.json({ pending, overdueCount: pending.filter((r) => r.overdue).length });
 });
 
