@@ -6,6 +6,31 @@
 - React 18 + Vite + Tailwind 3 + `@tanstack/react-query` + `leaflet` for the SPA
 - TypeScript strict for `types/` + `lib/` (see `server/tsconfig.json` — JS routes are `checkJs: false`)
 
+## Branch workflow
+
+- **`main`** — the live, deployed state. Protected: no direct pushes, requires
+  a pull request with 1 approval and a passing CI check
+  (`.github/workflows/ci.yml`) before merging. Every commit here is assumed
+  to already be running in production or ready to be.
+- **`development`** — the active integration branch. Unprotected on purpose,
+  for fast iteration. Branch your feature/fix work off `development` (or off
+  `main` for a small, self-contained fix — either is fine), open a PR, and
+  merge there first.
+- **`staging`** — kept in sync with `main`; not part of day-to-day work.
+
+**To ship a change**: branch off `development`, commit, open a PR into
+`development` and merge once it's reviewed and CI is green. Once a batch of
+work on `development` is confirmed working, open a PR from `development`
+into `main` to release it. Never push straight to `main` — even repo admins
+go through a PR, so the CI check and review actually run on every change
+that reaches production.
+
+**If a change needs a manual step after deploy** (a database migration, a
+new environment variable, a one-off script run on the Oracle server), say so
+explicitly in the PR description — Vercel deploys the frontend automatically
+on merge, but the backend on Oracle does not auto-update; someone has to
+`git pull`, rebuild, and restart the container by hand.
+
 ## Setup
 ```bash
 cd server && npm install && node index.js   # API on :4000

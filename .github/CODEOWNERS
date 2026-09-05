@@ -1,0 +1,5 @@
+# Default reviewer for every file in the repo. GitHub will automatically
+# request this review on every pull request once branch protection on
+# `main` requires it (Settings -> Branches -> main -> "Require a pull
+# request before merging" -> require review from Code Owners).
+* @loadbyton-byte
