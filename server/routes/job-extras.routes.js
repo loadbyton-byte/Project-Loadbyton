@@ -24,14 +24,16 @@ router.get('/api/jobs/:id/backload-matches', auth(['CARRIER']), async (req, res)
   }
 
   const deliveryEmirate = AREA_EMIRATE[job.delivery_area] || null;
+  // Same demo/real partition as the open-loads listing (job.service.js) —
+  // a demo job's own carrier should only ever see demo backload matches.
   const candidates = await db
     .prepare(
       `SELECT j.*, p.company_name AS shipper_company, p.rating_avg AS shipper_rating
        FROM jobs j LEFT JOIN profiles p ON p.user_id = j.shipper_id
-       WHERE j.status='OPEN' AND j.id != ?
+       WHERE j.status='OPEN' AND j.id != ? AND j.is_demo = ?
        ORDER BY j.created_at DESC LIMIT 200`
     )
-    .all(job.id);
+    .all(job.id, job.is_demo ? 1 : 0);
 
   const matches = [];
   for (const c of candidates) {

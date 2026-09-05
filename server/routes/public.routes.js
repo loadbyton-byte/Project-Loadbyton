@@ -30,7 +30,7 @@ router.get('/api/public/carriers', async (req, res) => {
     .prepare(
       `SELECT u.id, p.company_name, p.rating_avg, p.completed_jobs, p.fleet_size, p.coverage_zones, u.tier
        FROM users u JOIN profiles p ON p.user_id = u.id
-       WHERE u.role='CARRIER' AND u.is_verified=1
+       WHERE u.role='CARRIER' AND u.is_verified=1 AND u.is_demo=0
        ORDER BY p.rating_avg DESC`
     )
     .all();
@@ -50,7 +50,7 @@ router.get('/api/public/carriers', async (req, res) => {
 
 router.get('/api/public/market', async (req, res) => {
   const { commission_rate_bps } = await getSettings();
-  const openJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN'`).get()).c;
+  const openJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN' AND is_demo=0`).get()).c;
   const avgDrayageAED = Math.round(unifiedLanes.reduce((s, l) => s + l.basePriceAed, 0) / unifiedLanes.length);
   const containersPerDay = 300;
   res.set('Cache-Control', PUBLIC_JSON_CACHE).json({

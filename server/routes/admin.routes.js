@@ -75,12 +75,15 @@ router.get('/api/admin/live', auth(['ADMIN']), async (req, res) => {
 });
 
 router.get('/api/admin/health', auth(['ADMIN']), async (req, res) => {
-  const openJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN'`).get()).c;
-  const totalJobs = (await db.prepare('SELECT COUNT(*) c FROM jobs').get()).c;
-  const totalBids = (await db.prepare('SELECT COUNT(*) c FROM bids').get()).c;
-  const completedJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='COMPLETED'`).get()).c;
-  const escrowHeld = (await db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE escrow_status IN ('HELD','FUNDED')`).get()).s;
-  const disputesOpen = (await db.prepare(`SELECT COUNT(*) c FROM disputes WHERE status='OPEN'`).get()).c;
+  // Demo/investor-showcase jobs excluded from every platform-wide counter
+  // here, same as /api/admin/revenue below — otherwise a handful of demo
+  // records visibly nudge these numbers against a small real base.
+  const openJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN' AND is_demo=0`).get()).c;
+  const totalJobs = (await db.prepare('SELECT COUNT(*) c FROM jobs WHERE is_demo=0').get()).c;
+  const totalBids = (await db.prepare(`SELECT COUNT(*) c FROM bids b JOIN jobs j ON j.id=b.job_id WHERE j.is_demo=0`).get()).c;
+  const completedJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='COMPLETED' AND is_demo=0`).get()).c;
+  const escrowHeld = (await db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE escrow_status IN ('HELD','FUNDED') AND is_demo=0`).get()).s;
+  const disputesOpen = (await db.prepare(`SELECT COUNT(*) c FROM disputes d JOIN jobs j ON j.id=d.job_id WHERE d.status='OPEN' AND j.is_demo=0`).get()).c;
   res.json({
     health: {
       openJobs,
@@ -453,9 +456,11 @@ router.get('/api/admin/evidence/:jobId', auth(['ADMIN']), async (req, res) => {
 });
 
 router.get('/api/admin/revenue', auth(['ADMIN']), async (req, res) => {
-  const gmvAED = (await db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE agreed_price_aed IS NOT NULL`).get()).s;
-  const platformFeesAED = (await db.prepare('SELECT COALESCE(SUM(platform_fee_aed),0) s FROM payouts').get()).s;
-  const escrowHeldAED = (await db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE escrow_status IN ('HELD','FUNDED')`).get()).s;
+  // Demo/investor-showcase transactions excluded so this dashboard always
+  // reflects real GMV/fees/escrow only. See server/migrations/003_demo_data_flag.sql.
+  const gmvAED = (await db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE agreed_price_aed IS NOT NULL AND is_demo=0`).get()).s;
+  const platformFeesAED = (await db.prepare(`SELECT COALESCE(SUM(p.platform_fee_aed),0) s FROM payouts p JOIN jobs j ON j.id=p.job_id WHERE j.is_demo=0`).get()).s;
+  const escrowHeldAED = (await db.prepare(`SELECT COALESCE(SUM(agreed_price_aed),0) s FROM jobs WHERE escrow_status IN ('HELD','FUNDED') AND is_demo=0`).get()).s;
   const avgTakeRate = gmvAED > 0 ? `${((platformFeesAED / gmvAED) * 100).toFixed(1)}%` : '0.0%';
   res.json({ revenue: { gmvAED, platformFeesAED, escrowHeldAED, avgTakeRate } });
 });
