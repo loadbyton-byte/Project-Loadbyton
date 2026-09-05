@@ -163,8 +163,13 @@ async function listJobs(query, user) {
     where = 'shipper_id = ?';
     params.push(user.id);
   } else if (user.role === 'CARRIER') {
-    where = mine ? 'carrier_id = ?' : "(status = 'OPEN' OR carrier_id = ?)";
+    // Demo accounts only ever see demo jobs and real accounts only ever see
+    // real jobs on the open-loads browse (not `mine`) — otherwise an
+    // investor-demo job would show up as a real bidding opportunity for a
+    // real carrier, or vice versa. See server/migrations/003_demo_data_flag.sql.
+    where = mine ? 'carrier_id = ?' : "(status = 'OPEN' OR carrier_id = ?) AND is_demo = ?";
     params.push(user.id);
+    if (!mine) params.push(user.is_demo ? 1 : 0);
   }
   if (status) {
     const statuses = String(status).split(',').map((s) => s.trim()).filter(Boolean);

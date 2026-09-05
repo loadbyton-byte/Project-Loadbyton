@@ -51,6 +51,7 @@ const routes = [
   './routes/currency.routes',
   './routes/docs.routes',
   './routes/documents.routes',
+  './routes/document-templates.routes',
   './routes/driver.routes',
   './routes/edi.routes',
   './routes/enterprise.routes',

@@ -506,6 +506,15 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS insurance_doc_mime_type TEXT;
 -- Payout idempotency column (deterministic key prevents duplicate external transfers)
 ALTER TABLE payouts ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
 
+-- Demo/investor-showcase data flag — see server/migrations/003_demo_data_flag.sql
+-- for the hand-run production copy of this same change.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE contract_rfps ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_users_is_demo ON users(is_demo);
+CREATE INDEX IF NOT EXISTS idx_jobs_is_demo ON jobs(is_demo);
+CREATE INDEX IF NOT EXISTS idx_contract_rfps_is_demo ON contract_rfps(is_demo);
+
 -- ---------------------------------------------------------------------------
 -- Financial Core v2 — double-entry ledger, webhook idempotency, payout attempts, outbox
 -- ---------------------------------------------------------------------------

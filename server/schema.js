@@ -598,6 +598,12 @@ module.exports = function initSchema(db) {
   addColumn('profiles', 'insurance_doc_storage_path', 'insurance_doc_storage_path TEXT');
   addColumn('profiles', 'insurance_doc_mime_type', 'insurance_doc_mime_type TEXT');
 
+  // Demo/investor-showcase data flag — see server/migrations/003_demo_data_flag.sql
+  // for the hand-run production (Postgres) copy of this same change.
+  addColumn('users', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
+  addColumn('jobs', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
+  addColumn('contract_rfps', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');
