@@ -24,7 +24,13 @@ function DocLinks({ job }) {
   if (job.agreed_price_aed) links.push(['Load confirmation', 'load-confirmation']);
   if (job.delivered_at) links.push(['POD certificate', 'pod-certificate']);
   if (job.status === 'COMPLETED') links.push(['Settlement', 'settlement']);
-  if (job.status === 'COMPLETED') links.push(['Dispute notice', 'dispute-notice']);
+  // No "Dispute notice" link here — the job list this page uses doesn't
+  // say whether a job was actually disputed (only its current status,
+  // which reverts to COMPLETED once a dispute resolves), so showing this
+  // unconditionally on every completed job led to a dead-end 404 for the
+  // (majority) of completed jobs that were never disputed. The job's own
+  // detail page correctly knows its real dispute status and links there
+  // properly — this quick-links row isn't the place to guess.
   if (!links.length) return <span className="text-xs text-ink-muted">—</span>;
   return (
     <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
