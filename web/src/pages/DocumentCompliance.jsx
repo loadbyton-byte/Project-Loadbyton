@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { uploadFile, UPLOAD_ACCEPT, profileDocumentUrl } from '../lib/upload.js';
-import { Card, Badge, StatusBadge, EmptyState } from '../components/ui.jsx';
+import { Card, Badge, StatusBadge, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconShield, IconFile, IconCheckCircle, IconAlert, IconTruck } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 
@@ -24,14 +24,20 @@ export default function DocumentCompliance() {
 
   const [uploadingDocType, setUploadingDocType] = useState(null);
   const [drivers, setDrivers] = useState(null);
+  const [driversError, setDriversError] = useState('');
   const [jobs, setJobs] = useState(null);
+  const [jobsError, setJobsError] = useState('');
 
-  useEffect(() => {
-    if (isCarrier) api.listDrivers().then((d) => setDrivers(d.drivers)).catch(() => setDrivers([]));
-  }, [isCarrier]);
-  useEffect(() => {
-    api.myDocumentedJobs().then((d) => setJobs(d.jobs)).catch(() => setJobs([]));
-  }, []);
+  function loadDrivers() {
+    setDriversError('');
+    if (isCarrier) api.listDrivers().then((d) => setDrivers(d.drivers)).catch((err) => { setDrivers([]); setDriversError(err.message); });
+  }
+  useEffect(loadDrivers, [isCarrier]);
+  function loadJobs() {
+    setJobsError('');
+    api.myDocumentedJobs().then((d) => setJobs(d.jobs)).catch((err) => { setJobs([]); setJobsError(err.message); });
+  }
+  useEffect(loadJobs, []);
 
   async function uploadCompanyDoc(docType, file) {
     if (!file) return;
@@ -130,6 +136,8 @@ export default function DocumentCompliance() {
           <Card className="mt-3 overflow-hidden">
             {drivers === null ? (
               <p className="p-4 text-sm text-ink-muted">Loading…</p>
+            ) : driversError ? (
+              <div className="p-4"><ErrorState title="Couldn't load drivers" description={driversError} onRetry={loadDrivers} /></div>
             ) : drivers.length === 0 ? (
               <div className="p-4">
                 <EmptyState icon={<IconTruck size={24} />} title="No drivers yet" description="Add drivers from the Drivers page to track their documents here." />
@@ -162,6 +170,8 @@ export default function DocumentCompliance() {
       <Card className="mt-3 overflow-hidden">
         {jobs === null ? (
           <p className="p-4 text-sm text-ink-muted">Loading…</p>
+        ) : jobsError ? (
+          <div className="p-4"><ErrorState title="Couldn't load job documents" description={jobsError} onRetry={loadJobs} /></div>
         ) : jobs.length === 0 ? (
           <div className="p-4">
             <EmptyState icon={<IconFile size={24} />} title="No job documents yet" description="POD, EIR, and other files attached to your jobs will show up here." />

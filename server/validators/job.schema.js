@@ -42,6 +42,12 @@ async function createJobFromBody(body, req) {
 
   const code = jobCode();
   const initialStatus = scheduledPostAt && new Date(scheduledPostAt) > new Date() ? 'DRAFT' : 'OPEN';
+  // A job created by a demo (investor-showcase) shipper account must itself
+  // be flagged is_demo so it stays inside the demo/real partition enforced
+  // by job.service.js's listJobs and the other filters in
+  // server/migrations/003_demo_data_flag.sql — otherwise it defaults to 0
+  // and leaks into real carriers' Open Loads while being invisible to the
+  // demo carrier it was meant for.
   const result = await db.prepare(
     `INSERT INTO jobs (job_code, shipper_id, status, shipment_type, equipment_type, cargo_type, container_size, container_type, container_count,
        pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, notes,
@@ -49,8 +55,8 @@ async function createJobFromBody(body, req) {
        delivery_lat, delivery_lng, delivery_address_detail, loading_location, delivery_location,
        import_pickup_terminal, import_unloading_location, import_empty_return_location,
        export_empty_pickup_location, export_loading_location, export_deposit_terminal,
-       scheduled_post_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       scheduled_post_at, is_demo)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
      RETURNING id`
   ).run(
     code,
@@ -86,6 +92,7 @@ async function createJobFromBody(body, req) {
     exportLoadingLocation || null,
     exportDepositTerminal || null,
     scheduledPostAt || null,
+    req.user.is_demo ? 1 : 0,
   );
 
   const jobId = Number(result.lastInsertRowid);

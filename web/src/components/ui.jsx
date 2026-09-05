@@ -1,5 +1,5 @@
 import React from 'react';
-import { IconStar, IconMapPin } from './icons.jsx';
+import { IconStar, IconMapPin, IconAlert } from './icons.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -188,6 +188,25 @@ export function EmptyState({ icon, title, description, action, className }) {
         {description && <p className="mt-1 max-w-sm text-sm text-ink-muted">{description}</p>}
       </div>
       {action}
+    </div>
+  );
+}
+
+// A page/section couldn't load its data — distinct from EmptyState (which
+// means "loaded fine, there's just nothing here yet"). Every list-fetching
+// page previously swallowed fetch failures silently (`.catch(() => {})`),
+// showing the same "nothing here" empty state whether the user genuinely
+// had zero records or the request had actually failed — indistinguishable
+// and, for a real failure, misleading. Give it its own message and a retry.
+export function ErrorState({ title = 'Couldn’t load this', description, onRetry, className }) {
+  return (
+    <div className={cx('flex flex-col items-center justify-center gap-3 rounded-lg border px-6 py-14 text-center', className)} style={{ borderColor: 'var(--status-danger-bg)', background: 'var(--status-danger-bg)' }}>
+      <div style={{ color: 'var(--status-danger)' }}><IconAlert size={28} /></div>
+      <div>
+        <p className="font-display text-base font-semibold text-ink">{title}</p>
+        {description && <p className="mt-1 max-w-sm text-sm text-ink-muted">{description}</p>}
+      </div>
+      {onRetry && <Button variant="secondary" size="sm" onClick={onRetry}>Try again</Button>}
     </div>
   );
 }

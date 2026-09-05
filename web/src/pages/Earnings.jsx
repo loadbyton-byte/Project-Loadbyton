@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate } from '../lib/constants.js';
-import { Card, Badge, EmptyState, Select, BentoStat } from '../components/ui.jsx';
+import { Card, Badge, EmptyState, ErrorState, Select, BentoStat } from '../components/ui.jsx';
 import { IconPackage, IconDownload, IconWallet } from '../components/icons.jsx';
 
 const RELEASE_LABEL = { MANUAL: 'Manual', AUTO_24H: 'Auto-released', DISPUTE_RESOLUTION: 'Dispute resolution' };
@@ -50,18 +50,21 @@ export default function Earnings() {
   const [releaseFilter, setReleaseFilter] = useState('all');
   const [dateRange, setDateRange] = useState('all');
   const [invoiceByJob, setInvoiceByJob] = useState({});
+  const [error, setError] = useState('');
 
-  useEffect(() => {
+  function load() {
+    setError('');
     api.earnings().then((d) => {
       setPayouts(d.payouts);
       setTotals(d.totals);
-    }).catch(() => {});
+    }).catch((err) => setError(err.message));
     api.invoices().then((d) => {
       const byJob = {};
       for (const inv of d.invoices) byJob[inv.job_id] = inv;
       setInvoiceByJob(byJob);
     }).catch(() => {});
-  }, []);
+  }
+  useEffect(load, []);
 
   const filteredPayouts = payouts.filter((p) => {
     const releaseMatch = releaseFilter === 'all' || p.release_type === releaseFilter;
@@ -125,7 +128,9 @@ export default function Earnings() {
 
       <div className="mt-6">
         <p className="mb-2 font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Transaction history</p>
-        {payouts.length === 0 ? (
+        {error ? (
+          <ErrorState title="Couldn't load your earnings" description={error} onRetry={load} />
+        ) : payouts.length === 0 ? (
           <EmptyState icon={<IconPackage size={28} />} title="No payouts yet" description="Win a bid and complete the job to see your first payout here." />
         ) : filteredPayouts.length === 0 ? (
           <EmptyState icon={<IconPackage size={28} />} title="No payouts match these filters" description="Try a wider date range or release type." />

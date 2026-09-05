@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
-import { Button, Input, Badge, EmptyState } from '../components/ui.jsx';
+import { Button, Input, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconMessage, IconArrowLeft } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { ROLE_LABELS, ThreadMessageList } from '../features/job/ThreadPane.jsx';
@@ -21,6 +21,7 @@ export default function Messages() {
   const { addToast } = useToasts();
 
   const [inbox, setInbox] = useState(null); // [{id, jobId, jobCode, jobStatus, otherRole, lastMessage, unreadCount}]
+  const [inboxError, setInboxError] = useState('');
   const [selected, setSelected] = useState(null); // inbox row
   const [threadMessages, setThreadMessages] = useState([]);
   const [threadLoaded, setThreadLoaded] = useState(false);
@@ -29,7 +30,8 @@ export default function Messages() {
   const listRef = useRef(null);
 
   function loadInbox() {
-    api.messageThreads().then((d) => setInbox(d.threads)).catch(() => setInbox([]));
+    setInboxError('');
+    api.messageThreads().then((d) => setInbox(d.threads)).catch((err) => { setInbox([]); setInboxError(err.message); });
   }
   useEffect(loadInbox, []);
 
@@ -101,6 +103,8 @@ export default function Messages() {
         <div className={`overflow-hidden rounded-2xl border ${selected ? 'hidden md:block' : 'block'}`} style={{ borderColor: 'var(--border-default)' }}>
           {inbox === null ? (
             <p className="p-4 text-sm text-ink-muted">Loading…</p>
+          ) : inboxError ? (
+            <div className="p-4"><ErrorState title="Couldn't load messages" description={inboxError} onRetry={loadInbox} /></div>
           ) : inbox.length === 0 ? (
             <div className="p-4">
               <EmptyState icon={<IconMessage size={26} />} title="No conversations yet" description="Messages on your jobs will show up here." />

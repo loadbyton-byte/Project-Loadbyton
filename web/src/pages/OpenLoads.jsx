@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel } from '../lib/constants.js';
-import { EmptyState, Badge, Select, Input, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
+import { EmptyState, ErrorState, Badge, Select, Input, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconAlert, IconPackage, IconSearch } from '../components/icons.jsx';
 
 const PAGE_SIZE = 20;
@@ -22,6 +22,7 @@ export default function OpenLoads() {
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
   const [jobs, setJobs] = useState(null);
+  const [jobsError, setJobsError] = useState('');
   const [total, setTotal] = useState(0);
   const [equipmentFilter, setEquipmentFilter] = useState('all');
   const [shipmentFilter, setShipmentFilter] = useState('all');
@@ -41,14 +42,16 @@ export default function OpenLoads() {
 
   useEffect(() => { setOffset(0); }, [equipmentFilter, shipmentFilter, sort, debouncedSearch]);
 
-  useEffect(() => {
+  function loadOpenJobs() {
     setJobs(null);
+    setJobsError('');
     const params = { status: 'OPEN', sort, limit: PAGE_SIZE, offset };
     if (equipmentFilter !== 'all') params.equipmentType = equipmentFilter;
     if (shipmentFilter !== 'all') params.shipmentType = shipmentFilter;
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch(() => { setJobs([]); setTotal(0); });
-  }, [equipmentFilter, shipmentFilter, sort, debouncedSearch, offset]);
+    api.listJobs(params).then((d) => { setJobs(d.jobs); setTotal(d.total ?? d.jobs.length); }).catch((err) => { setJobs([]); setTotal(0); setJobsError(err.message); });
+  }
+  useEffect(loadOpenJobs, [equipmentFilter, shipmentFilter, sort, debouncedSearch, offset]);
 
   return (
     <div className="container-page py-6" dir="ltr">
@@ -91,6 +94,8 @@ export default function OpenLoads() {
       <div className="mt-6">
         {jobs === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
+        ) : jobsError ? (
+          <ErrorState title="Couldn't load open loads" description={jobsError} onRetry={loadOpenJobs} />
         ) : jobs.length === 0 ? (
           <EmptyState
             icon={<IconPackage size={28} />}

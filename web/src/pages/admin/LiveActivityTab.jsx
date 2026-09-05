@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { formatAED, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Card, Badge, Button, EmptyState } from '../../components/ui.jsx';
+import { Card, Badge, Button, EmptyState, ErrorState } from '../../components/ui.jsx';
 
 function StatusBadge({ status }) {
   const colors = { OPEN: 'info', PENDING: 'info', AWARDED: 'accent', PICKED_UP: 'warning', IN_TRANSIT: 'warning', DELIVERED: 'success', COMPLETED: 'success', WITHDRAWN: 'muted', REJECTED: 'danger', CANCELLED: 'danger', DISPUTED: 'danger' };
@@ -31,15 +31,18 @@ function AutoRefresh({ onRefresh, interval = 30000 }) {
 function LiveActivityTab() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [expandedJob, setExpandedJob] = useState(null);
 
   const load = useCallback(() => {
-    api.adminLive().then((d) => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+    setError('');
+    api.adminLive().then((d) => { setData(d); setLoading(false); }).catch((err) => { setLoading(false); setError(err.message); });
   }, []);
 
   useEffect(load, [load]);
 
   if (loading) return <p className="text-sm text-ink-muted">Loading live activity…</p>;
+  if (error) return <ErrorState title="Couldn't load live activity" description={error} onRetry={() => { setLoading(true); load(); }} />;
   if (!data) return <EmptyState title="Failed to load" />;
 
   const { openJobs, activeJobs, recentActivity } = data;

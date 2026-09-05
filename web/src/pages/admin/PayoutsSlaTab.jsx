@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -14,11 +14,13 @@ const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Dispute
 function PayoutsSlaTab() {
   const { addToast } = useToasts();
   const [pending, setPending] = useState(null);
+  const [error, setError] = useState('');
   const [overdueCount, setOverdueCount] = useState(0);
   const [busyId, setBusyId] = useState(null);
 
   function load() {
-    api.adminPayoutsSla().then((d) => { setPending(d.pending); setOverdueCount(d.overdueCount); }).catch(() => {});
+    setError('');
+    api.adminPayoutsSla().then((d) => { setPending(d.pending); setOverdueCount(d.overdueCount); }).catch((err) => setError(err.message));
   }
   useEffect(load, []);
 
@@ -35,6 +37,7 @@ function PayoutsSlaTab() {
     }
   }
 
+  if (error) return <ErrorState title="Couldn't load payout SLA data" description={error} onRetry={load} />;
   if (!pending) return <p className="text-sm text-ink-muted">Loading…</p>;
 
   return (

@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -13,8 +13,14 @@ const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Dispute
 
 function AuditTab() {
   const [entries, setEntries] = useState(null);
-  useEffect(() => { api.adminAudit().then((d) => setEntries(d.entries)).catch(() => setEntries([])); }, []);
+  const [error, setError] = useState('');
+  function load() {
+    setError('');
+    api.adminAudit().then((d) => setEntries(d.entries)).catch((err) => { setEntries([]); setError(err.message); });
+  }
+  useEffect(load, []);
   if (!entries) return <p className="text-sm text-ink-muted">Loading…</p>;
+  if (error) return <ErrorState title="Couldn't load the audit log" description={error} onRetry={load} />;
   return (
     <Card className="overflow-hidden">
       <div className="max-h-[600px] overflow-y-auto">

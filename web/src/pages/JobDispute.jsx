@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
-import { Card, Badge, Button, Input, Spinner, ChatThread } from '../components/ui.jsx';
+import { Card, Badge, Button, Input, Spinner, ChatThread, ErrorState } from '../components/ui.jsx';
 import { IconArrowLeft, IconGavel, IconFile, IconSend } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 
@@ -64,7 +64,7 @@ export default function JobDispute() {
     }
   }
 
-  if (error) return <div className="container-page py-10"><p className="text-status-danger">{error}</p></div>;
+  if (error) return <div className="container-page py-10"><ErrorState title="Couldn't load this dispute" description={error} onRetry={() => { setError(''); load(); }} /></div>;
   if (!data) return <div className="container-page flex justify-center py-24"><Spinner size={28} /></div>;
 
   const { dispute, job } = data;

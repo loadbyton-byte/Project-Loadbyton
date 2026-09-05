@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { uploadFile, UPLOAD_ACCEPT, driverDocumentUrl } from '../lib/upload.js';
-import { Button, Card, Input, Label, EmptyState, Badge } from '../components/ui.jsx';
+import { Button, Card, Input, Label, EmptyState, ErrorState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconTruck, IconFile, IconCheckCircle } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 
@@ -12,6 +12,7 @@ export default function Drivers() {
   usePageTitle('My Drivers');
   const { addToast } = useToasts();
   const [drivers, setDrivers] = useState(null);
+  const [driversError, setDriversError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   const [busy, setBusy] = useState(false);
@@ -20,7 +21,8 @@ export default function Drivers() {
   const [revealedSeat, setRevealedSeat] = useState(null); // { driverName, email, password } — shown once
 
   function load() {
-    api.listDrivers().then((d) => setDrivers(d.drivers)).catch(() => setDrivers([]));
+    setDriversError('');
+    api.listDrivers().then((d) => setDrivers(d.drivers)).catch((err) => { setDrivers([]); setDriversError(err.message); });
   }
   useEffect(load, []);
 
@@ -140,7 +142,9 @@ export default function Drivers() {
       )}
 
       <div className="mt-8">
-        {drivers === null ? null : drivers.length === 0 ? (
+        {drivers === null ? null : driversError ? (
+          <ErrorState title="Couldn't load your drivers" description={driversError} onRetry={load} />
+        ) : drivers.length === 0 ? (
           <EmptyState icon={<IconTruck size={28} />} title="No drivers yet" description="Add your first driver to start picking them from a list when a job is awarded." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

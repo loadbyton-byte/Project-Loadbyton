@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -14,13 +14,15 @@ const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Dispute
 function DisputesTab() {
   const { addToast } = useToasts();
   const [disputes, setDisputes] = useState(null);
+  const [disputesError, setDisputesError] = useState('');
   const [form, setForm] = useState({ jobId: '', reason: '' });
   const [resolveDrafts, setResolveDrafts] = useState({});
   const [busy, setBusy] = useState(false);
   const [evidenceFor, setEvidenceFor] = useState(null);
 
   function load() {
-    api.adminDisputes().then((d) => setDisputes(d.disputes)).catch(() => setDisputes([]));
+    setDisputesError('');
+    api.adminDisputes().then((d) => setDisputes(d.disputes)).catch((err) => { setDisputes([]); setDisputesError(err.message); });
   }
   useEffect(load, []);
 
@@ -66,6 +68,8 @@ function DisputesTab() {
       <div className="mt-6 space-y-4">
         {disputes === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
+        ) : disputesError ? (
+          <ErrorState title="Couldn't load disputes" description={disputesError} onRetry={load} />
         ) : disputes.length === 0 ? (
           <EmptyState icon={<IconAlert size={26} />} title="No disputes" description="Escrow disputes will show up here for review." />
         ) : (

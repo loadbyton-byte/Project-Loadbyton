@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
-import { Button, Card, EmptyState } from '../components/ui.jsx';
+import { Button, Card, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconBell } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 
@@ -21,13 +21,15 @@ const TYPE_LABELS = {
 export default function Notifications() {
   usePageTitle('Notifications');
   const [items, setItems] = useState(null);
+  const [itemsError, setItemsError] = useState('');
   const [prefs, setPrefs] = useState(null);
   const [prefsBusy, setPrefsBusy] = useState(false);
   const { addToast } = useToasts();
   const { refresh } = useAuth();
 
   function load() {
-    api.notifications().then((d) => setItems(d.notifications)).catch(() => setItems([]));
+    setItemsError('');
+    api.notifications().then((d) => setItems(d.notifications)).catch((err) => { setItems([]); setItemsError(err.message); });
   }
   useEffect(load, []);
   useEffect(() => {
@@ -87,6 +89,8 @@ export default function Notifications() {
       <div className="mt-5">
         {items === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
+        ) : itemsError ? (
+          <ErrorState title="Couldn't load notifications" description={itemsError} onRetry={load} />
         ) : items.length === 0 ? (
           <EmptyState icon={<IconBell size={26} />} title="No notifications" description="Bids, awards, status changes and payouts will show up here." />
         ) : (

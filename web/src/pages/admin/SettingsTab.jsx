@@ -5,7 +5,7 @@ import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, Pagination } from '../../components/ui.jsx';
+import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
 import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
 
 const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
@@ -14,13 +14,15 @@ const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Dispute
 function SettingsTab() {
   const { addToast } = useToasts();
   const [settings, setSettings] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [sweeping, setSweeping] = useState(false);
   const [sweepResult, setSweepResult] = useState(null);
 
   function load() {
-    api.adminGetSettings().then((d) => setSettings(d.settings)).catch(() => {});
+    setLoadError('');
+    api.adminGetSettings().then((d) => setSettings(d.settings)).catch((err) => setLoadError(err.message));
   }
   useEffect(load, []);
 
@@ -54,6 +56,7 @@ function SettingsTab() {
     }
   }
 
+  if (loadError) return <ErrorState title="Couldn't load settings" description={loadError} onRetry={load} />;
   if (!settings) return <p className="text-sm text-ink-muted">Loading…</p>;
   return (
     <div className="max-w-lg space-y-6">
