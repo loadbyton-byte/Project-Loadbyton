@@ -53,7 +53,7 @@ router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS'
 
 // Award — the money-moving transaction lives in services/award.service.js;
 // this wrapper only does HTTP (kept for backwards compat, not moved to job.controller to preserve award.service isolation).
-router.post('/api/jobs/:id/award', auth(['SHIPPER']), requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
+router.post('/api/jobs/:id/award', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
   const { bidId } = /** @type {any} */ (req.body) || {};
   const { awardJob } = /** @type {any} */ (require('../services/award.service'));
   await awardJob(req, res, Number(/** @type {any} */ (req.params).id), /** @type {any} */ (bidId));

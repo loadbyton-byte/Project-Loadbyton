@@ -425,7 +425,7 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
     // No-op in internal mode / when the charge never went through.
     refundJobAsync(job);
   } else {
-    try { await issueInvoice(db, job.id); } catch {}
+    try { await issueInvoice(db, job.id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${job.id}:`, e); }
     // TODO-3: with a processor configured this moves the money; in
     // internal mode it is a no-op and the admin SLA flow applies.
     executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);

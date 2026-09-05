@@ -1,6 +1,7 @@
 const db = require('../db');
 const { sendError } = require('../lib/http');
 const { auth } = require('../middleware/auth');
+const { timingSafeEqualStr } = require('../lib/helpers');
 const { rateLimiter, byIp } = require('../lib/rateLimit');
 const router = require('express').Router();
 
@@ -15,7 +16,7 @@ router.post('/api/telematics/ingest', ingestLimiter, async (req,res)=>{
   // anonymous writes from anyone for any job — fail closed rather than
   // silently open just because ops never set the optional device key.
   if (configuredKeys.length === 0) return sendError(res,401,'Telematics ingestion is not configured (set TELEMATICS_DEVICE_KEY or INTERNAL_KEY)');
-  if (!configuredKeys.includes(key)) return sendError(res,401,'Invalid device token');
+  if (!key || !configuredKeys.some(k => timingSafeEqualStr(key, k))) return sendError(res,401,'Invalid device token');
   const { deviceId, device_id, jobId, job_id, latitude, longitude, lat, lng, speed, temperature, temp, fuelLevel, fuel_level } = req.body||{};
   const did = deviceId || device_id;
   const jid = jobId || job_id || null;
@@ -38,7 +39,7 @@ router.post('/api/telematics/ingest', ingestLimiter, async (req,res)=>{
 });
 router.get('/api/telematics/logs', auth(), async (req,res)=>{
   const key = req.headers['x-internal-key'];
-  const isPrivileged = (key && key===process.env.INTERNAL_KEY) || req.user.role==='ADMIN';
+  const isPrivileged = (key && process.env.INTERNAL_KEY && timingSafeEqualStr(key, process.env.INTERNAL_KEY)) || req.user.role==='ADMIN';
   const { jobId, deviceId, limit } = req.query;
 
   if (!isPrivileged) {

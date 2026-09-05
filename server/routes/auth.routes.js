@@ -125,6 +125,7 @@ router.post('/api/auth/resend-verification', auth(), async (req, res) => {
 
 router.post(
   '/api/auth/forgot-password',
+  authIpLimiter,
   asyncHandler(async (req, res) => {
     const { email } = req.body || {};
     if (!email) return sendError(res, 400, 'email is required');

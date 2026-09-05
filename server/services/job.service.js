@@ -115,7 +115,7 @@ async function updateJobStatus(jobId, nextStatus, req) {
       return true;
     });
     if (released) {
-      try { await issueInvoice(db, id); } catch {}
+      try { await issueInvoice(db, id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${id}:`, e); }
       if (job.carrier_id) {
         try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
       }
