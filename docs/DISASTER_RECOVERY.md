@@ -25,8 +25,8 @@ actually configured (not generic AWS/RLS phrasing borrowed from elsewhere).
 - **Signal:** `/api/health`'s `db.ok` flips false, or Postgres error code `53300`.
 
 ### 2. Upload/IOPS pressure (many concurrent file uploads freeze the API)
-- **Current state:** uploads still go through the Node process as base64 in the request body (`server/lib/storage.js`'s `saveUploadedFile`, 5MB cap) — this **is** a real pressure point today, because Cloudflare R2 (the fix) isn't wired in yet.
-- **Mitigation, once R2 exists:** switch to presigned PUT URLs so the browser uploads directly to R2, bypassing the app server's CPU/memory entirely for file transfer — this is still open work, tracked as part of Stage 2's storage leg. Until then, the 5MB cap and single-file-per-request pattern keep any one upload's blast radius small.
+- **Current state:** R2 is wired in (`server/lib/storage.js`, S3-compatible client, selected via `S3_BUCKET`/`S3_ENDPOINT`). Uploads go through `getPresignedUploadUrl` — the browser PUTs the file straight to R2 with a presigned URL, bypassing the app server's CPU/memory entirely for file transfer (used by `documents.routes.js`, `fleet.routes.js`, `job-extras.routes.js`). The base64-through-Node path (`saveUploadedFile`, 5MB cap) only runs as the local-disk fallback when `S3_BUCKET` isn't configured (e.g. local dev).
+- **Mitigation:** with R2 configured in production this pressure point doesn't apply. If `S3_BUCKET` were ever unset in production, the 5MB cap and single-file-per-request pattern on the fallback path keep any one upload's blast radius small.
 
 ### 3. Layer-7 DDoS
 - **Mitigation:** Cloudflare (once DNS is proxied through it — see `docs/DEVELOPER_GUIDE.md`) → Security → **Under Attack Mode**, one click. Forces every visitor through a JS challenge at Cloudflare's edge before a request ever reaches the origin. The free Managed Ruleset and a rate-limiting rule on `/api/*` are the standing (always-on) layer; Under Attack Mode is the break-glass escalation for an active attack.

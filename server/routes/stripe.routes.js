@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('node:crypto');
 const db = require('../db');
-const { auth } = require('../middleware/auth');
+const { auth, writeLimiter } = require('../middleware/auth');
 const { sendError } = require('../lib/http');
 const { writeAudit, notify } = require('../lib/helpers');
 const { createPaymentIntent, createTransfer, constructWebhookEvent, createConnectAccount, createAccountLink, retrieveAccount } = require('../lib/stripe');
@@ -61,7 +61,7 @@ router.get('/api/stripe/connect/status', auth(['CARRIER']), async (req, res) => 
 });
 
 // Shipper creates hosted checkout / payment_intent for a job's escrow
-router.post('/api/jobs/:id/pay', auth(['SHIPPER']), async (req,res) => {
+router.post('/api/jobs/:id/pay', auth(['SHIPPER']), writeLimiter, async (req,res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return sendError(res,404,'Job not found');
   if(job.shipper_id!==req.user.id) return sendError(res,403,'Not your job');
@@ -143,9 +143,14 @@ router.post('/api/webhooks/stripe/mock-confirm', auth(['ADMIN']), async (req,res
 });
 
 // Transfer script — programmatic payout on delivery validation (carrier must have processor_account_id)
-router.post('/api/jobs/:id/release-payout', auth(['SHIPPER','ADMIN']), async (req,res)=>{
+router.post('/api/jobs/:id/release-payout', auth(['SHIPPER','ADMIN']), writeLimiter, async (req,res)=>{
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return sendError(res,404,'Job not found');
+  // Missing until now — any authenticated SHIPPER could release any other
+  // shipper's payout by guessing/enumerating a job id, forcing a real
+  // Stripe transfer ahead of the actual shipper's own confirmation. The
+  // sibling /pay endpoint above already has this check; this one didn't.
+  if(req.user.role!=='ADMIN' && job.shipper_id!==req.user.id) return sendError(res,403,'Not your job');
   if(!['DELIVERED','COMPLETED'].includes(job.status)) return sendError(res,400,'Job not delivered yet');
   if(job.escrow_status==='DISPUTED') return sendError(res,400,'Escrow frozen by dispute');
   const payout = await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id);
