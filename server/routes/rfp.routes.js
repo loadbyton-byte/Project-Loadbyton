@@ -15,7 +15,7 @@ router.post('/api/rfps', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req
   if(!Number.isFinite(Number(durationMonths)) || Number(durationMonths)<1 || Number(durationMonths)>60) return sendError(res,400,'durationMonths must be a number between 1 and 60');
   if(!Number.isFinite(Number(totalContainers)) || Number(totalContainers)<1) return sendError(res,400,'totalContainers must be a positive number');
   if(!Number.isFinite(Number(budgetAed)) || Number(budgetAed)<=0) return sendError(res,400,'budgetAed must be a positive number');
-  const r = await db.prepare(`INSERT INTO contract_rfps (shipper_id,title,description,origin,destination,total_containers,duration_months,budget_aed) VALUES (?,?,?,?,?,?,?,?) RETURNING id`).run(req.user.id,title,description||null,origin,destination,Number(totalContainers),Number(durationMonths),Number(budgetAed));
+  const r = await db.prepare(`INSERT INTO contract_rfps (shipper_id,title,description,origin,destination,total_containers,duration_months,budget_aed,is_demo) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id`).run(req.user.id,title,description||null,origin,destination,Number(totalContainers),Number(durationMonths),Number(budgetAed),req.user.is_demo?1:0);
   const id = Number(r.lastInsertRowid);
   // auto-create monthly milestones
   const months = Number(durationMonths);

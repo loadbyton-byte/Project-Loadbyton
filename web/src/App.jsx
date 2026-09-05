@@ -47,6 +47,7 @@ const DocumentCompliance = lazy(() => import('./pages/DocumentCompliance.jsx'));
 const DriverHome = lazy(() => import('./pages/DriverHome.jsx'));
 const Messages = lazy(() => import('./pages/Messages.jsx'));
 const Invoices = lazy(() => import('./pages/Invoices.jsx'));
+const JobHistory = lazy(() => import('./pages/JobHistory.jsx'));
 
 // Every navigation lands at the top of the new page — a long page left
 // scrolled midway (a job list, a document thread) must never hand off
@@ -133,6 +134,7 @@ export default function App() {
           <Route path="/won-jobs" element={<RequireAuth roles={['CARRIER']}><WonJobs /></RequireAuth>} />
           <Route path="/earnings" element={<RequireAuth roles={['CARRIER']}><Earnings /></RequireAuth>} />
           <Route path="/invoices" element={<RequireAuth roles={['CARRIER']}><Invoices /></RequireAuth>} />
+          <Route path="/history" element={<RequireAuth roles={['SHIPPER']}><JobHistory /></RequireAuth>} />
           <Route path="/drivers" element={<RequireAuth roles={['CARRIER']}><Drivers /></RequireAuth>} />
 
           <Route path="/admin" element={<RequireAuth roles={['ADMIN']}><Admin /></RequireAuth>} />

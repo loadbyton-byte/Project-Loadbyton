@@ -74,6 +74,7 @@ export default function JobDetail() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editingJob, setEditingJob] = useState(false);
+  const [awardConfirm, setAwardConfirm] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -143,8 +144,61 @@ export default function JobDetail() {
     }
   }
 
+  // Award confirmation popup: close on Escape, lock body scroll — same
+  // pattern as Dashboard.jsx's "post a job" popup.
+  useEffect(() => {
+    if (!awardConfirm) return;
+    const onKey = (e) => { if (e.key === 'Escape') setAwardConfirm(null); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [awardConfirm]);
+
+  function confirmAward() {
+    const bid = awardConfirm;
+    setAwardConfirm(null);
+    act(() => api.awardJob(job.id, bid.id));
+  }
+
   return (
     <div className="container-page py-10" dir="ltr">
+      {awardConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm award"
+          onClick={(e) => { if (e.target === e.currentTarget) setAwardConfirm(null); }}
+        >
+          <div className="w-full max-w-md rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
+            <Card className="border-0 shadow-none">
+              <Card.Header>
+                <Card.Title className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>
+                  Award this bid?
+                </Card.Title>
+              </Card.Header>
+              <Card.Content>
+                <p className="text-sm text-ink">
+                  You're about to award <strong>{formatAED(awardConfirm.amount_aed)}</strong> to{' '}
+                  <strong>{awardConfirm.carrier_company || 'this carrier'}</strong>.
+                </p>
+                <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
+                  <li>Every other bid on this job will be rejected</li>
+                  <li>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</li>
+                  <li>Funds move into escrow and the job moves to "Awarded"</li>
+                </ul>
+                <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
+              </Card.Content>
+              <div className="flex justify-end gap-2 px-6 pb-6">
+                <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
+                <Button variant="accent" onClick={confirmAward} loading={busy}>Confirm award</Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
       <button
         type="button"
         onClick={goBack}
@@ -317,7 +371,7 @@ export default function JobDetail() {
                     <div className="flex shrink-0 items-center gap-3">
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>
                       {isShipper && job.status === 'OPEN' && b.status === 'PENDING' && (
-                        <Button variant="accent" onClick={() => act(() => api.awardJob(job.id, b.id))} loading={busy}>Award</Button>
+                        <Button variant="accent" onClick={() => setAwardConfirm(b)} loading={busy}>Award</Button>
                       )}
                     </div>
                   </div>
