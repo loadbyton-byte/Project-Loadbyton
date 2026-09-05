@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatLabel, equipmentLabel, formatDateTime } from '../lib/constants.js';
-import { Button, Badge, EmptyState, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
+import { Button, Badge, EmptyState, ErrorState, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
 import { IconPackage, IconX, IconSearch } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 
@@ -19,6 +19,7 @@ const SORT_OPTIONS = [
 export default function MyBids() {
   usePageTitle('My bids');
   const [bids, setBids] = useState(null);
+  const [bidsError, setBidsError] = useState('');
   const [total, setTotal] = useState(0);
   const [busyId, setBusyId] = useState(null);
   const [sort, setSort] = useState('date_desc');
@@ -34,9 +35,10 @@ export default function MyBids() {
   useEffect(() => { setOffset(0); }, [sort, debouncedSearch]);
 
   function load() {
+    setBidsError('');
     const params = { sort, limit: PAGE_SIZE, offset };
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.myBids(params).then((d) => { setBids(d.bids); setTotal(d.total ?? d.bids.length); }).catch(() => { setBids([]); setTotal(0); });
+    api.myBids(params).then((d) => { setBids(d.bids); setTotal(d.total ?? d.bids.length); }).catch((err) => { setBids([]); setTotal(0); setBidsError(err.message); });
   }
   useEffect(load, [sort, debouncedSearch, offset]);
 
@@ -71,6 +73,8 @@ export default function MyBids() {
       <div className="mt-5">
         {bids === null ? (
           <p className="text-sm text-ink-muted">Loading…</p>
+        ) : bidsError ? (
+          <ErrorState title="Couldn't load your bids" description={bidsError} onRetry={load} />
         ) : bids.length === 0 ? (
           <EmptyState
             icon={<IconPackage size={28} />}

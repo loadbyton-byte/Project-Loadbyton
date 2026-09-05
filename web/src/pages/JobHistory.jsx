@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate, formatLabel } from '../lib/constants.js';
-import { Card, Input, EmptyState, StatusBadge } from '../components/ui.jsx';
+import { Card, Input, EmptyState, ErrorState, StatusBadge } from '../components/ui.jsx';
 import { IconHistory } from '../components/icons.jsx';
 
 // Shipper-facing equivalent of the carrier's Invoices/Earnings pages — a
@@ -41,10 +41,13 @@ export default function JobHistory() {
   usePageTitle('Job History');
   const [jobs, setJobs] = useState(null);
   const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    api.listJobs({ limit: 200, sort: 'date_desc' }).then((d) => setJobs(d.jobs)).catch(() => setJobs([]));
-  }, []);
+  function load() {
+    setError('');
+    api.listJobs({ limit: 200, sort: 'date_desc' }).then((d) => setJobs(d.jobs)).catch((err) => { setJobs([]); setError(err.message); });
+  }
+  useEffect(load, []);
 
   const filtered = jobs?.filter((j) => !search || j.job_code.toLowerCase().includes(search.toLowerCase()));
   const totalSpent = filtered?.filter((j) => j.status === 'COMPLETED').reduce((s, j) => s + (j.agreed_price_aed || 0), 0) || 0;
@@ -58,8 +61,10 @@ export default function JobHistory() {
         <Input placeholder="Search job code" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
       </Card>
 
-      {!filtered ? (
+      {!filtered && !error ? (
         <p className="mt-6 text-sm text-ink-muted">Loading…</p>
+      ) : error ? (
+        <ErrorState className="mt-6" title="Couldn't load your job history" description={error} onRetry={load} />
       ) : filtered.length === 0 ? (
         <EmptyState icon={<IconHistory size={26} />} title="No jobs yet" description="Posted jobs and their documents will show up here." />
       ) : (

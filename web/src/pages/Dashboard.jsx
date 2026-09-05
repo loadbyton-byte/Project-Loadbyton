@@ -7,7 +7,7 @@ import {
   CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
   equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel, depotLabel,
 } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, EmptyState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet, IconClose } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [jobs, setJobs] = useState(null);
   const [jobsTotal, setJobsTotal] = useState(0);
+  const [jobsError, setJobsError] = useState('');
   const [templates, setTemplates] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -85,7 +86,8 @@ export default function Dashboard() {
     const params = { sort, limit: PAGE_SIZE, offset };
     if (filter !== 'all') params.status = filter;
     if (debouncedSearch.trim()) params.q = debouncedSearch.trim();
-    api.listJobs(params).then((d) => { setJobs(d.jobs); setJobsTotal(d.total ?? d.jobs.length); }).catch(() => { setJobs([]); setJobsTotal(0); });
+    setJobsError('');
+    api.listJobs(params).then((d) => { setJobs(d.jobs); setJobsTotal(d.total ?? d.jobs.length); }).catch((err) => { setJobs([]); setJobsTotal(0); setJobsError(err.message); });
   }
   function load() {
     loadStats();
@@ -469,6 +471,8 @@ export default function Dashboard() {
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">Your jobs</h2>
         {jobs === null ? (
           <p className="mt-3 text-sm text-ink-muted">Loading…</p>
+        ) : jobsError ? (
+          <ErrorState className="mt-3" title="Couldn't load your jobs" description={jobsError} onRetry={loadJobs} />
         ) : jobs.length === 0 && filter === 'all' && !debouncedSearch ? (
           <EmptyState className="mt-3" title="No jobs yet" description="Post your first drayage job to start getting carrier bids." action={<Button onClick={() => setShowForm(true)}>Post a job</Button>} />
         ) : (

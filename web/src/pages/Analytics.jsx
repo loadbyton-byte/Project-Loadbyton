@@ -3,7 +3,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatLabel } from '../lib/constants.js';
-import { BentoStat, Spinner, Card } from '../components/ui.jsx';
+import { BentoStat, Spinner, Card, ErrorState } from '../components/ui.jsx';
 import { IconTrendUp, IconStar } from '../components/icons.jsx';
 
 // Promoted from the stats strip every dashboard already showed inline
@@ -103,9 +103,17 @@ export default function Analytics() {
   usePageTitle('Analytics');
   const { user } = useAuth();
   const [analytics, setAnalytics] = useState(null);
+  const [error, setError] = useState('');
 
-  useEffect(() => { api.analytics().then((d) => setAnalytics(d.analytics)).catch(() => {}); }, []);
+  function load() {
+    setError('');
+    api.analytics().then((d) => setAnalytics(d.analytics)).catch((err) => setError(err.message));
+  }
+  useEffect(load, []);
 
+  if (error) {
+    return <div className="container-page py-10"><ErrorState title="Couldn't load your analytics" description={error} onRetry={load} /></div>;
+  }
   if (!analytics) {
     return <div className="container-page flex justify-center py-24"><Spinner size={28} /></div>;
   }

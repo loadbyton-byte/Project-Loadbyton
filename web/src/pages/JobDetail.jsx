@@ -4,8 +4,8 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill } from '../components/ui.jsx';
-import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel } from '../components/icons.jsx';
+import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
+import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
 import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
@@ -107,10 +107,20 @@ export default function JobDetail() {
     if (payNotice) window.history.replaceState({}, '', window.location.pathname);
   }, [payNotice]);
 
-  if (error) return <div className="container-page py-10"><p className="text-status-danger">{error}</p></div>;
+  if (error && !data) {
+    return (
+      <div className="container-page py-10">
+        <ErrorState
+          title="Couldn't load this job"
+          description={error}
+          onRetry={() => { setError(''); load(); }}
+        />
+      </div>
+    );
+  }
   if (!data) return <div className="container-page flex justify-center py-24"><Spinner size={28} /></div>;
 
-  const { job, bids, documents, payout } = data;
+  const { job, bids, documents, payout, myRating } = data;
   const isShipper = user.id === job.shipper_id;
   const isCarrier = user.role === 'CARRIER';
   const isAwardedCarrier = user.id === job.carrier_id;
@@ -389,7 +399,20 @@ export default function JobDetail() {
           </Section>
 
           {job.status === 'COMPLETED' && (isShipper || isAwardedCarrier) && (
-            <Section title="Rate your counterparty"><RatingPanel job={job} onSubmit={load} /></Section>
+            <Section title="Rate your counterparty">
+              {myRating ? (
+                <div className="flex items-center gap-2 text-sm text-ink">
+                  <div className="flex" aria-label={`You rated ${myRating.score} stars`}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <IconStar key={n} size={18} style={{ color: n <= myRating.score ? 'var(--brand-accent)' : 'var(--border-strong)' }} />
+                    ))}
+                  </div>
+                  <span className="text-ink-muted">You already rated this job{myRating.comment ? ` — "${myRating.comment}"` : ''}.</span>
+                </div>
+              ) : (
+                <RatingPanel job={job} onSubmit={load} />
+              )}
+            </Section>
           )}
         </div>
 
