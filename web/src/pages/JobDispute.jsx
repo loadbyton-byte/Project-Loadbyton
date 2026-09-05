@@ -147,6 +147,14 @@ export default function JobDispute() {
                       <p className="mt-0.5 text-ink-secondary">{dispute.determination}</p>
                     </div>
                   )}
+                  <a
+                    href={`/api/jobs/${id}/documents/dispute-notice`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-sm font-semibold text-brand-secondary hover:underline"
+                  >
+                    Download dispute resolution notice
+                  </a>
                 </>
               )}
             </Card.Content>
