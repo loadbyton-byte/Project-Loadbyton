@@ -16,7 +16,7 @@ actually configured (not generic AWS/RLS phrasing borrowed from elsewhere).
   ```bash
   gunzip -c backup.sql.gz | psql "$DIRECT_DATABASE_URL"
   ```
-- **Test restores quarterly.** A backup you haven't restored is a backup you don't have.
+- **Test restores quarterly.** A backup you haven't restored is a backup you don't have. Log every real drill in `docs/DR_DRILL_LOG.md` — a recommendation with no log is just a hope.
 
 ## Incident playbook
 
