@@ -9,14 +9,14 @@ actually configured (not generic AWS/RLS phrasing borrowed from elsewhere).
 ## Backups
 
 - **Mechanism:** `scripts/backup-db.js`, scheduled by `.github/workflows/backup.yml` — daily at 02:17 UTC, decoupled from the API server entirely (a crashed or redeploying backend never means a missed backup).
-- **What it does:** `pg_dump --format=plain` against Supabase's **direct** (non-pooled) connection, gzipped, uploaded as a GitHub Actions artifact (90-day retention) and — once Cloudflare R2 credentials exist as repo secrets — also pushed there automatically, no workflow change required.
-- **RPO (Recovery Point Objective): ~24 hours.** Honest number for a once-daily backup, not an aspirational one. If that's ever too coarse (e.g. once real transaction volume justifies it), Supabase's paid tier adds point-in-time recovery — a plan upgrade, not a re-architecture.
+- **What it does:** `pg_dump --format=plain` against a non-pooled Supabase connection — specifically the **Session pooler** string, not "Direct connection" (Direct connection is IPv6-only on newer Supabase projects, and GitHub-hosted runners have no outbound IPv6 route — this silently failed the backup for three consecutive nights, 2026-09-04 through 2026-09-06, before being caught by a manual repo audit rather than an alert; see `.github/workflows/backup.yml`'s header comment) — gzipped, uploaded as a GitHub Actions artifact (90-day retention) and — once Cloudflare R2 credentials exist as repo secrets — also pushed there automatically, no workflow change required.
+- **RPO (Recovery Point Objective): ~24 hours, *when the workflow is actually succeeding*.** Honest number for a once-daily backup, not an aspirational one — but this number is only as good as someone noticing a failed run. There is no alerting on backup failure today beyond GitHub's own default email notification to watchers (Settings → Notifications on the account that owns the repo — confirm "Actions" workflow-failure emails are actually enabled there). Check the Actions tab's "Database backup" workflow history periodically until real alerting exists. If that's ever too coarse (e.g. once real transaction volume justifies it), Supabase's paid tier adds point-in-time recovery — a plan upgrade, not a re-architecture.
 - **RTO (Recovery Time Objective): under 30 minutes**, dominated by `pg_dump`/restore time at current data volume, not by anything infrastructural.
 - **Restore, verified end-to-end (dump → gzip → restore → data confirmed intact) during the Supabase cutover:**
   ```bash
   gunzip -c backup.sql.gz | psql "$DIRECT_DATABASE_URL"
   ```
-- **Test restores quarterly.** A backup you haven't restored is a backup you don't have.
+- **Test restores quarterly.** A backup you haven't restored is a backup you don't have. Log every real drill in `docs/DR_DRILL_LOG.md` — a recommendation with no log is just a hope.
 
 ## Incident playbook
 
