@@ -63,18 +63,16 @@ before a money-transmission licence is in hand.
 | Award idempotency | Built | Single transaction, OPEN+PENDING re-check |
 | Audit immutability | Built | DB triggers hard-abort UPDATE/DELETE |
 | Escrow safety | Built | DISPUTED freezes payouts |
-| Money movement | Demo only | DB status flips — no licensed rail yet |
+| Money movement | Live | Stripe Connect (checkout, webhook-funded escrow, Connect-transfer payouts) is a real licensed rail; DB-status-flip mode remains as `internal`/`mock` fallback, not the only path |
 
 ## Pre-launch risk register
 
-Four items tracked in `docs/ROADMAP.md` — worth surfacing here because three of them get
-structurally more expensive if they land after the planned schema/async port (C0)
-instead of during it:
+Of the four items originally tracked here, three have since shipped:
 
-1. **Medium** — No isolated test-DB harness (test harness)
-2. **High** — Driver identity not bound to the bid (TODO-2)
-3. **High** — No payout SLA tracker (TODO-3)
-4. **Medium** — WhatsApp Business API not yet started (TODO-4)
+1. ~~**Medium** — No isolated test-DB harness~~ — **Resolved.** `server/test/harness.js` spawns the real server against a fresh temp SQLite DB per run.
+2. ~~**High** — Driver identity not bound to the bid~~ — **Resolved.** `PATCH /api/jobs/:id/driver` (`server/routes/job-lifecycle.routes.js`) binds a driver at/after award; a full driver roster table backs it (`server/schema.js`'s `drivers` table).
+3. ~~**High** — No payout SLA tracker~~ — **Resolved.** `GET /api/admin/payouts-sla` (`server/routes/admin.routes.js`).
+4. **Medium** — WhatsApp Business API not yet started — **Still accurate.** `server/lib/whatsapp.js` is code-complete but stays dark until Meta Business API approval (external, non-technical dependency).
 
 ## Bottom line
 

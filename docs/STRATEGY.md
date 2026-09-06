@@ -37,7 +37,7 @@ playbooks and UAE drayage practice):
 | # | Market gap / loophole | Our answer | Residual risk |
 |---|---|---|---|
 | G1 | Drayage price is opaque; brokers quote 18–35% above recurring-contract rates | Public **Lane Index** (data product) + personal benchmark | Incumbents undercut with owned-fleet density |
-| G2 | Demurrage/free-time is the real hidden cost, not the truck | **Demurrage clock** per container + document readiness checklist | Port/liner data not yet EDI'd (V2) |
+| G2 | Demurrage/free-time is the real hidden cost, not the truck | **Demurrage clock** per container + document readiness checklist | Basic EDI ingestion now exists (`server/routes/edi.routes.js` — EDI 304/310, Cargo-XML); real port/liner integrations (vs. the current first-pass parser) still V2 |
 | G3 | Chassis availability controls the slot | Carrier profile captures **owned vs hired chassis** | Carriers overstate capacity |
 | G4 | Disintermediation: users exchange phone numbers | **Contact gating** — phone/identity locked until award; chat on-platform | WhatsApp habits are hard to break |
 | G5 | Verification is a rubber stamp | **Dual-factor carrier verify**: TRN check + licence + insurance flag + spot audit | Fraud at volume |
@@ -111,8 +111,10 @@ tied to a company; demurrage-sensitive commercial terms.
 2. **Sprint B — Trust layer**: ratings, dispute console, audit log, demurrage clock,
    document thread. (FTL Epic 4)
 3. **Sprint C — Retention layer**: templates, contract lanes, benchmarks, loyalty, referral.
-4. **Sprint D — Data moat**: Lane Index, reports, API/EDI (V2), multi-port (Khalifa,
-   Sharjah), then GCC corridors.
+4. **Sprint D — Data moat**: Lane Index, reports, a mature EDI/API integration
+   layer beyond today's first-pass parser (`server/routes/edi.routes.js`),
+   multi-port (Khalifa, Sharjah), then GCC corridors (config exists in
+   `server/lib/gcc.js` but isn't wired into any route yet).
 
 ---
 

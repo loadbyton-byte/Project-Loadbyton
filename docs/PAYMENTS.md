@@ -6,11 +6,17 @@ bookkeeping into real money movement. Two distinct halves:
 1. **Phase B — business/licensing work that only the founders can do**
    (merchant onboarding, KYB, legal review). Nothing in this repo can
    complete it; this document is the checklist.
-2. **Phase C — the code integration**, which is already built: a
-   provider-agnostic payment layer (`server/lib/payments.js`), a
-   signature-verified webhook, schema, UI, and a fully-testable mock
-   processor. Enabling it is a matter of credentials + a handful of
-   VERIFY points against Telr's sandbox.
+2. **Phase C — the code integration**, which is already built for two
+   real processors: a provider-agnostic payment layer
+   (`server/lib/payments.js`), signature-verified webhooks, schema, UI,
+   and a fully-testable mock processor. **Stripe Connect is the more
+   complete of the two today** — checkout, webhook-funded escrow,
+   refunds, and carrier payouts via Connect transfer are all live
+   (`server/lib/stripe.js`, `server/routes/stripe.routes.js`). Telr's
+   checkout/callback side is built, but its payout leg is not yet
+   implemented (`server/lib/payments.js` — Telr payout returns
+   `not_implemented`). Enabling either is a matter of credentials + the
+   VERIFY points in §6.4.
 
 ---
 
@@ -20,6 +26,7 @@ bookkeeping into real money movement. Two distinct halves:
 |---|---|---|---|
 | `internal` (default) | Pure bookkeeping (today's behavior, unchanged) | Admin via `POST /api/admin/confirm-receipt` | Admin via `/api/admin/payouts-sla` → `mark-transferred` |
 | `mock` | Simulated processor, real code paths | Webhook with HMAC signature | Auto-executed "payout", recorded like a real one |
+| `stripe` | Real card charges via Stripe Checkout + Connect onboarding (`country: 'AE'`) | Stripe's signature-verified webhook (`/api/webhooks/stripe`) | **Live** — Connect transfer to the carrier's connected account (`server/lib/stripe.js`'s `createTransfer`) |
 | `telr` | Real card charges via Telr hosted checkout | Telr's verified callback to `/api/webhooks/payments` | **PENDING VERIFY** — see §6.4; until then the admin SLA flow |
 
 Everything is fail-closed: a webhook with a bad signature, an unknown
@@ -32,12 +39,26 @@ the append-only audit log.
 
 ### 2.1 Choose the processor
 
-Recommended: **Telr** (CBUAE-licensed PSP, UAE-registered, supports AED
-card acquiring and hosted checkout — no card data on our servers).
-Second choice: **PayTabs** (also CBUAE-licensed, similar products).
-**Stripe is ruled out for the UAE market**: it does not onboard UAE
-merchants for AED processing directly (it uses regional partners), which
-adds a middleman to your acquiring, settlement, and dispute story.
+This is a licensing/business decision, not just a technical one — the
+code already supports both **Stripe** and **Telr** end-to-end (the mode
+matrix above), so the choice comes down to onboarding terms, not which
+one "works."
+
+- **Stripe** — global processor, onboards UAE-based merchants via
+  Stripe Connect Express with `country: 'AE'` (`server/lib/stripe.js`).
+  This is the more complete integration today: checkout, webhook-funded
+  escrow, refunds, *and* carrier payouts via Connect transfer all work.
+  Verify current Stripe UAE merchant-of-record/settlement terms directly
+  with Stripe before committing — cross-border settlement details change
+  over time and are a business call, not something this repo can decide.
+- **Telr** — CBUAE-licensed PSP, UAE-registered, supports AED card
+  acquiring and hosted checkout (no card data on our servers). Checkout
+  and the verified callback are built; the payout leg to carriers is not
+  implemented yet (would need `server/lib/payments.js`'s Telr payout
+  branch finished before it can replace the admin SLA flow for payouts).
+- **PayTabs** — also CBUAE-licensed, similar products; no code
+  integration exists yet, would need a `server/lib/payments.js` provider
+  branch built the same way Stripe/Telr's were.
 
 Compare on (in this order):
 
