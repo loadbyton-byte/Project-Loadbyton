@@ -6,8 +6,8 @@ info:
 servers:
   - url: http://localhost:4000
     description: Local
-  - url: https://claudeloadbyton.onrender.com
-    description: Production
+  - url: https://api.loadbyton.com
+    description: Production (proxied from https://loadbyton.com/api/* per vercel.json)
 tags:
   - name: system
     description: Health, auto-release, webhooks
@@ -312,6 +312,13 @@ paths:
       security: [{ cookieAuth: [] }]
       responses:
         '200': { description: ok }
+  /api/admin/live:
+    get:
+      tags: [admin]
+      summary: Real-time ops board — open jobs with live bids, active jobs, recent audit activity
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
   /api/admin/reconciliation:
     get:
       tags: [admin]
@@ -347,20 +354,13 @@ paths:
       security: [{ cookieAuth: [] }]
       responses:
         '200': { description: ok }
-  /api/location:
-    get:
-      tags: [jobs]
-      summary: Location lookup / reverse geocode
-      parameters:
-        - { name: lat, in: query, schema: { type: number } }
-        - { name: lng, in: query, schema: { type: number } }
-        - { name: q, in: query, schema: { type: string } }
-      responses:
-        '200': { description: ok }
+  /api/jobs/{id}/location:
     post:
       tags: [jobs]
-      summary: Update driver live location
+      summary: Carrier posts a live GPS ping (job must be IN_TRANSIT)
       security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
       requestBody:
         required: true
         content:
@@ -376,29 +376,42 @@ paths:
       responses:
         '200': { description: ok }
         '400': { description: validation }
-  /api/location/search:
+        '403': { description: not the job's carrier }
+  /api/jobs/{id}/locations:
     get:
       tags: [jobs]
-      summary: Search locations (Nominatim/Mapbox)
+      summary: List recent GPS pings for a job (participant or admin)
+      security: [{ cookieAuth: [] }]
       parameters:
-        - { name: q, in: query, required: true, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
         '200': { description: ok }
+        '403': { description: not permitted }
   /api/notifications:
     get:
       tags: [admin]
-      summary: List notifications for current user
+      summary: List notifications for current user (unread first, max 100)
       security: [{ cookieAuth: [] }]
-      parameters:
-        - { name: limit, in: query, schema: { type: integer } }
-        - { name: offset, in: query, schema: { type: integer } }
-        - { name: unreadOnly, in: query, schema: { type: boolean } }
       responses:
         '200': { description: ok }
+  /api/notifications/read:
     post:
       tags: [admin]
-      summary: Create notification (admin/system)
+      summary: Mark ALL of the current user's notifications read (bulk, no id in path)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/webhooks/stripe:
+    post:
+      tags: [payments]
+      summary: Stripe webhook (raw body + stripe-signature verified, idempotent via payment_webhook_events)
+      responses:
+        '200': { description: ack }
+        '400': { description: bad signature or unparseable payload }
+  /api/webhooks/stripe/mock-confirm:
+    post:
+      tags: [payments]
+      summary: Admin-only test webhook — simulates a successful Stripe payment (test/mock payment mode only)
       security: [{ cookieAuth: [] }]
       requestBody:
         required: true
@@ -406,42 +419,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [userId, title]
+              required: [processorPaymentRef]
               properties:
-                userId: { type: integer }
-                title: { type: string }
-                body: { type: string }
-      responses:
-        '201': { description: created }
-        '400': { description: validation }
-  /api/notifications/{id}/read:
-    post:
-      tags: [admin]
-      summary: Mark notification as read
-      security: [{ cookieAuth: [] }]
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
+                processorPaymentRef: { type: string }
       responses:
         '200': { description: ok }
-        '404': { description: not found }
-  /api/notifications/{id}:
-    get:
-      tags: [admin]
-      summary: Get single notification
-      security: [{ cookieAuth: [] }]
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
-      responses:
-        '200': { description: ok }
-        '404': { description: not found }
-    delete:
-      tags: [admin]
-      summary: Dismiss notification
-      security: [{ cookieAuth: [] }]
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: integer } }
-      responses:
-        '200': { description: ok }
+        '403': { description: not available outside test/mock payment mode }
 components:
   schemas:
     Register:
@@ -475,7 +458,7 @@ components:
         deadline: { type: string, format: date-time }
         maxBudgetAed: { type: number }
         targetPriceAed: { type: number }
-        shipmentType: { type: string, enum: [PORT_DRAYAGE, LOCAL] }
+        shipmentType: { type: string, enum: [IMPORT, EXPORT, LOCAL] }
         equipmentType: { type: string }
         cargoWeightTons: { type: number }
         notes: { type: string }
