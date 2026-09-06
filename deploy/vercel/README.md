@@ -1,14 +1,17 @@
 # Deploying the frontend to Vercel
 
+**Status: already deployed.** Production frontend runs on Vercel; production
+backend runs on Oracle Cloud (`deploy/oracle-cloud/`) against Supabase
+Postgres. This doc is both the reference for how that's wired and the
+runbook for redeploying from scratch if the project ever needs recreating.
+
 Vercel runs serverless functions with an ephemeral filesystem — the backend
-(`server/`) stores everything (users, jobs, escrow, the audit log) in a local
-SQLite file via Node's built-in `node:sqlite`, which would reset on every
-cold start there. the project keeps dependencies minimal by design — swapping in a hosted DB
-driver, and `render.yaml` already documents why the backend needs a
-persistent disk. So: **only the frontend (`web/`) goes on Vercel.** The
-backend stays on Render (`render.yaml`, repo root) or Oracle Cloud
-(`deploy/oracle-cloud/`) — either already provisions the persistent disk
-this app needs.
+(`server/`) needs a persistent, stateful database connection (Postgres in
+production, SQLite locally via Node's built-in `node:sqlite`), which doesn't
+fit Vercel's model. So: **only the frontend (`web/`) is on Vercel.** The
+backend runs on Oracle Cloud (`deploy/oracle-cloud/`), which provisions the
+persistent compute this app needs; `render.yaml` remains as an alternative
+one-click demo deploy target (`docs/DEMO_DEPLOY.md`), not the production host.
 
 ## What's already set up
 
@@ -28,43 +31,36 @@ this app needs.
   `web/package.json`'s `build:vercel` script — the existing `npm run build`
   (used by `render.yaml` / `deploy/oracle-cloud/`) is untouched.
 
-## What you need to fill in
+## Current configuration
 
-1. **Deploy the backend first** (Render or Oracle Cloud — see the sibling
-   `deploy/` folders) and note its public URL.
-2. **Edit `vercel.json`** at the repo root: replace
-   `https://REPLACE-WITH-YOUR-BACKEND-HOST` in the `/api/:path*` rewrite
-   with that backend's real URL. This makes Vercel transparently proxy API
-   calls to the backend server-side — the browser only ever talks to your
-   Vercel domain, so the `lb_session` cookie (`SameSite=Lax`, no `Secure`
-   flag in dev) keeps working exactly like the single-process Express setup
-   does. Pointing the frontend at the backend via `fetch` directly instead
-   (cross-origin) would silently break login: `SameSite=Lax` cookies aren't
-   sent on cross-site `fetch`/XHR, only top-level navigations.
-3. **Set the `SITE_ORIGIN` environment variable** in the Vercel project
-   (Project Settings → Environment Variables) to your final Vercel domain,
-   e.g. `https://loadbyton.ae` — used to build absolute URLs in
-   `sitemap.xml`. If unset, the build script falls back to Vercel's own
-   `VERCEL_PROJECT_PRODUCTION_URL`/`VERCEL_URL` (usually correct without
-   any manual config), then a placeholder.
-4. **Also set `FRONTEND_URL`** on the *backend* host to your Vercel domain —
-   `server/index.js` uses it for CORS (`FRONTEND_URL` env var, see
-   `docs/DEVELOPER_GUIDE.md`). With the rewrite proxy above the browser
-   never makes a cross-origin request, but the backend should still know
+1. **Backend URL is already wired in `vercel.json`** — the `/api/:path*`
+   rewrite points at `https://api.loadbyton.com/api/:path*` (the Oracle
+   Cloud-hosted backend). This makes Vercel transparently proxy API calls to
+   the backend server-side — the browser only ever talks to the Vercel
+   domain, so the `lb_session` cookie (`SameSite=Lax`) keeps working exactly
+   like a single-process Express setup would. Pointing the frontend at the
+   backend via `fetch` directly instead (cross-origin) would silently break
+   login: `SameSite=Lax` cookies aren't sent on cross-site `fetch`/XHR, only
+   top-level navigations.
+2. **`SITE_ORIGIN`** is set as a Vercel project environment variable
+   (Project Settings → Environment Variables) to the production domain —
+   used to build absolute URLs in `sitemap.xml`. If ever unset, the build
+   script falls back to Vercel's own `VERCEL_PROJECT_PRODUCTION_URL`/
+   `VERCEL_URL`.
+3. **`FRONTEND_URL`** is set on the *backend* host (Oracle Cloud) to the
+   production Vercel domain — `server/app.js` reads it for CORS (see
+   `docs/DEVELOPER_GUIDE.md`). With the rewrite proxy above, the browser
+   never makes a cross-origin request, but the backend still needs to know
    its canonical frontend origin.
 
-## Connecting the project
+## Redeploying from scratch (if the project is ever recreated)
 
-This session has no Vercel account/token, so the actual deploy trigger is a
-step for you to run, either:
-
-- **Dashboard**: vercel.com → New Project → import `shamhar07-max/loadbyton`
-  from GitHub. Vercel auto-detects `vercel.json` at the repo root — no
-  manual build/output-directory config needed. Push to the branch Vercel is
-  watching and it redeploys automatically.
+- **Dashboard**: vercel.com → New Project → import
+  `loadbyton-byte/Project-Loadbyton` from GitHub. Vercel auto-detects
+  `vercel.json` at the repo root — no manual build/output-directory config
+  needed. Pushing to the branch Vercel is watching redeploys automatically.
 - **CLI**: `npx vercel login`, then `npx vercel --prod` from the repo root.
 
-Either way, do steps 1–4 above (backend URL, `SITE_ORIGIN`, `FRONTEND_URL`)
-before or right after the first deploy — until the `/api/:path*` rewrite
-points at a real backend, every API call 404s and the app has nothing to
-log into.
+Either way, redo the three steps above (backend URL in `vercel.json`,
+`SITE_ORIGIN`, `FRONTEND_URL`) — until the `/api/:path*` rewrite points at a
+real backend, every API call 404s and the app has nothing to log into.

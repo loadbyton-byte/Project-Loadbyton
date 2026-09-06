@@ -6,16 +6,19 @@ way production would be (persistent disk, health checks, encryption key,
 real error monitoring hooks), with a one-click reset back to clean seeded
 data.
 
-The code is already verified: lint clean (server + web), 21/21 tests pass on
-Node 22, production build + prerender green, `render.yaml` blueprint and the
-Oracle Cloud Docker path both ready. This file is just the deploy runbook.
+The code is already verified: the full test suite passes on Node 22 (45
+tests as of this writing — `cd server && npm test`), production build +
+prerender green, `render.yaml` blueprint and the Oracle Cloud Docker path
+both ready. This file is the demo-specific deploy runbook — separate from
+the actual production deploy (Vercel + Oracle Cloud + Supabase, see
+`deploy/vercel/README.md` and `deploy/oracle-cloud/README.md`), for spinning
+up a disposable, reviewer-facing instance instead.
 
-## 0. Prerequisite — push the repo
+## 0. Prerequisite
 
-- The sandbox that produced this work has no git. From your machine, review
-  the diff, commit, push to `main`.
-- On push, GitHub Actions runs lint + the full test suite (`node --test` on
-  Node 22). Wait for the green check — the deploy builds from the same tree.
+Push to the branch you want deployed. `.github/workflows/ci.yml` runs the
+full test suite, a TypeScript check, and the frontend build on every push —
+wait for the green check before deploying from that commit.
 
 ## 1. Deploy — Option A: Render (recommended for the demo, ~15 min)
 
@@ -29,7 +32,7 @@ Steps:
 
 1. Render dashboard → **New → Blueprint** → select the repo → it reads
    `render.yaml` and creates the service.
-2. It starts on `https://api.loadbyton.ae` (the `FRONTEND_URL`
+2. It starts on `https://loadbyton.onrender.com` (the `FRONTEND_URL`
    in the blueprint already points there).
 3. Add the demo-mode env vars in **Environment** (do this before the first
    deploy finishes, then redeploy):
@@ -45,7 +48,7 @@ Steps:
 
    Everything else in the blueprint stays as-is.
 
-4. Wait for deploy → check `https://api.loadbyton.ae/api/health`
+4. Wait for deploy → check `https://loadbyton.onrender.com/api/health`
    → shows `"payments": { provider: "mock", ... }`.
 
 ## 2. Deploy — Option B: Oracle Cloud Always Free (UAE-resident, $0)
@@ -72,7 +75,7 @@ Seeded demo accounts (password `demo1234` for all): `admin@loadbyton.ae`,
    `<REF>` with the job's ref shown in the panel and keep the secret from §1.3):
 
    ```bash
-   curl -s https://api.loadbyton.ae/api/webhooks/payments \
+   curl -s https://loadbyton.onrender.com/api/webhooks/payments \
      -H "Content-Type: application/json" \
      -H "x-payments-signature: $(printf '{"event":"AUTHORISED","ref":"<REF>","tranref":"t1","amount_aed":650}' | openssl dgst -sha256 -hmac '<PAYMENTS_WEBHOOK_SECRET>' | awk '{print $2}')" \
      -d '{"event":"AUTHORISED","ref":"<REF>","tranref":"t1","amount_aed":650}'
@@ -105,7 +108,7 @@ rm -f /data/loadbyton.db /data/loadbyton.db-wal /data/loadbyton.db-shm
 ## 5. What must be OFF before real data ever goes near it
 
 - `SEED_DEMO_ADMIN` unset (the gate exists for a reason — see `server/seed.js`)
-- `PAYMENTS_PROVIDER` unset or `telr` only after §2 of `docs/PAYMENTS.md`
-  (onboarding + the 4 VERIFY points) is done
+- `PAYMENTS_PROVIDER` unset, or `telr`/`stripe` only after the relevant
+  onboarding + the VERIFY checklist in `docs/PAYMENTS.md` §6.4 is done
 - Domain + TLS set (§4.1 of `docs/DEVELOPER_GUIDE.md`), fixed secrets,
   `docs/PAYMENTS.md` §7 checklist complete

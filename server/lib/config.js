@@ -4,7 +4,7 @@ const { randomToken } = require('./http');
 
 const PORT = Number(process.env.PORT) || 4000;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
-const ADDITIONAL_ORIGINS = (process.env.ADDITIONAL_ORIGINS || 'https://loadbyton.ae,https://loadbyton.vercel.app,https://claudeloadbyton.onrender.com')
+const ADDITIONAL_ORIGINS = (process.env.ADDITIONAL_ORIGINS || 'https://loadbyton.ae,https://loadbyton.vercel.app,https://api.loadbyton.com,https://loadbyton.onrender.com')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);

@@ -3,7 +3,7 @@
 **UAE Road Freight & Container Drayage Marketplace** — a full-stack platform that connects **shippers** who need a container, a flatbed load, or a multi-truck job moved across Dubai, Abu Dhabi, Sharjah, or Fujairah with **carriers** who truck them (across 13 equipment types, from a container chassis to a genset trailer to custom loads), and gives **admins** a verification, escrow and dispute console.
 
 Built as a monorepo: an Express API (Node 22, dual DB — `node:sqlite` for dev + Postgres `pg` for production) and a React + Vite + Tailwind single-page app. Runs locally with `npm install` only; production uses Postgres + Redis + S3 via `docker-compose.yml`.
-Deps: `express`, `pg` (opt-in via `USE_POSTGRES`), `ioredis` (rate limiting), `stripe` (Connect payouts), `@aws-sdk/client-s3` (uploads), `zod` (validation), `bcryptjs`, `swagger-ui-express`.
+Deps: `express` 5, `pg` (opt-in via `USE_POSTGRES`), `ioredis` (rate limiting), `socket.io` (live tracking/notifications), `stripe` (Connect payouts), `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` (R2/S3 uploads), `@sentry/node` (error tracking), `zod` (validation), `bcryptjs`, `swagger-ui-express`.
 
 > Escrow + payouts are double-entry ledger-backed (`server/lib/ledger.js` + `ledger_*` tables) with Stripe Connect + Telr + mock providers (`server/lib/payments.js`). Mock mode runs end-to-end without keys; licensed rails activate via env.
 
@@ -22,9 +22,10 @@ A shipper posts a drayage job (container size/type, pickup terminal, delivery ar
 | **Auth** | Register (shipper/carrier, TRN, trade licence, referral codes), login with session cookie, logout, profile update, TOTP 2FA, per-email login throttling (8 fails / 15 min) |
 | **Marketplace core** | Post job, browse open loads, bid (price + ETA), award (idempotent, transactional), job status state machine, live tracking, per-job messaging, document/POD upload, ratings |
 | **Escrow & payouts** | `PENDING → HELD (award) → FUNDED (admin confirm) → RELEASED (shipper confirm or 24 h auto)`, disputes freeze escrow; payout rows with gross/fee/net + release type |
-| **Retention layer** | Recurring job **templates** (with one-click re-post), **contract lanes** (committed monthly volume), role-based **analytics**, loyalty **tiers**, **referrals** (with admin visibility), **notifications** (8 toast types via a shared `ToastProvider`, persistent notifications page) |
-| **Admin console** | Carrier verification queue (approve with IBAN, reject), all-members directory with role/verified/search filters, audited time-limited impersonation, system health, revenue/GMV, escrow held, disputes + evidence dossier, audit log, platform settings |
-| **Marketing/SEO** | Landing page, features/pricing/about/blog pages with server-injected meta tags, favicon, Open Graph/Twitter cards |
+| **Retention layer** | Recurring job **templates** (with one-click re-post), **contract lanes** (committed monthly volume), role-based **analytics** (monthly trend, status breakdown, top lanes), loyalty **tiers**, **referrals** (with admin visibility), **notifications** (8 toast types via a shared `ToastProvider`, persistent notifications page) |
+| **Enterprise lane** | RFP/contract-lane bidding with monthly milestones (`contract_rfps`), basic EDI ingestion (EDI 304/310, Cargo-XML → `global_consignments`), customs compliance declarations (HS code + simulated ZKP manifest commitment), driver fleet roster + driver-seat logins, hardware telematics ingestion, branded PDF-style documents (load confirmation, POD certificate, settlement statement, EIR summary, dispute notice) |
+| **Admin console** | Carrier verification queue (approve with IBAN, reject), all-members directory with role/verified/search filters, audited time-limited impersonation, system health, revenue/GMV, escrow held, disputes + evidence dossier, payout SLA tracker, audit log (hash-chained, tamper-evident), platform settings |
+| **Marketing/SEO** | Landing page + features/pricing/about/blog/security/compliance/terms/privacy pages, all server-injected meta tags and prerendered, favicon, Open Graph/Twitter cards |
 | **Brand** | Hand-authored SVG mark + wordmark, 3-layer design-token system (primitive → semantic → component), light/dark themes with a nav toggle |
 | **Onboarding** | 3-step first-login walkthrough, re-startable from Profile |
 
@@ -33,28 +34,48 @@ A shipper posts a drayage job (container size/type, pickup terminal, delivery ar
 ## Repository layout
 
 ```
-digitalburj/
+Project-Loadbyton/
 ├── README.md                 # this file
-├── CONTRIBUTING.md           # contributor guide
+├── CONTRIBUTING.md           # contributor guide + branch workflow
 ├── LICENSE                   # MIT license
+├── deploy/
+│   ├── oracle-cloud/          # production backend host — Dockerfile + README
+│   └── vercel/                # production frontend host — README
 ├── docs/
 │   ├── STRATEGY.md            # execution strategy & gap analysis
 │   ├── STRATEGIC_REVIEW.md    # investor/CEO/engineering read on the build
 │   ├── ARCHITECTURE.md        # how the system works (deep dive)
-│   ├── API.md                 # full REST endpoint reference
+│   ├── API.md                 # REST endpoint reference
 │   ├── DATA_MODEL.md          # database schema reference
 │   ├── DEVELOPER_GUIDE.md     # setup, run, build, troubleshoot
+│   ├── DEMO_DEPLOY.md         # spin up a live demo (Render blueprint)
 │   ├── TUTORIAL.md            # end-to-end walkthrough of a load lifecycle
-│   └── brand/
-│       ├── BRAND_GUIDELINES.md
-│       ├── design-tokens.json
-│       └── design-tokens.css
-├── server/                   # Express API (Node 22, node:sqlite), port 4000
-│   ├── index.js               # routes + business logic
-│   ├── db.js                  # schema, migrations, connection
-│   ├── seed.js                # idempotent demo seeding (6 users, 6 jobs…)
-│   ├── lib/                   # totp.js, lanes.js, http.js
-│   └── data/loadbyton.db      # SQLite DB (WAL mode, auto-created, gitignored)
+│   ├── PAYMENTS.md            # payment provider modes (mock/telr/stripe/internal)
+│   ├── DISASTER_RECOVERY.md   # backups, restore, incident playbook
+│   ├── ENTERPRISE_AUDIT.md    # audit log of production-readiness fixes
+│   ├── ROADMAP.md             # shipped / next / known limits
+│   ├── enterprise-roadmap.md  # longer-horizon technical roadmap
+│   ├── GOOGLE_MAPS_SETUP.md   # optional Places Autocomplete API key
+│   ├── WHATSAPP_SETUP.md      # WhatsApp Business API setup (gated on Meta approval)
+│   ├── openapi.yaml           # machine-readable API spec
+│   ├── brand/
+│   │   ├── BRAND_GUIDELINES.md
+│   │   ├── design-tokens.json
+│   │   └── design-tokens.css
+│   └── enterprise/             # deeper technical notes (multi-region, hardening)
+├── server/                   # Express API (Node 22), port 4000
+│   ├── index.js                # boot only — app.listen(), outbox worker, socket init
+│   ├── app.js                  # Express app + middleware + all route mounting
+│   ├── schema.js                # SQLite DDL + migrations (source of truth for dev)
+│   ├── db.js                    # DB connection abstraction (SQLite or Postgres)
+│   ├── seed.js                  # idempotent demo seeding
+│   ├── routes/                  # ~27 route files (jobs, bids, stripe, rfp, edi, telematics, …)
+│   ├── controllers/, services/, repositories/  # business logic layers
+│   ├── lib/                     # stripe.js, payments.js, ledger.js, storage.js, whatsapp.js, …
+│   ├── middleware/               # auth.js, validate.js
+│   ├── workers/outbox.worker.js  # outbox-pattern async event processor
+│   ├── migrations/               # postgres_init.sql + numbered production migrations
+│   └── data/loadbyton.db         # SQLite DB (WAL mode, auto-created, gitignored, dev only)
 └── web/                       # React 18 + Vite + Tailwind 3 SPA
     ├── index.html
     ├── vite.config.js          # dev port 5173, /api proxy → :4000
@@ -64,12 +85,16 @@ digitalburj/
         ├── main.jsx            # entry, BrowserRouter, AuthProvider, ToastProvider
         ├── App.jsx             # routes + auth guards
         ├── index.css           # design tokens + component classes
-        ├── lib/                # api.js, auth.jsx, seo.jsx, constants.js
-        ├── components/         # Shell.jsx, ui.jsx, icons.jsx, Toast.jsx
-        └── pages/               # Landing, Login, Register, Dashboard, OpenLoads,
-                                  # MyBids, WonJobs, JobDetail, Templates, Contracts,
-                                  # Earnings, Notifications, Admin, Profile, Features,
-                                  # Pricing, About, Blog, NotFound
+        ├── lib/                # api.js, auth.jsx, seo.jsx, constants.js, googleMaps.js
+        ├── components/         # Shell.jsx, ui.jsx, icons.jsx, Toast.jsx, LiveMap.jsx
+        └── pages/               # 32 pages — Landing, Login, Register, Dashboard,
+                                  # OpenLoads, MyBids, WonJobs, JobDetail, JobHistory,
+                                  # JobDispute, Templates, Contracts, Analytics, Earnings,
+                                  # Invoices, Compliance, DocumentCompliance, Drivers,
+                                  # DriverHome, Messages, Notifications, Admin (+ 11 tabs),
+                                  # Profile, Security, Features, Pricing, About, Blog,
+                                  # Terms, Privacy, ForgotPassword, ResetPassword,
+                                  # VerifyEmail, NotFound
 ```
 
 ---
@@ -120,51 +145,27 @@ The database seeds itself on first boot (see `server/seed.js`). To start clean, 
 ## How it fits together
 
 ```
-Browser (React SPA)
+Browser (React SPA, hosted on Vercel in production)
    │  fetch('/api/…') with HttpOnly lb_session cookie
    ▼
-Express API  :4000   ──►   SQLite (node:sqlite, WAL)  data/loadbyton.db
+Vercel rewrite (/api/* → Oracle Cloud) — dev: Vite proxies /api → :4000
+   ▼
+Express API  :4000  (server/app.js + server/routes/*.js, Oracle Cloud in prod)
    │
-   ├─ express.static(web/dist)   served SPA + assets
-   ├─ SEO routes (/features, /pricing, /about, /blog) — meta-injected HTML
+   ├─►  node:sqlite (dev) or Postgres via Supabase (prod, USE_POSTGRES=true)
+   ├─►  Cloudflare R2 / S3-compatible storage (uploads — local disk fallback in dev)
+   ├─►  Stripe Connect / Telr (escrow + payouts — mock/internal fallback with no keys)
+   ├─ express.static(web/dist)   serves the SPA + assets directly when not on Vercel
+   ├─ SEO routes (/, /features, /pricing, /about, /security, /compliance, /blog,
+   │              /terms, /privacy) — meta-injected, prerendered HTML
    └─ SPA fallback — any non-/api GET returns index.html (deep links work)
 ```
 
 - **Auth is session-cookie based, no JWT.** The client only ever holds an opaque random token in the `lb_session` HttpOnly cookie. Sessions live in the DB, expire after 7 days, and are cleaned on startup.
 - **Every protected route reads the session from the cookie** via the `auth()` middleware, which also enforces role allow-lists (`auth(['SHIPPER'])`, `auth(['ADMIN'])`, …).
-- **The built SPA is served by Express**, so production is one process on one port. In dev, Vite on :5173 proxies `/api` to :4000.
+- **In production, the SPA and API are two separate hosts** — Vercel serves `web/dist` and rewrites `/api/*` to the Oracle Cloud-hosted Express API (`vercel.json`). Locally, Express can also serve `web/dist` directly as one process on one port, which is what happens in a plain `docker-compose`/single-VM deploy.
 
 See `docs/ARCHITECTURE.md` for the deep dive, `docs/API.md` for the full endpoint reference, `docs/DATA_MODEL.md` for the schema, `docs/DEVELOPER_GUIDE.md` for setup/troubleshooting, and `docs/TUTORIAL.md` to click through the whole product as a demo. `docs/STRATEGY.md` and `docs/STRATEGIC_REVIEW.md` are the business case.
-
----
-
-## Current state — build & quality
-
-All **9 build-blocking errors** have been fixed and pushed to GitHub. The codebase now has:
-
-- **Zero TypeScript/ESLint build errors** on `npm run build`
-- **All 50+ frontend API calls** verified against backend endpoints
-- **Responsive design** (mobile 400px, tablet 859px, desktop 860px+)
-- **Dark mode toggle** with persistent localStorage storage
-- **WCAG AA accessibility** compliance
-- **Keyboard shortcuts** implemented
-- **Error boundaries** for robust UI
-
-### Fixed build errors (9 total)
-
-| # | Error | File | Fix |
-|---|-------|------|-----|
-| 1 | `Expected ")" but found ":"` | `auth.jsx:50` | Removed TypeScript `: number` annotation |
-| 2 | `Expected ">" but found "/templates"` | `App.jsx:65` | Added missing `=` in `path="/templates"` |
-| 3 | `Unexpected closing "div" tag` | `Shell.jsx:126` | Fixed JSX structure |
-| 4 | `Unterminated regular expression` | `Shell.jsx:127` | Fixed div nesting |
-| 5 | `Expected ")" but found "size"` | `OpenLoads.jsx:95` | Wrapped else branch in fragment |
-| 6 | `Expected ":" but found "}"` | `Earnings.jsx:57` | Added `: '—'` to ternary |
-| 7 | `Expected ">" but found "Try adjusting..."` | `Admin.jsx:411` | Added `=` in description prop |
-| 8 | Duplicate `variant` attribute | `Admin.jsx:532` | Changed to `variant="danger"` |
-| 9 | `IconInfo` not exported | `icons.jsx` | Added `IconInfo` export |
-
-Plus 22 code-quality fixes (Tailwind classes, SVG paths, fragment keys, console.error, filter logic, etc.)
 
 ---
 
@@ -172,17 +173,17 @@ Plus 22 code-quality fixes (Tailwind classes, SVG paths, fragment keys, console.
 
 | Area | Status | Detail |
 |---|---|---|
-| **DB** | ✅ Dual | SQLite (dev) + Postgres (prod, `USE_POSTGRES=true` + `DATABASE_URL`, WAL + FK, auto-migrate `server/migrations/postgres_init.sql`) |
-| **Ledger** | ✅ | Double-entry, idempotent `idempotency_key`, append-only `audit_log` triggers `server/schema.js:340`, outbox `workers/outbox.worker.js` |
-| **Auth** | ✅ | HttpOnly `lb_session` 7d, bcrypt, TOTP, per-email throttle 8/15m, RBAC + seat roles, re-auth for IBAN/payout |
-| **Rate limit** | ✅ | `server/lib/rateLimit.js` — Redis-distributed when `REDIS_URL` set, in-memory fallback with warning |
+| **DB** | ✅ Dual | SQLite (dev) + Postgres (prod, `USE_POSTGRES=true` + `DATABASE_URL`, WAL + FK, `server/migrations/postgres_init.sql` for fresh installs, numbered `NNN_*.sql` files for existing production) |
+| **Ledger** | ✅ | Double-entry, idempotent `idempotency_key`, append-only `audit_log` triggers (`server/schema.js`, `audit_log_no_update`/`audit_log_no_delete`), outbox `server/workers/outbox.worker.js` |
+| **Auth** | ✅ | HttpOnly `lb_session` 7d, bcrypt, TOTP, per-email login throttle (8 fails / 15 min), RBAC + org seat roles, re-auth required for IBAN/payout actions |
+| **Rate limit** | ✅ | `server/lib/rateLimit.js` — Redis-distributed (`ioredis`) when `REDIS_URL` set, in-memory fallback with a startup warning |
 | **Crypto** | ✅ | AES-256-GCM field encryption `server/lib/crypto.js` for TRN/IBAN (`enc:v1:`), `ENCRYPTION_KEY` required in prod |
-| **Payments** | ✅ | Provider abstraction `internal/mock/telr/stripe` + webhook idempotency + payout attempts ledger |
-| **Storage** | ✅ | S3 when `S3_BUCKET` set, local fallback `server/data/uploads/` |
-| **CI** | ✅ | `/.github/workflows/ci.yml` — tests + tsc + build + k6 smoke + Playwright |
-| **Deploy** | ✅ | `Dockerfile` (monolith) + `docker-compose.yml` (postgres+redis+app) + `render.yaml` + `vercel.json` + Terraform `infra/` |
+| **Payments** | ✅ | Provider abstraction `internal/mock/telr/stripe` (`server/lib/payments.js`) — Stripe Connect is the live production rail (checkout, webhook-funded escrow, Connect payouts); Telr is the UAE-specific alternative; webhook idempotency + a payout-attempts ledger back both |
+| **Storage** | ✅ | S3-compatible (Cloudflare R2 in production, via `S3_BUCKET`/`S3_ENDPOINT`) with presigned direct-to-storage uploads; local disk fallback for dev (`server/data/uploads/`) |
+| **CI** | ✅ Partial | `.github/workflows/ci.yml` — server tests, TypeScript check, frontend build, and `npm audit` are real gates; lint/k6/Playwright steps are explicitly advisory (not yet wired to a running server or a working lint config — see the workflow file's own comments) |
+| **Deploy** | ✅ | Production: Vercel (frontend, `vercel.json`) + Oracle Cloud (backend, `deploy/oracle-cloud/`) + Supabase (Postgres) + Cloudflare R2 (storage). `render.yaml` remains as a one-click demo/alternative deploy target (`docs/DEMO_DEPLOY.md`), not the production host. |
 
-Known limits: WhatsApp Business API needs approval for production templates; `mock` payments forbidden in `NODE_ENV=production` by `server/lib/config.js:22`.
+Known limits: WhatsApp Business API needs Meta approval for production templates (`server/lib/whatsapp.js` is code-complete and stays dark until then); `mock` payments are forbidden in `NODE_ENV=production` by `server/lib/config.js`; GCC multi-country expansion config exists (`server/lib/gcc.js`) but isn't wired into any route yet.
 
 ## Quick navigation
 
