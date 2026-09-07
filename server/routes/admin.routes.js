@@ -361,6 +361,7 @@ router.post('/api/admin/confirm-receipt', auth(['ADMIN']), async (req, res) => {
   const { jobId } = req.body || {};
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (job.escrow_status === 'FUNDED') return apiResponse.error(req, res, 'ESCROW_ALREADY_FUNDED', 'Escrow already confirmed as received');
   if (job.escrow_status !== 'HELD') return apiResponse.error(req, res, 'ESCROW_NOT_HELD', 'Escrow must be HELD to confirm receipt');
   await db.prepare(`UPDATE jobs SET escrow_status='FUNDED', updated_at=datetime('now') WHERE id=?`).run(job.id);
   await writeAudit(req, { userId: req.actorId, action: 'ESCROW_FUND', details: `${job.job_code} funds confirmed received`, entityType: 'job', entityId: job.id, beforeState: 'HELD', afterState: 'FUNDED' });
