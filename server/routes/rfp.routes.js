@@ -44,11 +44,27 @@ router.get('/api/rfps', auth(), async (req,res)=>{
   const rfps = await db.prepare(`SELECT * FROM contract_rfps WHERE ${where} ORDER BY created_at DESC`).all(...params);
   res.json({ rfps });
 });
+// Was missing any ownership/role check — unlike the list endpoint above
+// (which correctly scopes SHIPPER to their own RFPs), this single-record
+// fetch let any authenticated user enumerate RFP ids and read another
+// shipper's full RFP plus every competing carrier's rfp_bids (amount,
+// ETA, proposal text) — commercially sensitive cross-tenant bid data.
 router.get('/api/rfps/:id', auth(), async (req,res)=>{
   const rfp = await db.prepare('SELECT * FROM contract_rfps WHERE id=?').get(req.params.id);
   if(!rfp) return sendError(res,404,'RFP not found');
-  const bids = await db.prepare('SELECT * FROM rfp_bids WHERE rfp_id=? ORDER BY amount_aed').all(rfp.id);
+  const isOwner = req.user.role === 'SHIPPER' && rfp.shipper_id === req.user.id;
+  const isAdmin = req.user.role === 'ADMIN';
+  if (req.user.role === 'SHIPPER' && !isOwner && !isAdmin) return sendError(res,403,'Not your RFP');
   const milestones = await db.prepare('SELECT * FROM rfp_milestones WHERE rfp_id=? ORDER BY due_at').all(rfp.id);
+  let bids;
+  if (isOwner || isAdmin) {
+    // The party who needs to compare and award sees every bid.
+    bids = await db.prepare('SELECT * FROM rfp_bids WHERE rfp_id=? ORDER BY amount_aed').all(rfp.id);
+  } else {
+    // A carrier browsing/considering this RFP only ever sees their own
+    // bid, never a competitor's pricing or proposal text.
+    bids = await db.prepare('SELECT * FROM rfp_bids WHERE rfp_id=? AND carrier_id=? ORDER BY amount_aed').all(rfp.id, req.user.id);
+  }
   res.json({ rfp, bids, milestones });
 });
 router.post('/api/rfps/:id/bids', auth(['CARRIER']), async (req,res)=>{

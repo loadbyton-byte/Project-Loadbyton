@@ -1,7 +1,7 @@
 // Shared branded "letterhead" used by every generated document (tax invoice,
 // settlement statement, load confirmation, POD certificate, EIR summary,
 // dispute notice). Colors/fonts/logo are pulled straight from the app's own
-// brand kit (docs/docs/brand/design-tokens.json, docs/docs/brand/BRAND_GUIDELINES.md)
+// brand kit (docs/brand/design-tokens.json, docs/brand/BRAND_GUIDELINES.md)
 // — nothing here is a new visual identity, only the existing one applied.
 //
 // Every document is served from this same Express app, which serves

@@ -285,12 +285,17 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'assigned_driver_phone', 'assigned_driver_phone TEXT');
   addColumn('jobs', 'assigned_driver_id', 'assigned_driver_id INTEGER REFERENCES drivers(id)');
   addColumn('messages', 'thread_id', 'thread_id INTEGER REFERENCES message_threads(id)');
+  // Postgres (migrations/postgres_init.sql) already had this index — SQLite
+  // was missing it since thread_id here is a bolted-on column, not part of
+  // the original CREATE TABLE that idx_messages_job sits next to.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id)');
 
   addColumn('payouts', 'sla_deadline', 'sla_deadline TEXT');
   addColumn('payouts', 'transfer_executed_at', 'transfer_executed_at TEXT');
   addColumn('payouts', 'transfer_reference', 'transfer_reference TEXT');
 
   addColumn('users', 'org_owner_id', 'org_owner_id INTEGER REFERENCES users(id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_users_org_owner ON users(org_owner_id)');
   addColumn('users', 'seat_role', 'seat_role TEXT');
   addColumn('users', 'is_active', 'is_active INTEGER NOT NULL DEFAULT 1');
   addColumn('users', 'display_name', 'display_name TEXT');
@@ -396,6 +401,7 @@ module.exports = function initSchema(db) {
     recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
     raw_payload TEXT
   );
+  CREATE INDEX IF NOT EXISTS idx_telematics_job ON telematics_logs(job_id);
   CREATE TABLE IF NOT EXISTS global_consignments (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
@@ -417,6 +423,7 @@ module.exports = function initSchema(db) {
     cleared_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX IF NOT EXISTS idx_compliance_job ON compliance_declarations(job_id);
   CREATE TABLE IF NOT EXISTS debt_instruments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL REFERENCES jobs(id),
@@ -428,6 +435,7 @@ module.exports = function initSchema(db) {
     status TEXT NOT NULL DEFAULT 'ACTIVE',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX IF NOT EXISTS idx_debt_instruments_job ON debt_instruments(job_id);
   CREATE TABLE IF NOT EXISTS contract_rfps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     shipper_id INTEGER NOT NULL REFERENCES users(id),
@@ -442,6 +450,7 @@ module.exports = function initSchema(db) {
     awarded_carrier_id INTEGER REFERENCES users(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX IF NOT EXISTS idx_contract_rfps_shipper ON contract_rfps(shipper_id);
   CREATE TABLE IF NOT EXISTS rfp_bids (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     rfp_id INTEGER NOT NULL REFERENCES contract_rfps(id) ON DELETE CASCADE,
@@ -452,6 +461,7 @@ module.exports = function initSchema(db) {
     status TEXT NOT NULL DEFAULT 'PENDING',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX IF NOT EXISTS idx_rfp_bids_rfp ON rfp_bids(rfp_id);
   CREATE TABLE IF NOT EXISTS rfp_milestones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     rfp_id INTEGER NOT NULL REFERENCES contract_rfps(id) ON DELETE CASCADE,
@@ -461,6 +471,7 @@ module.exports = function initSchema(db) {
     status TEXT NOT NULL DEFAULT 'PENDING',
     invoice_id INTEGER REFERENCES invoices(id)
   );
+  CREATE INDEX IF NOT EXISTS idx_rfp_milestones_rfp ON rfp_milestones(rfp_id);
   CREATE TABLE IF NOT EXISTS fuel_advances (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL REFERENCES jobs(id),
@@ -514,7 +525,7 @@ module.exports = function initSchema(db) {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     transaction_id INTEGER NOT NULL REFERENCES ledger_transactions(id) ON DELETE CASCADE,
     account_code TEXT NOT NULL REFERENCES ledger_accounts(code),
-    amount_minor INTEGER NOT NULL CHECK (amount_minor != 0),
+    amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
     currency TEXT NOT NULL DEFAULT 'AED',
     side TEXT NOT NULL CHECK (side IN ('DEBIT','CREDIT')),
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -603,6 +614,26 @@ module.exports = function initSchema(db) {
   addColumn('users', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
   addColumn('jobs', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
   addColumn('contract_rfps', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
+
+  // Payment tiers — a job's escrow/checkout model, set at posting time.
+  // SPOT_ESCROW (the default, and today's only behavior) escrows the full
+  // price at award, before pickup. PAY_ON_DELIVERY defers that to the
+  // DELIVERED transition instead — see award.service.js and
+  // job.service.js's updateJobStatus. CONTRACT_CREDIT and OFF_PLATFORM
+  // skip per-job escrow entirely; CONTRACT_CREDIT's running credit-limit
+  // ledger is deliberately not built yet, this column just lets a job be
+  // tagged as belonging to that model without per-job escrow blocking it.
+  // Every existing job backfills to SPOT_ESCROW via this DEFAULT, so
+  // today's behavior is byte-for-byte unchanged for anything already in
+  // the database.
+  addColumn('jobs', 'payment_tier', "payment_tier TEXT NOT NULL DEFAULT 'SPOT_ESCROW'");
+  // Shipper-side payment-history signal — distinct from a carrier's
+  // rating_avg (a delivery-quality rating in the other direction) and
+  // named separately on purpose so the two are never conflated. Not yet
+  // computed from real signals or gated on anywhere; the field exists so
+  // payment_tier eligibility has something concrete to check against once
+  // that gating is built.
+  addColumn('profiles', 'trust_score', 'trust_score REAL NOT NULL DEFAULT 5.0');
 
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');

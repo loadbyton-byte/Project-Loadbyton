@@ -1,0 +1,31 @@
+.git
+.github
+.claude
+.vscode
+
+**/node_modules
+**/dist
+**/build
+**/coverage
+
+# Local env files and secrets — the image gets its config from real
+# environment variables at runtime, never a baked-in .env
+.env
+.env.*
+!.env.example
+
+# Local SQLite DB + uploaded files — never ship dev data into an image
+server/data
+*.db
+*.sqlite
+*.sqlite3
+
+# Docs, tests, tooling — not needed at runtime
+docs
+e2e
+**/*.test.js
+**/*.spec.js
+*.md
+
+npm-debug.log*
+.DS_Store

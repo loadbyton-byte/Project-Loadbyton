@@ -18,6 +18,9 @@ function zkCommit(manifest){
 router.post('/api/jobs/:id/compliance', auth(['SHIPPER','ADMIN']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return sendError(res,404,'Job not found');
+  // Was missing — any authenticated SHIPPER could file a customs
+  // declaration against any other shipper's job by id.
+  if(req.user.role!=='ADMIN' && job.shipper_id!==req.user.id) return sendError(res,403,'Not your job');
   const { hsCode, hs_code, manifest } = req.body||{};
   const hs=hsCode||hs_code;
   if(!validateHsCode(hs)) return sendError(res,400,'hsCode must be 6-10 digit HS classification');
@@ -41,6 +44,12 @@ router.post('/api/compliance/:id/clear', auth(['ADMIN']), async (req,res)=>{
   res.json({ declaration: d });
 });
 router.get('/api/jobs/:id/compliance', auth(), async (req,res)=>{
+  const job = await db.prepare('SELECT shipper_id, carrier_id FROM jobs WHERE id=?').get(req.params.id);
+  if(!job) return sendError(res,404,'Job not found');
+  // Was missing entirely — any logged-in user could read another
+  // company's HS code / customs manifest-hash declarations by job id.
+  const permitted = req.user.role==='ADMIN' || job.shipper_id===req.user.id || job.carrier_id===req.user.id;
+  if(!permitted) return sendError(res,403,'Not permitted');
   const rows=await db.prepare('SELECT * FROM compliance_declarations WHERE job_id=? ORDER BY created_at DESC').all(req.params.id);
   res.json({ declarations: rows });
 });

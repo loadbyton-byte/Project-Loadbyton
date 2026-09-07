@@ -43,10 +43,6 @@ jobs:
         working-directory: server
         run: npx tsc --noEmit
 
-      - name: Lint server
-        working-directory: server
-        run: npm run lint 2>&1 | head -n 100 || echo "lint skipped"
-
       - name: OpenAPI validation
         working-directory: server
         run: node -e "const yaml=require('yaml'); const fs=require('fs'); yaml.parse(fs.readFileSync('../docs/openapi.yaml','utf8')); console.log('openapi valid')"
@@ -59,15 +55,38 @@ jobs:
 
       - name: Security audit (server)
         working-directory: server
-        run: npm audit --audit-level=moderate || echo "audit found issues — review required"
+        run: npm audit --audit-level=moderate
 
-      - name: Run k6 load baseline (smoke)
+      # NOTE: the three steps below are intentionally advisory, not gates.
+      # Each needs real setup before it can safely block a merge:
+      #   - Lint: `npm run lint` in server/ references eslint, which isn't
+      #     an installed dependency or configured here — needs an ESLint
+      #     config added and the resulting findings triaged first.
+      #   - k6: the load script targets a running app server, which no
+      #     step here starts — needs a "boot the app in the background,
+      #     wait for /api/health" step before this can measure anything.
+      #   - Playwright: needs `npx playwright install --with-deps` (browser
+      #     binaries) and the same running-server step as k6.
+      # Tracked as follow-up work, not silently treated as "passing" — each
+      # failure below prints why it didn't run rather than being swallowed.
+      - name: Lint server (advisory — not yet a gate, see note above)
+        working-directory: server
         run: |
-          docker --version >/dev/null 2>&1 && docker run --rm -v $PWD/k6:/scripts grafana/k6 run /scripts/load.js --vus 5 --duration 10s || echo "k6 smoke skipped (docker not available in CI image)"
+          npm run lint 2>&1 | head -n 100
+          echo "not enforced -- eslint is not configured for server/ yet"
+
+      - name: Run k6 load baseline (advisory — not yet a gate, see note above)
+        run: |
+          if docker --version >/dev/null 2>&1; then
+            docker run --rm -v $PWD/k6:/scripts grafana/k6 run /scripts/load.js --vus 5 --duration 10s || echo "not enforced: k6 has no running server to hit in this job yet"
+          else
+            echo "not enforced: docker unavailable in this runner"
+          fi
 
       - name: Install Playwright
         working-directory: e2e
         run: npm ci 2>/dev/null || npm install
 
-      - name: Run Playwright E2E
-        run: npx playwright test --reporter=list 2>/dev/null || echo "playwright e2e skipped (no browser in CI)"
+      - name: Run Playwright E2E (advisory — not yet a gate, see note above)
+        run: |
+          npx playwright test --reporter=list || echo "not enforced -- no browser binaries installed and no running server in this job yet"

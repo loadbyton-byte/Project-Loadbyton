@@ -4,7 +4,19 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 
 - Auth: **cookie session**. Login once (`POST /api/auth/login`) — the `lb_session` HttpOnly cookie is sent automatically. No `Authorization` header. All fetches from the SPA use `credentials: 'include'`.
 - Content type: `application/json`. Every JSON body is `express.json()` parsed.
-- Errors: non-2xx responses carry `{ "error": "message" }`.
+- Errors: non-2xx responses carry a structured envelope, not a bare string:
+  ```json
+  {
+    "success": false,
+    "error": "message",
+    "code": "VALIDATION_FAILED",
+    "message": "message",
+    "_legacy": { "error": "message" },
+    "errorDetails": { "code": "VALIDATION_FAILED", "message": "message" },
+    "requestId": "..."
+  }
+  ```
+  A client should check `success`/`code` (stable, machine-readable) rather than treating `error` as the only field — `error` is kept as a plain string for backwards compat (older clients read it directly), and `_legacy`/`errorDetails` are transitional duplicates from the envelope migration. See `server/lib/http.js` (`sendError`) and `server/lib/apiResponse.js` (`apiResponse.error`).
 - Roles referenced below: `SHIPPER`, `CARRIER`, `ADMIN`.
 - The public endpoints (`/api/health`, `/api/public/*`) need no auth.
 
@@ -147,11 +159,16 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
 - **Auth:** session (job participant, or admin; `OPEN` jobs visible to carriers)
 - **200** `{ job }` — job plus `bids[]`, `documents[]`, `messages[]`, `payout`. For a non-awarded `OPEN` job, competitor bids are masked (no amounts) until award — contact gating.
 
+### `PATCH /api/jobs/:id`
+- **Auth:** `SHIPPER`, job owner, seat `OPS`, job `OPEN` **and no pending bid on it yet**
+- **Body:** any subset of `{ shipmentType, importPickupTerminal, importUnloadingLocation, importEmptyReturnLocation, exportEmptyPickupLocation, exportLoadingLocation, exportDepositTerminal, pickupTerminal, deliveryArea, deliveryAddress, containerNumber, readyAt, deadline, targetPriceAed, notes, containerCount, truckCount, cargoWeightTons, pickupLat, pickupLng, pickupAddressDetail, deliveryLat, deliveryLng, deliveryAddressDetail, loadingLocation, deliveryLocation }` — `shipmentType`, if sent, is re-validated against `IMPORT`\|`EXPORT`\|`LOCAL`; a lat/lng pair, if sent, must be valid UAE coordinates.
+- **200** `{ job }` — edits an already-posted job in place rather than requiring cancel-and-repost. **403** if not the owner, not `OPEN`, or a carrier already has a `PENDING` bid on it (withdraw/reject bids first, or cancel and repost). **400** invalid `shipmentType` or lat/lng.
+
 ### `POST /api/jobs/:id/bids`
 - **Auth:** `CARRIER` **+ verified profile** + job `OPEN`
-- **Body:** `{ amountAed, etaMinutes (1–600), truckType, notes }` — `truckType` is free text (stored as-is); the client UI offers the equipment values as a picklist defaulting to the job's own requirement, but the field isn't server-validated against that enum. Driver name/phone are **not** collected at bid time — they're only ever captured post-award via `PATCH /api/jobs/:id/driver` (contact-sharing follows the confirmed business relationship).
+- **Body:** `{ amountAed, etaAt, truckType, notes }` — `etaAt` is an ISO date/time (not a minute count): it can't be more than an hour in the past (`etaAt cannot be more than an hour in the past`) or more than 90 days out (`etaAt cannot be more than 90 days out`). `truckType` is free text (stored as-is); the client UI offers the equipment values as a picklist defaulting to the job's own requirement, but the field isn't server-validated against that enum. Driver name/phone are **not** collected at bid time — they're only ever captured post-award via `PATCH /api/jobs/:id/driver` (contact-sharing follows the confirmed business relationship).
 - **201** `{ bid }`
-- **403** unverified carrier or job not open (`{ "error": "Carrier verification required to bid." }`).
+- **403** unverified carrier or job not open (`{ "error": "Carrier verification required to bid." }`). **409** if the carrier already has a `PENDING` bid on this job.
 
 ### `GET /api/bids/mine`
 - **Auth:** `CARRIER`
@@ -371,7 +388,415 @@ All routes below require `auth(['ADMIN'])`.
 
 ---
 
-## 7. Status codes cheat sheet
+## 7. Compliance (customs declarations)
+
+### `POST /api/jobs/:id/compliance`
+- **Auth:** `SHIPPER`\|`ADMIN`, job's own shipper (or admin)
+- **Body:** `{ hsCode | hs_code, manifest? }` — `hsCode` must be a 6–10 digit HS classification code. `manifest` defaults to `{ job: job_code, hs, origin: pickup_terminal, dest: delivery_area }` if omitted.
+- **201** `{ declaration, manifest }` — files a customs declaration; commits a simulated ZKP hash (`manifestHash`/`zkProof`) and fires an async webhook to `TAX_CLEARING_WEBHOOK` if configured. **403** if not the job's shipper. **400** invalid HS code.
+
+### `POST /api/compliance/:id/clear`
+- **Auth:** `ADMIN`
+- **200** `{ declaration }` — marks a declaration `CLEARED`. **404** if not found.
+
+### `GET /api/jobs/:id/compliance`
+- **Auth:** session, job's shipper/carrier or admin
+- **200** `{ declarations: [...] }` — every declaration filed against the job. **403** if not a party to the job.
+
+---
+
+## 8. EDI / consignment ingestion
+
+### `POST /api/edi/ingest`
+- **Auth:** `SHIPPER`\|`ADMIN`
+- **Body:** `{ source: "EDI_304"|"EDI_310"|"CARGO_XML", data, mode?, linkedJobId? }` — `data` is mapped into a `global_consignments` row keyed by an id derived from the payload (BOL/invoice/AWB, or a generated fallback). `linkedJobId`, if sent by a non-admin, must be one of the caller's own jobs.
+- **201** `{ consignment }` — upserted (insert-or-update) by id. **400** missing/invalid `source`/`data`. **403** `linkedJobId` isn't the caller's own job.
+
+### `GET /api/edi/consignments`
+- **Auth:** `SHIPPER`\|`ADMIN`
+- **200** `{ consignments: [...] }` (max 100, newest first) — SHIPPER sees only consignments linked to one of their own jobs; ADMIN sees everything.
+
+### `GET /api/edi/consignments/:id`
+- **Auth:** `SHIPPER`\|`ADMIN`
+- **200** `{ consignment, linkedJob: { job_code, status } | null }` — **403** unless the caller is admin or the consignment is linked to one of their own jobs. **404** unknown id.
+
+### `POST /api/edi/consignments/:id/transition`
+- **Auth:** `SHIPPER`\|`ADMIN`, must own the linked job (or be admin)
+- **Body:** `{ status: "CREATED"|"IN_TRANSIT"|"DELIVERED"|"COMPLETED"|"CANCELLED" }`
+- **200** `{ consignment }` — advances the consignment's state machine. **400** invalid status. **403**/**404** as above.
+
+---
+
+## 9. RFP / contract-lane bidding
+
+### `POST /api/rfps`
+- **Auth:** `SHIPPER`, seat `OPS`
+- **Body:** `{ title, description?, origin, destination, totalContainers, durationMonths (1–60), budgetAed }`
+- **201** `{ rfp }` — creates an enterprise contract-lane RFP and auto-generates one `rfp_milestones` row per month, splitting `budgetAed` evenly (remainder on the last milestone). **400** missing/invalid fields.
+
+### `GET /api/rfps`
+- **Auth:** session
+- **200** `{ rfps: [...] }` — SHIPPER sees only their own; ADMIN sees all; CARRIER sees demo-or-real RFPs matching their own demo status.
+
+### `GET /api/rfps/:id`
+- **Auth:** session
+- **200** `{ rfp, bids, milestones }` — the owning shipper and admin see every bid on the RFP; any other carrier sees only their own bid, never a competitor's pricing/proposal. **403** a non-owning shipper. **404** unknown id.
+
+### `POST /api/rfps/:id/bids`
+- **Auth:** `CARRIER`, RFP `status = OPEN`
+- **Body:** `{ amountAed, etaDays?, proposal? }` (`etaDays` defaults to 30)
+- **201** `{ ok: true }` — notifies the RFP's shipper. **400** RFP not open, or invalid `amountAed`.
+
+### `POST /api/rfps/:id/award`
+- **Auth:** `SHIPPER`, RFP owner
+- **Body:** `{ bidId }`
+- **200** `{ ok: true }` — awards the RFP to a bid (RFP → `AWARDED`, winning bid → `ACCEPTED`, others → `REJECTED`). **403** not the RFP's owner. **404** unknown bid.
+
+---
+
+## 10. Telematics (hardware ingestion)
+
+### `POST /api/telematics/ingest`
+- **Auth:** none (device-keyed) — requires `x-device-token`, `x-internal-key`, or `x-api-key` matching `TELEMATICS_DEVICE_KEY` or `INTERNAL_KEY`; rate-limited to 120 requests/min/IP. **401** if neither env var is configured (fail-closed) or the key doesn't match.
+- **Body:** `{ deviceId, jobId?, latitude|lat, longitude|lng, speed?, temperature?, fuelLevel? }`
+- **200** `{ ok: true, logged: deviceId }` — appends to `telematics_logs`; if `jobId` resolves to an `IN_TRANSIT` job, also mirrors the ping into `location_logs` for the unified map view.
+
+### `GET /api/telematics/logs`
+- **Auth:** session, or `x-internal-key`/`ADMIN` for unfiltered access
+- **Query:** `?jobId=&deviceId=&limit=` (max 200)
+- **200** `{ logs: [...] }` — a non-privileged shipper/carrier **must** pass `jobId` for a job they're a party to (**400**/**403** otherwise); `deviceId` filtering is admin/internal-key only.
+
+---
+
+## 11. Predictive ETA (ML)
+
+### `POST /api/ml/predict-eta`
+- **Auth:** session
+- **Body:** `{ jobId? }` or `{ origin, destination }`, plus optional `vesselLat`, `vesselLng`, `weatherSeverity`
+- **200** `{ prediction: { baseHours, weatherPenalty, congestion, predictedHours, alternatives, inputs } }` — a deterministic mock pipeline standing in for real AIS/NOAA/port-delay feeds. **400** neither `jobId` nor `origin`+`destination` given.
+
+### `POST /api/ml/ingest/ais`
+- **Auth:** `ADMIN`
+- **Body:** `{ positions: [{ mmsi, lat, lng, speed, course }] }`
+- **200** `{ ingested, status }` — stub ingestion (no persistence yet; real version would feed TimescaleDB/PostGIS).
+
+### `POST /api/ml/ingest/noaa`
+- **Auth:** `ADMIN`
+- **Body:** `{ feeds }`
+- **200** `{ ingested, status }` — stub ingestion.
+
+---
+
+## 12. Branded documents (generated PDFs/HTML)
+
+Five printable, job-scoped documents beyond the tax invoice (`GET /api/invoices/:id` in §5). All are `GET`, `auth()`-gated to the job's shipper/carrier/admin, and return `text/html` (browser print-to-PDF).
+
+### `GET /api/jobs/:id/documents/settlement`
+- **200** rendered settlement statement. **404** if no payout exists yet for the job.
+
+### `GET /api/jobs/:id/documents/load-confirmation`
+- **200** rendered load confirmation. **404** if the job hasn't been awarded yet.
+
+### `GET /api/jobs/:id/documents/pod-certificate`
+- **200** rendered POD certificate (uses the most recent `POD`-type `job_documents` row, if any).
+
+### `GET /api/jobs/:id/documents/eir-summary`
+- **200** rendered EIR (Equipment Interchange Receipt) summary from every `EIR`-type document on the job.
+
+### `GET /api/jobs/:id/documents/dispute-notice`
+- **200** rendered dispute notice. **404** if the job has no `RESOLVED` dispute on file.
+
+---
+
+## 13. Fleet: driver roster, seats, driver documents
+
+### `GET /api/fleet/overview`
+- **Auth:** `CARRIER`
+- **200** `{ jobs: [{ job_code, status, driver, delivered_at }] }` — thin summary of the carrier's last 50 jobs.
+
+### `GET /api/fleet/drivers`
+- **Auth:** `CARRIER`
+- **200** `{ drivers: [...] }` — active roster drivers, own carrier only.
+
+### `POST /api/fleet/drivers`
+- **Auth:** `CARRIER`, seat `OPS`
+- **Body:** `{ name, phone, licenseNumber?, licenseExpiry? }` — `phone` must normalize to a UAE mobile; `licenseNumber` (if given) is 5–15 letters/digits/dashes with at least one digit.
+- **201** `{ driver }` — registers a driver once, to be picked (not retyped) at award time via `PATCH /api/jobs/:id/driver`.
+
+### `PATCH /api/fleet/drivers/:id`
+- **Auth:** `CARRIER`, seat `OPS`, own driver
+- **Body:** any subset of `{ name, phone, licenseNumber, licenseExpiry }`
+- **200** `{ driver }`. **404** not the caller's driver.
+
+### `DELETE /api/fleet/drivers/:id`
+- **Auth:** `CARRIER`, seat `OPS`, own driver
+- **200** `{ ok: true }` — soft delete (`is_active=0`); a past job's `assigned_driver_id` may still reference the row, so it's deactivated, never removed.
+
+### `POST /api/fleet/drivers/:id/seat`
+- **Auth:** `CARRIER`, **org root only** (no seat role can call this)
+- **Body:** `{ password? }` (min 8 chars if given; otherwise a random one is generated)
+- **201** `{ email, password }` — provisions a `DRIVER` seat login for a roster driver (email is a synthetic `<phone>@drivers.loadbyton.internal` address, never shown to the driver). The password is returned exactly once and never stored/retrievable again. **400** the driver already has a login.
+
+### `POST /api/fleet/drivers/:id/documents/upload-url`
+- **Auth:** `CARRIER`, seat `OPS`, own driver
+- **Body:** `{ mimeType }`
+- **200** a presigned S3 PUT URL, or `{ useBase64: true }` if S3 isn't configured.
+
+### `POST /api/fleet/drivers/:id/documents`
+- **Auth:** `CARRIER`, seat `OPS`, own driver
+- **Body:** `{ docType: "LICENSE"|"VEHICLE", mimeType, fileBase64|storageKey }`
+- **200** `{ driver }` (updated with the new document's storage path).
+
+### `GET /api/fleet/drivers/:id/documents/:docType`
+- **Auth:** session — the driver's own carrier, a shipper whose job that driver is assigned to, or admin
+- **200** the file bytes for `docType` (`license`\|`vehicle`). **403** not permitted. **404** no document uploaded.
+
+---
+
+## 14. Driver (seat) job view
+
+### `GET /api/driver/job`
+- **Auth:** `CARRIER` session **acting as a `DRIVER` seat**
+- **200** `{ job: { id, job_code, status, pickup_terminal, delivery_area, delivery_address, ready_at, deadline, cargo_type, equipment_type, pickup_lat, pickup_lng, delivery_lat, delivery_lng, updated_at } | null }` — the single job currently assigned to this driver (a deliberately small payload — a driver seat sees nothing else, per `middleware/auth.js`'s `DRIVER_SEAT_ALLOWED_ROUTES`). **403** if the acting seat isn't a `DRIVER`.
+
+---
+
+## 15. Enterprise: e-token, EIR photos, detention, fuel advance
+
+### `POST /api/jobs/:id/etoken`
+- **Auth:** `CARRIER`, own job
+- **Body:** `{ token }` (min 6 chars)
+- **200** `{ ok: true }` — records the DP World E-Token gate slot and notifies the shipper.
+
+### `POST /api/jobs/:id/eir`
+- **Auth:** `CARRIER`, own job
+- **Body:** `{ photos: [ {title?, fileBase64|storageKey, mimeType}, ... ] }` — exactly 3, in order Seal / Right Side / Left Side.
+- **200** `{ ok: true, photos: [storagePath, storagePath, storagePath] }` — stores each as an `EIR`-type `job_documents` row and on `jobs.eir_photos`.
+
+### `GET /api/jobs/:id/detention`
+- **Auth:** session, job participant or admin
+- **200** `{ jobId, freeDays, rateAed, daysSinceDelivery, daysLeft, status: "OK"|"DUE_TOMORROW"|"DUE_TODAY"|"OVERDUE", alarm }` — demurrage/detention exposure check.
+
+### `POST /api/system/detention-alarms`
+- **Auth:** `x-internal-key` header matching `INTERNAL_KEY`, or `ADMIN` session
+- **200** `{ alerted }` — scans delivered/in-flight jobs one day before their free-time window ends and notifies the carrier (WhatsApp/SMS stub + in-app).
+
+### `POST /api/jobs/:id/fuel-advance`
+- **Auth:** `CARRIER`, own job
+- **Body:** `{ type: "FUEL"|"SALIK" }`
+- **200** `{ ok: true, amount, type }` — one advance per job, 20% of the agreed freight price. **400** already taken, or no agreed price to advance against.
+
+### `GET /api/jobs/:id/fuel-advances`
+- **Auth:** session, job's own carrier or admin
+- **200** `{ advances: [...] }`.
+
+### `GET /api/carrier/fleet`
+- **Auth:** `CARRIER`
+- **200** `{ fleet: [{ driver, jobs, completed, completionRate, podClean, avgHours }] }` — per-driver performance rollup from the carrier's last 100 jobs.
+
+---
+
+## 16. Ledger: debt-instrument tokenization
+
+### `POST /api/jobs/:id/tokenize`
+- **Auth:** `SHIPPER`\|`ADMIN`, job's own shipper (or admin)
+- **Body:** `{ blNumber, faceValueAed? }` (defaults to the job's agreed/target price)
+- **201** `{ instrument, risk: { score, rateBps, lane } }` — creates a `debt_instruments` row with a computed risk score (rating, completed-jobs, lane stability, country risk) and interest rate. **400** missing `blNumber`/face value.
+
+### `GET /api/ledger/instruments`
+- **Auth:** `ADMIN`
+- **200** `{ instruments: [...] }` (max 100, unfiltered platform-wide).
+
+### `GET /api/jobs/:id/instruments`
+- **Auth:** session, job's shipper/carrier or admin
+- **200** `{ instruments: [...] }` for that job.
+
+---
+
+## 17. Verification: TRN & carrier gate
+
+### `GET /api/verify/trn/:trn`
+- **Auth:** session
+- **200** external TRN registry lookup result (`trn` must be 15 digits — **400** otherwise).
+
+### `POST /api/verify/check`
+- **Auth:** session
+- **Body:** `{ trnNumber, tradeLicenseNumber? }`
+- **200** `{ trn, licenceValid, overall, canAccessOpenLoads }` — checks TRN against the external registry and the trade licence format; caches a success so the carrier can access OpenLoads.
+
+### `GET /api/verify/gate`
+- **Auth:** `CARRIER`
+- **200** `{ allowed, reason? }` or `{ allowed, verification }` — the server-side gate behind carrier bidding: already-verified carriers pass automatically; otherwise the carrier's on-file TRN is checked externally (an encrypted TRN on file that hasn't been separately verified via `POST /api/verify/check` reports `allowed: false`).
+
+---
+
+## 18. Cross-job message threads
+
+Distinct from the job-scoped `GET`/`POST /api/jobs/:id/messages` in §4 — this is the account-wide inbox across every job the caller is a party to.
+
+### `GET /api/messages/threads`
+- **Auth:** session (not reachable by a `DRIVER` seat — one job, no cross-job history)
+- **200** `{ threads: [{ id, jobId, jobCode, jobStatus, otherRole, lastMessage, unreadCount }] }` — every thread the caller is a party to, across all their jobs, newest-activity first.
+
+### `POST /api/messages/threads/:id/read`
+- **Auth:** session, thread participant
+- **200** `{ ok: true }` — marks every message in the thread read for the caller. **403** not a participant. **404** unknown thread.
+
+---
+
+## 19. Profile documents (company registration docs)
+
+### `POST /api/profile/documents/upload-url`
+- **Auth:** `SHIPPER`\|`CARRIER`, seat `OPS`
+- **Body:** `{ docType: "TRADE_LICENSE"|"INSURANCE", mimeType }`
+- **200** a presigned S3 PUT URL, or `{ useBase64: true }`.
+
+### `POST /api/profile/documents`
+- **Auth:** `SHIPPER`\|`CARRIER`, seat `OPS`
+- **Body:** `{ docType, mimeType, fileBase64|storageKey }`
+- **200** `{ profile }` — uploading an `INSURANCE` doc also flips `profiles.insurance_uploaded=1`.
+
+### `GET /api/profile/documents/:docType` · `GET /api/profile/documents/:docType/:userId`
+- **Auth:** session — own document (no `:userId`), or any user's as admin (`:userId` form)
+- **200** the file bytes. **403** not permitted. **404** no document uploaded.
+
+### `GET /api/documents/my-jobs`
+- **Auth:** `SHIPPER`\|`CARRIER`
+- **200** `{ jobs: [{ id, jobCode, status, docCount }] }` — every job the caller is a party to that has **at least one** attached document (inner join — a full job list with a zero count isn't the point of this rollup).
+
+---
+
+## 20. Currency & per-job tax
+
+### `GET /api/currency/rates`
+- **Auth:** none
+- **200** `{ table }` — the country → VAT-rate/currency table.
+
+### `POST /api/jobs/:id/currency`
+- **Auth:** `SHIPPER`, job owner, job `OPEN`\|`DRAFT`
+- **Body:** `{ countryCode?, currency? }` (`countryCode` defaults to `AE`; `currency` derived from country if omitted)
+- **200** `{ ok: true, currency, countryCode, tax }` — recomputes and stores the job's country/currency/VAT. **400** job not editable in this regard.
+
+---
+
+## 21. Stripe payments (Connect, checkout, webhooks)
+
+Beyond the processor-agnostic `POST /api/jobs/:id/payment-checkout` and `POST /api/webhooks/payments` in §4 (`docs/PAYMENTS.md`), Stripe has its own dedicated routes:
+
+### `POST /api/stripe/connect/onboard`
+- **Auth:** `CARRIER`
+- **200** `{ accountId, url, mock }` — provisions (or reuses) a Stripe Express Connect account and returns a hosted onboarding link. **502** Stripe error.
+
+### `GET /api/stripe/connect/status`
+- **Auth:** `CARRIER`
+- **200** `{ accountId, charges_enabled, payouts_enabled, details_submitted, mock, onboarded }` (or `{ accountId: null, onboarded: false }` if never onboarded).
+
+### `POST /api/jobs/:id/pay`
+- **Auth:** `SHIPPER`, job owner, job `AWARDED`\|`PICKED_UP`\|`IN_TRANSIT`
+- **200** `{ paymentIntent, amount, buffer, total }` — creates a Stripe PaymentIntent for the agreed price plus a 10% incidentals buffer held automatically.
+
+### `POST /api/webhooks/stripe`
+- **No auth** — Stripe's callback, raw body + `stripe-signature` verified; idempotent via `payment_webhook_events` (unique on provider + event id).
+- On `payment_intent.succeeded`: escrow `HELD → HELD` confirmation path, updates the matching job/payout atomically and audits `ESCROW_HELD`. **200** `{ received: true }` always (Stripe must not retry on our application errors — malformed events just don't act).
+
+### `POST /api/webhooks/stripe/mock-confirm`
+- **Auth:** `ADMIN`, only when the active payment provider is in test/mock mode
+- **Body:** `{ processorPaymentRef }`
+- **200** `{ ok: true, escrow: "HELD", hash }` — manually simulates a successful Stripe payment for demos/tests without a real webhook. **403** outside test mode.
+
+### `POST /api/jobs/:id/release-payout`
+- **Auth:** `SHIPPER`\|`ADMIN`, job owner (shipper) or admin, job `DELIVERED`\|`COMPLETED`, escrow not `DISPUTED`
+- **200** `{ ok: true, transfer, net, hash }` — executes the real Stripe transfer to the carrier's Connect account. Requires 2-of-3 HSM multi-signatures via the `x-hsm-sigs` header when HSM keys are configured. **403** missing/invalid multi-sig. **409** a release for this payout is already in progress.
+
+---
+
+## 22. Live location (GPS pings)
+
+### `POST /api/jobs/:id/location`
+- **Auth:** `CARRIER`, own job, job `IN_TRANSIT`
+- **Body:** `{ lat, lng, speed?, heading? }`
+- **200** `{ ok: true }` — the carrier posts a live GPS ping (client polls the browser Geolocation API every ~3 min while in transit). **400** invalid/missing `lat`/`lng`.
+
+### `GET /api/jobs/:id/locations`
+- **Auth:** session, job participant or admin
+- **200** `{ locations: [...] }` — the job's last 100 GPS pings, newest first.
+
+---
+
+## 23. Auth: verification, password reset, data rights
+
+### `GET /api/auth/verify-email`
+- **Auth:** none
+- **Query:** `?token=`
+- **200** `{ ok: true }` — confirms the account's email. **400** invalid/expired token.
+
+### `POST /api/auth/forgot-password`
+- **Auth:** none (IP rate-limited)
+- **Body:** `{ email }`
+- **200** `{ ok: true, message }` — always the same generic response regardless of whether the email exists (no account-enumeration signal); a real account gets a 1-hour reset-link email.
+
+### `POST /api/auth/reset-password`
+- **Auth:** none
+- **Body:** `{ token, password }`
+- **200** `{ ok: true }` — sets the new password and invalidates every existing session for that user. **400** invalid/expired token or weak password.
+
+### `GET /api/me/export`
+- **Auth:** session
+- **200** `{ user, jobs, bids, payouts, notifications, audit }` — full personal-data export (PDPL data-portability right); decrypts `trn_number`/`iban` in the response.
+
+### `DELETE /api/me`
+- **Auth:** session
+- **200** `{ ok: true, message }` — self-service account deletion: anonymizes the user/profile row (email → `deleted-<id>@loadbyton.invalid`, PII cleared) rather than hard-deleting, so existing jobs/bids keep referential integrity; kills all sessions.
+
+---
+
+## 24. System: scheduling, admin bootstrap, key rotation
+
+### `POST /api/system/publish-scheduled`
+- **Auth:** `x-internal-key` header matching `INTERNAL_KEY`, or `ADMIN` session
+- **200** `{ ok: true, published }` — forces a pass of the scheduled-job publisher (also runs automatically every 60s).
+
+### `POST /api/system/setup-admin`
+- **Auth:** `x-setup-key` header matching `ADMIN_SETUP_KEY`; only works while **no** admin account exists yet
+- **Body:** `{ email, password, companyName? }`
+- **201** `{ ok: true, message }` — provisions the platform's first admin account; permanently a no-op (403) once any admin exists.
+
+### `POST /api/system/rotate-key`
+- **Auth:** `ADMIN`
+- **Body:** `{ keyId? }`
+- **200** `{ ok: true, message }` — audits an encryption-key-rotation intent; the actual re-encryption of at-rest fields is a manual runbook step (`docs/operations-runbook.md`), not performed by this route.
+
+---
+
+## 25. Admin additions: live ops board, document visibility, reconciliation
+
+### `GET /api/admin/live`
+- **Auth:** `ADMIN`
+- **200** `{ openJobs: [{ ...job, bids: [...] }], activeJobs: [...], recentActivity: [...] }` — a single real-time snapshot: every `OPEN` job with its live pending bids nested in, every `AWARDED`\|`PICKED_UP`\|`IN_TRANSIT` job (last 50), and the last 50 audit-log entries.
+
+### `GET /api/admin/documents`
+- **Auth:** `ADMIN`
+- **200** `{ companies: [{ id, role, companyName, verified, tradeLicenseDocPresent, insuranceDocPresent }] }` — presence flags only; the actual files are served by the existing owner/admin-gated file routes, not a parallel path here.
+
+### `GET /api/admin/documents/:userId`
+- **Auth:** `ADMIN`
+- **200** `{ company, drivers: [...], jobs: [...] }` — one company's full document picture: registration docs, every active driver's licence/vehicle doc presence (carriers only), and which jobs have attachments. **404** unknown/non-shipper-or-carrier user.
+
+### `GET /api/admin/reconciliation`
+- **Auth:** `ADMIN`
+- **200** ledger reconciliation run result (envelope via `apiResponse.success`) — audited as `RECONCILIATION_RUN`.
+
+---
+
+## 26. Job extras: cross-party thread view
+
+### `GET /api/jobs/:id/threads`
+- **Auth:** session, job participant
+- **200** `{ threads: [{ id, partyARole, partyBRole, otherRole, messages: [...] }], availableRecipientRoles }` — one entry per thread the caller is actually a party to on this job (multi-party: shipper/carrier/admin/driver), separate from the flat `GET /api/jobs/:id/messages` in §4, which stays unthreaded for `DISPUTED`-job correspondence.
+
+---
+
+## 27. Status codes cheat sheet
 
 | Code | Meaning |
 |---|---|
@@ -386,7 +811,7 @@ All routes below require `auth(['ADMIN'])`.
 
 ---
 
-## 8. Demo API flow (quick curl)
+## 28. Demo API flow (quick curl)
 
 ```bash
 BASE=http://localhost:4000/api
@@ -407,7 +832,7 @@ See `TUTORIAL.md` for the full demo walkthrough.
 
 ---
 
-## 9. Endpoints added beyond the original spec
+## 29. Endpoints added beyond the original spec
 
 Several routes exist beyond this document's original scope; the notable ones the
 Industrial Trust redesign pass newly wired into the UI (they were built and

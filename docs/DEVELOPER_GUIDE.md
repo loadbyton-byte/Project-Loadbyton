@@ -87,7 +87,7 @@ Now **http://localhost:4000** serves everything: the API, the built SPA, the SEO
 
 ## 6. Verification
 
-Automated test suite: run `cd server There is no automated test suite yet (tracked as test harness — see `docs/ROADMAP.md`). Verify the build by hand:There is no automated test suite yet (tracked as test harness — see `docs/ROADMAP.md`). Verify the build by hand: npm test` (isolated temp DB per run). Manual verification:
+Automated test suite: run `cd server && npm test` — spawns the real server against a fresh temp SQLite DB per run (`server/test/harness.js`), 45 tests as of this writing. Manual verification beyond that:
 
 ```bash
 curl -s localhost:4000/api/health
@@ -108,7 +108,7 @@ curl -s localhost:4000/api/public/lanes
 | `PLATFORM_LEGAL_NAME` | `Loadbyton` | Supplier legal name on tax invoices |
 | `ENCRYPTION_KEY` | none (required outside dev) | AES-256-GCM key for IBAN/TRN field encryption — see `server/lib/crypto.js` |
 | `WHATSAPP_ACCESS_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` | unset | Enables driver WhatsApp messaging (`server/lib/whatsapp.js`); safely no-ops and logs until both are set — see `docs/WHATSAPP_SETUP.md` (TODO-4) |
-| `PAYMENTS_PROVIDER` | `internal` | Payment processor mode: `internal` (escrow is bookkeeping only — the pre-existing admin confirm-receipt / mark-transferred flows), `mock` (simulated processor for dev/CI — full end-to-end payment flow via signature-verified webhooks), or `telr` (real charges/refunds via Telr hosted checkout) — see `docs/PAYMENTS.md` |
+| `PAYMENTS_PROVIDER` | `internal` | Payment processor mode: `internal` (escrow is bookkeeping only — the pre-existing admin confirm-receipt / mark-transferred flows), `mock` (simulated processor for dev/CI — full end-to-end payment flow via signature-verified webhooks), `telr` (real charges/refunds via Telr hosted checkout, UAE-specific), or `stripe` (real charges/refunds via Stripe Connect — hosted checkout, webhook-funded escrow, and Connect-transfer payouts to carriers; needs `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`) — see `docs/PAYMENTS.md` |
 | `PAYMENTS_WEBHOOK_SECRET` | unset | HMAC secret that verifies webhook callbacks in `mock` mode (and the mock side of any provider) |
 | `TELR_STORE_ID` / `TELR_AUTH_KEY` | unset | Telr merchant credentials (sandbox first: set `TELR_TEST=1`) |
 | `TELR_WEBHOOK_SECRET` | unset | Secret used to verify Telr's signed callbacks — **VERIFY the canonicalization against Telr's docs before go-live** (`server/lib/payments.js`) |

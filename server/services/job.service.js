@@ -77,6 +77,28 @@ async function updateJobStatus(jobId, nextStatus, req) {
     throw e;
   }
 
+  // Money-before-move gate — previously a carrier could mark a job
+  // PICKED_UP with zero check that payment was ever confirmed. Verified
+  // directly in award.service.js: escrow_status is set to 'HELD'
+  // UNCONDITIONALLY the instant a job is awarded — before any real
+  // payment attempt, let alone confirmation — so HELD alone proves
+  // nothing about whether money has actually moved. It only becomes
+  // 'FUNDED' once real receipt is confirmed: either a processor webhook
+  // (server/routes/stripe.routes.js) or, in today's internal-bookkeeping
+  // mode, an admin explicitly calling POST /api/admin/confirm-receipt
+  // (server/routes/admin.routes.js). The gate below requires FUNDED
+  // specifically — requiring only HELD would be a no-op, since every
+  // AWARDED SPOT_ESCROW job already has escrow_status='HELD' by
+  // definition. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM are defined
+  // by NOT requiring escrow before pickup — that's the whole point of
+  // those tiers — so they must never be blocked by this check.
+  const isSpotEscrowTier = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
+  if (nextStatus === 'PICKED_UP' && isSpotEscrowTier && job.escrow_status !== 'FUNDED') {
+    const e = new Error('Payment not yet confirmed — pickup unlocks once payment receipt is confirmed.');
+    e.status = 400;
+    throw e;
+  }
+
   // Primary status update via repository (uses repository to satisfy modularization)
   await jobRepository.updateStatus(id, { status: nextStatus });
 
@@ -115,7 +137,7 @@ async function updateJobStatus(jobId, nextStatus, req) {
       return true;
     });
     if (released) {
-      try { await issueInvoice(db, id); } catch {}
+      try { await issueInvoice(db, id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${id}:`, e); }
       if (job.carrier_id) {
         try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
       }

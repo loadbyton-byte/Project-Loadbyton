@@ -34,7 +34,16 @@ async function createTransfer({ amountAed, destination, jobCode }) {
 }
 async function constructWebhookEvent(rawBody, sig) {
   const s = getStripe();
-  if (!s) return JSON.parse(rawBody || '{}');
+  // Fail closed. This used to fall back to `JSON.parse(rawBody)` with no
+  // signature check at all whenever Stripe isn't configured (mock/internal/
+  // telr payment mode) — since POST /api/webhooks/stripe is mounted
+  // unconditionally regardless of PAYMENTS_PROVIDER, that meant anyone on
+  // the internet could POST an arbitrary payload and have it processed as
+  // a trusted, signed Stripe event (e.g. forging escrow into HELD). Mock
+  // payment confirmation has its own dedicated, ADMIN-gated,
+  // testMode-only route (POST /api/webhooks/stripe/mock-confirm) — this
+  // function has no legitimate reason to ever accept an unverified body.
+  if (!s) throw new Error('Stripe is not configured — this webhook cannot verify a signature and will not process the event');
   return s.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
 }
 // Hosted Checkout Session — the Stripe Connect marketplace flow. The

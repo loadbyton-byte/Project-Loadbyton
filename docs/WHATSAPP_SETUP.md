@@ -39,7 +39,8 @@ with everything else, per TODO-4's own framing.
    **Body:** `Hi {{1}}, you're assigned to pickup {{2}} at {{3}}. Reply here for gate pass details.`
 
    (`{{1}}` = driver name, `{{2}}` = job code, `{{3}}` = pickup terminal —
-   matches the `params` array passed in `server/index.js`'s award handler.)
+   matches the `params` array passed in `server/routes/job-lifecycle.routes.js`'s
+   award handler.)
 
 5. Once approved, set on the server:
 
@@ -52,7 +53,7 @@ with everything else, per TODO-4's own framing.
    once they're set — until then every call safely logs an intent and
    returns `{ sent: false, reason: 'not_configured' }`, and the existing
    in-app notification still fires regardless (see `notify()` in
-   `server/index.js`).
+   `server/lib/helpers.js`).
 
 ## Extending beyond the one template shipped here
 
