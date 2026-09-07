@@ -696,5 +696,12 @@ ALTER TABLE disputes ADD COLUMN IF NOT EXISTS split_shipper_pct REAL;
 ALTER TABLE disputes ADD COLUMN IF NOT EXISTS split_carrier_pct REAL;
 ALTER TABLE disputes ADD COLUMN IF NOT EXISTS police_report_filed INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE disputes ADD COLUMN IF NOT EXISTS police_report_reference TEXT;
+-- Carrier onboarding: RTA permit + haulage insurance — see server/schema.js
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rta_permit_number TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rta_permit_doc_storage_path TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rta_permit_doc_mime_type TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_doc_storage_path TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_doc_mime_type TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_expiry TEXT;
 
 COMMIT;

@@ -12,19 +12,25 @@ const { resolveUploadedFile } = require('../lib/helpers');
 const storage = require('../lib/storage');
 const router = require('express').Router();
 
-const DOC_COLUMN = { TRADE_LICENSE: 'trade_license_doc', INSURANCE: 'insurance_doc' };
+// RTA_PERMIT/HAULAGE_INSURANCE: additional carrier onboarding documents —
+// kept as distinct columns from INSURANCE (general business insurance;
+// haulage/goods-in-transit insurance is a materially different policy
+// type a shipper would want confirmed separately). Reuses this exact
+// mechanism rather than a parallel upload system.
+const DOC_COLUMN = { TRADE_LICENSE: 'trade_license_doc', INSURANCE: 'insurance_doc', RTA_PERMIT: 'rta_permit_doc', HAULAGE_INSURANCE: 'haulage_insurance_doc' };
+const DOC_TYPE_LIST = "'TRADE_LICENSE', 'INSURANCE', 'RTA_PERMIT', or 'HAULAGE_INSURANCE'";
 
 router.post('/api/profile/documents/upload-url', auth(['SHIPPER', 'CARRIER']), requireSeatRole(['OPS']), asyncHandler(async (req, res) => {
   const { docType, mimeType } = req.body || {};
-  if (!DOC_COLUMN[docType]) return sendError(res, 400, "docType must be 'TRADE_LICENSE' or 'INSURANCE'");
+  if (!DOC_COLUMN[docType]) return sendError(res, 400, `docType must be ${DOC_TYPE_LIST}`);
   const presigned = await storage.getPresignedUploadUrl(`profile/${req.user.id}`, mimeType);
   res.json(presigned || { useBase64: true });
 }));
 
 router.post('/api/profile/documents', auth(['SHIPPER', 'CARRIER']), requireSeatRole(['OPS']), asyncHandler(async (req, res) => {
-  const { docType, mimeType, fileBase64, storageKey } = req.body || {};
+  const { docType, mimeType, fileBase64, storageKey, permitNumber, expiryDate } = req.body || {};
   const column = DOC_COLUMN[docType];
-  if (!column) return sendError(res, 400, "docType must be 'TRADE_LICENSE' or 'INSURANCE'");
+  if (!column) return sendError(res, 400, `docType must be ${DOC_TYPE_LIST}`);
 
   const saved = await resolveUploadedFile(`profile/${req.user.id}`, { mimeType, fileBase64, storageKey });
   await db.prepare(`UPDATE profiles SET ${column}_storage_path=?, ${column}_mime_type=? WHERE user_id=?`)
@@ -33,6 +39,16 @@ router.post('/api/profile/documents', auth(['SHIPPER', 'CARRIER']), requireSeatR
   // existing compliance-score checklist — keep it true once a real file
   // backs the claim, instead of leaving two sources of truth to drift.
   if (docType === 'INSURANCE') await db.prepare('UPDATE profiles SET insurance_uploaded=1 WHERE user_id=?').run(req.user.id);
+  // RTA_PERMIT/HAULAGE_INSURANCE carry a non-file identifier alongside the
+  // uploaded file — the permit number and the policy expiry date — with no
+  // equivalent for TRADE_LICENSE/INSURANCE, so these are optional extras
+  // rather than a generalized metadata column.
+  if (docType === 'RTA_PERMIT' && permitNumber) {
+    await db.prepare('UPDATE profiles SET rta_permit_number=? WHERE user_id=?').run(permitNumber, req.user.id);
+  }
+  if (docType === 'HAULAGE_INSURANCE' && expiryDate) {
+    await db.prepare('UPDATE profiles SET haulage_insurance_expiry=? WHERE user_id=?').run(expiryDate, req.user.id);
+  }
 
   const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(req.user.id);
   res.json({ profile });
@@ -41,7 +57,7 @@ router.post('/api/profile/documents', auth(['SHIPPER', 'CARRIER']), requireSeatR
 async function serveProfileDocument(req, res, targetUserId) {
   if (targetUserId !== req.user.id && req.user.role !== 'ADMIN') return sendError(res, 403, 'Not permitted');
   const column = DOC_COLUMN[req.params.docType];
-  if (!column) return sendError(res, 400, "docType must be 'TRADE_LICENSE' or 'INSURANCE'");
+  if (!column) return sendError(res, 400, `docType must be ${DOC_TYPE_LIST}`);
 
   const profile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(targetUserId);
   const storagePath = profile && profile[`${column}_storage_path`];

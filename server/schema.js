@@ -809,6 +809,18 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'requires_seal', "requires_seal INTEGER NOT NULL DEFAULT 1");
 
   // ---------------------------------------------------------------------------
+  // Carrier onboarding: RTA permit + Haulage (goods-in-transit) insurance —
+  // kept distinct from the existing generic insurance_doc_* fields, which
+  // cover general business insurance, a materially different policy type.
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'rta_permit_number', 'rta_permit_number TEXT');
+  addColumn('profiles', 'rta_permit_doc_storage_path', 'rta_permit_doc_storage_path TEXT');
+  addColumn('profiles', 'rta_permit_doc_mime_type', 'rta_permit_doc_mime_type TEXT');
+  addColumn('profiles', 'haulage_insurance_doc_storage_path', 'haulage_insurance_doc_storage_path TEXT');
+  addColumn('profiles', 'haulage_insurance_doc_mime_type', 'haulage_insurance_doc_mime_type TEXT');
+  addColumn('profiles', 'haulage_insurance_expiry', 'haulage_insurance_expiry TEXT');
+
+  // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.
   // ---------------------------------------------------------------------------
 

@@ -100,7 +100,8 @@ router.get('/api/admin/health', auth(['ADMIN']), async (req, res) => {
 router.get('/api/admin/verification', auth(['ADMIN']), async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT u.*, p.company_name, p.trn_number, p.trade_license_number, p.phone, p.fleet_size, p.owned_chassis, p.insurance_uploaded, p.coverage_zones
+      `SELECT u.*, p.company_name, p.trn_number, p.trade_license_number, p.phone, p.fleet_size, p.owned_chassis, p.insurance_uploaded, p.coverage_zones,
+              p.rta_permit_number, p.rta_permit_doc_storage_path, p.haulage_insurance_doc_storage_path, p.haulage_insurance_expiry
        FROM users u JOIN profiles p ON p.user_id = u.id
        WHERE u.role='CARRIER' AND u.is_verified=0
        ORDER BY u.created_at ASC`
@@ -121,6 +122,10 @@ router.get('/api/admin/verification', auth(['ADMIN']), async (req, res) => {
         owned_chassis: r.owned_chassis,
         insurance_uploaded: !!r.insurance_uploaded,
         coverage_zones: r.coverage_zones,
+        rta_permit_number: r.rta_permit_number,
+        rta_permit_uploaded: !!r.rta_permit_doc_storage_path,
+        haulage_insurance_uploaded: !!r.haulage_insurance_doc_storage_path,
+        haulage_insurance_expiry: r.haulage_insurance_expiry,
       },
     })),
   });
