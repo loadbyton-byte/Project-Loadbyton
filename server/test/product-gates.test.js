@@ -216,6 +216,16 @@ test('driver details are not collected at bid time and are required before PICKE
   assert.equal(addDriver.status, 200, addDriver.raw);
   assert.equal(addDriver.body.job.assigned_driver_name, 'Hamdan Youssef');
 
+  // Money-before-move: still blocked on payment confirmation even with a
+  // driver now on file — escrow is only HELD (bookkeeping at award), not
+  // yet FUNDED.
+  const noPayment = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
+  assert.equal(noPayment.status, 400, 'PICKED_UP without confirmed payment must be rejected');
+
+  const admin = makeClient(server.baseUrl);
+  await admin.login('admin@loadbyton.ae', 'demo1234');
+  await admin.post('/api/admin/confirm-receipt', { jobId });
+
   const pickedUp = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
   assert.equal(pickedUp.status, 200, pickedUp.raw);
 });

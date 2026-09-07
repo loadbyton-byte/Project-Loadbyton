@@ -101,6 +101,18 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   const illegalSkip = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });
   assert.equal(illegalSkip.status, 403, 'carrier must not be able to skip PICKED_UP');
 
+  // Money-before-move: escrow_status is 'HELD' the instant a job is
+  // awarded (bookkeeping only, before any real payment confirmation) —
+  // PICKED_UP must stay blocked until it's actually 'FUNDED'.
+  const blockedPickup = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
+  assert.equal(blockedPickup.status, 400, 'pickup must be blocked while escrow is only HELD, not FUNDED');
+  assert.match(blockedPickup.raw, /Payment not yet confirmed/);
+
+  const admin0 = makeClient(server.baseUrl);
+  await admin0.login('admin@loadbyton.ae', 'demo1234');
+  const confirmReceipt = await admin0.post('/api/admin/confirm-receipt', { jobId });
+  assert.equal(confirmReceipt.status, 200, confirmReceipt.raw);
+
   const pickedUp = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
   assert.equal(pickedUp.status, 200, pickedUp.raw);
   const inTransit = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });
