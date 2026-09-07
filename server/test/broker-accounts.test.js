@@ -95,6 +95,29 @@ test('broker roster + direct-assign awards via the real award transaction; one-h
   void badTarget;
 });
 
+test('broker accounts cannot bid — direct-assign is their only win path (no self-dealing)', async () => {
+  const anon = makeClient(server.baseUrl);
+  const brk = await register(anon, 'BROKER');
+  const broker = makeClient(server.baseUrl);
+  await broker.login(brk.email, 'demo1234');
+
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '20FT', containerType: 'DRY',
+    pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ', deliveryAddress: 'No Broker Bids',
+    readyAt: new Date(Date.now() + 86400000).toISOString(),
+    deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+  });
+  assert.equal(created.status, 201, created.raw);
+
+  const bid = await broker.post(`/api/jobs/${created.body.job.id}/bids`, {
+    amountAed: 400, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+  });
+  assert.equal(bid.status, 403, `broker bidding must be rejected, got: ${bid.raw}`);
+  assert.match(bid.raw, /direct-assign/);
+});
+
 test('owner-operator registers and can bid like a carrier', async () => {
   const anon = makeClient(server.baseUrl);
   const oop = await register(anon, 'OWNER_OPERATOR');

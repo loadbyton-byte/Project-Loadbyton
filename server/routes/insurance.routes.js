@@ -41,13 +41,22 @@ router.post('/api/jobs/:id/insurance/bind', auth(['SHIPPER']), async (req, res) 
   }
 
   await db.prepare(`UPDATE jobs SET cargo_value_aed=?, insurance_opt_in=1 WHERE id=?`).run(q.cargoValueAed, job.id);
-  const r = await db
-    .prepare(
-      `INSERT INTO job_insurance (job_id, shipper_id, provider, cargo_value_aed, premium_aed, coverage_aed, rate_bps, policy_ref)
-       VALUES (?,?,?,?,?,?,?,?) RETURNING id`
-    )
-    .run(job.id, req.user.id, p, q.cargoValueAed, q.premiumAed, q.coverageAed, q.rateBps, policyRef);
-  const policy = await db.prepare(`SELECT * FROM job_insurance WHERE id=?`).get(Number(r.lastInsertRowid));
+  let policy;
+  try {
+    const r = await db
+      .prepare(
+        `INSERT INTO job_insurance (job_id, shipper_id, provider, cargo_value_aed, premium_aed, coverage_aed, rate_bps, policy_ref)
+         VALUES (?,?,?,?,?,?,?,?) RETURNING id`
+      )
+      .run(job.id, req.user.id, p, q.cargoValueAed, q.premiumAed, q.coverageAed, q.rateBps, policyRef);
+    policy = await db.prepare(`SELECT * FROM job_insurance WHERE id=?`).get(Number(r.lastInsertRowid));
+  } catch (e) {
+    // Double-submit race vs the pre-check above: job_id is UNIQUE.
+    if (e.code === '23505' || (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message))) {
+      return sendError(res, 409, 'This job already has an active policy');
+    }
+    throw e;
+  }
   const { writeAudit } = require('../lib/helpers');
   await writeAudit(req, { userId: req.actorId, action: 'INSURANCE_BIND', details: `${job.job_code}: GIT policy ${policyRef} bound (AED ${q.premiumAed} on AED ${q.cargoValueAed})`, entityType: 'job', entityId: job.id });
   res.status(201).json({ policy });

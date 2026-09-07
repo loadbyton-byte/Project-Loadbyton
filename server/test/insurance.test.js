@@ -69,7 +69,7 @@ test('bind records an internal policy; second bind is rejected; cancel works pre
   assert.equal(cancel.body.policy.status, 'CANCELLED');
 });
 
-test('broker provider without env vars stays dark (503), never a fake bound record', async () => {
+test('bind without any cargo value fails closed (400) — never a silent or fake bind', async () => {
   const prev = process.env.INSURANCE_PROVIDER;
   // NOTE: provider is read per-request from process.env of the SERVER child
   // process, not this test process — so this test asserts the route's dark
@@ -86,4 +86,41 @@ test('broker provider without env vars stays dark (503), never a fake bound reco
 
   const none = await shipper.get(`/api/jobs/${jobId}/insurance`);
   assert.equal(none.body.policy, null);
+});
+
+test('broker provider without URL/KEY stays dark: bind is 503, never a fake bound record', async () => {
+  // NOTE: harness freePort() derives from pid, so a second server in the
+  // same file must take an explicit PORT or it collides with the file's
+  // main server (and silently tests the wrong server). The harness builds
+  // baseUrl from its own port choice, so address the override explicitly.
+  const brokerServer = await startServer({ INSURANCE_PROVIDER: 'broker', PORT: '4311' });
+  const brokerBase = 'http://127.0.0.1:4311';
+  // startServer's readiness probe hits its own pid-derived port, not our
+  // PORT override — poll the real port until this child finishes booting.
+  for (let i = 0; i < 100; i++) {
+    try {
+      const h = await fetch(`${brokerBase}/api/health`);
+      if (h.ok) break;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  try {
+    const shipper = makeClient(brokerBase);
+    await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+    const created = await shipper.post('/api/jobs', {
+      containerSize: '20FT', containerType: 'DRY',
+      pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ', deliveryAddress: 'Dark Broker WH',
+      readyAt: new Date(Date.now() + 86400000).toISOString(),
+      deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    });
+    assert.equal(created.status, 201, created.raw);
+    const bind = await shipper.post(`/api/jobs/${created.body.job.id}/insurance/bind`, { cargoValueAed: 50000 });
+    assert.equal(bind.status, 503, `unconfigured broker must refuse, got: ${bind.raw}`);
+    assert.match(bind.raw, /not configured/i);
+    const got = await shipper.get(`/api/jobs/${created.body.job.id}/insurance`);
+    assert.equal(got.body.policy, null, 'refused bind must leave no policy row');
+    assert.equal(got.body.configured, false);
+  } finally {
+    await brokerServer.stop();
+  }
 });

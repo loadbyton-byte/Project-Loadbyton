@@ -13,7 +13,7 @@ const crypto = require('node:crypto');
 const db = require('../db');
 const { confirmDelivery } = require('../services/delivery.service');
 const { bindDriverToJob } = require('../services/driver-assignment.service');
-const { recordInboundSession } = require('../lib/whatsapp');
+const { recordInboundSession, isConfigured: isWhatsappConfigured } = require('../lib/whatsapp');
 const { resolveOrCreateThread } = require('../lib/messaging');
 const router = require('express').Router();
 
@@ -30,12 +30,14 @@ router.get('/api/whatsapp/webhook', (req, res) => {
 });
 
 // Meta signs the payload with the app secret (X-Hub-Signature-256). When
-// WHATSAPP_APP_SECRET isn't set, verification is skipped — matches this
-// codebase's existing "dark until configured" pattern rather than a hard
-// failure for an integration nobody's turned on yet.
+// nothing is configured at all the webhook is inert (no sender resolves to
+// a job, so nothing executes) and verification is skipped. But the moment
+// sending is live ( WHATSAPP_ACCESS_TOKEN set), an unset APP_SECRET would
+// leave inbound delivery confirmations unauthenticated — anyone could forge
+// a "Delivered" reply — so that combination fails closed instead.
 function verifySignature(req) {
   const secret = process.env.WHATSAPP_APP_SECRET;
-  if (!secret) return true;
+  if (!secret) return !isWhatsappConfigured();
   const signature = req.headers['x-hub-signature-256'];
   if (!signature || typeof signature !== 'string') return false;
   const expected = `sha256=${crypto.createHmac('sha256', secret).update(req.rawBody || '').digest('hex')}`;

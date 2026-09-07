@@ -78,6 +78,11 @@ const router = require('express').Router();
 router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, requireSeatRole(['OPS']), idempotency, async (/** @type {any} */ req, /** @type {any} */ res) => {
   const job = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id));
   if (!job) return sendError(res, 404, 'Job not found');
+  // BROKER passes the CARRIER guard via roleSatisfies (they also post jobs),
+  // but brokers must win work only through direct-assign (disclosed spread,
+  // roster, one-hop rule) — never by bidding against real carriers with no
+  // fleet behind the bid, and never self-dealing on their own postings.
+  if (req.user.role === 'BROKER') return sendError(res, 403, 'Broker accounts cannot bid — assign work via direct-assign instead.');
   if (job.status !== 'OPEN') return sendError(res, 403, 'Job is not open for bidding.');
   if (!req.user.profile || !req.user.profile.rating_avg || !(/** @type {any} */ (await db.prepare('SELECT is_verified FROM users WHERE id=?').get(req.user.id))).is_verified) {
     return sendError(res, 403, 'Carrier verification required to bid.');

@@ -109,10 +109,21 @@ router.post('/api/jobs/:id/direct-assign', auth(['BROKER', 'FORWARDER']), async 
   // cannot be awarded (see award.service.js pre-checks surface the same).
   if (!carrier.is_verified) return sendError(res, 403, 'Carrier is not verified yet');
 
-  const bidInsert = await db
-    .prepare(`INSERT INTO bids (job_id, carrier_id, amount_aed, eta_at, status, truck_type) VALUES (?,?,?,?, 'PENDING', ?) RETURNING id`)
-    .run(job.id, carrier.id, amount, etaAt || null, 'flatbed');
-  const bidId = Number(bidInsert.lastInsertRowid);
+  let bidId;
+  try {
+    const bidInsert = await db
+      .prepare(`INSERT INTO bids (job_id, carrier_id, amount_aed, eta_at, status, truck_type) VALUES (?,?,?,?, 'PENDING', ?) RETURNING id`)
+      .run(job.id, carrier.id, amount, etaAt || null, 'flatbed');
+    bidId = Number(bidInsert.lastInsertRowid);
+  } catch (e) {
+    // Double-submit race: the one-pending-bid-per-carrier UNIQUE index
+    // fires instead of any pre-check winning — same friendly-409 pattern
+    // as the marketplace bid route.
+    if (e.code === '23505' || (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message))) {
+      return sendError(res, 409, 'This carrier already has a pending bid on this job');
+    }
+    throw e;
+  }
 
   if (req.user.role === 'BROKER') {
     await db.prepare(`UPDATE jobs SET broker_id=?, broker_spread_bps=? WHERE id=?`).run(req.user.id, spread, job.id);
