@@ -546,6 +546,8 @@ CREATE TABLE IF NOT EXISTS ledger_transactions (
   job_id INTEGER REFERENCES jobs(id),
   payout_id INTEGER REFERENCES payouts(id),
   description TEXT,
+  prev_hash TEXT,
+  hash TEXT,
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 
@@ -842,5 +844,36 @@ CREATE INDEX IF NOT EXISTS idx_broker_carriers_broker ON broker_carriers(broker_
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS broker_id INTEGER REFERENCES users(id);
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS forwarder_client_id INTEGER REFERENCES forwarder_clients(id);
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS broker_spread_bps INTEGER NOT NULL DEFAULT 0;
+
+-- Change 21 + 30 core — see server/schema.js.
+INSERT INTO ledger_accounts (code, name, type) VALUES ('fee_receivable', 'Fee Receivable', 'ASSET') ON CONFLICT (code) DO NOTHING;
+ALTER TABLE ledger_transactions ADD COLUMN IF NOT EXISTS prev_hash TEXT;
+ALTER TABLE ledger_transactions ADD COLUMN IF NOT EXISTS hash TEXT;
+CREATE TABLE IF NOT EXISTS platform_fees (
+  id SERIAL PRIMARY KEY,
+  fee_code TEXT NOT NULL,
+  job_id INTEGER REFERENCES jobs(id),
+  user_id INTEGER REFERENCES users(id),
+  amount_aed REAL NOT NULL,
+  amount_minor INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACCRUED' CHECK(status IN ('ACCRUED','COLLECTED','WAIVED')),
+  idempotency_key TEXT UNIQUE NOT NULL,
+  ledger_transaction_id INTEGER REFERENCES ledger_transactions(id),
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_platform_fees_job ON platform_fees(job_id);
+CREATE INDEX IF NOT EXISTS idx_platform_fees_code ON platform_fees(fee_code);
+CREATE TABLE IF NOT EXISTS admin_approvals (
+  id SERIAL PRIMARY KEY,
+  action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND')),
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  payload TEXT,
+  requested_by INTEGER NOT NULL REFERENCES users(id),
+  confirmed_by INTEGER REFERENCES users(id),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','CONFIRMED','REJECTED','EXECUTED')),
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  decided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approvals(status);
 
 COMMIT;

@@ -165,8 +165,7 @@ async function createJobFromBody(body, req) {
       await insertLineItem.run(jobId, li.containerSize, li.containerType, li.count);
     }
   }
-  // GIT insurance opt-in (Change 20) — declared cargo value + flag at posting.
-  // Binding itself is a separate step (POST /api/jobs/:id/insurance/bind);
+  // GIT insurance opt-in (Change 20) — declared cargo value + flag at posting.  // Binding itself is a separate step (POST /api/jobs/:id/insurance/bind);
   // this just records the shipper's declared value so quote/bind has it.
   if (cargoValueAed !== undefined && cargoValueAed !== null && cargoValueAed !== '') {
     const cv = Number(cargoValueAed);
@@ -174,6 +173,22 @@ async function createJobFromBody(body, req) {
     await db.prepare('UPDATE jobs SET cargo_value_aed=?, insurance_opt_in=? WHERE id=?').run(cv, insuranceOptIn ? 1 : 0, jobId);
   } else if (insuranceOptIn) {
     throw { status: 400, message: 'cargoValueAed is required when opting into insurance' };
+  }
+  // Change 30 — priority placement: optional paid boost at posting. Recorded
+  // as a platform_fees + ledger row via chargeFee() (idempotent per job);
+  // collection rides existing rails (internal bookkeeping until billing).
+  if (body.priorityPlacement) {
+    try {
+      const { chargeFee } = require('../lib/ledger');
+      const { getSettings } = require('../lib/helpers');
+      const { priority_placement_fee_aed } = await getSettings();
+      const feeAed = Number(priority_placement_fee_aed) || 50;
+      await chargeFee(db, {
+        idempotencyKey: `priority-${jobId}`, feeCode: 'PRIORITY_PLACEMENT',
+        jobId, userId: req.user.id, amountAed: feeAed,
+        description: `Priority placement fee (job #${jobId}) AED ${feeAed}`,
+      });
+    } catch (e) { console.error(`[fees] priority charge failed for job ${jobId}:`, e.message); }
   }
 
   return await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);

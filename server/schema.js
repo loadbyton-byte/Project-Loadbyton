@@ -853,6 +853,58 @@ module.exports = function initSchema(db) {
   seedAccount.run('carrier_payable', 'Carrier Payable', 'LIABILITY');
   seedAccount.run('platform_revenue', 'Platform Revenue', 'REVENUE');
   seedAccount.run('refund_liability', 'Refund Liability', 'LIABILITY');
+  seedAccount.run('fee_receivable', 'Fee Receivable', 'ASSET');
+
+  // Change 21 — tamper-evident ledger hash chain. prev_hash/hash are set by
+  // lib/ledger.js createTransaction (sha256 over prev|key|job|entries); the
+  // audit_log_no_update/_no_delete triggers below are the same pattern for
+  // audit_log. Existing rows backfill lazily (NULL until a new transaction
+  // chains from GENESIS-or-latest — verifyChain() treats a NULL gap as
+  // "pre-chain era", not as tampering).
+  addColumn('ledger_transactions', 'prev_hash', 'prev_hash TEXT');
+  addColumn('ledger_transactions', 'hash', 'hash TEXT');
+
+  // Change 30 core — platform_fees: one row per fee event, reusing the
+  // ledger via chargeFee() (lib/ledger.js). Status tracks collection, not
+  // existence: ACCRUED bookkeeping exists in every mode; COLLECTED flips
+  // when a real rail settles it (Change 30 billing follow-ups).
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS platform_fees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fee_code TEXT NOT NULL,
+    job_id INTEGER REFERENCES jobs(id),
+    user_id INTEGER REFERENCES users(id),
+    amount_aed REAL NOT NULL,
+    amount_minor INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACCRUED' CHECK(status IN ('ACCRUED','COLLECTED','WAIVED')),
+    idempotency_key TEXT UNIQUE NOT NULL,
+    ledger_transaction_id INTEGER REFERENCES ledger_transactions(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_platform_fees_job ON platform_fees(job_id);
+  CREATE INDEX IF NOT EXISTS idx_platform_fees_code ON platform_fees(fee_code);
+  `);
+
+  // Change 21 — two-person approval on sensitive admin actions. A requester
+  // admin creates a PENDING request; a DIFFERENT admin confirms (or rejects)
+  // and only confirmation executes the underlying state change via the
+  // allowlisted executor in admin-approvals.routes.js. Same-admin
+  // self-confirm is rejected; HSM multi-sig stays the aspirational version
+  // (lib/hsm.js), this table is the real, buildable control.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS admin_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND')),
+    job_id INTEGER NOT NULL REFERENCES jobs(id),
+    payload TEXT,
+    requested_by INTEGER NOT NULL REFERENCES users(id),
+    confirmed_by INTEGER REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','CONFIRMED','REJECTED','EXECUTED')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    decided_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approvals(status);
+  `);
 
   // ---------------------------------------------------------------------------
   // Platform settings — seeded once, editable via /api/admin/settings.
@@ -862,6 +914,7 @@ module.exports = function initSchema(db) {
   seedSetting.run('commission_rate_bps', '600');
   seedSetting.run('auto_release_hours', '24');
   seedSetting.run('cancellation_fee_bps_after_award', '1000');
+  seedSetting.run('priority_placement_fee_aed', '50');
 
   // ---------------------------------------------------------------------------
   // Equipment capacity tracking — profiles.fleet_size was a static,

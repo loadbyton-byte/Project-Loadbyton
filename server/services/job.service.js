@@ -129,6 +129,19 @@ async function updateJobStatus(jobId, nextStatus, req) {
       // Refunds the net amount (after the fee), not the full price.
       try { refundJobAsync(job, netRefundAed); } catch {}
     }
+    // Change 30 — the cancellation fee is now a real platform_fees +
+    // ledger row via chargeFee() (idempotent per job), not just a column
+    // on the job. Zero-fee cancellations (free tier / pre-award) skip it.
+    if (cancelled && cancellationFeeAed > 0) {
+      try {
+        const { chargeFee } = require('../lib/ledger');
+        await chargeFee(db, {
+          idempotencyKey: `cancel-fee-${id}`, feeCode: 'CANCELLATION_FEE',
+          jobId: id, userId: job.shipper_id, amountAed: cancellationFeeAed,
+          description: `Cancellation fee ${job.job_code} AED ${cancellationFeeAed}`,
+        });
+      } catch (e) { console.error(`[fees] cancel-fee charge failed for job ${id}:`, e.message); }
+    }
     // A carrier backing out after commitment is exactly the "no-show"
     // scenario this reliability score exists to catch — a shipper
     // cancelling isn't the carrier's fault and doesn't penalize anyone.
