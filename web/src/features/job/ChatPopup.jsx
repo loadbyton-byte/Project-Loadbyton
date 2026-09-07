@@ -112,7 +112,7 @@ export default function ChatPopup({ jobId }) {
   const messages = activeThread?.messages || [];
 
   return (
-    <div className="fixed bottom-5 right-5 z-40" dir="ltr">
+    <div className="fixed z-40" style={{ bottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem))', right: 'max(1.25rem, env(safe-area-inset-right))' }} dir="ltr">
       {isOpen && (
         <div
           className="animate-chat-in mb-3 flex h-[440px] w-[350px] flex-col overflow-hidden rounded-2xl border shadow-2xl"

@@ -111,7 +111,7 @@ export default function Register() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100vh-4rem)] items-center justify-center py-10">
+    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-10">
       <Card className="w-full max-w-lg p-6 sm:p-8">
         <p className="font-display text-xl font-bold text-ink">Create your account</p>
         <p className="mt-1 text-sm text-ink-muted">Post drayage jobs, or bid on them — pick which one you are.</p>

@@ -3,16 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 import {
   CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
-  equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel, depotLabel,
+  equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet, IconClose } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
-import SearchableSelect from '../components/SearchableSelect.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -43,6 +43,7 @@ const emptyJob = {
 export default function Dashboard() {
   usePageTitle('Dashboard');
   const { user } = useAuth();
+  const { t, isRtl } = useLocale();
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
   const [jobs, setJobs] = useState(null);
@@ -71,8 +72,8 @@ export default function Dashboard() {
 
   // Search-as-you-type without a request per keystroke.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
   }, [search]);
   useEffect(() => { setOffset(0); }, [filter, sort, debouncedSearch]);
 
@@ -171,7 +172,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Profile banner — the Stitch shipper-dashboard header pattern.
           Stacks on mobile: identity row, then a full-width action row —
           the previous single flex row squeezed a long company name against
@@ -183,15 +184,15 @@ export default function Dashboard() {
           </span>
           <div className="min-w-0">
             <h1 className="truncate font-display text-lg font-bold text-ink">{user?.profile?.company_name}</h1>
-            <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">Tier {user?.tier} · {analytics?.jobsPosted ?? 0} jobs posted</p>
+            <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">{t('dashboard.tier', 'Tier {tier} · {count} jobs posted', { tier: user?.tier, count: analytics?.jobsPosted ?? 0 })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <Button variant="ghost" size="sm" className="flex-1 sm:flex-none" onClick={() => setShowImport((v) => !v)}>
-            <IconUpload size={15} /> Import CSV
+            <IconUpload size={15} /> {t('dashboard.importCsv', 'Import CSV')}
           </Button>
           <Button size="sm" className="flex-1 sm:flex-none" disabled={user?.account_approval_status && user.account_approval_status !== 'APPROVED'} onClick={() => setShowForm(true)}>
-            <IconPlus size={15} /> Post a job
+            <IconPlus size={15} /> {t('dashboard.postJob', 'Post a job')}
           </Button>
         </div>
       </section>
@@ -200,19 +201,19 @@ export default function Dashboard() {
 
       {analytics && (
         <section className="mt-4 grid grid-cols-2 gap-3">
-          <BentoStat label="Active jobs" value={analytics.activeJobs} />
-          <BentoStat label="Completed" value={analytics.jobsCompleted} />
-          <BentoStat label="Total spent" value={formatAED(analytics.totalSpentAED)} icon={<IconWallet size={22} />} />
-          <BentoStat label="Savings vs. market" value={`${analytics.savingsPercent}%`} tone="accent" />
+          <BentoStat label={t('dashboard.stat.activeJobs', 'Active jobs')} value={analytics.activeJobs} />
+          <BentoStat label={t('dashboard.stat.completed', 'Completed')} value={analytics.jobsCompleted} />
+          <BentoStat label={t('dashboard.stat.totalSpent', 'Total spent')} value={formatAED(analytics.totalSpentAED)} icon={<IconWallet size={22} />} />
+          <BentoStat label={t('dashboard.stat.savings', 'Savings vs. market')} value={`${analytics.savingsPercent}%`} tone="accent" />
         </section>
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Post a new job" onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={t('dashboard.postNewJob', 'Post a new job')} onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
             <Card className="border-0 shadow-none">
               <Card.Header>
-                <Card.Title className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span> Post a new job</Card.Title>
+                <Card.Title className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span> {t('dashboard.postNewJob', 'Post a new job')}</Card.Title>
                 <button type="button" onClick={() => setShowForm(false)} className="rounded-full p-1.5 text-ink-muted hover:bg-surface-container hover:text-ink" aria-label="Close"><IconClose size={18} /></button>
               </Card.Header>
           <form onSubmit={onCreate}>
@@ -228,6 +229,19 @@ export default function Dashboard() {
                     : 'General freight — describe the cargo in the notes field below instead of a container size.'}
                 </p>
               </div>
+              {form.shipmentType === 'LOCAL' ? (
+                <div>
+                  <Label>No. of vehicles required</Label>
+                  <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
+                  <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                </div>
+              ) : (
+                <div>
+                  <Label>No. of containers</Label>
+                  <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
+                  <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <Label>Cargo type</Label>
                 <Select value={form.cargoType} onChange={(e) => setForm({ ...form, cargoType: e.target.value })}>
@@ -314,12 +328,12 @@ export default function Dashboard() {
                 <>
                   <div>
                     <Label>Container pickup at terminal <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={TERMINALS}
+                    <PlaceAutocomplete
+                      required
                       value={form.importPickupTerminal}
-                      labelFn={formatLabel}
+                      onChange={(e) => setForm({ ...form, importPickupTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, importPickupTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
                       placeholder="Search terminals…"
-                      onChange={(v) => setForm({ ...form, importPickupTerminal: v, pickupTerminal: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — where the laden container is picked up.</p>
                   </div>
@@ -336,12 +350,12 @@ export default function Dashboard() {
                   </div>
                   <div className="sm:col-span-2">
                     <Label>Empty container return location <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={DEPOTS}
+                    <PlaceAutocomplete
+                      required
                       value={form.importEmptyReturnLocation}
-                      labelFn={depotLabel}
+                      onChange={(e) => setForm({ ...form, importEmptyReturnLocation: e.target.value })}
+                      onPlaceSelect={({ address }) => setForm((f) => ({ ...f, importEmptyReturnLocation: address }))}
                       placeholder="Search depots…"
-                      onChange={(v) => setForm({ ...form, importEmptyReturnLocation: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — depot where empty is returned (detention clock stops here).</p>
                   </div>
@@ -350,12 +364,12 @@ export default function Dashboard() {
                 <>
                   <div>
                     <Label>Empty pickup location <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={DEPOTS}
+                    <PlaceAutocomplete
+                      required
                       value={form.exportEmptyPickupLocation}
-                      labelFn={depotLabel}
+                      onChange={(e) => setForm({ ...form, exportEmptyPickupLocation: e.target.value })}
+                      onPlaceSelect={({ address }) => setForm((f) => ({ ...f, exportEmptyPickupLocation: address }))}
                       placeholder="Search depots…"
-                      onChange={(v) => setForm({ ...form, exportEmptyPickupLocation: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — depot where empty container is picked up.</p>
                   </div>
@@ -372,12 +386,12 @@ export default function Dashboard() {
                   </div>
                   <div className="sm:col-span-2">
                     <Label>Deposit location (port/terminal) <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={TERMINALS}
+                    <PlaceAutocomplete
+                      required
                       value={form.exportDepositTerminal}
-                      labelFn={formatLabel}
+                      onChange={(e) => setForm({ ...form, exportDepositTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, exportDepositTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
                       placeholder="Search terminals…"
-                      onChange={(v) => setForm({ ...form, exportDepositTerminal: v, pickupTerminal: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — terminal where laden container is deposited.</p>
                   </div>
@@ -400,22 +414,6 @@ export default function Dashboard() {
                   No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from your ready time.
                 </p>
               </div>
-              {form.shipmentType !== 'LOCAL' && (
-                <div className="sm:col-span-2 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
-                  <p className="text-sm font-medium text-ink">Volume — how much does this job cover?</p>
-                  <p className="mt-0.5 text-xs text-ink-muted">Leave both at 1 for a single load. Raise either to post one inquiry a carrier fulfils as a batch.</p>
-                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>No. of containers</Label>
-                      <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
-                    </div>
-                    <div>
-                      <Label>No. of trucks</Label>
-                      <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
-                    </div>
-                  </div>
-                </div>
-              )}
               <div>
                 <Label>Target price (AED, per trip)</Label>
                 <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
@@ -513,19 +511,20 @@ export default function Dashboard() {
                 </Select>
               </div>
               <div className="min-w-[200px] flex-1 sm:max-w-xs">
-                <Label>Search</Label>
+                <Label>{t('dashboard.search', 'Search')}</Label>
                 {/* Icon lives in its own relative wrapper around just the
                     Input (not the Label), so top-1/2 centers against the
                     input's own box instead of a hardcoded pixel guess at
-                    label+input combined height. */}
+                    label+input combined height. RTL-aware: the icon and its
+                    matching input padding both flip sides under dir="rtl". */}
                 <div className="relative">
-                  <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Job code, address, notes…" className="pl-9" />
+                  <IconSearch size={15} className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted ${isRtl ? 'right-3' : 'left-3'}`} />
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('dashboard.searchPlaceholder', 'Job code, address, notes…')} className={isRtl ? 'pr-9' : 'pl-9'} />
                 </div>
               </div>
             </div>
             {jobs.length === 0 ? (
-              <EmptyState className="mt-4" title="No jobs match these filters" description="Try a broader search or clear a filter." />
+              <EmptyState className="mt-4" title={t('dashboard.empty.title', 'No jobs match these filters')} description={t('dashboard.empty.description', 'Try a broader search or clear a filter.')} />
             ) : (
               <div className="mt-3">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
