@@ -598,6 +598,61 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_job_unique ON payouts(job_id);
 
+-- WhatsApp two-way: channel + dedup tracking, and a per-phone 24h
+-- customer-service-window tracker — see server/schema.js.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'WEB';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS whatsapp_message_id TEXT;
+CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+  phone TEXT PRIMARY KEY,
+  last_inbound_at TEXT NOT NULL,
+  session_expires_at TEXT NOT NULL
+);
+
+-- Compliance-engine foundation for the future DRIVER_ASSOCIATE role
+-- (Change 25) — see server/schema.js for rationale.
+CREATE TABLE IF NOT EXISTS vehicles (
+  id SERIAL PRIMARY KEY,
+  carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plate_number TEXT,
+  plate_type TEXT CHECK(plate_type IN ('COMMERCIAL','PRIVATE')),
+  registration_expiry TEXT,
+  insurance_expiry TEXT,
+  permitted_emirates TEXT,
+  vehicle_reg_doc_storage_path TEXT,
+  vehicle_reg_doc_mime_type TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_vehicles_carrier ON vehicles(carrier_id);
+
+CREATE TABLE IF NOT EXISTS compliance_rules (
+  id SERIAL PRIMARY KEY,
+  rule_code TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK(severity IN ('RED','YELLOW','GREEN')),
+  field TEXT NOT NULL,
+  condition TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1
+);
+
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS visa_status TEXT;
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS visa_expiry TEXT;
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS license_category TEXT;
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS vehicle_id INTEGER REFERENCES vehicles(id);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_free_zone_registered INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS mainland_work_permitted INTEGER NOT NULL DEFAULT 0;
+
+INSERT INTO compliance_rules (rule_code, description, severity, field, condition) VALUES
+  ('PRIVATE_PLATE', 'Private (non-commercial) plate performing paid freight work', 'RED', 'vehicle.plate_type', '{"op":"eq","value":"PRIVATE"}'),
+  ('VISA_INVALID', 'Visit-visa or no valid residence visa', 'RED', 'driver.visa_status', '{"op":"in","value":["VISIT","NONE"]}'),
+  ('VISA_EXPIRED', 'Residence visa expired', 'RED', 'driver.visa_expiry', '{"op":"expired"}'),
+  ('LICENSE_EXPIRED', 'Driver license expired', 'RED', 'driver.license_expiry', '{"op":"expired"}'),
+  ('VEHICLE_REG_EXPIRED', 'Vehicle registration expired', 'RED', 'vehicle.registration_expiry', '{"op":"expired"}'),
+  ('VEHICLE_INSURANCE_EXPIRED', 'Vehicle insurance expired', 'RED', 'vehicle.insurance_expiry', '{"op":"expired"}'),
+  ('MAINLAND_WITHOUT_PERMIT', 'Free-zone carrier on mainland without the allowed-to-work-mainland document — restrict to free-zone/port-only jobs', 'YELLOW', 'special:mainland_permit', '{"op":"special"}'),
+  ('OUTSIDE_PERMITTED_EMIRATES', 'Job outside this vehicle''s permitted emirates', 'YELLOW', 'special:permitted_emirates', '{"op":"special"}')
+ON CONFLICT (rule_code) DO NOTHING;
+
 INSERT INTO ledger_accounts (code, name, type) VALUES ('processor_clearing', 'Processor Clearing', 'ASSET') ON CONFLICT (code) DO NOTHING;
 INSERT INTO ledger_accounts (code, name, type) VALUES ('escrow_liability', 'Escrow Liability', 'LIABILITY') ON CONFLICT (code) DO NOTHING;
 INSERT INTO ledger_accounts (code, name, type) VALUES ('carrier_payable', 'Carrier Payable', 'LIABILITY') ON CONFLICT (code) DO NOTHING;

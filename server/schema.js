@@ -615,6 +615,88 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
   addColumn('contract_rfps', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
 
+  // WhatsApp two-way: which channel a message came in on, plus dedup/
+  // delivery-status tracking for inbound sends. Existing messages default
+  // to 'WEB' since every one of them was — this doesn't retroactively
+  // reclassify anything.
+  addColumn('messages', 'channel', "channel TEXT NOT NULL DEFAULT 'WEB'");
+  addColumn('messages', 'whatsapp_message_id', 'whatsapp_message_id TEXT');
+
+  // Tracks Meta's 24h customer-service window per contact phone number —
+  // outside that window a free-form reply can't be sent, only a
+  // pre-approved template (see server/lib/whatsapp.js's sendSessionAware).
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+    phone TEXT PRIMARY KEY,
+    last_inbound_at TEXT NOT NULL,
+    session_expires_at TEXT NOT NULL
+  );
+  `);
+
+  // Compliance-engine foundation for the future DRIVER_ASSOCIATE role
+  // (Change 25) — a vehicle as a structured, queryable entity (plate type,
+  // per-emirate permits) is the single biggest gap underneath that role's
+  // own guardrails ("no private plates," "auto-pause on expiry"), so this
+  // is built first, before the role itself. drivers.vehicle_id is nullable
+  // — a driver-with-no-truck pattern has none of their own.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS vehicles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plate_number TEXT,
+    plate_type TEXT CHECK(plate_type IN ('COMMERCIAL','PRIVATE')),
+    registration_expiry TEXT,
+    insurance_expiry TEXT,
+    permitted_emirates TEXT,
+    vehicle_reg_doc_storage_path TEXT,
+    vehicle_reg_doc_mime_type TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_vehicles_carrier ON vehicles(carrier_id);
+
+  -- Data-driven so admins can tune thresholds without a redeploy — not
+  -- every rule fits the plain {field, condition} shape (two of the seeded
+  -- rules below need two facts together), but keeping all of them in one
+  -- table still gives one place to see/enable/disable every rule.
+  CREATE TABLE IF NOT EXISTS compliance_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_code TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL,
+    severity TEXT NOT NULL CHECK(severity IN ('RED','YELLOW','GREEN')),
+    field TEXT NOT NULL,
+    condition TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1
+  );
+  `);
+
+  addColumn('drivers', 'visa_status', 'visa_status TEXT');
+  addColumn('drivers', 'visa_expiry', 'visa_expiry TEXT');
+  addColumn('drivers', 'license_category', 'license_category TEXT');
+  addColumn('drivers', 'vehicle_id', 'vehicle_id INTEGER REFERENCES vehicles(id)');
+
+  // Free-zone-vs-mainland gate (Change 25's operational-risk cluster) — no
+  // upload UI yet, admin-settable via the same profiles-field pattern as
+  // everything else in this table; the document-upload workflow is
+  // deliberately follow-up work, not part of the engine itself.
+  addColumn('profiles', 'is_free_zone_registered', 'is_free_zone_registered INTEGER NOT NULL DEFAULT 0');
+  addColumn('profiles', 'mainland_work_permitted', 'mainland_work_permitted INTEGER NOT NULL DEFAULT 0');
+
+  // Seed the five highest-severity/most mechanical compliance rules —
+  // the rest of the 18-scenario matrix is explicit follow-up seed data,
+  // not built here (see server/lib/compliance.js).
+  const seedRule = db.prepare(
+    `INSERT OR IGNORE INTO compliance_rules (rule_code, description, severity, field, condition) VALUES (?, ?, ?, ?, ?)`
+  );
+  seedRule.run('PRIVATE_PLATE', 'Private (non-commercial) plate performing paid freight work', 'RED', 'vehicle.plate_type', JSON.stringify({ op: 'eq', value: 'PRIVATE' }));
+  seedRule.run('VISA_INVALID', 'Visit-visa or no valid residence visa', 'RED', 'driver.visa_status', JSON.stringify({ op: 'in', value: ['VISIT', 'NONE'] }));
+  seedRule.run('VISA_EXPIRED', 'Residence visa expired', 'RED', 'driver.visa_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('LICENSE_EXPIRED', 'Driver license expired', 'RED', 'driver.license_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('VEHICLE_REG_EXPIRED', 'Vehicle registration expired', 'RED', 'vehicle.registration_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('VEHICLE_INSURANCE_EXPIRED', 'Vehicle insurance expired', 'RED', 'vehicle.insurance_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('MAINLAND_WITHOUT_PERMIT', 'Free-zone carrier on mainland without the allowed-to-work-mainland document — restrict to free-zone/port-only jobs', 'YELLOW', 'special:mainland_permit', JSON.stringify({ op: 'special' }));
+  seedRule.run('OUTSIDE_PERMITTED_EMIRATES', 'Job outside this vehicle\'s permitted emirates', 'YELLOW', 'special:permitted_emirates', JSON.stringify({ op: 'special' }));
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

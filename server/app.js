@@ -65,6 +65,7 @@ const routes = [
   './routes/rfp.routes',
   './routes/stripe.routes',
   './routes/telematics.routes',
+  './routes/whatsapp.routes',
 ];
 for (const r of routes) {
   try {

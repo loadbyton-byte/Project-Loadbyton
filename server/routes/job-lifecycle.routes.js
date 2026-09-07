@@ -26,6 +26,8 @@ const issueInvoice = /** @type {any} */ (invoiceMod).issueInvoice;
 const whatsappMod = require('../lib/whatsapp');
 const notifyDriverAsync = /** @type {any} */ (whatsappMod).notifyDriverAsync;
 /** @type {any} */
+const deliveryService = require('../services/delivery.service');
+/** @type {any} */
 const configMod = require('../lib/config');
 const FRONTEND_URL = /** @type {any} */ (configMod).FRONTEND_URL;
 /** @type {any} */
@@ -35,13 +37,11 @@ const sendError = /** @type {any} */ (httpMod).sendError;
 const apiResponse = require('../lib/apiResponse');
 /** @type {any} */
 const constantsMod = require('../lib/constants');
-const DOC_TYPES = /** @type {any} */ (constantsMod).DOC_TYPES;
 const STATUS_ORDER = /** @type {any} */ (constantsMod).STATUS_ORDER;
 const TRANSITIONS = /** @type {any} */ (constantsMod).TRANSITIONS;
 const DISPUTABLE_STATUSES = /** @type {any} */ (constantsMod).DISPUTABLE_STATUSES;
 /** @type {any} */
 const helpersMod = require('../lib/helpers');
-const resolveUploadedFile = /** @type {any} */ (helpersMod).resolveUploadedFile;
 const normalizeUaeMobile = /** @type {any} */ (helpersMod).normalizeUaeMobile;
 const getSettings = /** @type {any} */ (helpersMod).getSettings;
 const writeAudit = /** @type {any} */ (helpersMod).writeAudit;
@@ -225,43 +225,14 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
   // Migrated POD errors to new envelope (apiResponse.error preserves _legacy)
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   if (job.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
-  if (job.status !== 'IN_TRANSIT') return apiResponse.error(req, res, 'FORBIDDEN', 'Job must be IN_TRANSIT to submit proof of delivery');
 
   const doc = /** @type {any} */ ((/** @type {any} */ (req.body) || {}).document);
-  let storagePath = null;
-  let mimeType = null;
-  if (doc && (doc.fileBase64 || doc.storageKey)) {
-    try {
-      // @ts-ignore
-      ({ storagePath, mimeType } = await resolveUploadedFile(String(job.id), { mimeType: doc.mimeType, fileBase64: doc.fileBase64, storageKey: doc.storageKey }));
-    } catch (/** @type {any} */ e) {
-      return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
-    }
+  let updated;
+  try {
+    updated = await deliveryService.confirmDelivery(job, { actorId: req.actorId, doc, req });
+  } catch (/** @type {any} */ e) {
+    return apiResponse.error(req, res, e.status === 403 ? 'FORBIDDEN' : 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
   }
-  await db.prepare(`UPDATE jobs SET status='DELIVERED', delivered_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
-  if (doc && (doc.fileUrl || storagePath)) {
-    await db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
-      job.id,
-      req.actorId,
-      DOC_TYPES.includes(doc.docType) ? doc.docType : 'POD',
-      doc.title || 'Proof of Delivery',
-      doc.fileUrl || storagePath || '',
-      storagePath,
-      mimeType
-    );
-  }
-  await writeAudit(req, {
-    userId: req.actorId,
-    action: 'STATUS',
-    details: `${job.job_code}: POD submitted`,
-    entityType: 'job',
-    entityId: job.id,
-    beforeState: 'IN_TRANSIT',
-    afterState: 'DELIVERED',
-  });
-  const { auto_release_hours } = /** @type {any} */ (await getSettings());
-  await notify(job.shipper_id, 'Proof of delivery submitted', `Confirm delivery on ${job.job_code}, or it auto-releases in ${auto_release_hours}h.`, job.id, 'status');
-  const updated = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id));
   res.json({ job: updated });
 });
 
