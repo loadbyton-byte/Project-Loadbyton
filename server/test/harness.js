@@ -102,6 +102,7 @@ function makeClient(baseUrl) {
     get: (p) => call('GET', p),
     post: (p, b) => call('POST', p, b),
     patch: (p, b) => call('PATCH', p, b),
+    delete: (p) => call('DELETE', p),
     async login(email, password) {
       const r = await call('POST', '/api/auth/login', { email, password });
       if (!r.ok) throw new Error(`login failed for ${email}: ${r.status} ${r.raw}`);

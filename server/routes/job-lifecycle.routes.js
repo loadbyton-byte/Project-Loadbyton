@@ -204,7 +204,19 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
   }
   const { driverId, driverName: rawDriverName, driverPhone: rawDriverPhone } = /** @type {any} */ (req.body) || {};
   let driverName = rawDriverName;
-  let normalizedPhone = /** @type {any} */ (normalizeUaeMobile(rawDriverPhone));
+  // Phase 8 (Change 31) — country-aware phone validation. AE jobs keep the
+  // existing UAE check byte-for-byte; non-AE jobs validate against that
+  // country's pattern from lib/gcc.js (wired in here, previously imported
+  // nowhere). Registration/TRN stay AE-only — market entry is a business
+  // decision this does not resolve.
+  const { getCountryConfig } = require('../lib/gcc');
+  const countryCfg = getCountryConfig(job.country_code || 'AE');
+  const phoneOk = (raw) => {
+    const digits = String(raw || '').replace(/[\s-]/g, '');
+    if ((job.country_code || 'AE') === 'AE') return normalizeUaeMobile(raw);
+    return countryCfg.phoneRe.test(digits) ? digits : null;
+  };
+  let normalizedPhone = /** @type {any} */ (phoneOk(rawDriverPhone));
 
   // Preferred path: pick from the carrier's saved roster (server/routes/fleet.routes.js)
   // — name/phone still get written to jobs.assigned_driver_name/_phone too
@@ -220,7 +232,7 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
     normalizedPhone = driver.phone;
   } else {
     if (!driverName) return sendError(res, 400, 'driverId or driverName is required');
-    if (!normalizedPhone) return sendError(res, 400, 'driverPhone is required and must be a valid UAE mobile number');
+    if (!normalizedPhone) return sendError(res, 400, `driverPhone is required and must be a valid ${(job.country_code || 'AE')} mobile number`);
   }
 
   const updated = await bindDriverToJob(job, { driverId: resolvedDriverId, driverName, driverPhone: normalizedPhone, actorId: req.actorId, req });

@@ -876,4 +876,19 @@ CREATE TABLE IF NOT EXISTS admin_approvals (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approvals(status);
 
+-- Phase 8 (Change 28 remainder) — see server/schema.js.
+CREATE TABLE IF NOT EXISTS job_stops (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  stop_type TEXT NOT NULL CHECK(stop_type IN ('PICKUP','DROP','WAYPOINT')),
+  location TEXT NOT NULL,
+  address_detail TEXT,
+  lat REAL,
+  lng REAL,
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_job_stops_job ON job_stops(job_id, seq);
+
 COMMIT;

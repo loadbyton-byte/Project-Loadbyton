@@ -400,12 +400,16 @@ async function getJob(jobId, user) {
   // type/count columns (which already represent line item 1) — empty for
   // every job posted before multi-line-item support existed.
   const extraLineItems = await db.prepare('SELECT id, container_size, container_type, count FROM job_line_items WHERE job_id=? ORDER BY id').all(job.id);
+  // Multi-stop itinerary (Phase 8) — intermediate legs in seq order; the
+  // job's own pickup/delivery stay the canonical first/last legs.
+  const stops = await db.prepare(`SELECT * FROM job_stops WHERE job_id=? ORDER BY seq ASC`).all(job.id);
   const jobWithRating = {
     ...job,
     ...(driverIdentityVisible ? null : { assigned_driver_name: null, assigned_driver_phone: null }),
     shipper_rating: shipperProfile ? shipperProfile.rating_avg : null,
     driver_info: driverIdentityVisible ? driverInfo : null,
     extra_line_items: extraLineItems,
+    stops,
   };
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
