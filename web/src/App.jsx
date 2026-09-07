@@ -56,6 +56,34 @@ const Insurance = lazy(() => import('./pages/Insurance.jsx'));
 const TripOffers = lazy(() => import('./pages/TripOffers.jsx'));
 const Stops = lazy(() => import('./pages/Stops.jsx'));
 
+// RFP pages
+const RfpList = lazy(() => import('./pages/RfpList.jsx'));
+const RfpDetail = lazy(() => import('./pages/RfpDetail.jsx'));
+
+// EDI pages
+const EdiConsignments = lazy(() => import('./pages/EdiConsignments.jsx'));
+const EdiConsignmentDetail = lazy(() => import('./pages/EdiConsignmentDetail.jsx'));
+
+// GCC pages
+const GccCorridors = lazy(() => import('./pages/GccCorridors.jsx'));
+
+// Stripe Connect
+const StripeConnect = lazy(() => import('./pages/StripeConnect.jsx'));
+
+// Verification
+const VerifyTrn = lazy(() => import('./pages/VerifyTrn.jsx'));
+
+// Admin pages
+const AdminReconciliation = lazy(() => import('./pages/admin/AdminReconciliation.jsx'));
+const AdminPlatformFees = lazy(() => import('./pages/admin/AdminPlatformFees.jsx'));
+const AdminLedgerVerify = lazy(() => import('./pages/admin/AdminLedgerVerify.jsx'));
+
+// Account deletion
+const AccountDeletion = lazy(() => import('./pages/AccountDeletion.jsx'));
+
+// Driver location tracking
+const DriverLocationTracking = lazy(() => import('./pages/DriverLocationTracking.jsx'));
+
 // Every navigation lands at the top of the new page — a long page left
 // scrolled midway (a job list, a document thread) must never hand off
 // mid-viewport when the route changes. Keyed on pathname only, so an
@@ -149,6 +177,34 @@ export default function App() {
           <Route path="/jobs/:id/insurance" element={<RequireAuth roles={['SHIPPER', 'FORWARDER']}><Insurance /></RequireAuth>} />
           <Route path="/jobs/:id/trip-offers" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><TripOffers /></RequireAuth>} />
           <Route path="/jobs/:id/stops" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Stops /></RequireAuth>} />
+
+          {/* RFP routes */}
+          <Route path="/rfps" element={<RequireAuth roles={['SHIPPER', 'FORWARDER']}><RfpList /></RequireAuth>} />
+          <Route path="/rfps/:id" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'ADMIN']}><RfpDetail /></RequireAuth>} />
+
+          {/* EDI routes */}
+          <Route path="/edi/consignments" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'ADMIN']}><EdiConsignments /></RequireAuth>} />
+          <Route path="/edi/consignments/:id" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'ADMIN']}><EdiConsignmentDetail /></RequireAuth>} />
+
+          {/* GCC routes */}
+          <Route path="/gcc/corridors" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR', 'ADMIN']}><GccCorridors /></RequireAuth>} />
+
+          {/* Stripe Connect */}
+          <Route path="/stripe/connect" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><StripeConnect /></RequireAuth>} />
+
+          {/* Verification */}
+          <Route path="/verify/trn" element={<RequireAuth><VerifyTrn /></RequireAuth>} />
+
+          {/* Admin advanced pages */}
+          <Route path="/admin/reconciliation" element={<RequireAuth roles={['ADMIN']}><AdminReconciliation /></RequireAuth>} />
+          <Route path="/admin/platform-fees" element={<RequireAuth roles={['ADMIN']}><AdminPlatformFees /></RequireAuth>} />
+          <Route path="/admin/ledger-verify" element={<RequireAuth roles={['ADMIN']}><AdminLedgerVerify /></RequireAuth>} />
+
+          {/* Account deletion */}
+          <Route path="/account/deletion" element={<RequireAuth><AccountDeletion /></RequireAuth>} />
+
+          {/* Driver location tracking */}
+          <Route path="/driver/tracking" element={<DriverOnly><DriverLocationTracking /></DriverOnly>} />
 
           <Route path="/admin" element={<RequireAuth roles={['ADMIN']}><Admin /></RequireAuth>} />
 

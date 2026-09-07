@@ -220,6 +220,14 @@ export default function Profile() {
         <IconChevronRight size={16} className="text-ink-muted" />
       </Link>
 
+      <Link to="/account/deletion" className="card mt-5 flex items-center justify-between gap-3 p-4" style={{ borderColor: 'var(--status-warning-bg)' }}>
+        <div className="flex items-center gap-3">
+          <IconUser size={18} className="text-status-warning" />
+          <span className="text-sm font-semibold text-ink">Account deletion & data export</span>
+        </div>
+        <IconChevronRight size={16} className="text-ink-muted" />
+      </Link>
+
       <Card className="mt-5">
         <form onSubmit={save}>
           <Card.Header><Card.Title>Company profile</Card.Title></Card.Header>

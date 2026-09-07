@@ -238,4 +238,53 @@ Object.assign(api, {
   deleteStop: (id, stopId) => del(`/jobs/${id}/stops/${stopId}`),
   // Admin reject approval
   adminReject: (id) => post(`/admin/approvals/${id}/reject`, {}),
+  // Admin approvals request
+  adminRequestApproval: (body) => post('/admin/approvals/request', body),
+  // Admin reconciliation / platform fees / ledger
+  adminReconciliation: () => get('/admin/reconciliation'),
+  adminPlatformFees: () => get('/admin/platform-fees'),
+  adminLedgerVerify: () => get('/admin/ledger/verify-chain'),
+  // Account deletion / GDPR
+  deleteAccount: () => del('/me'),
+  exportAccount: () => get('/me/export'),
+  // Bid ancillary charge delete
+  deleteBidAncillaryCharge: (bidId, chargeId) => del(`/bids/${bidId}/ancillary-charges/${chargeId}`),
+  // Job status patch (admin)
+  patchJobStatus: (id, status) => patch(`/jobs/${id}/status`, { status }),
+  // Stripe Connect
+  stripeConnectOnboard: () => post('/stripe/connect/onboard', {}),
+  stripeConnectStatus: () => get('/stripe/connect/status'),
+  // Verification
+  verifyTrn: (trn) => get(`/verify/trn/${encodeURIComponent(trn)}`),
+  verifyCheck: (body) => post('/verify/check', body),
+  verifyGate: () => get('/verify/gate'),
+  // Currency
+  currencyRates: () => get('/currency/rates'),
+  setJobCurrency: (id, body) => post(`/jobs/${id}/currency`, body),
+  // RFP
+  listRfps: () => get('/rfps'),
+  getRfp: (id) => get(`/rfps/${id}`),
+  createRfp: (body) => post('/rfps', body),
+  bidRfp: (id, body) => post(`/rfps/${id}/bids`, body),
+  awardRfp: (id, bidId) => post(`/rfps/${id}/award`, { bidId }),
+  // EDI
+  ingestEdi: (body) => post('/edi/ingest', body),
+  listConsignments: () => get('/edi/consignments'),
+  getConsignment: (id) => get(`/edi/consignments/${id}`),
+  transitionConsignment: (id, body) => post(`/edi/consignments/${id}/transition`, body),
+  // GCC
+  getGccCountries: () => get('/gcc/countries'),
+  getGccCorridors: () => get('/gcc/corridors'),
+  // Billing / Lanes
+  getBillingFees: () => get('/billing/fees'),
+  getLanesQuote: (params) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''));
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return get(`/lanes/quote${suffix}`);
+  },
+  // Audit / Ledger
+  getAuditChain: () => get('/audit/chain'),
+  verifyAuditChain: () => get('/audit/chain/verify'),
+  // Job instruments
+  getInstruments: (id) => get(`/jobs/${id}/instruments`),
 });

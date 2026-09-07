@@ -6,7 +6,7 @@ import { api } from '../lib/api.js';
 import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
-  IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt,
+  IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt, IconShield,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 
@@ -45,6 +45,7 @@ function navByRole(t) {
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
     ],
     CARRIER: [
       { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} /> },
@@ -56,6 +57,7 @@ function navByRole(t) {
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
       { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
     ],
     FORWARDER: [
       { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} /> },
@@ -64,6 +66,7 @@ function navByRole(t) {
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
     ],
     BROKER: [
       { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} /> },
@@ -72,6 +75,7 @@ function navByRole(t) {
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
     ],
     OWNER_OPERATOR: [
       { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} /> },
@@ -83,10 +87,12 @@ function navByRole(t) {
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
       { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} /> },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
     ],
     ADMIN: [
       { to: '/admin', label: t('nav.admin', 'Admin console'), icon: <IconSettings size={20} /> },
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
     ],
   };
 }

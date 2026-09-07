@@ -14,8 +14,11 @@ const AuditTab = lazy(() => import('./admin/AuditTab.jsx'));
 const RevenueTab = lazy(() => import('./admin/RevenueTab.jsx'));
 const SettingsTab = lazy(() => import('./admin/SettingsTab.jsx'));
 const DocumentsTab = lazy(() => import('./admin/DocumentsTab.jsx'));
+const ReconciliationTab = lazy(() => import('./admin/AdminReconciliation.jsx'));
+const PlatformFeesTab = lazy(() => import('./admin/AdminPlatformFees.jsx'));
+const LedgerVerifyTab = lazy(() => import('./admin/AdminLedgerVerify.jsx'));
 
-const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Documents', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
+const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Documents', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings', 'Reconciliation', 'Platform fees', 'Ledger verify'];
 const TAB_COMPONENTS = {
   Health: HealthTab,
   'Live activity': LiveActivityTab,
@@ -29,6 +32,9 @@ const TAB_COMPONENTS = {
   'Audit log': AuditTab,
   Revenue: RevenueTab,
   Settings: SettingsTab,
+  Reconciliation: ReconciliationTab,
+  'Platform fees': PlatformFeesTab,
+  'Ledger verify': LedgerVerifyTab,
 };
 
 export default function Admin() {

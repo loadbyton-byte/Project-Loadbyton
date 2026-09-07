@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS } from '../lib/constants.js';
+import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -634,6 +634,50 @@ export default function JobDetail() {
             <Link to={`/jobs/${job.id}/dispute`} className="btn-danger mb-6 w-full justify-center">
               <IconGavel size={15} /> View dispute
             </Link>
+          )}
+
+          {/* Tokenize Bill of Lading — shipper only, after award */}
+          {(isShipper || isAwardedCarrier) && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(job.status) && (
+            <Section title="Bill of Lading Token" className="mb-6">
+              <Card className="border-l-4" style={{ borderLeftColor: 'var(--brand-accent)' }}>
+                <Card.Content className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
+                  <div>
+                    <p className="font-medium text-ink">{t('jobDetail.tokenizeBL', 'Tokenize Bill of Lading')}</p>
+                    <p className="text-xs text-ink-muted">{t('jobDetail.tokenizeBLDesc', 'Create a verifiable, transferable digital token for this shipment\'s bill of lading')}</p>
+                  </div>
+                  <Button variant="accent" onClick={async () => {
+                    const result = await act(async () => {
+                      const res = await api.tokenizeBL(job.id, { shipmentType: job.shipment_type });
+                      return res;
+                    });
+                  }} loading={busy}>
+                    {t('jobDetail.tokenizeBLBtn', 'Tokenize BL')}
+                  </Button>
+                </Card.Content>
+              </Card>
+            </Section>
+          )}
+
+          {/* Currency selector — shipper can change job currency before award */}
+          {isShipper && ['OPEN', 'QUOTING'].includes(job.status) && (
+            <Section title={t('jobDetail.currency', 'Currency')} className="mb-6">
+              <Card className="border-l-4" style={{ borderLeftColor: 'var(--lb-orange-600)' }}>
+                <Card.Content className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
+                  <div>
+                    <p className="font-medium text-ink">{t('jobDetail.currencyLabel', 'Job Currency')}</p>
+                    <p className="text-xs text-ink-muted">{t('jobDetail.currencyDesc', 'Set the currency for this job. All bids and payments will use this currency.')}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={job.currency || 'AED'}
+                      onChange={(e) => act(async () => { await api.setJobCurrency(job.id, { currency: e.target.value }); })}
+                    >
+                      {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                    </Select>
+                  </div>
+                </Card.Content>
+              </Card>
+            </Section>
           )}
 
           <Card className="mb-6">

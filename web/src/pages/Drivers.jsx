@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { uploadFile, UPLOAD_ACCEPT, driverDocumentUrl } from '../lib/upload.js';
-import { Button, Card, Input, Label, EmptyState, ErrorState, Badge } from '../components/ui.jsx';
-import { IconPlus, IconTruck, IconFile, IconCheckCircle } from '../components/icons.jsx';
+import { Button, Card, Input, Label, EmptyState, ErrorState, Badge, Select } from '../components/ui.jsx';
+import { IconPlus, IconTruck, IconFile, IconCheckCircle, IconWallet, IconChevronDown, IconChevronRight } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 
 const empty = { name: '', phone: '', licenseNumber: '', licenseExpiry: '' };
@@ -19,10 +19,20 @@ export default function Drivers() {
   const [uploadingFor, setUploadingFor] = useState(null); // { driverId, docType }
   const [seatBusyFor, setSeatBusyFor] = useState(null); // driverId
   const [revealedSeat, setRevealedSeat] = useState(null); // { driverName, email, password } — shown once
+  const [capacity, setCapacity] = useState(null);
+  const [walletEntries, setWalletEntries] = useState([]);
+  const [capacityBusy, setCapacityBusy] = useState(false);
+  const [engageUnits, setEngageUnits] = useState('');
+  const [engageNote, setEngageNote] = useState('');
+  const [walletBusyFor, setWalletBusyFor] = useState(null);
 
   function load() {
     setDriversError('');
-    api.listDrivers().then((d) => setDrivers(d.drivers)).catch((err) => { setDrivers([]); setDriversError(err.message); });
+    Promise.all([
+      api.listDrivers().then((d) => setDrivers(d.drivers)).catch((err) => { setDrivers([]); setDriversError(err.message); }),
+      api.getFleetCapacity().then((c) => setCapacity(c.capacity)).catch(() => setCapacity(null)),
+      api.get('/fleet/driver-associates/wallet').then((w) => setWalletEntries(w.entries || [])).catch(() => setWalletEntries([])),
+    ]);
   }
   useEffect(load, []);
 
@@ -79,6 +89,53 @@ export default function Drivers() {
     }
   }
 
+  async function engageExternalUnits(e) {
+    e.preventDefault();
+    if (!engageUnits || Number(engageUnits) <= 0) return;
+    setCapacityBusy(true);
+    try {
+      await api.externalEngageUnits(Number(engageUnits), engageNote);
+      addToast({ type: 'status_change', title: 'Units engaged', body: `${engageUnits} unit(s) added to your fleet capacity.` });
+      setEngageUnits('');
+      setEngageNote('');
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not engage units', body: err.message });
+    } finally {
+      setCapacityBusy(false);
+    }
+  }
+
+  async function releaseUnits(e) {
+    e.preventDefault();
+    if (!engageUnits || Number(engageUnits) <= 0) return;
+    setCapacityBusy(true);
+    try {
+      await api.releaseExternalUnits(Number(engageUnits));
+      addToast({ type: 'status_change', title: 'Units released', body: `${engageUnits} unit(s) released from your fleet capacity.` });
+      setEngageUnits('');
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not release units', body: err.message });
+    } finally {
+      setCapacityBusy(false);
+    }
+  }
+
+  async function markWalletPaid(driverId, entryId, amount) {
+    if (!window.confirm(`Mark AED ${amount} as paid for this driver?`)) return;
+    setWalletBusyFor(entryId);
+    try {
+      await api.post(`/fleet/driver-associates/wallet/${entryId}/mark-paid`, {});
+      addToast({ type: 'status_change', title: 'Marked paid', body: `AED ${amount} marked as paid.` });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not mark paid', body: err.message });
+    } finally {
+      setWalletBusyFor(null);
+    }
+  }
+
   return (
     <div className="container-page py-6" dir="ltr">
       <div className="flex items-start justify-between gap-4">
@@ -92,6 +149,64 @@ export default function Drivers() {
           <IconPlus size={18} /> Add driver
         </Button>
       </div>
+
+      {/* Fleet Capacity */}
+      <Card className="mt-5">
+        <Card.Header>
+          <Card.Title>Fleet Capacity</Card.Title>
+        </Card.Header>
+        <Card.Content>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="col-span-3 sm:col-span-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Available Units</p>
+              <p className="mt-1 tabular font-display text-3xl font-bold text-ink">{capacity?.available_units ?? '—'}</p>
+            </div>
+            <div className="col-span-3 sm:col-span-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Engaged</p>
+              <p className="mt-1 tabular font-display text-3xl font-bold text-brand-primary">{capacity?.engaged_units ?? '—'}</p>
+            </div>
+            <div className="col-span-3 sm:col-span-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Released</p>
+              <p className="mt-1 tabular font-display text-3xl font-bold" style={{ color: 'var(--status-success)' }}>{capacity?.released_units ?? '—'}</p>
+            </div>
+          </div>
+          <form onSubmit={engageExternalUnits} className="mt-4 flex flex-col sm:flex-row gap-2">
+            <Input type="number" min="1" placeholder="Units to engage" value={engageUnits} onChange={(e) => setEngageUnits(e.target.value)} className="w-full sm:w-32" />
+            <Input type="text" placeholder="Note (optional)" value={engageNote} onChange={(e) => setEngageNote(e.target.value)} className="w-full sm:w-48" />
+            <Button type="submit" loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronRight size={16} className="mr-2" /> Engage Units</Button>
+            <Button type="button" variant="secondary" onClick={releaseUnits} loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronDown size={16} className="mr-2" /> Release Units</Button>
+          </form>
+        </Card.Content>
+      </Card>
+
+      {/* Driver Associate Wallet */}
+      <Card className="mt-5">
+        <Card.Header>
+          <Card.Title className="flex items-center gap-2"><IconWallet size={20} /> Driver Associate Wallet</Card.Title>
+        </Card.Header>
+        <Card.Content>
+          {walletEntries.length === 0 ? (
+            <p className="text-sm text-ink-muted">No pending driver associate payments.</p>
+          ) : (
+            <div className="space-y-3">
+              {walletEntries.map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between gap-3 p-3 rounded-lg border" style={{ borderColor: 'var(--border-default)' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-ink">{entry.driver_name}</p>
+                    <p className="text-sm text-ink-muted">Job: {entry.job_code} · {entry.created_at ? new Date(entry.created_at).toLocaleDateString() : '—'}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="tabular font-display text-lg font-bold text-ink">AED {entry.driver_share_aed}</span>
+                    <Button size="sm" variant={entry.paid_at ? 'ghost' : 'accent'} loading={walletBusyFor === entry.id} onClick={() => markWalletPaid(entry.driver_id, entry.id, entry.driver_share_aed)} disabled={entry.paid_at}>
+                      {entry.paid_at ? (<span><IconCheckCircle size={14} /> Paid</span>) : 'Mark Paid'}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card.Content>
+      </Card>
 
       {revealedSeat && (
         <Card className="mt-5" style={{ borderColor: 'var(--brand-accent)' }}>
