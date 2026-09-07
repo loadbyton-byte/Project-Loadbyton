@@ -815,6 +815,37 @@ module.exports = function initSchema(db) {
   `);
   db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('insurance_rate_bps', '35')`).run();
 
+  // Change 27 (Phase 7b) — Forwarder client roster, Broker carrier roster,
+  // and direct-assign columns. WhatsApp-in-dashboard + bulk CSV import are
+  // explicit Phase 2 of this item (not built here).
+  // One-hop broker rule is enforced in broker.routes.js: a job with
+  // broker_id set rejects assignment attempts by any other broker, and a
+  // broker can only direct-assign to a CARRIER/OWNER_OPERATOR in their own
+  // roster — never to another broker/forwarder.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS forwarder_clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    forwarder_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_name TEXT NOT NULL,
+    contact_phone TEXT,
+    contact_email TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_forwarder_clients_owner ON forwarder_clients(forwarder_id);
+
+  CREATE TABLE IF NOT EXISTS broker_carriers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    broker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(broker_id, carrier_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_broker_carriers_broker ON broker_carriers(broker_id);
+  `);
+  addColumn('jobs', 'broker_id', 'broker_id INTEGER REFERENCES users(id)');
+  addColumn('jobs', 'forwarder_client_id', 'forwarder_client_id INTEGER REFERENCES forwarder_clients(id)');
+  addColumn('jobs', 'broker_spread_bps', 'broker_spread_bps INTEGER NOT NULL DEFAULT 0');
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

@@ -18,8 +18,21 @@ const totp = require('../lib/totp');
 // job the carrier has) is enforced separately, inside
 // isParticipantOrBidder/isPartyOnJob/canViewJob (lib/helpers.js) and
 // messaging.js, which the routes below already call.
-const DRIVER_SEAT_ALLOWED_ROUTES = [
-  { method: 'GET', pattern: /^\/api\/auth\/me$/ },
+// Change 27 role aliases — new account types reuse existing route guards
+// without rewriting every allow-list:
+//   FORWARDER → satisfies SHIPPER checks (posts jobs, awards, confirms)
+//   OWNER_OPERATOR → satisfies CARRIER checks (bids, executes, POD)
+//   BROKER → satisfies BOTH (posts + direct-assigns), with the disclosed
+//     one-hop rule enforced at the job level (see broker.routes.js), not here.
+function roleSatisfies(userRole, allowedRoles) {
+  if (allowedRoles.includes(userRole)) return true;
+  if (userRole === 'FORWARDER' && allowedRoles.includes('SHIPPER')) return true;
+  if (userRole === 'OWNER_OPERATOR' && allowedRoles.includes('CARRIER')) return true;
+  if (userRole === 'BROKER' && (allowedRoles.includes('SHIPPER') || allowedRoles.includes('CARRIER'))) return true;
+  return false;
+}
+
+const DRIVER_SEAT_ALLOWED_ROUTES = [  { method: 'GET', pattern: /^\/api\/auth\/me$/ },
   { method: 'POST', pattern: /^\/api\/auth\/logout$/ },
   { method: 'GET', pattern: /^\/api\/driver\/job$/ },
   { method: 'GET', pattern: /^\/api\/jobs\/\d+\/threads$/ },
@@ -89,7 +102,7 @@ function auth(allowedRoles) {
       : user.email;
 
     if (allowedRoles && allowedRoles.length > 0) {
-      if (!allowedRoles.includes(user.role)) {
+      if (!roleSatisfies(user.role, allowedRoles)) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
     }
@@ -160,4 +173,4 @@ async function revokeAllSessions(userId) {
   await db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);
 }
 
-module.exports = { auth, requireSeatRole, requirePermission, requireReauth, revokeAllSessions, writeLimiter, isThrottled, recordFailure, clearThrottle };
+module.exports = { auth, requireSeatRole, requirePermission, requireReauth, revokeAllSessions, writeLimiter, isThrottled, recordFailure, clearThrottle, roleSatisfies };

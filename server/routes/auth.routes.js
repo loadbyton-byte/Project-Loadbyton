@@ -32,7 +32,7 @@ router.post(
     // mechanism anywhere — see server/schema.js's terms_acceptances table.
     if (!agreedToTerms) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'You must agree to the Terms & Conditions to create an account');
     if (!isPasswordValid(password)) return apiResponse.error(req, res, 'VALIDATION_FAILED', `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-    if (!['SHIPPER', 'CARRIER'].includes(role)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'role must be SHIPPER or CARRIER', { status: 422 });
+    if (!['SHIPPER', 'CARRIER', 'FORWARDER', 'OWNER_OPERATOR', 'BROKER'].includes(role)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'role must be SHIPPER, CARRIER, FORWARDER, OWNER_OPERATOR or BROKER', { status: 422 });
     const existing = await db.prepare('SELECT id FROM users WHERE email=?').get(email);
     if (existing) {
       // Deliberately generic — a distinct "this email already exists"
@@ -58,7 +58,7 @@ router.post(
     }
 
     const passwordHash = bcrypt.hashSync(password, 10);
-    const prefix = role === 'SHIPPER' ? 'SHP' : 'CAR';
+    const prefix = role === 'SHIPPER' ? 'SHP' : role === 'CARRIER' ? 'CAR' : role === 'FORWARDER' ? 'FWD' : role === 'BROKER' ? 'BRK' : 'OOP';
     let code = referralCode(prefix, companyName);
     while (await db.prepare('SELECT 1 FROM users WHERE referral_code=?').get(code)) {
       code = `${code}${crypto.randomInt(10, 100)}`;

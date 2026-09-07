@@ -821,4 +821,26 @@ CREATE TABLE IF NOT EXISTS job_insurance (
 CREATE INDEX IF NOT EXISTS idx_job_insurance_shipper ON job_insurance(shipper_id);
 INSERT INTO settings (key, value) VALUES ('insurance_rate_bps', '35') ON CONFLICT (key) DO NOTHING;
 
+-- Change 27 (Phase 7b) — see server/schema.js.
+CREATE TABLE IF NOT EXISTS forwarder_clients (
+  id SERIAL PRIMARY KEY,
+  forwarder_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_name TEXT NOT NULL,
+  contact_phone TEXT,
+  contact_email TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_forwarder_clients_owner ON forwarder_clients(forwarder_id);
+CREATE TABLE IF NOT EXISTS broker_carriers (
+  id SERIAL PRIMARY KEY,
+  broker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  added_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  UNIQUE(broker_id, carrier_id)
+);
+CREATE INDEX IF NOT EXISTS idx_broker_carriers_broker ON broker_carriers(broker_id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS broker_id INTEGER REFERENCES users(id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS forwarder_client_id INTEGER REFERENCES forwarder_clients(id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS broker_spread_bps INTEGER NOT NULL DEFAULT 0;
+
 COMMIT;
