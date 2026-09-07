@@ -171,6 +171,98 @@ test('auto-release sweep rejects requests with no key and no admin session', asy
   assert.equal(res.status, 403);
 });
 
+test('a losing bidder cannot see the winning bid\'s driver name/phone after award, even though they can still see the price', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '40FT',
+    containerType: 'DRY',
+    pickupTerminal: 'JEBEL_ALI_T2',
+    deliveryArea: 'JAFZA_SOUTH',
+    deliveryAddress: 'Test Warehouse — driver leak regression',
+    readyAt: new Date(Date.now() + 86400000).toISOString(),
+    deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    maxBudgetAed: 900,
+  });
+  assert.equal(created.status, 201, created.raw);
+  const jobId = created.body.job.id;
+
+  const winner = makeClient(server.baseUrl);
+  await winner.login('carrier@dubaidrayage.com', 'demo1234');
+  const winningBid = await winner.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 700, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed',
+  });
+  assert.equal(winningBid.status, 201, winningBid.raw);
+
+  const loser = makeClient(server.baseUrl);
+  await loser.login('falcon@containerxpress.ae', 'demo1234');
+  const losingBid = await loser.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 750, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+  });
+  assert.equal(losingBid.status, 201, losingBid.raw);
+
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: winningBid.body.bid.id });
+  assert.equal(award.status, 200, award.raw);
+
+  await winner.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Ahmed Al Mazrouei', driverPhone: '0551112222' });
+
+  // The real, live leak: PATCH /api/jobs/:id/driver writes to
+  // jobs.assigned_driver_name/assigned_driver_phone (bids.driver_name/
+  // driver_phone are separate, always-null legacy columns — driver
+  // details were moved off the bid entirely per an earlier product
+  // change). getJob() previously spread the full job row with no masking,
+  // and canViewJob() (via isParticipantOrBidder) grants a losing bidder
+  // view access forever, since they placed a real bid on this job.
+  const asLoser = await loser.get(`/api/jobs/${jobId}`);
+  assert.equal(asLoser.status, 200, asLoser.raw);
+  assert.equal(asLoser.body.job.assigned_driver_name, null, 'assigned_driver_name must be masked from a losing bidder');
+  assert.equal(asLoser.body.job.assigned_driver_phone, null, 'assigned_driver_phone must be masked from a losing bidder');
+  assert.equal(asLoser.body.job.driver_info, null, 'driver_info must be masked from a losing bidder too');
+  const winningBidAsSeenByLoser = asLoser.body.bids.find((b) => b.id === winningBid.body.bid.id);
+  assert.ok(winningBidAsSeenByLoser, 'the losing bidder should still be able to see the winning bid exists');
+  // Commercial info (price, company) is useful, non-sensitive market
+  // information once bidding has closed — it should NOT be masked.
+  assert.equal(winningBidAsSeenByLoser.amount_aed, 700, 'bid amount should remain visible post-award (not sensitive)');
+
+  const asWinner = await winner.get(`/api/jobs/${jobId}`);
+  assert.equal(asWinner.body.job.assigned_driver_name, 'Ahmed Al Mazrouei', 'the awarded carrier must always see their own assigned driver in full');
+  assert.equal(asWinner.body.job.assigned_driver_phone, '0551112222');
+
+  const asShipper = await shipper.get(`/api/jobs/${jobId}`);
+  assert.equal(asShipper.body.job.assigned_driver_name, 'Ahmed Al Mazrouei', 'the shipper who owns the job must always see the assigned driver');
+});
+
+test('two rapid POST /api/jobs with the same Idempotency-Key create only one job', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const key = `test-idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const payload = {
+    containerSize: '20FT',
+    containerType: 'DRY',
+    pickupTerminal: 'JEBEL_ALI_T1',
+    deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Test Warehouse — idempotency regression',
+    readyAt: new Date(Date.now() + 86400000).toISOString(),
+    deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    maxBudgetAed: 500,
+  };
+  const headers = { 'Idempotency-Key': key };
+  const [first, second] = await Promise.all([
+    shipper.post('/api/jobs', payload, headers),
+    shipper.post('/api/jobs', payload, headers),
+  ]);
+  assert.equal(first.status, 201, first.raw);
+  assert.equal(second.status, 201, second.raw);
+  assert.equal(first.body.job.id, second.body.job.id, 'a double-tap with the same Idempotency-Key must not create two jobs');
+
+  const mine = await shipper.get('/api/jobs?limit=100');
+  const matching = mine.body.jobs.filter((j) => j.delivery_address === payload.deliveryAddress);
+  assert.equal(matching.length, 1, 'only one job with this delivery address should exist, not two');
+});
+
+// Deliberately placed after every test above that needs to log in — this
+// test intentionally exhausts the per-IP auth rate limit, and its cooldown
+// window would otherwise cause spurious 429s on any later test's login().
 test('per-IP rate limiting kicks in on /api/auth — previously the ONLY throttle in the app was per-email login lockout', async () => {
   const statuses = [];
   for (let i = 0; i < 25; i++) {
