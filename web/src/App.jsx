@@ -49,6 +49,13 @@ const Messages = lazy(() => import('./pages/Messages.jsx'));
 const Invoices = lazy(() => import('./pages/Invoices.jsx'));
 const JobHistory = lazy(() => import('./pages/JobHistory.jsx'));
 
+// Forwarder / Broker / Insurance / TripOffer / Stops pages
+const ForwarderClients = lazy(() => import('./pages/ForwarderClients.jsx'));
+const BrokerCarriers = lazy(() => import('./pages/BrokerCarriers.jsx'));
+const Insurance = lazy(() => import('./pages/Insurance.jsx'));
+const TripOffers = lazy(() => import('./pages/TripOffers.jsx'));
+const Stops = lazy(() => import('./pages/Stops.jsx'));
+
 // Every navigation lands at the top of the new page — a long page left
 // scrolled midway (a job list, a document thread) must never hand off
 // mid-viewport when the route changes. Keyed on pathname only, so an
@@ -125,21 +132,27 @@ export default function App() {
           <Route path="/reset-password" element={<GuestOnly><ResetPassword /></GuestOnly>} />
           <Route path="/verify-email" element={<VerifyEmail />} />
 
-          <Route path="/dashboard" element={<RequireAuth roles={['SHIPPER']}><Dashboard /></RequireAuth>} />
+          <Route path="/dashboard" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Dashboard /></RequireAuth>} />
           <Route path="/templates" element={<RequireAuth roles={['SHIPPER']}><Templates /></RequireAuth>} />
           <Route path="/contracts" element={<RequireAuth roles={['SHIPPER']}><Contracts /></RequireAuth>} />
 
-          <Route path="/open-loads" element={<RequireAuth roles={['CARRIER']}><OpenLoads /></RequireAuth>} />
-          <Route path="/my-bids" element={<RequireAuth roles={['CARRIER']}><MyBids /></RequireAuth>} />
-          <Route path="/won-jobs" element={<RequireAuth roles={['CARRIER']}><WonJobs /></RequireAuth>} />
-          <Route path="/earnings" element={<RequireAuth roles={['CARRIER']}><Earnings /></RequireAuth>} />
-          <Route path="/invoices" element={<RequireAuth roles={['CARRIER']}><Invoices /></RequireAuth>} />
-          <Route path="/history" element={<RequireAuth roles={['SHIPPER']}><JobHistory /></RequireAuth>} />
-          <Route path="/drivers" element={<RequireAuth roles={['CARRIER']}><Drivers /></RequireAuth>} />
+          <Route path="/open-loads" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><OpenLoads /></RequireAuth>} />
+          <Route path="/my-bids" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><MyBids /></RequireAuth>} />
+          <Route path="/won-jobs" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><WonJobs /></RequireAuth>} />
+          <Route path="/earnings" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><Earnings /></RequireAuth>} />
+          <Route path="/invoices" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><Invoices /></RequireAuth>} />
+          <Route path="/history" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'BROKER']}><JobHistory /></RequireAuth>} />
+          <Route path="/drivers" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><Drivers /></RequireAuth>} />
+
+          <Route path="/forwarder/clients" element={<RequireAuth roles={['FORWARDER']}><ForwarderClients /></RequireAuth>} />
+          <Route path="/broker/carriers" element={<RequireAuth roles={['BROKER']}><BrokerCarriers /></RequireAuth>} />
+          <Route path="/jobs/:id/insurance" element={<RequireAuth roles={['SHIPPER', 'FORWARDER']}><Insurance /></RequireAuth>} />
+          <Route path="/jobs/:id/trip-offers" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><TripOffers /></RequireAuth>} />
+          <Route path="/jobs/:id/stops" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Stops /></RequireAuth>} />
 
           <Route path="/admin" element={<RequireAuth roles={['ADMIN']}><Admin /></RequireAuth>} />
 
-          <Route path="/analytics" element={<RequireAuth roles={['SHIPPER', 'CARRIER']}><Analytics /></RequireAuth>} />
+          <Route path="/analytics" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Analytics /></RequireAuth>} />
           <Route path="/jobs/:id" element={<RequireAuth><JobDetail /></RequireAuth>} />
           <Route path="/jobs/:id/dispute" element={<RequireAuth><JobDispute /></RequireAuth>} />
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />

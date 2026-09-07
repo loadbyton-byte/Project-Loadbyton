@@ -219,4 +219,23 @@ Object.assign(api, {
   predictEta: (body) => post('/ml/predict-eta', body),
   auditChain: () => get('/audit/chain'),
   auditVerify: () => get('/audit/chain/verify'),
+  // Insurance
+  getInsuranceQuote: (id, body) => post(`/jobs/${id}/insurance/quote`, body),
+  bindInsurance: (id, body) => post(`/jobs/${id}/insurance/bind`, body),
+  cancelInsurance: (id) => post(`/jobs/${id}/insurance/cancel`, {}),
+  // Direct assign / Broker / Forwarder
+  directAssign: (id, body) => post(`/jobs/${id}/direct-assign`, body),
+  listBrokerCarriers: () => get('/broker/carriers'),
+  addBrokerCarrier: (body) => post('/broker/carriers', body),
+  listForwarderClients: () => get('/forwarder/clients'),
+  addForwarderClient: (body) => post('/forwarder/clients', body),
+  // Trip offers
+  createTripOffer: (id, body) => post(`/jobs/${id}/trip-offer`, body),
+  // Stops
+  listStops: (id) => get(`/jobs/${id}/stops`),
+  createStop: (id, body) => post(`/jobs/${id}/stops`, body),
+  completeStop: (id, stopId) => post(`/jobs/${id}/stops/${stopId}/complete`, {}),
+  deleteStop: (id, stopId) => del(`/jobs/${id}/stops/${stopId}`),
+  // Admin reject approval
+  adminReject: (id) => post(`/admin/approvals/${id}/reject`, {}),
 });

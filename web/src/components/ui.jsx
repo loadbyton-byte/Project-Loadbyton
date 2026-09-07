@@ -1,5 +1,5 @@
-import React from 'react';
-import { IconStar, IconMapPin, IconAlert } from './icons.jsx';
+import React, { useEffect } from 'react';
+import { IconStar, IconMapPin, IconAlert, IconX } from './icons.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -376,6 +376,25 @@ export function ChatThread({ messages, emptyLabel = 'No messages yet.', classNam
       {messages.map((m) => (
         <ChatBubble key={m.id} body={m.body} senderLabel={m.senderLabel} mine={m.mine} at={m.at} variant={m.variant} />
       ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Modal
+export function Modal({ open, onClose, title, children, className }) {
+  if (!open) return null;
+  return (
+    <div className={cx('fixed inset-0 z-50 flex items-center justify-center p-4', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-xl bg-white shadow-xl animate-slide-up overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+          <h2 id="modal-title" className="font-display text-lg font-semibold text-ink">{title}</h2>
+          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-surface-container-high text-ink-muted transition-colors" aria-label="Close">
+            <IconX size={20} />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
     </div>
   );
 }
