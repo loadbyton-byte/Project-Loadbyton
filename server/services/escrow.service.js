@@ -10,7 +10,20 @@ async function runAutoReleaseSweep(req) {
 
   let released = 0;
   for (const job of jobs) {
-    await db.prepare(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
+    // Atomic claim: this UPDATE's WHERE clause repeats the exact
+    // escrow_status/status condition the SELECT above used, so if a
+    // second server instance's own timer (this sweep runs on
+    // setInterval, once per process — see server/routes/system.routes.js)
+    // already claimed this same job between the SELECT and here, this
+    // UPDATE matches zero rows and .changes is 0. Only the instance that
+    // actually flips the row proceeds to the payout update and side
+    // effects below — otherwise every instance would run them for the
+    // same job.
+    const claim = await db.prepare(
+      `UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now')
+       WHERE id=? AND escrow_status IN ('HELD','FUNDED') AND status='DELIVERED'`
+    ).run(job.id);
+    if (!claim.changes) continue;
     await db.prepare(`UPDATE payouts SET status='RELEASED', release_type='AUTO', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=? AND status != 'RELEASED'`).run(job.id);
     await writeAudit(req, {
       action: 'ESCROW_AUTO_RELEASE',

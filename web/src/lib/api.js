@@ -16,11 +16,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, extraHeaders) {
   const res = await fetch(`${API_BASE_URL}/api${path}`, {
     method,
     credentials: 'include',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: body !== undefined ? { 'Content-Type': 'application/json', ...extraHeaders } : extraHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const isJson = res.headers.get('content-type')?.includes('application/json');
@@ -44,9 +44,15 @@ async function request(method, path, body) {
 }
 
 const get = (path) => request('GET', path);
-const post = (path, body) => request('POST', path, body ?? {});
+const post = (path, body, extraHeaders) => request('POST', path, body ?? {}, extraHeaders);
 const patch = (path, body) => request('PATCH', path, body ?? {});
 const del = (path) => request('DELETE', path);
+
+// Pass the same key back on a retry of the same submit attempt (e.g. after
+// a network error) so the backend's idempotency middleware
+// (server/lib/idempotency.js) can replay the first response instead of
+// creating a duplicate row — a fresh key means a genuinely new submission.
+const idempotencyHeaders = (key) => (key ? { 'Idempotency-Key': key } : undefined);
 
 export const api = {
   // auth
@@ -76,7 +82,7 @@ export const api = {
     const suffix = qs.toString() ? `?${qs}` : '';
     return get(`/jobs${suffix}`);
   },
-  createJob: (body) => post('/jobs', body),
+  createJob: (body, idempotencyKey) => post('/jobs', body, idempotencyHeaders(idempotencyKey)),
   importJobs: (jobs) => post('/jobs/import', { jobs }),
   editJob: (id, body) => patch(`/jobs/${id}`, body),
   myBids: (params = {}) => {

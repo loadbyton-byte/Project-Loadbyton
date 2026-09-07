@@ -165,7 +165,8 @@ async function createJobFromBody(body, req) {
       await insertLineItem.run(jobId, li.containerSize, li.containerType, li.count);
     }
   }
-  // GIT insurance opt-in (Change 20) — declared cargo value + flag at posting.  // Binding itself is a separate step (POST /api/jobs/:id/insurance/bind);
+  // GIT insurance opt-in (Change 20) — declared cargo value + flag at posting.
+  // Binding itself is a separate step (POST /api/jobs/:id/insurance/bind);
   // this just records the shipper's declared value so quote/bind has it.
   if (cargoValueAed !== undefined && cargoValueAed !== null && cargoValueAed !== '') {
     const cv = Number(cargoValueAed);

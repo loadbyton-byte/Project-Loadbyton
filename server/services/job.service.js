@@ -12,7 +12,7 @@ const jobRepository = require('../repositories/job.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const bidRepository = require('../repositories/bid.repository');
 const { TRANSITIONS } = require('../lib/constants');
-const { getSettings, writeAudit, notify } = require('../lib/helpers');
+const { getSettings, writeAudit, notify, notifyAdmins } = require('../lib/helpers');
 const { issueInvoice } = require('../lib/invoice');
 const { executePayoutAsync, refundJobAsync } = require('./payout.service');
 
@@ -177,7 +177,17 @@ async function updateJobStatus(jobId, nextStatus, req) {
       return true;
     });
     if (released) {
-      try { await issueInvoice(db, id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${id}:`, e); }
+      // issueInvoice() already retries a colliding invoice number
+      // internally (server/lib/invoice.js) — a failure reaching here is a
+      // real, non-self-healing problem. Previously this was only
+      // console.error'd, so a completed job could silently end up with no
+      // invoice at all, visible nowhere an admin would actually see it.
+      try {
+        await issueInvoice(db, id);
+      } catch (e) {
+        console.error(`[invoice] issueInvoice failed for job ${id}:`, e);
+        try { await notifyAdmins('Invoice issuance failed', `Job ${job.job_code} (id ${id}) completed and released, but its invoice failed to issue: ${e.message}`, id, 'system'); } catch {}
+      }
       if (job.carrier_id) {
         try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
       }
@@ -357,8 +367,12 @@ async function getJob(jobId, user) {
     // are ALL masked from every other bidder while the job is still OPEN —
     // "no bidder should watch other bidders' price and everything, docs etc."
     // Once the job leaves OPEN, price/company stay visible as useful market
-    // information, but driver identity/contact stays masked forever for
-    // anyone but the shipper, the actually-awarded carrier, or admin.
+    // information (non-sensitive once bidding has closed), but driver
+    // identity/contact stays masked forever for anyone but the shipper,
+    // the actually-awarded carrier, or admin — previously a losing bidder
+    // could see the winning bid's driver_name/driver_phone in full once a
+    // job left OPEN, since isParticipantOrBidder() grants view access to
+    // any carrier who ever placed a bid, win or lose.
     const isOpenPhase = job.status === 'OPEN';
     bids = bids.map((b) => {
       if (b.carrier_id === user.id) return b;
