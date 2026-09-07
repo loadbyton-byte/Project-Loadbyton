@@ -42,7 +42,10 @@ test('inbound WhatsApp "Delivered" button reply marks the job DELIVERED via the 
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed' });
   const bidId = bidRes.body.bid.id;
-  await shipper.post(`/api/jobs/${jobId}/award`, { bidId });
+  await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
+  const adminW1 = makeClient(server.baseUrl);
+  await adminW1.login('admin@loadbyton.ae', 'demo1234');
+  await adminW1.post('/api/admin/confirm-receipt', { jobId });
   await carrier.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Yusuf Al Naqbi', driverPhone: '0559998877' });
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
   const inTransit = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });
@@ -91,7 +94,10 @@ test('inbound WhatsApp text message lands in the job thread with channel=WHATSAP
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed' });
-  await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id });
+  await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
+  const adminW2 = makeClient(server.baseUrl);
+  await adminW2.login('admin@loadbyton.ae', 'demo1234');
+  await adminW2.post('/api/admin/confirm-receipt', { jobId });
   await carrier.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Second Driver', driverPhone: '0551112233' });
 
   const webhookPayload = {

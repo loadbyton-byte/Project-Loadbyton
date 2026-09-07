@@ -26,7 +26,7 @@ async function postAwardedJob(shipper, carrier) {
   });
   const jobId = created.body.job.id;
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
-  await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id });
+  await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   return jobId;
 }
 
@@ -163,6 +163,10 @@ test('a job completed by a DRIVER_ASSOCIATE driver creates a wallet ledger entry
   }
   assert.equal(job.assigned_driver_id, driverId);
 
+  const adminW = makeClient(server.baseUrl);
+  await adminW.login('admin@loadbyton.ae', 'demo1234');
+  await adminW.post('/api/admin/confirm-receipt', { jobId });
+
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });
   await carrier.post(`/api/jobs/${jobId}/pod`, {});
@@ -188,6 +192,9 @@ test('inbound WhatsApp live location lands in location_logs with source=WHATSAPP
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const jobId = await postAwardedJob(shipper, carrier);
+  const adminL = makeClient(server.baseUrl);
+  await adminL.login('admin@loadbyton.ae', 'demo1234');
+  await adminL.post('/api/admin/confirm-receipt', { jobId });
   await carrier.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Live Loc Driver', driverPhone: '0559991234' });
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });

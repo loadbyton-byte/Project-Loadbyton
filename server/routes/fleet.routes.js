@@ -97,7 +97,14 @@ router.post('/api/fleet/drivers/:id/seat', auth(['CARRIER']), requireSeatRole([]
   if (!driver) return sendError(res, 404, 'Driver not found');
   if (driver.seat_user_id) return sendError(res, 400, 'This driver already has a login');
 
-  const { password } = req.body || {};
+  const { password, seatRole } = req.body || {};
+  // DRIVER_ASSOCIATE: a pool driver pushed trip offers over WhatsApp, never
+  // bidding, never seeing the open marketplace — same restricted-seat
+  // mechanism as a regular DRIVER seat (see middleware/auth.js), just a
+  // different acquisition model. Defaults to DRIVER, matching this
+  // endpoint's existing behavior exactly when the caller doesn't ask for
+  // the associate variant.
+  const finalSeatRole = seatRole === 'DRIVER_ASSOCIATE' ? 'DRIVER_ASSOCIATE' : 'DRIVER';
   const finalPassword = password && String(password).length >= 8 ? String(password) : crypto.randomBytes(9).toString('base64url');
   const email = `${driver.phone.replace(/[^0-9]/g, '')}@drivers.loadbyton.internal`;
   if (await db.prepare('SELECT id FROM users WHERE email=?').get(email)) {
@@ -107,7 +114,7 @@ router.post('/api/fleet/drivers/:id/seat', auth(['CARRIER']), requireSeatRole([]
   const passwordHash = bcrypt.hashSync(finalPassword, 10);
   const result = await db
     .prepare('INSERT INTO users (email, password_hash, role, tier, org_owner_id, seat_role, display_name, is_verified) VALUES (?,?,?,?,?,?,?,?) RETURNING id')
-    .run(email, passwordHash, req.user.role, 'BRONZE', req.user.id, 'DRIVER', driver.name, req.user.is_verified ? 1 : 0);
+    .run(email, passwordHash, req.user.role, 'BRONZE', req.user.id, finalSeatRole, driver.name, req.user.is_verified ? 1 : 0);
   const seatUserId = Number(result.lastInsertRowid);
   await db.prepare(`UPDATE drivers SET seat_user_id=?, updated_at=datetime('now') WHERE id=?`).run(seatUserId, driver.id);
 

@@ -139,7 +139,9 @@ async function updateJobStatus(jobId, nextStatus, req) {
     if (cancelled && job.carrier_id) {
       // Restore the capacity award.service.js decremented — a cancelled
       // job is no longer occupying this carrier's declared capacity.
-      const unitCount = job.shipment_type === 'LOCAL' ? (job.truck_count || 1) : (job.container_count || 1);
+      // Uses the shared total (line item 1 + job_line_items extras).
+      const { jobUnitCount } = require('../lib/capacity');
+      const unitCount = await jobUnitCount(job);
       await db.prepare(`UPDATE profiles SET available_units = available_units + ? WHERE user_id=?`).run(unitCount, job.carrier_id);
       await db.prepare(
         `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`

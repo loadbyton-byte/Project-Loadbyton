@@ -31,7 +31,10 @@ async function fullyDeliveredJob(shipper, carrier) {
   const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
     amountAed: 1000, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
-  await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id });
+  await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });
+  const admin0 = makeClient(server.baseUrl);
+  await admin0.login('admin@loadbyton.ae', 'demo1234');
+  await admin0.post('/api/admin/confirm-receipt', { jobId });
   await carrier.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Test Driver', driverPhone: '0551230077' });
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
   await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });

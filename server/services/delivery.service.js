@@ -56,10 +56,12 @@ async function confirmDelivery(job, { actorId, doc, req }) {
     } catch (e) { console.error(`[delivery] PAY_ON_DELIVERY escrow failed for job ${job.id}:`, e); }
   }
   // Equipment capacity — trip done, carrier slot free again. Restores exactly
-  // what award.service.js decremented. Lives here so WhatsApp-confirmed
-  // deliveries restore capacity too, not just web-POD ones.
+  // what award.service.js decremented (total incl. job_line_items extras).
+  // Lives here so WhatsApp-confirmed deliveries restore capacity too,
+  // not just web-POD ones.
   try {
-    const unitCount = job.shipment_type === 'LOCAL' ? (job.truck_count || 1) : (job.container_count || 1);
+    const { jobUnitCount } = require('../lib/capacity');
+    const unitCount = await jobUnitCount(job);
     await db.prepare(`UPDATE profiles SET available_units = available_units + ? WHERE user_id=?`).run(unitCount, job.carrier_id);
     await db.prepare(
       `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`
