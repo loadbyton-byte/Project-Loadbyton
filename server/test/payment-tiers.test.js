@@ -37,7 +37,7 @@ async function postAndAwardJob(shipper, carrier, overrides = {}) {
     amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);
-  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id });
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
   return { jobId, award };
 }
