@@ -234,7 +234,7 @@ export function BentoStat({ label, value, icon, tone = 'default', span, classNam
       style={{ background: tone === 'accent' ? 'var(--surface-container-high)' : 'var(--surface-container-low)', border: '1px solid var(--border-subtle)' }}
     >
       <div className={cx('min-w-0', span === 2 && 'flex flex-col gap-1')}>
-        <span className="block truncate font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{label}</span>
+        <span className={cx('block truncate font-mono text-[11px] font-semibold uppercase tracking-wider', tone === 'accent' ? 'text-ink-secondary' : 'text-ink-muted')}>{label}</span>
         <p className="tabular truncate font-display text-2xl font-extrabold text-ink">{value}</p>
       </div>
       {icon && <span className="shrink-0 text-brand-accent">{icon}</span>}
