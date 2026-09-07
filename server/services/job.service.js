@@ -84,19 +84,44 @@ async function updateJobStatus(jobId, nextStatus, req) {
   // Use direct db for multi-column updates that repository.updateStatus also supports,
   // but keep explicit SQL to match original routes byte-for-byte semantics.
   if (nextStatus === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
+    // Cancellation fee (planning register Change 24F) — this block only
+    // ever fires for a job that was already AWARDED (escrow HELD/FUNDED),
+    // so every cancellation reaching here is "after award," the only case
+    // the fee applies to; a job cancelled before award never touches this
+    // code path and stays free, as it always has been.
+    const { cancellation_fee_bps_after_award } = await getSettings();
+    const cancellationFeeAed = Math.round((job.agreed_price_aed || 0) * cancellation_fee_bps_after_award / 10000 * 100) / 100;
+    const netRefundAed = Math.max(0, (job.agreed_price_aed || 0) - cancellationFeeAed);
     // Row-locked + idempotency-guarded — two concurrent cancel requests
     // for the same job must not both fire a refund.
     const cancelled = await db.transaction(async (trx) => {
       const locked = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [id]);
       const currentEscrow = locked.rows[0]?.escrow_status;
       if (currentEscrow === 'RELEASED') return false; // already handled by a concurrent request
-      await trx.query(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`, [id]);
+      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', cancellation_fee_aed=? WHERE id=?`, [cancellationFeeAed, id]);
       await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [id]);
       return true;
     });
     if (cancelled && job.escrow_status === 'FUNDED') {
-      // fire-and-forget refund (processor path) — do not await failure
-      try { refundJobAsync(job); } catch {}
+      // fire-and-forget refund (processor path) — do not await failure.
+      // Refunds the net amount (after the fee), not the full price.
+      try { refundJobAsync(job, netRefundAed); } catch {}
+    }
+    // A carrier backing out after commitment is exactly the "no-show"
+    // scenario this reliability score exists to catch — a shipper
+    // cancelling isn't the carrier's fault and doesn't penalize anyone.
+    if (cancelled && job.carrier_id && role === 'CARRIER') {
+      await db.prepare(`UPDATE profiles SET reliability_score = MAX(0, reliability_score - 1) WHERE user_id=?`).run(job.carrier_id);
+      await writeAudit(req, { userId: req.actorId, action: 'CARRIER_RELIABILITY_STRIKE', details: `${job.job_code}: carrier cancelled after award`, entityType: 'user', entityId: job.carrier_id });
+    }
+    if (cancelled && job.carrier_id) {
+      // Restore the capacity award.service.js decremented — a cancelled
+      // job is no longer occupying this carrier's declared capacity.
+      const unitCount = job.shipment_type === 'LOCAL' ? (job.truck_count || 1) : (job.container_count || 1);
+      await db.prepare(`UPDATE profiles SET available_units = available_units + ? WHERE user_id=?`).run(unitCount, job.carrier_id);
+      await db.prepare(
+        `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`
+      ).run(job.carrier_id, id, 'RESTORED', unitCount, `Cancelled ${job.job_code}`);
     }
   }
 
@@ -232,19 +257,27 @@ async function getJob(jobId, user) {
   }
   let bids = await db
     .prepare(
-      `SELECT bids.*, cp.rating_avg as carrier_rating, cp.company_name as carrier_company
+      `SELECT bids.*, cp.rating_avg as carrier_rating, cp.company_name as carrier_company, cp.available_units as carrier_available_units, cp.reliability_score as carrier_reliability_score
        FROM bids LEFT JOIN profiles cp ON cp.user_id = bids.carrier_id
        WHERE job_id=? ORDER BY amount_aed ASC`
     )
     .all(job.id);
   const isOwnerShipper = user.id === job.shipper_id;
   const isAdmin = user.role === 'ADMIN';
-  if (job.status === 'OPEN' && !isOwnerShipper && !isAdmin) {
-    bids = bids.map((b) =>
-      b.carrier_id === user.id
-        ? b
-        : { ...b, amount_aed: null, eta_at: null, eta_minutes: null, driver_name: null, notes: null, carrier_company: null, masked: true }
-    );
+  if (!isOwnerShipper && !isAdmin) {
+    // Driver identity/contact must never leak to a carrier who isn't the
+    // bid's own owner, regardless of job status (bringing in the same
+    // fix shipped separately, since this function is being touched anyway
+    // for the new capacity/reliability fields below, which need the exact
+    // same "no bidder sees another bidder's data" treatment as price).
+    const isOpenPhase = job.status === 'OPEN';
+    bids = bids.map((b) => {
+      if (b.carrier_id === user.id) return b;
+      const driverMasked = { ...b, driver_name: null, driver_phone: null, notes: null };
+      return isOpenPhase
+        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, carrier_available_units: null, carrier_reliability_score: null, masked: true }
+        : driverMasked;
+    });
   }
   const shipperProfile = await db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
   // Driver info for whoever can already see this job (shipper/carrier/admin
@@ -264,7 +297,20 @@ async function getJob(jobId, user) {
       };
     }
   }
-  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null, driver_info: driverInfo };
+  // The real, currently-live version of the driver-identity leak: job.*
+  // (a plain SELECT *) includes assigned_driver_name/assigned_driver_phone
+  // directly, and canViewJob() grants access to any carrier who ever
+  // placed a bid on this job, win or lose, with no status/outcome check.
+  // Only the shipper, the actually-awarded carrier, and admin should ever
+  // see who the winning carrier's driver is.
+  const isAwardedCarrierViewer = user.id === job.carrier_id;
+  const driverIdentityVisible = isOwnerShipper || isAdmin || isAwardedCarrierViewer;
+  const jobWithRating = {
+    ...job,
+    ...(driverIdentityVisible ? null : { assigned_driver_name: null, assigned_driver_phone: null }),
+    shipper_rating: shipperProfile ? shipperProfile.rating_avg : null,
+    driver_info: driverIdentityVisible ? driverInfo : null,
+  };
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
   const payout = await payoutRepository.findByJobId(job.id) || null;

@@ -148,7 +148,12 @@ router.post('/api/jobs/:id/rating', auth(), async (req, res) => {
   // guarantee; this just turns a constraint violation into a clean 409
   // instead of a 500.
   try {
-    await db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment) VALUES (?,?,?,?,?)').run(job.id, req.user.id, rateeId, score, b.comment || null);
+    // driver_id: when a shipper rates the carrier, also record which
+    // driver actually executed the job — so a pattern of issues can later
+    // be traced to a specific driver, not just the carrier account.
+    await db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment, driver_id) VALUES (?,?,?,?,?,?)').run(
+      job.id, req.user.id, rateeId, score, b.comment || null, req.user.id === job.shipper_id ? job.assigned_driver_id : null
+    );
   } catch (e) {
     // 23505 is Postgres's unique_violation code — the ERR_SQLITE_ERROR
     // check alone left this dead on Postgres (any real double-submit threw

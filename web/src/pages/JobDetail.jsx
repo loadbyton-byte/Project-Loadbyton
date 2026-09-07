@@ -382,6 +382,12 @@ export default function JobDetail() {
                           <span className="truncate">{b.carrier_company}</span> <RatingPill rating={b.carrier_rating} />
                         </p>
                       )}
+                      {!b.masked && b.carrier_available_units != null && (
+                        <p className="mt-0.5 text-xs" style={{ color: b.carrier_available_units <= 0 ? 'var(--status-danger)' : 'var(--ink-muted)' }}>
+                          {b.carrier_available_units <= 0 ? '⚠ 0 declared available units' : `${b.carrier_available_units} unit(s) available`}
+                          {b.carrier_reliability_score != null && ` · reliability ${Number(b.carrier_reliability_score).toFixed(1)}`}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>

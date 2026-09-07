@@ -168,4 +168,44 @@ router.get('/api/fleet/drivers/:id/documents/:docType', auth(), asyncHandler(asy
   else res.sendFile(file.localPath);
 }));
 
+// --- Equipment capacity (planning register Change 3) ----------------------
+// available_units is the live number; fleet_size stays the static declared
+// total, unchanged by any of this.
+
+router.get('/api/fleet/capacity', auth(['CARRIER']), asyncHandler(async (req, res) => {
+  const profile = await db.prepare('SELECT fleet_size, available_units, externally_engaged_units FROM profiles WHERE user_id=?').get(req.user.id);
+  const events = await db.prepare('SELECT * FROM carrier_capacity_events WHERE carrier_id=? ORDER BY created_at DESC LIMIT 20').all(req.user.id);
+  res.json({ ...profile, events });
+}));
+
+router.post('/api/fleet/capacity/external-engage', auth(['CARRIER']), requireSeatRole(['OPS']), asyncHandler(async (req, res) => {
+  const { units, note, expiresAt } = req.body || {};
+  const n = Number(units);
+  if (!n || n <= 0) return sendError(res, 400, 'units must be a positive number');
+  await db.prepare(
+    `UPDATE profiles SET available_units = available_units - ?, externally_engaged_units = externally_engaged_units + ? WHERE user_id=?`
+  ).run(n, n, req.user.id);
+  await db.prepare(
+    `INSERT INTO carrier_capacity_events (carrier_id, event_type, units_delta, note, expires_at) VALUES (?,'EXTERNAL_ENGAGE',?,?,?)`
+  ).run(req.user.id, -n, note || null, expiresAt || null);
+  const profile = await db.prepare('SELECT fleet_size, available_units, externally_engaged_units FROM profiles WHERE user_id=?').get(req.user.id);
+  res.json(profile);
+}));
+
+router.post('/api/fleet/capacity/release', auth(['CARRIER']), requireSeatRole(['OPS']), asyncHandler(async (req, res) => {
+  const { units } = req.body || {};
+  const n = Number(units);
+  if (!n || n <= 0) return sendError(res, 400, 'units must be a positive number');
+  const profile = await db.prepare('SELECT externally_engaged_units FROM profiles WHERE user_id=?').get(req.user.id);
+  if (n > profile.externally_engaged_units) return sendError(res, 400, 'Cannot release more units than are currently marked externally engaged');
+  await db.prepare(
+    `UPDATE profiles SET available_units = available_units + ?, externally_engaged_units = externally_engaged_units - ? WHERE user_id=?`
+  ).run(n, n, req.user.id);
+  await db.prepare(
+    `INSERT INTO carrier_capacity_events (carrier_id, event_type, units_delta, note) VALUES (?,'EXTERNAL_RELEASE',?,?)`
+  ).run(req.user.id, n, null);
+  const updated = await db.prepare('SELECT fleet_size, available_units, externally_engaged_units FROM profiles WHERE user_id=?').get(req.user.id);
+  res.json(updated);
+}));
+
 module.exports = router;

@@ -5,6 +5,7 @@ import { api, ApiError } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { Button, Card, Input, Label, Select, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
+import EquipmentCapacity from '../features/profile/EquipmentCapacity.jsx';
 
 const SEAT_ROLE_HELP = {
   OPS: 'Full day-to-day access — post jobs, bid, award, update status.',
@@ -292,6 +293,8 @@ export default function Profile() {
           </Card.Footer>
         </form>
       </Card>
+
+      {user.role === 'CARRIER' && <EquipmentCapacity />}
 
       <Card className="mt-6">
         <Card.Header><Card.Title>Two-factor authentication</Card.Title></Card.Header>

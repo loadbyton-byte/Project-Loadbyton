@@ -177,13 +177,17 @@ async function executePayoutAsync(job, payout, req) {
  * @param {Job} job
  * @returns {Promise<void>}
  */
-async function refundJobAsync(job) {
+async function refundJobAsync(job, amountAedOverride) {
   if (!payments.isConfigured()) return;
   let r;
   try {
     r = await payments.refundCharge({
       jobCode: job.job_code,
-      amountAed: /** @type {any} */ (job).agreed_price_aed,
+      // A cancellation fee (planning register Change 24F) means the
+      // shipper is refunded less than the full agreed price — the caller
+      // passes the net amount explicitly rather than this function
+      // guessing a deduction on its own.
+      amountAed: amountAedOverride != null ? amountAedOverride : /** @type {any} */ (job).agreed_price_aed,
       tranref: /** @type {any} */ (job).processor_tranref,
       paymentRef: /** @type {any} */ (job).processor_payment_ref,
     });

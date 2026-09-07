@@ -17,6 +17,7 @@ function DisputesTab() {
   const [disputesError, setDisputesError] = useState('');
   const [form, setForm] = useState({ jobId: '', reason: '' });
   const [resolveDrafts, setResolveDrafts] = useState({});
+  const [splitDrafts, setSplitDrafts] = useState({});
   const [busy, setBusy] = useState(false);
   const [evidenceFor, setEvidenceFor] = useState(null);
 
@@ -45,7 +46,10 @@ function DisputesTab() {
   async function resolve(id, decision) {
     setBusy(true);
     try {
-      await api.adminResolveDispute(id, { decision, determination: resolveDrafts[id] || '' });
+      const extra = decision === 'SPLIT'
+        ? { splitShipperPct: Number(splitDrafts[id]?.shipper) || 0, splitCarrierPct: Number(splitDrafts[id]?.carrier) || 0 }
+        : {};
+      await api.adminResolveDispute(id, { decision, determination: resolveDrafts[id] || '', ...extra });
       load();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Could not resolve dispute', body: err.message });
@@ -94,7 +98,11 @@ function DisputesTab() {
                   <Input placeholder="Determination note" value={resolveDrafts[d.id] || ''} onChange={(e) => setResolveDrafts({ ...resolveDrafts, [d.id]: e.target.value })} className="flex-1 min-w-[220px]" />
                   <Button variant="accent" onClick={() => resolve(d.id, 'RELEASE_TO_CARRIER')} loading={busy}>Release to carrier</Button>
                   <Button variant="secondary" onClick={() => resolve(d.id, 'REFUND_SHIPPER')} loading={busy}>Refund shipper</Button>
-                  <Button variant="ghost" onClick={() => resolve(d.id, 'SPLIT')} loading={busy}>Split</Button>
+                  <div className="flex items-center gap-1">
+                    <Input type="number" min="0" max="100" placeholder="Shipper %" value={splitDrafts[d.id]?.shipper || ''} onChange={(e) => setSplitDrafts({ ...splitDrafts, [d.id]: { ...splitDrafts[d.id], shipper: e.target.value } })} className="w-20" />
+                    <Input type="number" min="0" max="100" placeholder="Carrier %" value={splitDrafts[d.id]?.carrier || ''} onChange={(e) => setSplitDrafts({ ...splitDrafts, [d.id]: { ...splitDrafts[d.id], carrier: e.target.value } })} className="w-20" />
+                    <Button variant="ghost" onClick={() => resolve(d.id, 'SPLIT')} loading={busy}>Split</Button>
+                  </div>
                 </div>
               )}
             </Card>

@@ -78,6 +78,12 @@ router.post(
     await db.prepare(
       'INSERT INTO profiles (user_id, company_name, trn_number, trade_license_number, phone) VALUES (?,?,?,?,?)'
     ).run(userId, companyName, encryptField(trnNumber.trim()), tradeLicenseNumber.toUpperCase(), normalizeUaeMobile(phone));
+    // available_units has no column-level default (see server/schema.js —
+    // it needs to stay nullable there so the one-time migration backfill
+    // can distinguish "never set" from "explicitly 0" on existing rows),
+    // so every new profile needs it set explicitly here to match the
+    // brand-new fleet_size default of 0.
+    await db.prepare(`UPDATE profiles SET available_units = fleet_size WHERE user_id=?`).run(userId);
 
     await writeAudit(req, { userId, action: 'REGISTER', details: `${role} registered: ${email}`, entityType: 'user', entityId: userId });
     sendEmailAsync({
