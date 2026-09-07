@@ -106,19 +106,44 @@ async function updateJobStatus(jobId, nextStatus, req) {
   // Use direct db for multi-column updates that repository.updateStatus also supports,
   // but keep explicit SQL to match original routes byte-for-byte semantics.
   if (nextStatus === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
+    // Cancellation fee (planning register Change 24F) — this block only
+    // ever fires for a job that was already AWARDED (escrow HELD/FUNDED),
+    // so every cancellation reaching here is "after award," the only case
+    // the fee applies to; a job cancelled before award never touches this
+    // code path and stays free, as it always has been.
+    const { cancellation_fee_bps_after_award } = await getSettings();
+    const cancellationFeeAed = Math.round((job.agreed_price_aed || 0) * cancellation_fee_bps_after_award / 10000 * 100) / 100;
+    const netRefundAed = Math.max(0, (job.agreed_price_aed || 0) - cancellationFeeAed);
     // Row-locked + idempotency-guarded — two concurrent cancel requests
     // for the same job must not both fire a refund.
     const cancelled = await db.transaction(async (trx) => {
       const locked = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [id]);
       const currentEscrow = locked.rows[0]?.escrow_status;
       if (currentEscrow === 'RELEASED') return false; // already handled by a concurrent request
-      await trx.query(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`, [id]);
+      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', cancellation_fee_aed=? WHERE id=?`, [cancellationFeeAed, id]);
       await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [id]);
       return true;
     });
     if (cancelled && job.escrow_status === 'FUNDED') {
-      // fire-and-forget refund (processor path) — do not await failure
-      try { refundJobAsync(job); } catch {}
+      // fire-and-forget refund (processor path) — do not await failure.
+      // Refunds the net amount (after the fee), not the full price.
+      try { refundJobAsync(job, netRefundAed); } catch {}
+    }
+    // A carrier backing out after commitment is exactly the "no-show"
+    // scenario this reliability score exists to catch — a shipper
+    // cancelling isn't the carrier's fault and doesn't penalize anyone.
+    if (cancelled && job.carrier_id && role === 'CARRIER') {
+      await db.prepare(`UPDATE profiles SET reliability_score = MAX(0, reliability_score - 1) WHERE user_id=?`).run(job.carrier_id);
+      await writeAudit(req, { userId: req.actorId, action: 'CARRIER_RELIABILITY_STRIKE', details: `${job.job_code}: carrier cancelled after award`, entityType: 'user', entityId: job.carrier_id });
+    }
+    if (cancelled && job.carrier_id) {
+      // Restore the capacity award.service.js decremented — a cancelled
+      // job is no longer occupying this carrier's declared capacity.
+      const unitCount = job.shipment_type === 'LOCAL' ? (job.truck_count || 1) : (job.container_count || 1);
+      await db.prepare(`UPDATE profiles SET available_units = available_units + ? WHERE user_id=?`).run(unitCount, job.carrier_id);
+      await db.prepare(
+        `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`
+      ).run(job.carrier_id, id, 'RESTORED', unitCount, `Cancelled ${job.job_code}`);
     }
   }
 
@@ -254,7 +279,7 @@ async function getJob(jobId, user) {
   }
   let bids = await db
     .prepare(
-      `SELECT bids.*, cp.rating_avg as carrier_rating, cp.company_name as carrier_company
+      `SELECT bids.*, cp.rating_avg as carrier_rating, cp.company_name as carrier_company, cp.available_units as carrier_available_units, cp.reliability_score as carrier_reliability_score
        FROM bids LEFT JOIN profiles cp ON cp.user_id = bids.carrier_id
        WHERE job_id=? ORDER BY amount_aed ASC`
     )
@@ -283,10 +308,10 @@ async function getJob(jobId, user) {
     // bid's own owner, regardless of job status (see the fix shipped
     // separately for this — bringing the same logic in here since this
     // branch predates it and this function is being touched anyway).
-    // Price, ancillary charges, and driver identity are ALL masked from
-    // every other bidder while the job is still OPEN — "no bidder should
-    // watch other bidders' price and everything, docs etc." Once the job
-    // leaves OPEN, price/company stay visible as useful market
+    // Price, ancillary charges, capacity/reliability, and driver identity
+    // are ALL masked from every other bidder while the job is still OPEN —
+    // "no bidder should watch other bidders' price and everything, docs etc."
+    // Once the job leaves OPEN, price/company stay visible as useful market
     // information, but driver identity/contact stays masked forever for
     // anyone but the shipper, the actually-awarded carrier, or admin.
     const isOpenPhase = job.status === 'OPEN';
@@ -294,7 +319,7 @@ async function getJob(jobId, user) {
       if (b.carrier_id === user.id) return b;
       const driverMasked = { ...b, driver_name: null, driver_phone: null, notes: null };
       return isOpenPhase
-        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, ancillary_charges: [], masked: true }
+        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, ancillary_charges: [], carrier_available_units: null, carrier_reliability_score: null, masked: true }
         : driverMasked;
     });
   }

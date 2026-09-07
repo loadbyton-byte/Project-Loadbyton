@@ -101,7 +101,7 @@ export const api = {
   updateDriver: (id, body) => patch(`/jobs/${id}/driver`, body),
   submitPod: (id, body) => post(`/jobs/${id}/pod`, body),
   track: (id) => get(`/jobs/${id}/track`),
-  disputeJob: (id, reason) => post(`/jobs/${id}/dispute`, { reason }),
+  disputeJob: (id, reason, disputeType) => post(`/jobs/${id}/dispute`, { reason, disputeType }),
   getDispute: (id) => get(`/jobs/${id}/dispute`),
   backloadMatches: (id) => get(`/jobs/${id}/backload-matches`),
   addDocument: (id, body) => post(`/jobs/${id}/documents`, body),
@@ -121,6 +121,9 @@ export const api = {
   uploadDriverDocument: (id, body) => post(`/fleet/drivers/${id}/documents`, body),
   getDriverDocumentUploadUrl: (id, mimeType) => post(`/fleet/drivers/${id}/documents/upload-url`, { mimeType }),
   addDriverSeat: (id, password) => post(`/fleet/drivers/${id}/seat`, password ? { password } : {}),
+  getFleetCapacity: () => get('/fleet/capacity'),
+  externalEngageUnits: (units, note) => post('/fleet/capacity/external-engage', { units, note }),
+  releaseExternalUnits: (units) => post('/fleet/capacity/release', { units }),
 
   // driver seat's own view
   driverJob: () => get('/driver/job'),

@@ -663,5 +663,38 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eir_photos_pickup TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eir_photos_delivery TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS seal_number_delivery TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS requires_seal INTEGER NOT NULL DEFAULT 1;
+-- Phase 3: equipment capacity, trust & safety, dispute typing/SLA/split —
+-- see server/schema.js (the actual auto-migrating SQLite path) for the
+-- full reasoning; mirrored here for the opt-in Postgres path.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS available_units INTEGER;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS externally_engaged_units INTEGER NOT NULL DEFAULT 0;
+UPDATE profiles SET available_units = fleet_size WHERE available_units IS NULL;
+
+CREATE TABLE IF NOT EXISTS carrier_capacity_events (
+  id SERIAL PRIMARY KEY,
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  job_id INTEGER REFERENCES jobs(id),
+  event_type TEXT NOT NULL CHECK (event_type IN ('AWARDED','RESTORED','EXTERNAL_ENGAGE','EXTERNAL_RELEASE')),
+  units_delta INTEGER NOT NULL,
+  note TEXT,
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_capacity_events_carrier ON carrier_capacity_events(carrier_id);
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payment_reliability_score REAL NOT NULL DEFAULT 5.0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS reliability_score REAL NOT NULL DEFAULT 5.0;
+ALTER TABLE ratings ADD COLUMN IF NOT EXISTS driver_id INTEGER REFERENCES drivers(id);
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ip_address TEXT;
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_agent TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ip_address TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancellation_fee_aed REAL;
+
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS dispute_type TEXT;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS sla_deadline TEXT;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS split_shipper_pct REAL;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS split_carrier_pct REAL;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS police_report_filed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS police_report_reference TEXT;
 
 COMMIT;

@@ -650,6 +650,75 @@ module.exports = function initSchema(db) {
   const seedSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   seedSetting.run('commission_rate_bps', '600');
   seedSetting.run('auto_release_hours', '24');
+  seedSetting.run('cancellation_fee_bps_after_award', '1000');
+
+  // ---------------------------------------------------------------------------
+  // Equipment capacity tracking — profiles.fleet_size was a static,
+  // self-reported number never checked at bid/award time, so a carrier
+  // could bid on far more concurrent jobs than their fleet could ever
+  // service, including capacity already privately engaged off-platform.
+  // available_units is the new LIVE number: decremented automatically on
+  // award, restored on delivery/cancellation, and separately reducible by
+  // the carrier themselves via "mark N units externally engaged" — the
+  // actual fix for a carrier who has privately committed some of their
+  // fleet outside the platform. fleet_size itself stays the static
+  // declared total, unchanged.
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'available_units', 'available_units INTEGER');
+  addColumn('profiles', 'externally_engaged_units', 'externally_engaged_units INTEGER NOT NULL DEFAULT 0');
+  // Backfill available_units to fleet_size for every existing profile that
+  // doesn't have it set yet (new column, so this runs once per row).
+  db.exec(`UPDATE profiles SET available_units = fleet_size WHERE available_units IS NULL`);
+
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS carrier_capacity_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    carrier_id INTEGER NOT NULL REFERENCES users(id),
+    job_id INTEGER REFERENCES jobs(id),
+    event_type TEXT NOT NULL CHECK (event_type IN ('AWARDED','RESTORED','EXTERNAL_ENGAGE','EXTERNAL_RELEASE')),
+    units_delta INTEGER NOT NULL,
+    note TEXT,
+    expires_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_capacity_events_carrier ON carrier_capacity_events(carrier_id);
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Trust & safety: shipper payment-history score (distinct from a
+  // carrier's rating_avg, which is a delivery-quality rating in the other
+  // direction — named separately so the two directions are never
+  // conflated), carrier reliability score (cancellation/no-show
+  // accountability), and per-driver rating linkage so a pattern of issues
+  // can be traced to a specific driver, not just the carrier account.
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'payment_reliability_score', 'payment_reliability_score REAL NOT NULL DEFAULT 5.0');
+  addColumn('profiles', 'reliability_score', 'reliability_score REAL NOT NULL DEFAULT 5.0');
+  addColumn('ratings', 'driver_id', 'driver_id INTEGER REFERENCES drivers(id)');
+  // Collusion-detection groundwork — capture going forward only, nothing
+  // can be reconstructed retroactively for past actions. The actual
+  // detection query is deliberately NOT built yet (see the planning
+  // register's Change 24 note) — false positives from shared office
+  // networks/VPNs need human review design first, not an automatic flag.
+  addColumn('audit_log', 'ip_address', 'ip_address TEXT');
+  addColumn('audit_log', 'user_agent', 'user_agent TEXT');
+  addColumn('sessions', 'ip_address', 'ip_address TEXT');
+  // Cancellation-fee schedule — see server/lib/constants.js's
+  // CANCELLATION_FEE_BPS_AFTER_AWARD for the actual policy value.
+  addColumn('jobs', 'cancellation_fee_aed', 'cancellation_fee_aed REAL');
+
+  // ---------------------------------------------------------------------------
+  // 7-bucket dispute types, typed evidence, real SLA, and a real SPLIT
+  // resolution (previously accepted as a valid decision value but fell
+  // through to the exact same full-release-to-carrier code path as
+  // RELEASE_TO_CARRIER — a live bug, not just a missing feature).
+  // ---------------------------------------------------------------------------
+  addColumn('disputes', 'dispute_type', 'dispute_type TEXT');
+  addColumn('disputes', 'sla_deadline', 'sla_deadline TEXT');
+  addColumn('disputes', 'split_shipper_pct', 'split_shipper_pct REAL');
+  addColumn('disputes', 'split_carrier_pct', 'split_carrier_pct REAL');
+  addColumn('disputes', 'police_report_filed', 'police_report_filed INTEGER NOT NULL DEFAULT 0');
+  addColumn('disputes', 'police_report_reference', 'police_report_reference TEXT');
 
   // ---------------------------------------------------------------------------
   // Terms & Conditions acceptance — a readable Terms page (web/src/pages/

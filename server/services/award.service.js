@@ -102,6 +102,18 @@ async function awardJob(req, res, jobId, bidId) {
       await trx.query(`UPDATE bids SET status='AWARDED' WHERE id=?`, [bidId]);
       await trx.query(`UPDATE bids SET status='REJECTED' WHERE job_id=? AND id != ?`, [jobId, bidId]);
 
+      // Equipment capacity — decrement the carrier's live available_units
+      // by this job's unit count, same transaction/lock discipline as
+      // everything else here. Not clamped below 0 deliberately: a
+      // negative number is a real, visible signal (this carrier is now
+      // over-committed), not something to silently hide by floor-ing it.
+      const unitCount = preJob.shipment_type === 'LOCAL' ? (preJob.truck_count || 1) : (preJob.container_count || 1);
+      await trx.query(`UPDATE profiles SET available_units = available_units - ? WHERE user_id=?`, [unitCount, bid.carrier_id]);
+      await trx.query(
+        `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`,
+        [bid.carrier_id, jobId, 'AWARDED', -unitCount, `Awarded ${preJob.job_code}`]
+      );
+
       // Payout — unique on job_id prevents duplicates under race
       try {
         await trx.query(

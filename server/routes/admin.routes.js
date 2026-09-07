@@ -4,7 +4,7 @@ const { issueInvoice } = require('../lib/invoice');
 const { sendError } = require('../lib/http');
 const apiResponse = require('../lib/apiResponse');
 const { encryptField, decryptField } = require('../lib/crypto');
-const { writeAudit, toPublicUser, getSettings, notify, parseDbDate } = require('../lib/helpers');
+const { writeAudit, toPublicUser, getSettings, notify, notifyAdmins, parseDbDate } = require('../lib/helpers');
 const { refundJobAsync, executePayoutAsync } = require('../services/payout.service');
 const { approveAccount, verifyCarrier } = require('../services/verification.service');
 const { auth } = require('../middleware/auth');
@@ -393,9 +393,31 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
   const dispute = await db.prepare('SELECT * FROM disputes WHERE id=?').get(req.params.id);
   if (!dispute) return sendError(res, 404, 'Dispute not found');
   if (dispute.status === 'RESOLVED') return sendError(res, 409, 'Dispute already resolved');
-  const { determination, decision } = req.body || {};
+  const { determination, decision, splitShipperPct, splitCarrierPct } = req.body || {};
   if (!['RELEASE_TO_CARRIER', 'REFUND_SHIPPER', 'SPLIT'].includes(decision)) return sendError(res, 400, 'Invalid decision');
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(dispute.job_id);
+
+  // SPLIT was previously accepted as a valid decision but fell through to
+  // the exact same full-release-to-carrier code path as
+  // RELEASE_TO_CARRIER — an admin choosing "split the difference" got a
+  // full release with zero indication anything different happened. This
+  // computes and executes a real proportional split.
+  let carrierPortionGross = null;
+  let carrierPlatformFee = null;
+  let carrierNetAed = null;
+  let shipperRefundAed = null;
+  if (decision === 'SPLIT') {
+    const shipperPct = Number(splitShipperPct);
+    const carrierPct = Number(splitCarrierPct);
+    if (!Number.isFinite(shipperPct) || !Number.isFinite(carrierPct) || Math.abs(shipperPct + carrierPct - 100) > 0.01) {
+      return sendError(res, 400, 'splitShipperPct and splitCarrierPct are required for a SPLIT decision and must sum to 100');
+    }
+    const { commission_rate_bps } = await getSettings();
+    carrierPortionGross = Math.round((job.agreed_price_aed || 0) * carrierPct / 100 * 100) / 100;
+    carrierPlatformFee = Math.round(carrierPortionGross * (commission_rate_bps / 10000));
+    carrierNetAed = carrierPortionGross - carrierPlatformFee;
+    shipperRefundAed = Math.round(((job.agreed_price_aed || 0) - carrierPortionGross) * 100) / 100;
+  }
 
   // All three writes (payouts, jobs, disputes) happen atomically — a crash
   // between them used to leave the dispute row still OPEN despite the
@@ -407,6 +429,11 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
   await db.transaction(async (trx) => {
     if (decision === 'REFUND_SHIPPER') {
       await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`, [job.id]);
+    } else if (decision === 'SPLIT') {
+      await trx.query(
+        `UPDATE payouts SET gross_aed=?, platform_fee_aed=?, net_aed=?, status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`,
+        [carrierPortionGross, carrierPlatformFee, carrierNetAed, job.id]
+      );
     } else {
       await trx.query(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`, [job.id]);
     }
@@ -415,8 +442,8 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
       [dispute.decision || decision, job.id]
     );
     await trx.query(
-      `UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now') WHERE id=?`,
-      [determination || null, decision, req.user.id, dispute.id]
+      `UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now'), split_shipper_pct=?, split_carrier_pct=? WHERE id=?`,
+      [determination || null, decision, req.user.id, decision === 'SPLIT' ? Number(splitShipperPct) : null, decision === 'SPLIT' ? Number(splitCarrierPct) : null, dispute.id]
     );
   });
 
@@ -424,16 +451,86 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
     // TODO-3: give the money back via the processor when it was taken.
     // No-op in internal mode / when the charge never went through.
     refundJobAsync(job);
+  } else if (decision === 'SPLIT') {
+    try { await issueInvoice(db, job.id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${job.id}:`, e); }
+    if (shipperRefundAed > 0) refundJobAsync(job, shipperRefundAed);
+    executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
   } else {
     try { await issueInvoice(db, job.id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${job.id}:`, e); }
     // TODO-3: with a processor configured this moves the money; in
     // internal mode it is a no-op and the admin SLA flow applies.
     executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
   }
-  await writeAudit(req, { userId: req.actorId, action: 'DISPUTE_RESOLVE', details: `${decision}: ${determination || ''}`, entityType: 'dispute', entityId: dispute.id, beforeState: 'OPEN', afterState: 'RESOLVED' });
+  // Carrier reliability: a REFUND_SHIPPER (or the carrier's portion of a
+  // SPLIT) resolution implies the carrier didn't deliver as promised.
+  if ((decision === 'REFUND_SHIPPER' || decision === 'SPLIT') && job.carrier_id) {
+    await db.prepare(`UPDATE profiles SET reliability_score = MAX(0, reliability_score - 1) WHERE user_id=?`).run(job.carrier_id);
+  }
+  await writeAudit(req, { userId: req.actorId, action: 'DISPUTE_RESOLVE', details: `${decision}: ${determination || ''}${decision === 'SPLIT' ? ` (${splitShipperPct}/${splitCarrierPct})` : ''}`, entityType: 'dispute', entityId: dispute.id, beforeState: 'OPEN', afterState: 'RESOLVED' });
   await notify(job.shipper_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
   await notify(job.carrier_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
   res.json({ ok: true });
+});
+
+// SLA breach check — flags any OPEN dispute past its 48h sla_deadline.
+// Matches the pattern of the other /api/system/* internal-key-gated
+// sweeps (server/routes/system.routes.js) — notify admins, never
+// auto-resolve.
+router.post('/api/system/dispute-sla-check', async (req, res) => {
+  const key = req.headers['x-internal-key'];
+  if (!key || key !== process.env.INTERNAL_KEY) return sendError(res, 403, 'Invalid internal key');
+  const overdue = await db.prepare(`SELECT d.*, j.job_code FROM disputes d JOIN jobs j ON j.id = d.job_id WHERE d.status='OPEN' AND d.sla_deadline IS NOT NULL AND d.sla_deadline < datetime('now')`).all();
+  for (const d of overdue) {
+    await notifyAdmins('Dispute past its 48h SLA', `${d.job_code}: dispute #${d.id} (${d.dispute_type || 'untyped'}) is still open past its resolution deadline.`, d.job_id, 'dispute');
+  }
+  res.json({ ok: true, flagged: overdue.length });
+});
+
+// Fraud/identity disputes are admin-only review, not a standard resolution
+// — re-surfaces the account's original onboarding documents side by side,
+// plus a place to record that a police report was filed (Loadbyton isn't
+// filing one on anyone's behalf, just recording the reference for the case
+// file).
+router.get('/api/admin/disputes/:id/evidence', auth(['ADMIN']), async (req, res) => {
+  const dispute = await db.prepare('SELECT * FROM disputes WHERE id=?').get(req.params.id);
+  if (!dispute) return sendError(res, 404, 'Dispute not found');
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(dispute.job_id);
+  const bundle = { dispute, job };
+  if (dispute.dispute_type === 'PRICE') {
+    bundle.bid = await db.prepare('SELECT * FROM bids WHERE job_id=? AND status=\'AWARDED\'').get(job.id);
+    bundle.ancillaryCharges = bundle.bid ? await db.prepare('SELECT * FROM bid_ancillary_charges WHERE bid_id=?').all(bundle.bid.id) : [];
+    bundle.negotiation = bundle.bid ? await db.prepare('SELECT * FROM bid_negotiations WHERE bid_id=? ORDER BY created_at').all(bundle.bid.id) : [];
+  } else if (dispute.dispute_type === 'DELAY_DEMURRAGE') {
+    bundle.locationLogs = await db.prepare('SELECT * FROM location_logs WHERE job_id=? ORDER BY recorded_at').all(job.id);
+    bundle.eToken = job.dp_world_e_token || null;
+  } else if (dispute.dispute_type === 'DAMAGE_SHORTAGE') {
+    bundle.eirDocuments = await db.prepare(`SELECT * FROM job_documents WHERE job_id=? AND doc_type='EIR' ORDER BY created_at`).all(job.id);
+    bundle.podDocuments = await db.prepare(`SELECT * FROM job_documents WHERE job_id=? AND doc_type='POD' ORDER BY created_at`).all(job.id);
+  } else if (dispute.dispute_type === 'MISSING_DOCS') {
+    bundle.documents = await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id);
+  } else if (dispute.dispute_type === 'NO_SHOW') {
+    bundle.locationLogs = await db.prepare('SELECT * FROM location_logs WHERE job_id=? ORDER BY recorded_at').all(job.id);
+  } else if (dispute.dispute_type === 'PAYMENT_VAT') {
+    bundle.auditTrail = await db.prepare('SELECT * FROM audit_log WHERE entity_type=\'job\' AND entity_id=? ORDER BY id').all(job.id);
+    bundle.invoice = await db.prepare('SELECT * FROM invoices WHERE job_id=?').get(job.id);
+  } else if (dispute.dispute_type === 'FRAUD_IDENTITY') {
+    const shipperProfile = await db.prepare('SELECT company_name, trn_number, trade_license_number, trade_license_doc_storage_path, insurance_doc_storage_path FROM profiles WHERE user_id=?').get(job.shipper_id);
+    const carrierProfile = job.carrier_id ? await db.prepare('SELECT company_name, trn_number, trade_license_number, trade_license_doc_storage_path, insurance_doc_storage_path FROM profiles WHERE user_id=?').get(job.carrier_id) : null;
+    bundle.shipperProfile = shipperProfile;
+    bundle.carrierProfile = carrierProfile;
+  }
+  res.json(bundle);
+});
+
+router.post('/api/admin/disputes/:id/police-report', auth(['ADMIN']), async (req, res) => {
+  const dispute = await db.prepare('SELECT * FROM disputes WHERE id=?').get(req.params.id);
+  if (!dispute) return sendError(res, 404, 'Dispute not found');
+  const { reference } = req.body || {};
+  if (!reference || !String(reference).trim()) return sendError(res, 400, 'reference is required');
+  await db.prepare(`UPDATE disputes SET police_report_filed=1, police_report_reference=? WHERE id=?`).run(String(reference).trim(), dispute.id);
+  await writeAudit(req, { userId: req.actorId, action: 'DISPUTE_POLICE_REPORT', details: `Dispute #${dispute.id}: police report ${reference}`, entityType: 'dispute', entityId: dispute.id });
+  const updated = await db.prepare('SELECT * FROM disputes WHERE id=?').get(dispute.id);
+  res.json({ dispute: updated });
 });
 
 async function buildEvidence(jobId) {
@@ -508,7 +605,7 @@ router.get('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
 });
 
 router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
-  const { commission_rate_bps, auto_release_hours } = req.body || {};
+  const { commission_rate_bps, auto_release_hours, cancellation_fee_bps_after_award } = req.body || {};
   if (commission_rate_bps !== undefined) {
     // Number.isFinite (not just a bounds comparison) rejects non-numeric
     // input outright — "abc" < 0 and "abc" > 10000 are both false for a
@@ -524,6 +621,12 @@ router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
       return sendError(res, 400, 'auto_release_hours must be a number between 1 and 168');
     }
     await db.prepare('UPDATE settings SET value=? WHERE key=\'auto_release_hours\'').run(String(Number(auto_release_hours)));
+  }
+  if (cancellation_fee_bps_after_award !== undefined) {
+    if (!Number.isFinite(Number(cancellation_fee_bps_after_award)) || Number(cancellation_fee_bps_after_award) < 0 || Number(cancellation_fee_bps_after_award) > 10000) {
+      return sendError(res, 400, 'cancellation_fee_bps_after_award must be a number between 0 and 10000');
+    }
+    await db.prepare('UPDATE settings SET value=? WHERE key=\'cancellation_fee_bps_after_award\'').run(String(Number(cancellation_fee_bps_after_award)));
   }
   await writeAudit(req, { userId: req.actorId, action: 'SETTINGS_UPDATE', details: JSON.stringify(req.body) });
   res.json({ settings: await getSettings() });

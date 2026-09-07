@@ -192,6 +192,15 @@ async function getSettings() {
   return {
     commission_rate_bps: Number(/** @type {any} */ (map).commission_rate_bps ?? 600),
     auto_release_hours: Number(/** @type {any} */ (map).auto_release_hours ?? 24),
+    // Cancellation-fee schedule (planning register Change 24F) — a real
+    // business-policy decision this codebase can't make unilaterally.
+    // Default here is a placeholder (10%) so the mechanism is real and
+    // testable rather than unbuilt; change it via
+    // POST /api/admin/settings, not by editing this default, once a real
+    // policy is set. Applies only to an already-AWARDED job being
+    // cancelled (escrow HELD/FUNDED) — a job cancelled before award is
+    // already free, since nothing was ever deducted.
+    cancellation_fee_bps_after_award: Number(/** @type {any} */ (map).cancellation_fee_bps_after_award ?? 1000),
   };
 }
 
@@ -243,10 +252,17 @@ async function toPublicUser(row) {
  * @returns {Promise<void>}
  */
 async function writeAudit(req, { userId = null, action, details = null, entityType = null, entityId = null, beforeState = null, afterState = null }) {
+  // Collusion-detection groundwork (planning register Change 24) — capture
+  // going forward only, nothing can be reconstructed retroactively. Same
+  // "prefer Cloudflare-resolved header" preference as server/lib/rateLimit.js's
+  // byIp, inlined here rather than imported to avoid a require cycle risk
+  // between the two lib modules.
+  const ipAddress = req ? (req.headers?.['cf-connecting-ip'] || req.ip || null) : null;
+  const userAgent = req ? (req.headers?.['user-agent'] || null) : null;
   await db.prepare(
-    `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id)
-     VALUES (?,?,?,?,?,?,?,?)`
-  ).run(userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null);
+    `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id, ip_address, user_agent)
+     VALUES (?,?,?,?,?,?,?,?,?,?)`
+  ).run(userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null, ipAddress, userAgent);
 }
 
 /**
@@ -381,12 +397,14 @@ function sessionCookieAttributes(req) {
 async function createSession(req, res, userId, { impersonatingAdminId = null, actingSeatId = null, maxAgeSeconds = 7 * 24 * 60 * 60 } = {}) {
   const token = randomToken(32);
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000).toISOString();
-  await db.prepare('INSERT INTO sessions (session_token, user_id, expires_at, impersonating_admin_id, acting_seat_id) VALUES (?,?,?,?,?)').run(
+  const ipAddress = req ? (req.headers?.['cf-connecting-ip'] || req.ip || null) : null;
+  await db.prepare('INSERT INTO sessions (session_token, user_id, expires_at, impersonating_admin_id, acting_seat_id, ip_address) VALUES (?,?,?,?,?,?)').run(
     token,
     userId,
     expiresAt,
     impersonatingAdminId,
-    actingSeatId
+    actingSeatId,
+    ipAddress
   );
   res.setHeader('Set-Cookie', `lb_session=${token}; HttpOnly; Path=/; Max-Age=${maxAgeSeconds}${sessionCookieAttributes(req)}`);
 }

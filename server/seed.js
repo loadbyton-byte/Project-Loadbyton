@@ -71,6 +71,10 @@ module.exports = async function seed() {
       p.completed ?? 0,
       p.verifiedAt || null
     );
+    // available_units defaults NULL at the column level (server/schema.js)
+    // — its one-time backfill runs during schema init, before any of these
+    // seed rows exist, so every seeded profile needs this explicitly.
+    await db.prepare(`UPDATE profiles SET available_units = fleet_size WHERE user_id=? AND available_units IS NULL`).run(userId);
   }
 
   // --- Users -----------------------------------------------------------

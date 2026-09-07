@@ -136,7 +136,12 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   await writeAudit(req, { userId: req.actorId, action: 'BID_CREATE', details: `Bid AED ${amount} on ${job.job_code}${bidCharges.length ? ` (+${bidCharges.length} ancillary charge(s))` : ''}`, entityType: 'bid', entityId: bidId });
   await notify(job.shipper_id, 'New bid received', `${req.user.profile.company_name} bid AED ${amount} on ${job.job_code}.`, job.id, 'bid');
   const bid = /** @type {any} */ (await db.prepare('SELECT * FROM bids WHERE id=?').get(bidId));
-  res.status(201).json({ bid });
+  // Warn, don't block — a shipper may still want to see/consider this bid,
+  // but must be told the carrier has declared zero (or negative) available
+  // capacity right now.
+  const carrierProfile = await db.prepare('SELECT available_units FROM profiles WHERE user_id=?').get(req.user.id);
+  const lowCapacityWarning = carrierProfile && carrierProfile.available_units <= 0;
+  res.status(201).json({ bid, warning: lowCapacityWarning });
 });
 
 router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
@@ -295,6 +300,15 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
     });
     await notify(job.shipper_id, 'Payment due', `${job.job_code} was delivered — payment is now due (pay-on-delivery).`, job.id, 'payout');
   }
+  // Equipment capacity — the trip is done, this carrier's truck/container
+  // slot is free again. Restores exactly what award.service.js decremented.
+  {
+    const unitCount = job.shipment_type === 'LOCAL' ? (job.truck_count || 1) : (job.container_count || 1);
+    await db.prepare(`UPDATE profiles SET available_units = available_units + ? WHERE user_id=?`).run(unitCount, job.carrier_id);
+    await db.prepare(
+      `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`
+    ).run(job.carrier_id, job.id, 'RESTORED', unitCount, `Delivered ${job.job_code}`);
+  }
   if (doc && (doc.fileUrl || storagePath)) {
     await db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
       job.id,
@@ -328,10 +342,29 @@ router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRo
   const isCarrierOwner = req.user.role === 'CARRIER' && job.carrier_id === req.user.id;
   if (!isShipperOwner && !isCarrierOwner) return sendError(res, 403, 'Not a participant on this job');
   if (!DISPUTABLE_STATUSES.includes(job.status)) return sendError(res, 403, `Cannot dispute a job in ${job.status} status`);
-  const { reason } = /** @type {any} */ (req.body) || {};
+  const { reason, disputeType } = /** @type {any} */ (req.body) || {};
   if (!reason || !String(reason).trim()) return sendError(res, 400, 'reason is required');
+  const DISPUTE_TYPES = ['PRICE', 'DELAY_DEMURRAGE', 'DAMAGE_SHORTAGE', 'MISSING_DOCS', 'NO_SHOW', 'PAYMENT_VAT', 'FRAUD_IDENTITY'];
+  if (!DISPUTE_TYPES.includes(disputeType)) {
+    return sendError(res, 400, `disputeType is required and must be one of: ${DISPUTE_TYPES.join(', ')}`);
+  }
+  // Per-type minimum evidence — require photo evidence to already exist
+  // rather than accepting an empty claim and leaving the admin to chase it
+  // down. Scoped to the two types with a clear, mechanical evidence check
+  // today; the other five are surfaced to the admin at resolution time
+  // instead (see the evidence-bundle logic on the resolve side).
+  if (disputeType === 'DAMAGE_SHORTAGE') {
+    const hasEirPhoto = await db.prepare(`SELECT 1 FROM job_documents WHERE job_id=? AND doc_type='EIR'`).get(job.id);
+    if (!hasEirPhoto) return sendError(res, 400, 'A damage/shortage dispute requires at least one EIR photo already on file for this job');
+  }
+  if (disputeType === 'NO_SHOW') {
+    const hasLocation = await db.prepare(`SELECT 1 FROM location_logs WHERE job_id=?`).get(job.id);
+    if (!hasLocation) return sendError(res, 400, 'A no-show dispute requires at least one recorded location ping, or a gate-attempt photo uploaded as a document first');
+  }
 
-  const result = /** @type {any} */ (await db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\') RETURNING id').run(job.id, req.user.id, String(reason).trim()));
+  const result = /** @type {any} */ (await db.prepare(
+    `INSERT INTO disputes (job_id, opened_by, reason, status, dispute_type, sla_deadline) VALUES (?,?,?,'OPEN',?,datetime('now','+48 hours')) RETURNING id`
+  ).run(job.id, req.user.id, String(reason).trim(), disputeType));
   await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
   await writeAudit(req, {
     userId: req.actorId,
