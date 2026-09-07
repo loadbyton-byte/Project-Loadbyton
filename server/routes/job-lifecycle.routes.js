@@ -125,7 +125,13 @@ router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), writeLimiter, r
   // Migrated to new envelope: payment-checkout errors use apiResponse.error (adds success:false + _legacy)
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   if (job.shipper_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
-  if (job.status !== 'AWARDED') return apiResponse.error(req, res, 'JOB_NOT_OPEN', 'Only AWARDED jobs can be paid');
+  // PAY_ON_DELIVERY jobs reach escrow_status='HELD' at the DELIVERED
+  // transition instead of at AWARDED (see the /pod handler above) — this
+  // endpoint stays reachable for them at that later status too, since
+  // that's the whole point of the tier. Every other tier keeps today's
+  // AWARDED-only behavior.
+  const statusAllowsCheckout = job.status === 'AWARDED' || (job.payment_tier === 'PAY_ON_DELIVERY' && job.status === 'DELIVERED');
+  if (!statusAllowsCheckout) return apiResponse.error(req, res, 'JOB_NOT_OPEN', 'Only AWARDED jobs can be paid');
   if (job.escrow_status !== 'HELD') return apiResponse.error(req, res, 'ESCROW_NOT_HELD', 'Escrow is not in HELD state');
   if (job.processor_payment_status === 'PAID') return apiResponse.error(req, res, 'JOB_ALREADY_AWARDED', 'This job is already paid');
   if (!payments.isConfigured()) return apiResponse.error(req, res, 'PAYMENT_NOT_CONFIGURED', 'Payments are not configured — escrow is internal bookkeeping (see docs/PAYMENTS.md)');
@@ -239,6 +245,37 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
     }
   }
   await db.prepare(`UPDATE jobs SET status='DELIVERED', delivered_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
+  // PAY_ON_DELIVERY tier (server/schema.js's jobs.payment_tier): award
+  // deliberately skipped escrow entirely for this tier (see
+  // award.service.js) — this is the point where payment actually becomes
+  // due instead. Mirrors exactly what SPOT_ESCROW's award does (escrow
+  // HELD, processor_payment_status REQUIRES_PAYMENT, the same
+  // processor_clearing/escrow_liability ledger entry), just deferred to
+  // here. Guarded so this only ever fires once per job even under a
+  // retried/duplicate POD submission (idempotency middleware already
+  // protects the request itself, but this is a second, cheaper guard).
+  if (job.payment_tier === 'PAY_ON_DELIVERY' && job.escrow_status === 'PENDING') {
+    const ledger = require('../lib/ledger');
+    await db.transaction(async (/** @type {any} */ trx) => {
+      const locked = await trx.query(`SELECT escrow_status, agreed_price_aed FROM jobs WHERE id=? FOR UPDATE`, [job.id]);
+      const current = locked.rows[0];
+      if (!current || current.escrow_status !== 'PENDING') return; // already handled by a concurrent request
+      await trx.query(
+        `UPDATE jobs SET escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`,
+        [job.id]
+      );
+      await ledger.createTransaction(trx, {
+        idempotencyKey: `pay-on-delivery-${job.id}`,
+        jobId: job.id,
+        description: `Payment due on delivery ${job.job_code} AED ${current.agreed_price_aed}`,
+        entries: [
+          { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(current.agreed_price_aed) },
+          { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(current.agreed_price_aed) },
+        ],
+      });
+    });
+    await notify(job.shipper_id, 'Payment due', `${job.job_code} was delivered — payment is now due (pay-on-delivery).`, job.id, 'payout');
+  }
   if (doc && (doc.fileUrl || storagePath)) {
     await db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
       job.id,

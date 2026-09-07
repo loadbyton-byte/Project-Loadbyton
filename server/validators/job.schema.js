@@ -96,6 +96,19 @@ async function createJobFromBody(body, req) {
   );
 
   const jobId = Number(result.lastInsertRowid);
+
+  // payment_tier: not yet exposed in the job-posting UI or gated by any
+  // eligibility check (that's separate, not-yet-built work) — accepted
+  // here mainly so the tier logic in award.service.js/job.service.js is
+  // exercisable and testable. jobs.payment_tier already defaults to
+  // SPOT_ESCROW at the schema level, so an omitted/invalid value here is
+  // simply left at that default rather than validated as an error.
+  const { paymentTier } = body;
+  const VALID_PAYMENT_TIERS = ['SPOT_ESCROW', 'PAY_ON_DELIVERY', 'CONTRACT_CREDIT', 'OFF_PLATFORM'];
+  if (paymentTier && VALID_PAYMENT_TIERS.includes(paymentTier) && paymentTier !== 'SPOT_ESCROW') {
+    await db.prepare('UPDATE jobs SET payment_tier=? WHERE id=?').run(paymentTier, jobId);
+  }
+
   return await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
 }
 

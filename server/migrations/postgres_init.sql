@@ -519,6 +519,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE contract_rfps ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_users_is_demo ON users(is_demo);
+
+-- Payment tiers — see server/schema.js (the actual auto-migrating SQLite
+-- path this app runs on) for the full reasoning; mirrored here for the
+-- opt-in Postgres path.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS payment_tier TEXT NOT NULL DEFAULT 'SPOT_ESCROW';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS trust_score REAL NOT NULL DEFAULT 5.0;
 CREATE INDEX IF NOT EXISTS idx_jobs_is_demo ON jobs(is_demo);
 CREATE INDEX IF NOT EXISTS idx_contract_rfps_is_demo ON contract_rfps(is_demo);
 

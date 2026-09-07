@@ -68,8 +68,20 @@ async function awardJob(req, res, jobId, bidId) {
         const err = /** @type {any} */ (new Error('Job already awarded')); err.status = 409; throw err;
       }
 
+      // payment_tier branching — SPOT_ESCROW (the default, and every job
+      // created before this column existed) keeps exactly today's
+      // behavior: escrow HELD immediately, checkout required before
+      // pickup. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM defer
+      // escrow entirely — for PAY_ON_DELIVERY, job.service.js's
+      // updateJobStatus creates the actual checkout/ledger entry at the
+      // DELIVERED transition instead; CONTRACT_CREDIT and OFF_PLATFORM
+      // don't touch per-job escrow at all in this pass (CONTRACT_CREDIT's
+      // running credit-limit ledger is a separate, not-yet-built piece).
+      const isSpotEscrow = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
       await trx.query(
-        `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`,
+        isSpotEscrow
+          ? `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`
+          : `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, updated_at=datetime('now') WHERE id=?`,
         [bid.carrier_id, agreedPrice, jobId]
       );
 
@@ -105,16 +117,24 @@ async function awardJob(req, res, jobId, bidId) {
       // (status, bid updates, payout row) while the caller believes it
       // succeeded. Letting it throw lets db.transaction's own catch
       // rollback and report a real error instead.
-      const ledger = require('../lib/ledger');
-      await ledger.createTransaction(trx, {
-        idempotencyKey,
-        jobId,
-        description: `Award ${preJob.job_code} AED ${agreedPrice}`,
-        entries: [
-          { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
-          { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
-        ],
-      });
+      // For PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM, no funds are
+      // expected yet at award time — recording an escrow-liability entry
+      // here would be booking a receivable that doesn't exist until
+      // DELIVERED (PAY_ON_DELIVERY) or, for the other two tiers, ever
+      // on-platform in this pass. job.service.js's updateJobStatus creates
+      // the equivalent ledger entry for PAY_ON_DELIVERY at DELIVERED.
+      if (isSpotEscrow) {
+        const ledger = require('../lib/ledger');
+        await ledger.createTransaction(trx, {
+          idempotencyKey,
+          jobId,
+          description: `Award ${preJob.job_code} AED ${agreedPrice}`,
+          entries: [
+            { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
+            { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
+          ],
+        });
+      }
 
       // Audit atomically with the financial writes
       await trx.query(
