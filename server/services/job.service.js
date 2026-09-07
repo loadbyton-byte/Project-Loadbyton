@@ -12,7 +12,7 @@ const jobRepository = require('../repositories/job.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const bidRepository = require('../repositories/bid.repository');
 const { TRANSITIONS } = require('../lib/constants');
-const { getSettings, writeAudit, notify } = require('../lib/helpers');
+const { getSettings, writeAudit, notify, notifyAdmins } = require('../lib/helpers');
 const { issueInvoice } = require('../lib/invoice');
 const { executePayoutAsync, refundJobAsync } = require('./payout.service');
 
@@ -77,6 +77,28 @@ async function updateJobStatus(jobId, nextStatus, req) {
     throw e;
   }
 
+  // Money-before-move gate — previously a carrier could mark a job
+  // PICKED_UP with zero check that payment was ever confirmed. Verified
+  // directly in award.service.js: escrow_status is set to 'HELD'
+  // UNCONDITIONALLY the instant a job is awarded — before any real
+  // payment attempt, let alone confirmation — so HELD alone proves
+  // nothing about whether money has actually moved. It only becomes
+  // 'FUNDED' once real receipt is confirmed: either a processor webhook
+  // (server/routes/stripe.routes.js) or, in today's internal-bookkeeping
+  // mode, an admin explicitly calling POST /api/admin/confirm-receipt
+  // (server/routes/admin.routes.js). The gate below requires FUNDED
+  // specifically — requiring only HELD would be a no-op, since every
+  // AWARDED SPOT_ESCROW job already has escrow_status='HELD' by
+  // definition. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM are defined
+  // by NOT requiring escrow before pickup — that's the whole point of
+  // those tiers — so they must never be blocked by this check.
+  const isSpotEscrowTier = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
+  if (nextStatus === 'PICKED_UP' && isSpotEscrowTier && job.escrow_status !== 'FUNDED') {
+    const e = new Error('Payment not yet confirmed — pickup unlocks once payment receipt is confirmed.');
+    e.status = 400;
+    throw e;
+  }
+
   // Primary status update via repository (uses repository to satisfy modularization)
   await jobRepository.updateStatus(id, { status: nextStatus });
 
@@ -84,19 +106,59 @@ async function updateJobStatus(jobId, nextStatus, req) {
   // Use direct db for multi-column updates that repository.updateStatus also supports,
   // but keep explicit SQL to match original routes byte-for-byte semantics.
   if (nextStatus === 'CANCELLED' && ['HELD', 'FUNDED'].includes(job.escrow_status)) {
+    // Cancellation fee (planning register Change 24F) — this block only
+    // ever fires for a job that was already AWARDED (escrow HELD/FUNDED),
+    // so every cancellation reaching here is "after award," the only case
+    // the fee applies to; a job cancelled before award never touches this
+    // code path and stays free, as it always has been.
+    const { cancellation_fee_bps_after_award } = await getSettings();
+    const cancellationFeeAed = Math.round((job.agreed_price_aed || 0) * cancellation_fee_bps_after_award / 10000 * 100) / 100;
+    const netRefundAed = Math.max(0, (job.agreed_price_aed || 0) - cancellationFeeAed);
     // Row-locked + idempotency-guarded — two concurrent cancel requests
     // for the same job must not both fire a refund.
     const cancelled = await db.transaction(async (trx) => {
       const locked = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [id]);
       const currentEscrow = locked.rows[0]?.escrow_status;
       if (currentEscrow === 'RELEASED') return false; // already handled by a concurrent request
-      await trx.query(`UPDATE jobs SET escrow_status='RELEASED' WHERE id=?`, [id]);
+      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', cancellation_fee_aed=? WHERE id=?`, [cancellationFeeAed, id]);
       await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [id]);
       return true;
     });
     if (cancelled && job.escrow_status === 'FUNDED') {
-      // fire-and-forget refund (processor path) — do not await failure
-      try { refundJobAsync(job); } catch {}
+      // fire-and-forget refund (processor path) — do not await failure.
+      // Refunds the net amount (after the fee), not the full price.
+      try { refundJobAsync(job, netRefundAed); } catch {}
+    }
+    // Change 30 — the cancellation fee is now a real platform_fees +
+    // ledger row via chargeFee() (idempotent per job), not just a column
+    // on the job. Zero-fee cancellations (free tier / pre-award) skip it.
+    if (cancelled && cancellationFeeAed > 0) {
+      try {
+        const { chargeFee } = require('../lib/ledger');
+        await chargeFee(db, {
+          idempotencyKey: `cancel-fee-${id}`, feeCode: 'CANCELLATION_FEE',
+          jobId: id, userId: job.shipper_id, amountAed: cancellationFeeAed,
+          description: `Cancellation fee ${job.job_code} AED ${cancellationFeeAed}`,
+        });
+      } catch (e) { console.error(`[fees] cancel-fee charge failed for job ${id}:`, e.message); }
+    }
+    // A carrier backing out after commitment is exactly the "no-show"
+    // scenario this reliability score exists to catch — a shipper
+    // cancelling isn't the carrier's fault and doesn't penalize anyone.
+    if (cancelled && job.carrier_id && role === 'CARRIER') {
+      await db.prepare(`UPDATE profiles SET reliability_score = MAX(0, reliability_score - 1) WHERE user_id=?`).run(job.carrier_id);
+      await writeAudit(req, { userId: req.actorId, action: 'CARRIER_RELIABILITY_STRIKE', details: `${job.job_code}: carrier cancelled after award`, entityType: 'user', entityId: job.carrier_id });
+    }
+    if (cancelled && job.carrier_id) {
+      // Restore the capacity award.service.js decremented — a cancelled
+      // job is no longer occupying this carrier's declared capacity.
+      // Uses the shared total (line item 1 + job_line_items extras).
+      const { jobUnitCount } = require('../lib/capacity');
+      const unitCount = await jobUnitCount(job);
+      await db.prepare(`UPDATE profiles SET available_units = available_units + ? WHERE user_id=?`).run(unitCount, job.carrier_id);
+      await db.prepare(
+        `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`
+      ).run(job.carrier_id, id, 'RESTORED', unitCount, `Cancelled ${job.job_code}`);
     }
   }
 
@@ -115,7 +177,17 @@ async function updateJobStatus(jobId, nextStatus, req) {
       return true;
     });
     if (released) {
-      try { await issueInvoice(db, id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${id}:`, e); }
+      // issueInvoice() already retries a colliding invoice number
+      // internally (server/lib/invoice.js) — a failure reaching here is a
+      // real, non-self-healing problem. Previously this was only
+      // console.error'd, so a completed job could silently end up with no
+      // invoice at all, visible nowhere an admin would actually see it.
+      try {
+        await issueInvoice(db, id);
+      } catch (e) {
+        console.error(`[invoice] issueInvoice failed for job ${id}:`, e);
+        try { await notifyAdmins('Invoice issuance failed', `Job ${job.job_code} (id ${id}) completed and released, but its invoice failed to issue: ${e.message}`, id, 'system'); } catch {}
+      }
       if (job.carrier_id) {
         try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
       }
@@ -124,7 +196,37 @@ async function updateJobStatus(jobId, nextStatus, req) {
         const payout = await payoutRepository.findByJobId(id) || await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(id);
         await executePayoutAsync(job, payout, req);
       } catch {}
+
+      // DRIVER_ASSOCIATE Phase 1: the driver's wallet cut of a job they
+      // actually executed — a running ledger entry, not yet an automated
+      // weekly payout (see server/schema.js's driver_wallet_entries
+      // comment; the carrier marks entries paid, same honest scoping as
+      // every other manual-settlement piece in this codebase today).
+      try {
+        if (job.assigned_driver_id) {
+          const driver = await db.prepare('SELECT * FROM drivers WHERE id=?').get(job.assigned_driver_id);
+          const seatUser = driver && driver.seat_user_id ? await db.prepare('SELECT seat_role FROM users WHERE id=?').get(driver.seat_user_id) : null;
+          if (seatUser && seatUser.seat_role === 'DRIVER_ASSOCIATE' && job.agreed_price_aed) {
+            const { driver_associate_default_split_bps } = await getSettings();
+            const splitBps = Number(driver_associate_default_split_bps) || 8000;
+            const driverShare = Math.round(job.agreed_price_aed * (splitBps / 10000) * 100) / 100;
+            await db.prepare(
+              'INSERT INTO driver_wallet_entries (driver_id, job_id, carrier_id, gross_amount_aed, split_bps, driver_share_aed) VALUES (?,?,?,?,?,?)'
+            ).run(driver.id, job.id, job.carrier_id, job.agreed_price_aed, splitBps, driverShare);
+          }
+        }
+      } catch (e) { console.error(`[wallet] driver_wallet_entries insert failed for job ${id}:`, e); }
     }
+  }
+
+  if (nextStatus === 'IN_TRANSIT' && job.assigned_driver_phone) {
+    // First real two-way WhatsApp bot flow: delivery confirmation via
+    // interactive buttons once the driver is en route. Fire-and-forget,
+    // same as every other WhatsApp send site — never blocks the response.
+    try {
+      const { sendDeliveryConfirmationPrompt } = require('../lib/whatsapp');
+      sendDeliveryConfirmationPrompt({ to: job.assigned_driver_phone, jobCode: job.job_code });
+    } catch {}
   }
 
   await writeAudit(req, {
@@ -232,19 +334,53 @@ async function getJob(jobId, user) {
   }
   let bids = await db
     .prepare(
-      `SELECT bids.*, cp.rating_avg as carrier_rating, cp.company_name as carrier_company
+      `SELECT bids.*, cp.rating_avg as carrier_rating, cp.company_name as carrier_company, cp.available_units as carrier_available_units, cp.reliability_score as carrier_reliability_score
        FROM bids LEFT JOIN profiles cp ON cp.user_id = bids.carrier_id
        WHERE job_id=? ORDER BY amount_aed ASC`
     )
     .all(job.id);
+
+  // Ancillary charges (Salik/e-token/demurrage/inspection-waiting) are now
+  // declared at bid time and reviewed by the shipper alongside each bid's
+  // price — attach them here so the shipper sees a bidder's full expected
+  // cost in one place, rather than needing a separate call per bid.
+  if (bids.length) {
+    const allCharges = await db
+      .prepare(`SELECT * FROM bid_ancillary_charges WHERE bid_id IN (${bids.map(() => '?').join(',')}) ORDER BY created_at ASC`)
+      .all(...bids.map((b) => b.id));
+    const chargesByBid = new Map();
+    for (const c of allCharges) {
+      if (!chargesByBid.has(c.bid_id)) chargesByBid.set(c.bid_id, []);
+      chargesByBid.get(c.bid_id).push(c);
+    }
+    bids = bids.map((b) => ({ ...b, ancillary_charges: chargesByBid.get(b.id) || [] }));
+  }
+
   const isOwnerShipper = user.id === job.shipper_id;
   const isAdmin = user.role === 'ADMIN';
-  if (job.status === 'OPEN' && !isOwnerShipper && !isAdmin) {
-    bids = bids.map((b) =>
-      b.carrier_id === user.id
-        ? b
-        : { ...b, amount_aed: null, eta_at: null, eta_minutes: null, driver_name: null, notes: null, carrier_company: null, masked: true }
-    );
+  if (!isOwnerShipper && !isAdmin) {
+    // Driver identity/contact must never leak to a carrier who isn't the
+    // bid's own owner, regardless of job status (see the fix shipped
+    // separately for this — bringing the same logic in here since this
+    // branch predates it and this function is being touched anyway).
+    // Price, ancillary charges, capacity/reliability, and driver identity
+    // are ALL masked from every other bidder while the job is still OPEN —
+    // "no bidder should watch other bidders' price and everything, docs etc."
+    // Once the job leaves OPEN, price/company stay visible as useful market
+    // information (non-sensitive once bidding has closed), but driver
+    // identity/contact stays masked forever for anyone but the shipper,
+    // the actually-awarded carrier, or admin — previously a losing bidder
+    // could see the winning bid's driver_name/driver_phone in full once a
+    // job left OPEN, since isParticipantOrBidder() grants view access to
+    // any carrier who ever placed a bid, win or lose.
+    const isOpenPhase = job.status === 'OPEN';
+    bids = bids.map((b) => {
+      if (b.carrier_id === user.id) return b;
+      const driverMasked = { ...b, driver_name: null, driver_phone: null, notes: null };
+      return isOpenPhase
+        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, ancillary_charges: [], carrier_available_units: null, carrier_reliability_score: null, masked: true }
+        : driverMasked;
+    });
   }
   const shipperProfile = await db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
   // Driver info for whoever can already see this job (shipper/carrier/admin
@@ -264,7 +400,31 @@ async function getJob(jobId, user) {
       };
     }
   }
-  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null, driver_info: driverInfo };
+  // The real, currently-live version of the driver-identity leak: job.*
+  // (a plain `SELECT *`, via jobRepository.findById) includes
+  // assigned_driver_name/assigned_driver_phone directly, and canViewJob()
+  // grants access to any carrier who ever placed a bid on this job, win or
+  // lose (isParticipantOrBidder has no status/outcome check on the bid).
+  // Only the shipper, the actually-awarded carrier, and admin should ever
+  // see who the winning carrier's driver is — a losing bidder gets these
+  // fields stripped, same as the bids[]-level masking above.
+  const isAwardedCarrier = user.id === job.carrier_id;
+  const driverIdentityVisible = isOwnerShipper || isAdmin || isAwardedCarrier;
+  // Extra container-type line items beyond the job's own container_size/
+  // type/count columns (which already represent line item 1) — empty for
+  // every job posted before multi-line-item support existed.
+  const extraLineItems = await db.prepare('SELECT id, container_size, container_type, count FROM job_line_items WHERE job_id=? ORDER BY id').all(job.id);
+  // Multi-stop itinerary (Phase 8) — intermediate legs in seq order; the
+  // job's own pickup/delivery stay the canonical first/last legs.
+  const stops = await db.prepare(`SELECT * FROM job_stops WHERE job_id=? ORDER BY seq ASC`).all(job.id);
+  const jobWithRating = {
+    ...job,
+    ...(driverIdentityVisible ? null : { assigned_driver_name: null, assigned_driver_phone: null }),
+    shipper_rating: shipperProfile ? shipperProfile.rating_avg : null,
+    driver_info: driverIdentityVisible ? driverInfo : null,
+    extra_line_items: extraLineItems,
+    stops,
+  };
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
   const payout = await payoutRepository.findByJobId(job.id) || null;

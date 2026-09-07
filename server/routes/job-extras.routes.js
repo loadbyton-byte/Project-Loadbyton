@@ -79,6 +79,21 @@ router.post('/api/jobs/:id/documents', auth(), async (req, res) => {
   if (!(await isPartyOnJob(job, req.user))) return apiResponse.error(req, res, 'FORBIDDEN', 'Only the shipper and the awarded carrier can attach documents');
   const b = req.body || {};
   if (!b.title || !(b.fileUrl || b.fileBase64 || b.storageKey)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'title and (fileUrl, fileBase64+mimeType, or storageKey+mimeType) are required');
+  // Post-assignment document exchange (see the planning register's Change
+  // 7): carrier shares DO/BOE (import/export) and proof of an inspection
+  // they attended; shipper shares the gate pass and the POD template.
+  // Both parties are already isPartyOnJob-checked above; this only narrows
+  // which of the two may use these specific doc types.
+  const CARRIER_ONLY_DOC_TYPES = ['DO', 'BOE', 'INSPECTION_PROOF'];
+  const SHIPPER_ONLY_DOC_TYPES = ['GATE_PASS', 'POD_TEMPLATE'];
+  const isCarrierParty = req.user.role === 'CARRIER' && job.carrier_id === req.user.id;
+  const isShipperParty = req.user.role === 'SHIPPER' && job.shipper_id === req.user.id;
+  if (CARRIER_ONLY_DOC_TYPES.includes(b.docType) && !isCarrierParty) {
+    return apiResponse.error(req, res, 'FORBIDDEN', `${b.docType} can only be uploaded by the assigned carrier`);
+  }
+  if (SHIPPER_ONLY_DOC_TYPES.includes(b.docType) && !isShipperParty) {
+    return apiResponse.error(req, res, 'FORBIDDEN', `${b.docType} can only be uploaded by the shipper`);
+  }
   let storagePath = null;
   let mimeType = null;
   if (b.fileBase64 || b.storageKey) {
@@ -148,7 +163,12 @@ router.post('/api/jobs/:id/rating', auth(), async (req, res) => {
   // guarantee; this just turns a constraint violation into a clean 409
   // instead of a 500.
   try {
-    await db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment) VALUES (?,?,?,?,?)').run(job.id, req.user.id, rateeId, score, b.comment || null);
+    // driver_id: when a shipper rates the carrier, also record which
+    // driver actually executed the job — so a pattern of issues can later
+    // be traced to a specific driver, not just the carrier account.
+    await db.prepare('INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment, driver_id) VALUES (?,?,?,?,?,?)').run(
+      job.id, req.user.id, rateeId, score, b.comment || null, req.user.id === job.shipper_id ? job.assigned_driver_id : null
+    );
   } catch (e) {
     // 23505 is Postgres's unique_violation code — the ERR_SQLITE_ERROR
     // check alone left this dead on Postgres (any real double-submit threw
@@ -262,6 +282,38 @@ router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
   const message = await db.prepare('SELECT * FROM messages WHERE id=?').get(Number(result.lastInsertRowid));
   try { require('../lib/socket').emitNewMessage(threadId, message); } catch {}
   res.status(201).json({ message, threadId });
+});
+
+// Haulier Code / Token — free-text, not tied to DP World's specific
+// process, so it still works for an Abu Dhabi Ports or Sharjah Ports job
+// where the actual mechanism differs (see server/schema.js's comment).
+// Carrier sets their own haulier code; shipper creates the token against
+// it. Only meaningful post-assignment (carrier_id must already be set).
+router.post('/api/jobs/:id/haulier-code', auth(['CARRIER']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (job.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
+  const { haulierCode } = req.body || {};
+  if (!haulierCode || !String(haulierCode).trim()) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'haulierCode is required');
+  await db.prepare(`UPDATE jobs SET haulier_code=?, updated_at=datetime('now') WHERE id=?`).run(String(haulierCode).trim(), job.id);
+  await notify(job.shipper_id, 'Haulier code set', `Carrier set a haulier code on ${job.job_code}.`, job.id, 'status');
+  await writeAudit(req, { userId: req.actorId, action: 'HAULIER_CODE_SET', entityType: 'job', entityId: job.id });
+  const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
+  res.json({ job: updated });
+});
+
+router.post('/api/jobs/:id/haulier-token', auth(['SHIPPER']), async (req, res) => {
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  if (job.shipper_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
+  if (!job.haulier_code) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'The carrier has not set a haulier code on this job yet');
+  const { haulierToken } = req.body || {};
+  if (!haulierToken || !String(haulierToken).trim()) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'haulierToken is required');
+  await db.prepare(`UPDATE jobs SET haulier_token=?, haulier_token_set_by=?, haulier_token_set_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(String(haulierToken).trim(), req.actorId, job.id);
+  await notify(job.carrier_id, 'Haulier token issued', `Shipper issued a haulier token on ${job.job_code}.`, job.id, 'status');
+  await writeAudit(req, { userId: req.actorId, action: 'HAULIER_TOKEN_SET', entityType: 'job', entityId: job.id });
+  const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);
+  res.json({ job: updated });
 });
 
 module.exports = router;

@@ -16,7 +16,7 @@ export function ThreadMessageList({ listRef, loaded, activeRole, messages, myId,
       ) : messages.length === 0 ? (
         <p className="text-sm text-ink-muted">No messages with {ROLE_LABELS[activeRole] || activeRole} yet — say hello.</p>
       ) : (
-        messages.map((m) => <ChatBubble key={m.id} body={m.content} mine={m.sender_id === myId} />)
+        messages.map((m) => <ChatBubble key={m.id} body={m.content} mine={m.sender_id === myId} channel={m.channel} />)
       )}
     </div>
   );

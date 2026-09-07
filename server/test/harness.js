@@ -82,12 +82,13 @@ async function startServer(extraEnv = {}) {
 // than one logged-in role at a time.
 function makeClient(baseUrl) {
   let cookie = null;
-  async function call(method, urlPath, body) {
+  async function call(method, urlPath, body, extraHeaders) {
     const res = await fetch(`${baseUrl}${urlPath}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
         ...(cookie ? { Cookie: cookie } : {}),
+        ...extraHeaders,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
@@ -100,8 +101,9 @@ function makeClient(baseUrl) {
   }
   return {
     get: (p) => call('GET', p),
-    post: (p, b) => call('POST', p, b),
+    post: (p, b, extraHeaders) => call('POST', p, b, extraHeaders),
     patch: (p, b) => call('PATCH', p, b),
+    delete: (p) => call('DELETE', p),
     async login(email, password) {
       const r = await call('POST', '/api/auth/login', { email, password });
       if (!r.ok) throw new Error(`login failed for ${email}: ${r.status} ${r.raw}`);

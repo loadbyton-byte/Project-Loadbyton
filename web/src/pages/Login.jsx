@@ -37,7 +37,7 @@ export default function Login() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100vh-4rem)] items-center justify-center py-16">
+    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-16">
       <Card className="w-full max-w-md p-8">
         <p className="font-display text-xl font-semibold text-ink">Log in to Loadbyton</p>
         <p className="mt-1 text-sm text-ink-muted">Post loads, bid on freight, or run the ops console.</p>

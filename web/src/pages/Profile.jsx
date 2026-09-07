@@ -5,6 +5,7 @@ import { api, ApiError } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { Button, Card, Input, Label, Select, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
+import EquipmentCapacity from '../features/profile/EquipmentCapacity.jsx';
 
 const SEAT_ROLE_HELP = {
   OPS: 'Full day-to-day access — post jobs, bid, award, update status.',
@@ -219,6 +220,14 @@ export default function Profile() {
         <IconChevronRight size={16} className="text-ink-muted" />
       </Link>
 
+      <Link to="/account/deletion" className="card mt-5 flex items-center justify-between gap-3 p-4" style={{ borderColor: 'var(--status-warning-bg)' }}>
+        <div className="flex items-center gap-3">
+          <IconUser size={18} className="text-status-warning" />
+          <span className="text-sm font-semibold text-ink">Account deletion & data export</span>
+        </div>
+        <IconChevronRight size={16} className="text-ink-muted" />
+      </Link>
+
       <Card className="mt-5">
         <form onSubmit={save}>
           <Card.Header><Card.Title>Company profile</Card.Title></Card.Header>
@@ -292,6 +301,8 @@ export default function Profile() {
           </Card.Footer>
         </form>
       </Card>
+
+      {user.role === 'CARRIER' && <EquipmentCapacity />}
 
       <Card className="mt-6">
         <Card.Header><Card.Title>Two-factor authentication</Card.Title></Card.Header>

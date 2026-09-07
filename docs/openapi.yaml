@@ -433,7 +433,7 @@ components:
       properties:
         email: { type: string, format: email }
         password: { type: string, minLength: 8 }
-        role: { type: string, enum: [SHIPPER, CARRIER] }
+        role: { type: string, enum: [SHIPPER, CARRIER, FORWARDER, OWNER_OPERATOR, BROKER] }
         companyName: { type: string }
         phone: { type: string, description: 'UAE mobile 05XXXXXXXX or +9715XXXXXXXX' }
         trnNumber: { type: string, pattern: '^[0-9]{15}$' }
@@ -475,7 +475,7 @@ components:
       required: [title]
       properties:
         title: { type: string }
-        docType: { type: string, enum: [CUSTOMS, LICENCE, POD, PACKING_LIST, OTHER] }
+        docType: { type: string, enum: [CUSTOMS, RECEIPT, POD, LICENCE, INSURANCE, PACKING_LIST, OTHER, DO, BOE, GATE_PASS, POD_TEMPLATE, INSPECTION_PROOF] }
         fileUrl: { type: string, format: uri }
         fileBase64: { type: string, contentEncoding: base64 }
         mimeType: { type: string }

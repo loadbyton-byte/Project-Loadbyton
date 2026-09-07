@@ -5,6 +5,7 @@
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { encryptField } = require('./lib/crypto');
+const { TERMS_VERSION } = require('./lib/constants');
 
 function sqliteTime(offsetMs = 0) {
   return new Date(Date.now() + offsetMs).toISOString().slice(0, 19).replace('T', ' ');
@@ -40,7 +41,15 @@ module.exports = async function seed() {
          RETURNING id`
       )
       .run(email, PASSWORD_HASH, role, is_verified ? 1 : 0, tier, referral_code);
-    return Number(r.lastInsertRowid);
+    const userId = Number(r.lastInsertRowid);
+    // Seed/demo accounts simulate an already-established real user, not a
+    // fresh signup — record a standing Terms acceptance so demo walkthroughs
+    // and tests aren't blocked by the same T&C-required gate a brand-new
+    // real signup goes through (server/routes/auth.routes.js).
+    await db.prepare(
+      `INSERT INTO terms_acceptances (user_id, terms_version, context) VALUES (?,?,'SIGNUP')`
+    ).run(userId, TERMS_VERSION);
+    return userId;
   }
   async function insertProfile(userId, p) {
     await db.prepare(
@@ -62,6 +71,10 @@ module.exports = async function seed() {
       p.completed ?? 0,
       p.verifiedAt || null
     );
+    // available_units defaults NULL at the column level (server/schema.js)
+    // — its one-time backfill runs during schema init, before any of these
+    // seed rows exist, so every seeded profile needs this explicitly.
+    await db.prepare(`UPDATE profiles SET available_units = fleet_size WHERE user_id=? AND available_units IS NULL`).run(userId);
   }
 
   // --- Users -----------------------------------------------------------

@@ -3,16 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 import {
   CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
-  equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel, depotLabel,
+  equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet, IconClose } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
-import SearchableSelect from '../components/SearchableSelect.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -43,6 +43,7 @@ const emptyJob = {
 export default function Dashboard() {
   usePageTitle('Dashboard');
   const { user } = useAuth();
+  const { t, isRtl } = useLocale();
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
   const [jobs, setJobs] = useState(null);
@@ -52,8 +53,20 @@ export default function Dashboard() {
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(emptyJob);
+  // Extra container-type line items beyond the primary size/type/count
+  // above — empty by default, so a job posted without touching this stays
+  // exactly the single-container request it always was.
+  const [extraLineItems, setExtraLineItems] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Progressive disclosure: most shippers already have a standing
+  // acceptance of the current Terms version (from signup, or an earlier
+  // job) — the backend silently skips requiring this per job in that case
+  // (see server/validators/job.schema.js). This checkbox only appears
+  // after a first submit attempt actually comes back needing it, instead
+  // of showing on every single post and causing checkbox fatigue.
+  const [needsTermsCheckbox, setNeedsTermsCheckbox] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('date_desc');
   const [search, setSearch] = useState('');
@@ -63,10 +76,15 @@ export default function Dashboard() {
 
   // Search-as-you-type without a request per keystroke.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
   }, [search]);
   useEffect(() => { setOffset(0); }, [filter, sort, debouncedSearch]);
+
+  // Closing the modal by any path (Escape, backdrop click, X, Cancel)
+  // should also drop any in-progress extra container-type rows, not just a
+  // successful submit — otherwise reopening the form shows stale rows.
+  useEffect(() => { if (!showForm) setExtraLineItems([]); }, [showForm]);
 
   // Popup modal: close on Escape, lock body scroll
   useEffect(() => {
@@ -76,6 +94,15 @@ export default function Dashboard() {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [showForm]);
+
+  // A fresh key per time the form is opened for a new job — reused across
+  // retries of the same submit attempt (e.g. after a network error, before
+  // the form has closed) so the backend's idempotency middleware can
+  // replay the first response instead of creating a duplicate job.
+  const postJobIdempotencyKeyRef = React.useRef(null);
+  useEffect(() => {
+    if (showForm) postJobIdempotencyKeyRef.current = crypto.randomUUID();
   }, [showForm]);
 
   function loadStats() {
@@ -113,7 +140,14 @@ export default function Dashboard() {
         containerCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.containerCount) || 1,
         truckCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.truckCount) || 1,
         scheduledPostAt: form.scheduleForLater && form.scheduledPostAt ? new Date(form.scheduledPostAt).toISOString() : undefined,
-      });
+        agreedToTerms,
+        // Only sent when the shipper actually used the "add another
+        // container type" rows — omitting lineItems keeps the exact
+        // pre-existing single-container request shape otherwise.
+        lineItems: extraLineItems.length > 0
+          ? [{ containerSize: form.containerSize, containerType: form.containerType, count: Number(form.containerCount) || 1 }, ...extraLineItems.map((li) => ({ ...li, count: Number(li.count) || 1 }))]
+          : undefined,
+      }, postJobIdempotencyKeyRef.current);
       const jobId = created.job?.id;
       if (form.packingList && jobId) {
         const b64 = await new Promise((resolve, reject) => {
@@ -131,6 +165,7 @@ export default function Dashboard() {
         }
       }
       setForm(emptyJob);
+      setExtraLineItems([]);
       setShowForm(false);
       addToast({
         type: 'status_change',
@@ -142,11 +177,15 @@ export default function Dashboard() {
       load();
     } catch (err) {
       setError(err.message);
-      addToast({
-        type: 'system_message',
-        title: 'Error',
-        body: err.message,
-      });
+      if (/agree to the current Terms/i.test(err.message)) {
+        setNeedsTermsCheckbox(true);
+      } else {
+        addToast({
+          type: 'system_message',
+          title: 'Error',
+          body: err.message,
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -158,7 +197,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Profile banner — the Stitch shipper-dashboard header pattern.
           Stacks on mobile: identity row, then a full-width action row —
           the previous single flex row squeezed a long company name against
@@ -170,15 +209,15 @@ export default function Dashboard() {
           </span>
           <div className="min-w-0">
             <h1 className="truncate font-display text-lg font-bold text-ink">{user?.profile?.company_name}</h1>
-            <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">Tier {user?.tier} · {analytics?.jobsPosted ?? 0} jobs posted</p>
+            <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">{t('dashboard.tier', 'Tier {tier} · {count} jobs posted', { tier: user?.tier, count: analytics?.jobsPosted ?? 0 })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
           <Button variant="ghost" size="sm" className="flex-1 sm:flex-none" onClick={() => setShowImport((v) => !v)}>
-            <IconUpload size={15} /> Import CSV
+            <IconUpload size={15} /> {t('dashboard.importCsv', 'Import CSV')}
           </Button>
           <Button size="sm" className="flex-1 sm:flex-none" disabled={user?.account_approval_status && user.account_approval_status !== 'APPROVED'} onClick={() => setShowForm(true)}>
-            <IconPlus size={15} /> Post a job
+            <IconPlus size={15} /> {t('dashboard.postJob', 'Post a job')}
           </Button>
         </div>
       </section>
@@ -187,19 +226,19 @@ export default function Dashboard() {
 
       {analytics && (
         <section className="mt-4 grid grid-cols-2 gap-3">
-          <BentoStat label="Active jobs" value={analytics.activeJobs} />
-          <BentoStat label="Completed" value={analytics.jobsCompleted} />
-          <BentoStat label="Total spent" value={formatAED(analytics.totalSpentAED)} icon={<IconWallet size={22} />} />
-          <BentoStat label="Savings vs. market" value={`${analytics.savingsPercent}%`} tone="accent" />
+          <BentoStat label={t('dashboard.stat.activeJobs', 'Active jobs')} value={analytics.activeJobs} />
+          <BentoStat label={t('dashboard.stat.completed', 'Completed')} value={analytics.jobsCompleted} />
+          <BentoStat label={t('dashboard.stat.totalSpent', 'Total spent')} value={formatAED(analytics.totalSpentAED)} icon={<IconWallet size={22} />} />
+          <BentoStat label={t('dashboard.stat.savings', 'Savings vs. market')} value={`${analytics.savingsPercent}%`} tone="accent" />
         </section>
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Post a new job" onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={t('dashboard.postNewJob', 'Post a new job')} onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
             <Card className="border-0 shadow-none">
               <Card.Header>
-                <Card.Title className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span> Post a new job</Card.Title>
+                <Card.Title className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span> {t('dashboard.postNewJob', 'Post a new job')}</Card.Title>
                 <button type="button" onClick={() => setShowForm(false)} className="rounded-full p-1.5 text-ink-muted hover:bg-surface-container hover:text-ink" aria-label="Close"><IconClose size={18} /></button>
               </Card.Header>
           <form onSubmit={onCreate}>
@@ -215,6 +254,19 @@ export default function Dashboard() {
                     : 'General freight — describe the cargo in the notes field below instead of a container size.'}
                 </p>
               </div>
+              {form.shipmentType === 'LOCAL' ? (
+                <div>
+                  <Label>No. of vehicles required</Label>
+                  <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
+                  <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                </div>
+              ) : (
+                <div>
+                  <Label>No. of containers</Label>
+                  <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
+                  <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <Label>Cargo type</Label>
                 <Select value={form.cargoType} onChange={(e) => setForm({ ...form, cargoType: e.target.value })}>
@@ -235,6 +287,49 @@ export default function Dashboard() {
                     <Select value={form.containerType} onChange={(e) => setForm({ ...form, containerType: e.target.value })}>
                       {CONTAINER_TYPES.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
                     </Select>
+                  </div>
+                  {/* Multi-container-type support: needs more than one size/
+                      type in the same job (e.g. 2x 40HC + 1x 20FT) instead
+                      of posting separate jobs. Optional — empty by default. */}
+                  <div className="sm:col-span-2 flex flex-col gap-2">
+                    {extraLineItems.map((li, idx) => (
+                      <div key={idx} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: 'var(--border-default)' }}>
+                        <Select
+                          value={li.containerSize}
+                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerSize: e.target.value } : it)))}
+                          className="flex-1"
+                        >
+                          {CONTAINER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </Select>
+                        <Select
+                          value={li.containerType}
+                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerType: e.target.value } : it)))}
+                          className="flex-1"
+                        >
+                          {CONTAINER_TYPES.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
+                        </Select>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={li.count}
+                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, count: e.target.value } : it)))}
+                          className="w-20"
+                          aria-label="Count"
+                        />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setExtraLineItems((items) => items.filter((_, i) => i !== idx))} aria-label="Remove line item">
+                          <IconX size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="self-start"
+                      onClick={() => setExtraLineItems((items) => [...items, { containerSize: CONTAINER_SIZES[0], containerType: CONTAINER_TYPES[0], count: 1 }])}
+                    >
+                      <IconPlus size={13} /> Add another container type
+                    </Button>
                   </div>
                 </>
               ) : form.equipmentType === 'CUSTOM' ? (
@@ -301,12 +396,12 @@ export default function Dashboard() {
                 <>
                   <div>
                     <Label>Container pickup at terminal <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={TERMINALS}
+                    <PlaceAutocomplete
+                      required
                       value={form.importPickupTerminal}
-                      labelFn={formatLabel}
+                      onChange={(e) => setForm({ ...form, importPickupTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, importPickupTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
                       placeholder="Search terminals…"
-                      onChange={(v) => setForm({ ...form, importPickupTerminal: v, pickupTerminal: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — where the laden container is picked up.</p>
                   </div>
@@ -323,12 +418,12 @@ export default function Dashboard() {
                   </div>
                   <div className="sm:col-span-2">
                     <Label>Empty container return location <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={DEPOTS}
+                    <PlaceAutocomplete
+                      required
                       value={form.importEmptyReturnLocation}
-                      labelFn={depotLabel}
+                      onChange={(e) => setForm({ ...form, importEmptyReturnLocation: e.target.value })}
+                      onPlaceSelect={({ address }) => setForm((f) => ({ ...f, importEmptyReturnLocation: address }))}
                       placeholder="Search depots…"
-                      onChange={(v) => setForm({ ...form, importEmptyReturnLocation: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — depot where empty is returned (detention clock stops here).</p>
                   </div>
@@ -337,12 +432,12 @@ export default function Dashboard() {
                 <>
                   <div>
                     <Label>Empty pickup location <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={DEPOTS}
+                    <PlaceAutocomplete
+                      required
                       value={form.exportEmptyPickupLocation}
-                      labelFn={depotLabel}
+                      onChange={(e) => setForm({ ...form, exportEmptyPickupLocation: e.target.value })}
+                      onPlaceSelect={({ address }) => setForm((f) => ({ ...f, exportEmptyPickupLocation: address }))}
                       placeholder="Search depots…"
-                      onChange={(v) => setForm({ ...form, exportEmptyPickupLocation: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — depot where empty container is picked up.</p>
                   </div>
@@ -359,12 +454,12 @@ export default function Dashboard() {
                   </div>
                   <div className="sm:col-span-2">
                     <Label>Deposit location (port/terminal) <span className="text-status-danger">*</span></Label>
-                    <SearchableSelect
-                      options={TERMINALS}
+                    <PlaceAutocomplete
+                      required
                       value={form.exportDepositTerminal}
-                      labelFn={formatLabel}
+                      onChange={(e) => setForm({ ...form, exportDepositTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, exportDepositTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
                       placeholder="Search terminals…"
-                      onChange={(v) => setForm({ ...form, exportDepositTerminal: v, pickupTerminal: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — terminal where laden container is deposited.</p>
                   </div>
@@ -387,22 +482,6 @@ export default function Dashboard() {
                   No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from your ready time.
                 </p>
               </div>
-              {form.shipmentType !== 'LOCAL' && (
-                <div className="sm:col-span-2 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
-                  <p className="text-sm font-medium text-ink">Volume — how much does this job cover?</p>
-                  <p className="mt-0.5 text-xs text-ink-muted">Leave both at 1 for a single load. Raise either to post one inquiry a carrier fulfils as a batch.</p>
-                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label>No. of containers</Label>
-                      <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
-                    </div>
-                    <div>
-                      <Label>No. of trucks</Label>
-                      <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
-                    </div>
-                  </div>
-                </div>
-              )}
               <div>
                 <Label>Target price (AED, per trip)</Label>
                 <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
@@ -440,11 +519,17 @@ export default function Dashboard() {
                   placeholder={CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 'Gate pass instructions, contact on site, etc.' : 'What is being moved — e.g. "40 tonnes of aggregate, site access via gate 4."'}
                 />
               </div>
+              {needsTermsCheckbox && (
+                <label className="sm:col-span-2 flex items-start gap-2 text-sm text-ink-secondary">
+                  <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5" />
+                  <span>I have read and agree to the current <a href="/terms" target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</a> (updated since your last acceptance)</span>
+                </label>
+              )}
               {error && <p className="sm:col-span-2 rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>{error}</p>}
             </Card.Content>
             <Card.Footer>
               <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button type="submit" loading={submitting}>Post job</Button>
+              <Button type="submit" loading={submitting} disabled={needsTermsCheckbox && !agreedToTerms}>Post job</Button>
             </Card.Footer>
           </form>
         </Card>
@@ -494,19 +579,20 @@ export default function Dashboard() {
                 </Select>
               </div>
               <div className="min-w-[200px] flex-1 sm:max-w-xs">
-                <Label>Search</Label>
+                <Label>{t('dashboard.search', 'Search')}</Label>
                 {/* Icon lives in its own relative wrapper around just the
                     Input (not the Label), so top-1/2 centers against the
                     input's own box instead of a hardcoded pixel guess at
-                    label+input combined height. */}
+                    label+input combined height. RTL-aware: the icon and its
+                    matching input padding both flip sides under dir="rtl". */}
                 <div className="relative">
-                  <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Job code, address, notes…" className="pl-9" />
+                  <IconSearch size={15} className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted ${isRtl ? 'right-3' : 'left-3'}`} />
+                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('dashboard.searchPlaceholder', 'Job code, address, notes…')} className={isRtl ? 'pr-9' : 'pl-9'} />
                 </div>
               </div>
             </div>
             {jobs.length === 0 ? (
-              <EmptyState className="mt-4" title="No jobs match these filters" description="Try a broader search or clear a filter." />
+              <EmptyState className="mt-4" title={t('dashboard.empty.title', 'No jobs match these filters')} description={t('dashboard.empty.description', 'Try a broader search or clear a filter.')} />
             ) : (
               <div className="mt-3">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

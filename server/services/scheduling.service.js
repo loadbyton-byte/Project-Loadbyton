@@ -9,7 +9,12 @@ async function publishScheduledJobs(req) {
 
   let published = 0;
   for (const job of jobs) {
-    await db.prepare(`UPDATE jobs SET status='OPEN', updated_at=datetime('now') WHERE id=?`).run(job.id);
+    // Atomic claim, same reasoning as escrow.service.js's runAutoReleaseSweep
+    // — this sweep also runs on its own setInterval per process, so the
+    // UPDATE's WHERE clause repeats the SELECT's status guard and only the
+    // instance that actually flips the row (claim.changes > 0) proceeds.
+    const claim = await db.prepare(`UPDATE jobs SET status='OPEN', updated_at=datetime('now') WHERE id=? AND status='DRAFT'`).run(job.id);
+    if (!claim.changes) continue;
     await writeAudit(req, {
       action: 'JOB_PUBLISH',
       details: `${job.job_code} published from schedule`,

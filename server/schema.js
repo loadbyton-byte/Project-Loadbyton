@@ -615,6 +615,237 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
   addColumn('contract_rfps', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
 
+  // Payment tiers — a job's escrow/checkout model, set at posting time.
+  // SPOT_ESCROW (the default, and today's only behavior) escrows the full
+  // price at award, before pickup. PAY_ON_DELIVERY defers that to the
+  // DELIVERED transition instead — see award.service.js and
+  // job.service.js's updateJobStatus. CONTRACT_CREDIT and OFF_PLATFORM
+  // skip per-job escrow entirely; CONTRACT_CREDIT's running credit-limit
+  // ledger is deliberately not built yet, this column just lets a job be
+  // tagged as belonging to that model without per-job escrow blocking it.
+  // Every existing job backfills to SPOT_ESCROW via this DEFAULT, so
+  // today's behavior is byte-for-byte unchanged for anything already in
+  // the database.
+  addColumn('jobs', 'payment_tier', "payment_tier TEXT NOT NULL DEFAULT 'SPOT_ESCROW'");
+  // Shipper-side payment-history signal — distinct from a carrier's
+  // rating_avg (a delivery-quality rating in the other direction) and
+  // named separately on purpose so the two are never conflated. Not yet
+  // computed from real signals or gated on anywhere; the field exists so
+  // payment_tier eligibility has something concrete to check against once
+  // that gating is built.
+  addColumn('profiles', 'trust_score', 'trust_score REAL NOT NULL DEFAULT 5.0');
+  // WhatsApp two-way: which channel a message came in on, plus dedup/
+  // delivery-status tracking for inbound sends. Existing messages default
+  // to 'WEB' since every one of them was — this doesn't retroactively
+  // reclassify anything.
+  addColumn('messages', 'channel', "channel TEXT NOT NULL DEFAULT 'WEB'");
+  addColumn('messages', 'whatsapp_message_id', 'whatsapp_message_id TEXT');
+
+  // Tracks Meta's 24h customer-service window per contact phone number —
+  // outside that window a free-form reply can't be sent, only a
+  // pre-approved template (see server/lib/whatsapp.js's sendSessionAware).
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+    phone TEXT PRIMARY KEY,
+    last_inbound_at TEXT NOT NULL,
+    session_expires_at TEXT NOT NULL
+  );
+  `);
+
+  // Compliance-engine foundation for the future DRIVER_ASSOCIATE role
+  // (Change 25) — a vehicle as a structured, queryable entity (plate type,
+  // per-emirate permits) is the single biggest gap underneath that role's
+  // own guardrails ("no private plates," "auto-pause on expiry"), so this
+  // is built first, before the role itself. drivers.vehicle_id is nullable
+  // — a driver-with-no-truck pattern has none of their own.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS vehicles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    plate_number TEXT,
+    plate_type TEXT CHECK(plate_type IN ('COMMERCIAL','PRIVATE')),
+    registration_expiry TEXT,
+    insurance_expiry TEXT,
+    permitted_emirates TEXT,
+    vehicle_reg_doc_storage_path TEXT,
+    vehicle_reg_doc_mime_type TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_vehicles_carrier ON vehicles(carrier_id);
+
+  -- Data-driven so admins can tune thresholds without a redeploy — not
+  -- every rule fits the plain {field, condition} shape (two of the seeded
+  -- rules below need two facts together), but keeping all of them in one
+  -- table still gives one place to see/enable/disable every rule.
+  CREATE TABLE IF NOT EXISTS compliance_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_code TEXT NOT NULL UNIQUE,
+    description TEXT NOT NULL,
+    severity TEXT NOT NULL CHECK(severity IN ('RED','YELLOW','GREEN')),
+    field TEXT NOT NULL,
+    condition TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1
+  );
+  `);
+
+  addColumn('drivers', 'visa_status', 'visa_status TEXT');
+  addColumn('drivers', 'visa_expiry', 'visa_expiry TEXT');
+  addColumn('drivers', 'license_category', 'license_category TEXT');
+  addColumn('drivers', 'vehicle_id', 'vehicle_id INTEGER REFERENCES vehicles(id)');
+
+  // Free-zone-vs-mainland gate (Change 25's operational-risk cluster) — no
+  // upload UI yet, admin-settable via the same profiles-field pattern as
+  // everything else in this table; the document-upload workflow is
+  // deliberately follow-up work, not part of the engine itself.
+  addColumn('profiles', 'is_free_zone_registered', 'is_free_zone_registered INTEGER NOT NULL DEFAULT 0');
+  addColumn('profiles', 'mainland_work_permitted', 'mainland_work_permitted INTEGER NOT NULL DEFAULT 0');
+
+  // Seed the five highest-severity/most mechanical compliance rules —
+  // the rest of the 18-scenario matrix is explicit follow-up seed data,
+  // not built here (see server/lib/compliance.js).
+  const seedRule = db.prepare(
+    `INSERT OR IGNORE INTO compliance_rules (rule_code, description, severity, field, condition) VALUES (?, ?, ?, ?, ?)`
+  );
+  seedRule.run('PRIVATE_PLATE', 'Private (non-commercial) plate performing paid freight work', 'RED', 'vehicle.plate_type', JSON.stringify({ op: 'eq', value: 'PRIVATE' }));
+  seedRule.run('VISA_INVALID', 'Visit-visa or no valid residence visa', 'RED', 'driver.visa_status', JSON.stringify({ op: 'in', value: ['VISIT', 'NONE'] }));
+  seedRule.run('VISA_EXPIRED', 'Residence visa expired', 'RED', 'driver.visa_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('LICENSE_EXPIRED', 'Driver license expired', 'RED', 'driver.license_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('VEHICLE_REG_EXPIRED', 'Vehicle registration expired', 'RED', 'vehicle.registration_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('VEHICLE_INSURANCE_EXPIRED', 'Vehicle insurance expired', 'RED', 'vehicle.insurance_expiry', JSON.stringify({ op: 'expired' }));
+  seedRule.run('MAINLAND_WITHOUT_PERMIT', 'Free-zone carrier on mainland without the allowed-to-work-mainland document — restrict to free-zone/port-only jobs', 'YELLOW', 'special:mainland_permit', JSON.stringify({ op: 'special' }));
+  seedRule.run('OUTSIDE_PERMITTED_EMIRATES', 'Job outside this vehicle\'s permitted emirates', 'YELLOW', 'special:permitted_emirates', JSON.stringify({ op: 'special' }));
+
+  // Multi-container-type jobs (Change 2, Prompt 2) — jobs.container_size/
+  // container_type/container_count stays the "line item 1" record for
+  // every existing job (zero migration needed, every current consumer
+  // that reads those three columns directly keeps working unchanged);
+  // this table holds any ADDITIONAL line items beyond the first for a job
+  // that needs a mix (e.g. 2x 40HC + 1x 20FT in one posting). A carrier
+  // still bids once, lump-sum, on the whole job — award/escrow logic is
+  // unchanged, this is purely a richer description of what's being moved.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS job_line_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    container_size TEXT NOT NULL,
+    container_type TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_job_line_items_job ON job_line_items(job_id);
+  `);
+
+  // Live location via WhatsApp — a driver's shared-location message lands
+  // here through the exact same location_logs table/GET endpoint the
+  // browser-Geolocation path already uses (LiveMap.jsx), so the dashboard
+  // needs no new UI to show it; `source` just distinguishes which channel
+  // produced a given point. Existing rows default to 'BROWSER' — nothing
+  // retroactively reclassified.
+  addColumn('location_logs', 'source', "source TEXT NOT NULL DEFAULT 'BROWSER'");
+
+  // DRIVER_ASSOCIATE Phase 1 (Change 25) — a carrier pushes a specific job
+  // to a specific driver-associate; the driver accepts/declines over
+  // WhatsApp (see server/routes/whatsapp.routes.js), never bids, never
+  // sees the open marketplace. driver_id references the existing drivers
+  // roster row (reused, not a parallel driver entity) — what's new is the
+  // seat_role='DRIVER_ASSOCIATE' distinction (lib/constants.js's
+  // SEAT_ROLES) and this offer/accept flow around it.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS trip_offers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    carrier_id INTEGER NOT NULL REFERENCES users(id),
+    driver_id INTEGER NOT NULL REFERENCES drivers(id),
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','EXPIRED')),
+    decline_reason TEXT,
+    offered_at TEXT NOT NULL DEFAULT (datetime('now')),
+    responded_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_trip_offers_job ON trip_offers(job_id);
+  CREATE INDEX IF NOT EXISTS idx_trip_offers_driver ON trip_offers(driver_id);
+
+  -- One entry per completed job a DRIVER_ASSOCIATE executed — the running
+  -- ledger behind "wallet + weekly payout." The actual weekly cadence is a
+  -- carrier-driven action (mark-paid) for this first pass, not yet an
+  -- automated payout schedule — stated honestly rather than implying more
+  -- automation than exists, matching this codebase's existing pattern for
+  -- every other "real ledger, manual settlement" piece (e.g. internal
+  -- payment mode).
+  CREATE TABLE IF NOT EXISTS driver_wallet_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    driver_id INTEGER NOT NULL REFERENCES drivers(id),
+    job_id INTEGER NOT NULL REFERENCES jobs(id),
+    carrier_id INTEGER NOT NULL REFERENCES users(id),
+    gross_amount_aed REAL NOT NULL,
+    split_bps INTEGER NOT NULL,
+    driver_share_aed REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PAID')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_wallet_entries_driver ON driver_wallet_entries(driver_id);
+  `);
+
+  const seedDriverAssociateSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  seedDriverAssociateSetting.run('driver_associate_default_split_bps', '8000');
+
+  // GIT cargo insurance (Change 20) — optional per-job line item. cargo_value
+  // + opt-in captured at posting (see validators/job.schema.js); the policy
+  // row below is created on bind. Premium settlement rides existing rails
+  // (escrow/admin) until Change 30's billing — stated honestly, not implied.
+  addColumn('jobs', 'cargo_value_aed', 'cargo_value_aed REAL');
+  addColumn('jobs', 'insurance_opt_in', 'insurance_opt_in INTEGER NOT NULL DEFAULT 0');
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS job_insurance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+    shipper_id INTEGER NOT NULL REFERENCES users(id),
+    provider TEXT NOT NULL DEFAULT 'internal',
+    cargo_value_aed REAL NOT NULL,
+    premium_aed REAL NOT NULL,
+    coverage_aed REAL NOT NULL,
+    rate_bps INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','CANCELLED','EXPIRED')),
+    policy_ref TEXT,
+    bound_at TEXT NOT NULL DEFAULT (datetime('now')),
+    cancelled_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_job_insurance_shipper ON job_insurance(shipper_id);
+  `);
+  db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('insurance_rate_bps', '35')`).run();
+
+  // Change 27 (Phase 7b) — Forwarder client roster, Broker carrier roster,
+  // and direct-assign columns. WhatsApp-in-dashboard + bulk CSV import are
+  // explicit Phase 2 of this item (not built here).
+  // One-hop broker rule is enforced in broker.routes.js: a job with
+  // broker_id set rejects assignment attempts by any other broker, and a
+  // broker can only direct-assign to a CARRIER/OWNER_OPERATOR in their own
+  // roster — never to another broker/forwarder.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS forwarder_clients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    forwarder_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_name TEXT NOT NULL,
+    contact_phone TEXT,
+    contact_email TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_forwarder_clients_owner ON forwarder_clients(forwarder_id);
+
+  CREATE TABLE IF NOT EXISTS broker_carriers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    broker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(broker_id, carrier_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_broker_carriers_broker ON broker_carriers(broker_id);
+  `);
+  addColumn('jobs', 'broker_id', 'broker_id INTEGER REFERENCES users(id)');
+  addColumn('jobs', 'forwarder_client_id', 'forwarder_client_id INTEGER REFERENCES forwarder_clients(id)');
+  addColumn('jobs', 'broker_spread_bps', 'broker_spread_bps INTEGER NOT NULL DEFAULT 0');
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');
@@ -622,6 +853,79 @@ module.exports = function initSchema(db) {
   seedAccount.run('carrier_payable', 'Carrier Payable', 'LIABILITY');
   seedAccount.run('platform_revenue', 'Platform Revenue', 'REVENUE');
   seedAccount.run('refund_liability', 'Refund Liability', 'LIABILITY');
+  seedAccount.run('fee_receivable', 'Fee Receivable', 'ASSET');
+
+  // Change 21 — tamper-evident ledger hash chain. prev_hash/hash are set by
+  // lib/ledger.js createTransaction (sha256 over prev|key|job|entries); the
+  // audit_log_no_update/_no_delete triggers below are the same pattern for
+  // audit_log. Existing rows backfill lazily (NULL until a new transaction
+  // chains from GENESIS-or-latest — verifyChain() treats a NULL gap as
+  // "pre-chain era", not as tampering).
+  addColumn('ledger_transactions', 'prev_hash', 'prev_hash TEXT');
+  addColumn('ledger_transactions', 'hash', 'hash TEXT');
+
+  // Change 30 core — platform_fees: one row per fee event, reusing the
+  // ledger via chargeFee() (lib/ledger.js). Status tracks collection, not
+  // existence: ACCRUED bookkeeping exists in every mode; COLLECTED flips
+  // when a real rail settles it (Change 30 billing follow-ups).
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS platform_fees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fee_code TEXT NOT NULL,
+    job_id INTEGER REFERENCES jobs(id),
+    user_id INTEGER REFERENCES users(id),
+    amount_aed REAL NOT NULL,
+    amount_minor INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACCRUED' CHECK(status IN ('ACCRUED','COLLECTED','WAIVED')),
+    idempotency_key TEXT UNIQUE NOT NULL,
+    ledger_transaction_id INTEGER REFERENCES ledger_transactions(id),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_platform_fees_job ON platform_fees(job_id);
+  CREATE INDEX IF NOT EXISTS idx_platform_fees_code ON platform_fees(fee_code);
+  `);
+
+  // Change 21 — two-person approval on sensitive admin actions. A requester
+  // admin creates a PENDING request; a DIFFERENT admin confirms (or rejects)
+  // and only confirmation executes the underlying state change via the
+  // allowlisted executor in admin-approvals.routes.js. Same-admin
+  // self-confirm is rejected; HSM multi-sig stays the aspirational version
+  // (lib/hsm.js), this table is the real, buildable control.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS admin_approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND')),
+    job_id INTEGER NOT NULL REFERENCES jobs(id),
+    payload TEXT,
+    requested_by INTEGER NOT NULL REFERENCES users(id),
+    confirmed_by INTEGER REFERENCES users(id),
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','CONFIRMED','REJECTED','EXECUTED')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    decided_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approvals(status);
+  `);
+
+  // Phase 8 (Change 28 remainder) — multi-stop itinerary. The job's own
+  // pickup_terminal/delivery_area stay the canonical first/last legs (every
+  // existing consumer keeps working); this table holds INTERMEDIATE stops
+  // (port → warehouse → multiple drops) in sequence order. Drivers execute
+  // in seq order; shipper/carrier dashboards render the full itinerary.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS job_stops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    seq INTEGER NOT NULL,
+    stop_type TEXT NOT NULL CHECK(stop_type IN ('PICKUP','DROP','WAYPOINT')),
+    location TEXT NOT NULL,
+    address_detail TEXT,
+    lat REAL,
+    lng REAL,
+    completed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_job_stops_job ON job_stops(job_id, seq);
+  `);
 
   // ---------------------------------------------------------------------------
   // Platform settings — seeded once, editable via /api/admin/settings.
@@ -630,6 +934,176 @@ module.exports = function initSchema(db) {
   const seedSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   seedSetting.run('commission_rate_bps', '600');
   seedSetting.run('auto_release_hours', '24');
+  seedSetting.run('cancellation_fee_bps_after_award', '1000');
+  seedSetting.run('priority_placement_fee_aed', '50');
+
+  // ---------------------------------------------------------------------------
+  // Equipment capacity tracking — profiles.fleet_size was a static,
+  // self-reported number never checked at bid/award time, so a carrier
+  // could bid on far more concurrent jobs than their fleet could ever
+  // service, including capacity already privately engaged off-platform.
+  // available_units is the new LIVE number: decremented automatically on
+  // award, restored on delivery/cancellation, and separately reducible by
+  // the carrier themselves via "mark N units externally engaged" — the
+  // actual fix for a carrier who has privately committed some of their
+  // fleet outside the platform. fleet_size itself stays the static
+  // declared total, unchanged.
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'available_units', 'available_units INTEGER');
+  addColumn('profiles', 'externally_engaged_units', 'externally_engaged_units INTEGER NOT NULL DEFAULT 0');
+  // Backfill available_units to fleet_size for every existing profile that
+  // doesn't have it set yet (new column, so this runs once per row).
+  db.exec(`UPDATE profiles SET available_units = fleet_size WHERE available_units IS NULL`);
+
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS carrier_capacity_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    carrier_id INTEGER NOT NULL REFERENCES users(id),
+    job_id INTEGER REFERENCES jobs(id),
+    event_type TEXT NOT NULL CHECK (event_type IN ('AWARDED','RESTORED','EXTERNAL_ENGAGE','EXTERNAL_RELEASE')),
+    units_delta INTEGER NOT NULL,
+    note TEXT,
+    expires_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_capacity_events_carrier ON carrier_capacity_events(carrier_id);
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Trust & safety: shipper payment-history score (distinct from a
+  // carrier's rating_avg, which is a delivery-quality rating in the other
+  // direction — named separately so the two directions are never
+  // conflated), carrier reliability score (cancellation/no-show
+  // accountability), and per-driver rating linkage so a pattern of issues
+  // can be traced to a specific driver, not just the carrier account.
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'payment_reliability_score', 'payment_reliability_score REAL NOT NULL DEFAULT 5.0');
+  addColumn('profiles', 'reliability_score', 'reliability_score REAL NOT NULL DEFAULT 5.0');
+  addColumn('ratings', 'driver_id', 'driver_id INTEGER REFERENCES drivers(id)');
+  // Collusion-detection groundwork — capture going forward only, nothing
+  // can be reconstructed retroactively for past actions. The actual
+  // detection query is deliberately NOT built yet (see the planning
+  // register's Change 24 note) — false positives from shared office
+  // networks/VPNs need human review design first, not an automatic flag.
+  addColumn('audit_log', 'ip_address', 'ip_address TEXT');
+  addColumn('audit_log', 'user_agent', 'user_agent TEXT');
+  addColumn('sessions', 'ip_address', 'ip_address TEXT');
+  // Cancellation-fee schedule — see server/lib/constants.js's
+  // CANCELLATION_FEE_BPS_AFTER_AWARD for the actual policy value.
+  addColumn('jobs', 'cancellation_fee_aed', 'cancellation_fee_aed REAL');
+
+  // ---------------------------------------------------------------------------
+  // 7-bucket dispute types, typed evidence, real SLA, and a real SPLIT
+  // resolution (previously accepted as a valid decision value but fell
+  // through to the exact same full-release-to-carrier code path as
+  // RELEASE_TO_CARRIER — a live bug, not just a missing feature).
+  // ---------------------------------------------------------------------------
+  addColumn('disputes', 'dispute_type', 'dispute_type TEXT');
+  addColumn('disputes', 'sla_deadline', 'sla_deadline TEXT');
+  addColumn('disputes', 'split_shipper_pct', 'split_shipper_pct REAL');
+  addColumn('disputes', 'split_carrier_pct', 'split_carrier_pct REAL');
+  addColumn('disputes', 'police_report_filed', 'police_report_filed INTEGER NOT NULL DEFAULT 0');
+  addColumn('disputes', 'police_report_reference', 'police_report_reference TEXT');
+
+  // ---------------------------------------------------------------------------
+  // Terms & Conditions acceptance — a readable Terms page (web/src/pages/
+  // Terms.jsx) existed with zero acceptance-recording mechanism anywhere.
+  // context distinguishes a one-time SIGNUP acceptance from a per-JOB one
+  // (job_id set only for the latter). terms_version is a plain string
+  // (server/lib/constants.js's TERMS_VERSION) bumped by hand whenever
+  // Terms.jsx's content materially changes — comparing a user's latest
+  // acceptance for a context against the current version is what lets a
+  // returning user skip re-accepting until it actually changes.
+  // ---------------------------------------------------------------------------
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS terms_acceptances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    terms_version TEXT NOT NULL,
+    context TEXT NOT NULL CHECK (context IN ('SIGNUP','JOB')),
+    job_id INTEGER REFERENCES jobs(id),
+    ip_address TEXT,
+    accepted_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_terms_acceptances_user ON terms_acceptances(user_id, context);
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Pre-award negotiation + itemized ancillary charges + haulier code/token.
+  // Deliberately a SEPARATE table from messages/message_threads, which are
+  // scoped to jobs.carrier_id and only make sense once a carrier is
+  // assigned — pre-award negotiation is commercial back-and-forth on a
+  // specific bid, before any carrier is chosen, a different semantic than
+  // post-award job chat. bid_ancillary_charges' two agreed_by flags require
+  // BOTH the shipper and the carrier to independently confirm a charge line
+  // before it counts as agreed — neither side can unilaterally mark it so.
+  // ---------------------------------------------------------------------------
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS bid_negotiations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+    sender_id INTEGER NOT NULL REFERENCES users(id),
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_bid_negotiations_bid ON bid_negotiations(bid_id);
+
+  CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+    charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+    amount_aed REAL NOT NULL,
+    notes TEXT,
+    proposed_by INTEGER NOT NULL REFERENCES users(id),
+    agreed_by_shipper INTEGER NOT NULL DEFAULT 0,
+    agreed_by_carrier INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
+  `);
+  addColumn('bids', 'terms_confirmed_at', 'terms_confirmed_at TEXT');
+
+  // Haulier code/token — modeled as free text, not tied to DP World's
+  // specific process, so it still works for an Abu Dhabi Ports or Sharjah
+  // Ports job where the actual mechanism differs (see the register's
+  // Change 6 note: the marketing "whole UAE" positioning must hold up in
+  // practice, not just in copy).
+  addColumn('jobs', 'haulier_code', 'haulier_code TEXT');
+  addColumn('jobs', 'haulier_token', 'haulier_token TEXT');
+  addColumn('jobs', 'haulier_token_set_by', 'haulier_token_set_by INTEGER REFERENCES users(id)');
+  addColumn('jobs', 'haulier_token_set_at', 'haulier_token_set_at TEXT');
+
+  // EIR: a seal *number* (the actual verifiable fact in a damage/tamper
+  // dispute — the photo alone only proves a seal existed, not which one)
+  // captured alongside the existing photo checklist, plus splitting the
+  // single eir_photos column into pickup/delivery stages so both ends of
+  // the journey are documented, not just pickup.
+  addColumn('jobs', 'seal_number', 'seal_number TEXT');
+  addColumn('jobs', 'eir_photos_pickup', 'eir_photos_pickup TEXT');
+  addColumn('jobs', 'eir_photos_delivery', 'eir_photos_delivery TEXT');
+  addColumn('jobs', 'seal_number_delivery', 'seal_number_delivery TEXT');
+  // Whether this job's container is sealed (carrying goods) vs. empty/
+  // unsealed (a local move, or an empty-container repositioning leg) —
+  // decides whether the EIR checklist requires 1 photo (Seal) or 2
+  // (Right Side, Left Side). No existing field reliably implies this:
+  // CARGO_TYPES has no "empty" value, and shipment_type/container_type
+  // don't distinguish a loaded leg from an empty one either — checked
+  // directly rather than guessed. Defaults by shipment_type (IMPORT/EXPORT
+  // typically sealed customs containers; LOCAL typically not) but is a
+  // real, shipper-editable field at posting time, not just a fixed rule.
+  addColumn('jobs', 'requires_seal', "requires_seal INTEGER NOT NULL DEFAULT 1");
+
+  // ---------------------------------------------------------------------------
+  // Carrier onboarding: RTA permit + Haulage (goods-in-transit) insurance —
+  // kept distinct from the existing generic insurance_doc_* fields, which
+  // cover general business insurance, a materially different policy type.
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'rta_permit_number', 'rta_permit_number TEXT');
+  addColumn('profiles', 'rta_permit_doc_storage_path', 'rta_permit_doc_storage_path TEXT');
+  addColumn('profiles', 'rta_permit_doc_mime_type', 'rta_permit_doc_mime_type TEXT');
+  addColumn('profiles', 'haulage_insurance_doc_storage_path', 'haulage_insurance_doc_storage_path TEXT');
+  addColumn('profiles', 'haulage_insurance_doc_mime_type', 'haulage_insurance_doc_mime_type TEXT');
+  addColumn('profiles', 'haulage_insurance_expiry', 'haulage_insurance_expiry TEXT');
 
   // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.

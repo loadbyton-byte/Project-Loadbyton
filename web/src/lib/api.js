@@ -16,11 +16,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, extraHeaders) {
   const res = await fetch(`${API_BASE_URL}/api${path}`, {
     method,
     credentials: 'include',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: body !== undefined ? { 'Content-Type': 'application/json', ...extraHeaders } : extraHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const isJson = res.headers.get('content-type')?.includes('application/json');
@@ -44,9 +44,15 @@ async function request(method, path, body) {
 }
 
 const get = (path) => request('GET', path);
-const post = (path, body) => request('POST', path, body ?? {});
+const post = (path, body, extraHeaders) => request('POST', path, body ?? {}, extraHeaders);
 const patch = (path, body) => request('PATCH', path, body ?? {});
 const del = (path) => request('DELETE', path);
+
+// Pass the same key back on a retry of the same submit attempt (e.g. after
+// a network error) so the backend's idempotency middleware
+// (server/lib/idempotency.js) can replay the first response instead of
+// creating a duplicate row — a fresh key means a genuinely new submission.
+const idempotencyHeaders = (key) => (key ? { 'Idempotency-Key': key } : undefined);
 
 export const api = {
   // auth
@@ -76,7 +82,7 @@ export const api = {
     const suffix = qs.toString() ? `?${qs}` : '';
     return get(`/jobs${suffix}`);
   },
-  createJob: (body) => post('/jobs', body),
+  createJob: (body, idempotencyKey) => post('/jobs', body, idempotencyHeaders(idempotencyKey)),
   importJobs: (jobs) => post('/jobs/import', { jobs }),
   editJob: (id, body) => patch(`/jobs/${id}`, body),
   myBids: (params = {}) => {
@@ -87,13 +93,21 @@ export const api = {
   withdrawBid: (id) => post(`/bids/${id}/withdraw`),
   getJob: (id) => get(`/jobs/${id}`),
   placeBid: (id, body) => post(`/jobs/${id}/bids`, body),
-  awardJob: (id, bidId) => post(`/jobs/${id}/award`, { bidId }),
+  awardJob: (id, bidId, opts) => post(`/jobs/${id}/award`, { bidId, ...opts }),
+  getBidNegotiation: (bidId) => get(`/bids/${bidId}/negotiation`),
+  postBidNegotiation: (bidId, message) => post(`/bids/${bidId}/negotiation`, { message }),
+  getAncillaryCharges: (bidId) => get(`/bids/${bidId}/ancillary-charges`),
+  proposeAncillaryCharge: (bidId, chargeType, amountAed, notes) => post(`/bids/${bidId}/ancillary-charges`, { chargeType, amountAed, notes }),
+  agreeAncillaryCharge: (bidId, chargeId) => post(`/bids/${bidId}/ancillary-charges/${chargeId}/agree`, {}),
+  confirmBidTerms: (bidId) => post(`/bids/${bidId}/confirm-terms`, {}),
+  setHaulierCode: (jobId, haulierCode) => post(`/jobs/${jobId}/haulier-code`, { haulierCode }),
+  setHaulierToken: (jobId, haulierToken) => post(`/jobs/${jobId}/haulier-token`, { haulierToken }),
   paymentCheckout: (id) => post(`/jobs/${id}/payment-checkout`, {}),
   setStatus: (id, status) => patch(`/jobs/${id}/status`, { status }),
   updateDriver: (id, body) => patch(`/jobs/${id}/driver`, body),
   submitPod: (id, body) => post(`/jobs/${id}/pod`, body),
   track: (id) => get(`/jobs/${id}/track`),
-  disputeJob: (id, reason) => post(`/jobs/${id}/dispute`, { reason }),
+  disputeJob: (id, reason, disputeType) => post(`/jobs/${id}/dispute`, { reason, disputeType }),
   getDispute: (id) => get(`/jobs/${id}/dispute`),
   backloadMatches: (id) => get(`/jobs/${id}/backload-matches`),
   addDocument: (id, body) => post(`/jobs/${id}/documents`, body),
@@ -113,6 +127,9 @@ export const api = {
   uploadDriverDocument: (id, body) => post(`/fleet/drivers/${id}/documents`, body),
   getDriverDocumentUploadUrl: (id, mimeType) => post(`/fleet/drivers/${id}/documents/upload-url`, { mimeType }),
   addDriverSeat: (id, password) => post(`/fleet/drivers/${id}/seat`, password ? { password } : {}),
+  getFleetCapacity: () => get('/fleet/capacity'),
+  externalEngageUnits: (units, note) => post('/fleet/capacity/external-engage', { units, note }),
+  releaseExternalUnits: (units) => post('/fleet/capacity/release', { units }),
 
   // driver seat's own view
   driverJob: () => get('/driver/job'),
@@ -184,7 +201,7 @@ Object.assign(api, {
   setJobCurrency: (id, body) => post(`/jobs/${id}/currency`, body),
   // enterprise
   setEToken: (id, token) => post(`/jobs/${id}/etoken`, { token }),
-  postEir: (id, photos) => post(`/jobs/${id}/eir`, { photos }),
+  postEir: (id, photos, { stage = 'pickup', sealNumber } = {}) => post(`/jobs/${id}/eir?stage=${stage}`, { photos, sealNumber }),
   getDetention: (id) => get(`/jobs/${id}/detention`),
   requestFuelAdvance: (id, type) => post(`/jobs/${id}/fuel-advance`, { type }),
   getFleet: () => get('/carrier/fleet'),
@@ -202,4 +219,72 @@ Object.assign(api, {
   predictEta: (body) => post('/ml/predict-eta', body),
   auditChain: () => get('/audit/chain'),
   auditVerify: () => get('/audit/chain/verify'),
+  // Insurance
+  getInsuranceQuote: (id, body) => post(`/jobs/${id}/insurance/quote`, body),
+  bindInsurance: (id, body) => post(`/jobs/${id}/insurance/bind`, body),
+  cancelInsurance: (id) => post(`/jobs/${id}/insurance/cancel`, {}),
+  // Direct assign / Broker / Forwarder
+  directAssign: (id, body) => post(`/jobs/${id}/direct-assign`, body),
+  listBrokerCarriers: () => get('/broker/carriers'),
+  addBrokerCarrier: (body) => post('/broker/carriers', body),
+  listForwarderClients: () => get('/forwarder/clients'),
+  addForwarderClient: (body) => post('/forwarder/clients', body),
+  // Trip offers
+  createTripOffer: (id, body) => post(`/jobs/${id}/trip-offer`, body),
+  // Stops
+  listStops: (id) => get(`/jobs/${id}/stops`),
+  createStop: (id, body) => post(`/jobs/${id}/stops`, body),
+  completeStop: (id, stopId) => post(`/jobs/${id}/stops/${stopId}/complete`, {}),
+  deleteStop: (id, stopId) => del(`/jobs/${id}/stops/${stopId}`),
+  // Admin reject approval
+  adminReject: (id) => post(`/admin/approvals/${id}/reject`, {}),
+  // Admin approvals request
+  adminRequestApproval: (body) => post('/admin/approvals/request', body),
+  // Admin reconciliation / platform fees / ledger
+  adminReconciliation: () => get('/admin/reconciliation'),
+  adminPlatformFees: () => get('/admin/platform-fees'),
+  adminLedgerVerify: () => get('/admin/ledger/verify-chain'),
+  // Account deletion / GDPR
+  deleteAccount: () => del('/me'),
+  exportAccount: () => get('/me/export'),
+  // Bid ancillary charge delete
+  deleteBidAncillaryCharge: (bidId, chargeId) => del(`/bids/${bidId}/ancillary-charges/${chargeId}`),
+  // Job status patch (admin)
+  patchJobStatus: (id, status) => patch(`/jobs/${id}/status`, { status }),
+  // Stripe Connect
+  stripeConnectOnboard: () => post('/stripe/connect/onboard', {}),
+  stripeConnectStatus: () => get('/stripe/connect/status'),
+  // Verification
+  verifyTrn: (trn) => get(`/verify/trn/${encodeURIComponent(trn)}`),
+  verifyCheck: (body) => post('/verify/check', body),
+  verifyGate: () => get('/verify/gate'),
+  // Currency
+  currencyRates: () => get('/currency/rates'),
+  setJobCurrency: (id, body) => post(`/jobs/${id}/currency`, body),
+  // RFP
+  listRfps: () => get('/rfps'),
+  getRfp: (id) => get(`/rfps/${id}`),
+  createRfp: (body) => post('/rfps', body),
+  bidRfp: (id, body) => post(`/rfps/${id}/bids`, body),
+  awardRfp: (id, bidId) => post(`/rfps/${id}/award`, { bidId }),
+  // EDI
+  ingestEdi: (body) => post('/edi/ingest', body),
+  listConsignments: () => get('/edi/consignments'),
+  getConsignment: (id) => get(`/edi/consignments/${id}`),
+  transitionConsignment: (id, body) => post(`/edi/consignments/${id}/transition`, body),
+  // GCC
+  getGccCountries: () => get('/gcc/countries'),
+  getGccCorridors: () => get('/gcc/corridors'),
+  // Billing / Lanes
+  getBillingFees: () => get('/billing/fees'),
+  getLanesQuote: (params) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''));
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return get(`/lanes/quote${suffix}`);
+  },
+  // Audit / Ledger
+  getAuditChain: () => get('/audit/chain'),
+  verifyAuditChain: () => get('/audit/chain/verify'),
+  // Job instruments
+  getInstruments: (id) => get(`/jobs/${id}/instruments`),
 });

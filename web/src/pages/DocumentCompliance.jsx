@@ -27,6 +27,8 @@ export default function DocumentCompliance() {
   const [driversError, setDriversError] = useState('');
   const [jobs, setJobs] = useState(null);
   const [jobsError, setJobsError] = useState('');
+  const [rtaPermitNumber, setRtaPermitNumber] = useState(p.rta_permit_number || '');
+  const [haulageInsuranceExpiry, setHaulageInsuranceExpiry] = useState(p.haulage_insurance_expiry || '');
 
   function loadDrivers() {
     setDriversError('');
@@ -39,12 +41,12 @@ export default function DocumentCompliance() {
   }
   useEffect(loadJobs, []);
 
-  async function uploadCompanyDoc(docType, file) {
+  async function uploadCompanyDoc(docType, file, extra) {
     if (!file) return;
     setUploadingDocType(docType);
     try {
       const uploaded = await uploadFile(file, (mimeType) => api.getProfileDocumentUploadUrl(docType, mimeType));
-      await api.uploadProfileDocument({ docType, ...uploaded });
+      await api.uploadProfileDocument({ docType, ...uploaded, ...extra });
       await refresh();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Could not upload document', body: err.message });
@@ -58,6 +60,8 @@ export default function DocumentCompliance() {
     { label: 'Trade licence', done: !!p.trade_license_number, hint: 'Trade licence number on file.' },
     ...(isCarrier ? [
       { label: 'Insurance', done: !!p.insurance_uploaded, hint: 'Fleet/cargo insurance confirmed.' },
+      { label: 'RTA permit', done: !!p.rta_permit_doc_storage_path, hint: 'Roads & Transport Authority goods-transport permit.' },
+      { label: 'Haulage insurance', done: !!p.haulage_insurance_doc_storage_path, hint: 'Goods-in-transit insurance, separate from fleet/cargo insurance.' },
       { label: 'Payout IBAN', done: !!p.iban, hint: 'Required before an admin can approve verification.' },
     ] : []),
   ];
@@ -125,6 +129,43 @@ export default function DocumentCompliance() {
               uploading={uploadingDocType === 'INSURANCE'}
               onUpload={(file) => uploadCompanyDoc('INSURANCE', file)}
             />
+          )}
+          {isCarrier && (
+            <div className="flex flex-col gap-2 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+              <CompanyDocRow
+                label="RTA permit"
+                docType="RTA_PERMIT"
+                present={!!p.rta_permit_doc_storage_path}
+                uploading={uploadingDocType === 'RTA_PERMIT'}
+                onUpload={(file) => uploadCompanyDoc('RTA_PERMIT', file, { permitNumber: rtaPermitNumber || undefined })}
+              />
+              <input
+                type="text"
+                placeholder="Permit number"
+                value={rtaPermitNumber}
+                onChange={(e) => setRtaPermitNumber(e.target.value)}
+                className="rounded-md border px-2.5 py-1.5 text-xs text-ink"
+                style={{ borderColor: 'var(--border-default)' }}
+              />
+            </div>
+          )}
+          {isCarrier && (
+            <div className="flex flex-col gap-2 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+              <CompanyDocRow
+                label="Haulage (goods-in-transit) insurance"
+                docType="HAULAGE_INSURANCE"
+                present={!!p.haulage_insurance_doc_storage_path}
+                uploading={uploadingDocType === 'HAULAGE_INSURANCE'}
+                onUpload={(file) => uploadCompanyDoc('HAULAGE_INSURANCE', file, { expiryDate: haulageInsuranceExpiry || undefined })}
+              />
+              <input
+                type="date"
+                value={haulageInsuranceExpiry}
+                onChange={(e) => setHaulageInsuranceExpiry(e.target.value)}
+                className="rounded-md border px-2.5 py-1.5 text-xs text-ink"
+                style={{ borderColor: 'var(--border-default)' }}
+              />
+            </div>
           )}
         </div>
       </Card>

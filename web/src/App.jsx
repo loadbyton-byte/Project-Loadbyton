@@ -49,6 +49,41 @@ const Messages = lazy(() => import('./pages/Messages.jsx'));
 const Invoices = lazy(() => import('./pages/Invoices.jsx'));
 const JobHistory = lazy(() => import('./pages/JobHistory.jsx'));
 
+// Forwarder / Broker / Insurance / TripOffer / Stops pages
+const ForwarderClients = lazy(() => import('./pages/ForwarderClients.jsx'));
+const BrokerCarriers = lazy(() => import('./pages/BrokerCarriers.jsx'));
+const Insurance = lazy(() => import('./pages/Insurance.jsx'));
+const TripOffers = lazy(() => import('./pages/TripOffers.jsx'));
+const Stops = lazy(() => import('./pages/Stops.jsx'));
+
+// RFP pages
+const RfpList = lazy(() => import('./pages/RfpList.jsx'));
+const RfpDetail = lazy(() => import('./pages/RfpDetail.jsx'));
+
+// EDI pages
+const EdiConsignments = lazy(() => import('./pages/EdiConsignments.jsx'));
+const EdiConsignmentDetail = lazy(() => import('./pages/EdiConsignmentDetail.jsx'));
+
+// GCC pages
+const GccCorridors = lazy(() => import('./pages/GccCorridors.jsx'));
+
+// Stripe Connect
+const StripeConnect = lazy(() => import('./pages/StripeConnect.jsx'));
+
+// Verification
+const VerifyTrn = lazy(() => import('./pages/VerifyTrn.jsx'));
+
+// Admin pages
+const AdminReconciliation = lazy(() => import('./pages/admin/AdminReconciliation.jsx'));
+const AdminPlatformFees = lazy(() => import('./pages/admin/AdminPlatformFees.jsx'));
+const AdminLedgerVerify = lazy(() => import('./pages/admin/AdminLedgerVerify.jsx'));
+
+// Account deletion
+const AccountDeletion = lazy(() => import('./pages/AccountDeletion.jsx'));
+
+// Driver location tracking
+const DriverLocationTracking = lazy(() => import('./pages/DriverLocationTracking.jsx'));
+
 // Every navigation lands at the top of the new page — a long page left
 // scrolled midway (a job list, a document thread) must never hand off
 // mid-viewport when the route changes. Keyed on pathname only, so an
@@ -63,7 +98,7 @@ function ScrollToTop() {
 
 function FullScreenSpinner() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas">
+    <div className="flex min-h-dvh items-center justify-center bg-canvas">
       <Spinner size={28} className="text-brand-primary" />
     </div>
   );
@@ -125,21 +160,55 @@ export default function App() {
           <Route path="/reset-password" element={<GuestOnly><ResetPassword /></GuestOnly>} />
           <Route path="/verify-email" element={<VerifyEmail />} />
 
-          <Route path="/dashboard" element={<RequireAuth roles={['SHIPPER']}><Dashboard /></RequireAuth>} />
+          <Route path="/dashboard" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Dashboard /></RequireAuth>} />
           <Route path="/templates" element={<RequireAuth roles={['SHIPPER']}><Templates /></RequireAuth>} />
           <Route path="/contracts" element={<RequireAuth roles={['SHIPPER']}><Contracts /></RequireAuth>} />
 
-          <Route path="/open-loads" element={<RequireAuth roles={['CARRIER']}><OpenLoads /></RequireAuth>} />
-          <Route path="/my-bids" element={<RequireAuth roles={['CARRIER']}><MyBids /></RequireAuth>} />
-          <Route path="/won-jobs" element={<RequireAuth roles={['CARRIER']}><WonJobs /></RequireAuth>} />
-          <Route path="/earnings" element={<RequireAuth roles={['CARRIER']}><Earnings /></RequireAuth>} />
-          <Route path="/invoices" element={<RequireAuth roles={['CARRIER']}><Invoices /></RequireAuth>} />
-          <Route path="/history" element={<RequireAuth roles={['SHIPPER']}><JobHistory /></RequireAuth>} />
-          <Route path="/drivers" element={<RequireAuth roles={['CARRIER']}><Drivers /></RequireAuth>} />
+          <Route path="/open-loads" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><OpenLoads /></RequireAuth>} />
+          <Route path="/my-bids" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><MyBids /></RequireAuth>} />
+          <Route path="/won-jobs" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><WonJobs /></RequireAuth>} />
+          <Route path="/earnings" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><Earnings /></RequireAuth>} />
+          <Route path="/invoices" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><Invoices /></RequireAuth>} />
+          <Route path="/history" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'BROKER']}><JobHistory /></RequireAuth>} />
+          <Route path="/drivers" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><Drivers /></RequireAuth>} />
+
+          <Route path="/forwarder/clients" element={<RequireAuth roles={['FORWARDER']}><ForwarderClients /></RequireAuth>} />
+          <Route path="/broker/carriers" element={<RequireAuth roles={['BROKER']}><BrokerCarriers /></RequireAuth>} />
+          <Route path="/jobs/:id/insurance" element={<RequireAuth roles={['SHIPPER', 'FORWARDER']}><Insurance /></RequireAuth>} />
+          <Route path="/jobs/:id/trip-offers" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><TripOffers /></RequireAuth>} />
+          <Route path="/jobs/:id/stops" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Stops /></RequireAuth>} />
+
+          {/* RFP routes */}
+          <Route path="/rfps" element={<RequireAuth roles={['SHIPPER', 'FORWARDER']}><RfpList /></RequireAuth>} />
+          <Route path="/rfps/:id" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'ADMIN']}><RfpDetail /></RequireAuth>} />
+
+          {/* EDI routes */}
+          <Route path="/edi/consignments" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'ADMIN']}><EdiConsignments /></RequireAuth>} />
+          <Route path="/edi/consignments/:id" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'ADMIN']}><EdiConsignmentDetail /></RequireAuth>} />
+
+          {/* GCC routes */}
+          <Route path="/gcc/corridors" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR', 'ADMIN']}><GccCorridors /></RequireAuth>} />
+
+          {/* Stripe Connect */}
+          <Route path="/stripe/connect" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><StripeConnect /></RequireAuth>} />
+
+          {/* Verification */}
+          <Route path="/verify/trn" element={<RequireAuth><VerifyTrn /></RequireAuth>} />
+
+          {/* Admin advanced pages */}
+          <Route path="/admin/reconciliation" element={<RequireAuth roles={['ADMIN']}><AdminReconciliation /></RequireAuth>} />
+          <Route path="/admin/platform-fees" element={<RequireAuth roles={['ADMIN']}><AdminPlatformFees /></RequireAuth>} />
+          <Route path="/admin/ledger-verify" element={<RequireAuth roles={['ADMIN']}><AdminLedgerVerify /></RequireAuth>} />
+
+          {/* Account deletion */}
+          <Route path="/account/deletion" element={<RequireAuth><AccountDeletion /></RequireAuth>} />
+
+          {/* Driver location tracking */}
+          <Route path="/driver/tracking" element={<DriverOnly><DriverLocationTracking /></DriverOnly>} />
 
           <Route path="/admin" element={<RequireAuth roles={['ADMIN']}><Admin /></RequireAuth>} />
 
-          <Route path="/analytics" element={<RequireAuth roles={['SHIPPER', 'CARRIER']}><Analytics /></RequireAuth>} />
+          <Route path="/analytics" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Analytics /></RequireAuth>} />
           <Route path="/jobs/:id" element={<RequireAuth><JobDetail /></RequireAuth>} />
           <Route path="/jobs/:id/dispute" element={<RequireAuth><JobDispute /></RequireAuth>} />
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />

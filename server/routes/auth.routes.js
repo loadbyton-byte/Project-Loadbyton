@@ -15,7 +15,7 @@ const {
 const { auth, requireSeatRole, requireReauth, isThrottled, recordFailure, clearThrottle } = require('../middleware/auth');
 const { rateLimiter, byIp } = require('../lib/rateLimit');
 const { validate, registerSchema } = require('../middleware/validate');
-const { MIN_PASSWORD_LENGTH } = require('../lib/constants');
+const { MIN_PASSWORD_LENGTH, TERMS_VERSION } = require('../lib/constants');
 
 const router = require('express').Router();
 const authIpLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20, keyFn: byIp, message: 'Too many auth requests. Please slow down.' });
@@ -25,11 +25,14 @@ router.post(
   authIpLimiter,
   validate(registerSchema),
   asyncHandler(async (req, res) => {
-    const { email, password, role, companyName, phone, trnNumber, tradeLicenseNumber, referralCode: incomingReferral } = req.body || {};
+    const { email, password, role, companyName, phone, trnNumber, tradeLicenseNumber, referralCode: incomingReferral, agreedToTerms } = req.body || {};
     // Migrated register errors to new envelope (apiResponse.error preserves _legacy for old tests)
     if (!email || !password || !companyName) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'email, password and companyName are required');
+    // A readable Terms page existed with zero acceptance-recording
+    // mechanism anywhere — see server/schema.js's terms_acceptances table.
+    if (!agreedToTerms) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'You must agree to the Terms & Conditions to create an account');
     if (!isPasswordValid(password)) return apiResponse.error(req, res, 'VALIDATION_FAILED', `Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-    if (!['SHIPPER', 'CARRIER'].includes(role)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'role must be SHIPPER or CARRIER', { status: 422 });
+    if (!['SHIPPER', 'CARRIER', 'FORWARDER', 'OWNER_OPERATOR', 'BROKER'].includes(role)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'role must be SHIPPER, CARRIER, FORWARDER, OWNER_OPERATOR or BROKER', { status: 422 });
     const existing = await db.prepare('SELECT id FROM users WHERE email=?').get(email);
     if (existing) {
       // Deliberately generic — a distinct "this email already exists"
@@ -55,7 +58,7 @@ router.post(
     }
 
     const passwordHash = bcrypt.hashSync(password, 10);
-    const prefix = role === 'SHIPPER' ? 'SHP' : 'CAR';
+    const prefix = role === 'SHIPPER' ? 'SHP' : role === 'CARRIER' ? 'CAR' : role === 'FORWARDER' ? 'FWD' : role === 'BROKER' ? 'BRK' : 'OOP';
     let code = referralCode(prefix, companyName);
     while (await db.prepare('SELECT 1 FROM users WHERE referral_code=?').get(code)) {
       code = `${code}${crypto.randomInt(10, 100)}`;
@@ -78,6 +81,16 @@ router.post(
     await db.prepare(
       'INSERT INTO profiles (user_id, company_name, trn_number, trade_license_number, phone) VALUES (?,?,?,?,?)'
     ).run(userId, companyName, encryptField(trnNumber.trim()), tradeLicenseNumber.toUpperCase(), normalizeUaeMobile(phone));
+    // available_units has no column-level default (see server/schema.js —
+    // it needs to stay nullable there so the one-time migration backfill
+    // can distinguish "never set" from "explicitly 0" on existing rows),
+    // so every new profile needs it set explicitly here to match the
+    // brand-new fleet_size default of 0.
+    await db.prepare(`UPDATE profiles SET available_units = fleet_size WHERE user_id=?`).run(userId);
+
+    await db.prepare(
+      `INSERT INTO terms_acceptances (user_id, terms_version, context, ip_address) VALUES (?,?,'SIGNUP',?)`
+    ).run(userId, TERMS_VERSION, byIp(req) || null);
 
     await writeAudit(req, { userId, action: 'REGISTER', details: `${role} registered: ${email}`, entityType: 'user', entityId: userId });
     sendEmailAsync({

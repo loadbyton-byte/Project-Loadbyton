@@ -58,7 +58,7 @@ const registerSchema = z
   .object({
     email: z.string().email('invalid email format'),
     password: z.string().min(8, 'password must be at least 8 characters'),
-    role: z.enum(['SHIPPER', 'CARRIER']),
+    role: z.enum(['SHIPPER', 'CARRIER', 'FORWARDER', 'OWNER_OPERATOR', 'BROKER']),
     companyName: z.string().min(2, 'companyName must be at least 2 characters').max(200),
     phone: z.string().min(9, 'phone is required'),
     trnNumber: z.string().regex(/^\d{15}$/, 'trnNumber must be exactly 15 digits'),

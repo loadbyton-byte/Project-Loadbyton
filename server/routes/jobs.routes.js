@@ -31,6 +31,9 @@ const validate = /** @type {any} */ (validateMod).validate;
 const jobCreateSchema = /** @type {any} */ (validateMod).jobCreateSchema;
 /** @type {any} */
 const jobController = require('../controllers/job.controller');
+/** @type {any} */
+const idempotencyMod = require('../lib/idempotency');
+const idempotency = /** @type {any} */ (idempotencyMod).idempotency;
 
 // @ts-ignore
 const router = require('express').Router();
@@ -49,7 +52,13 @@ router.get('/api/jobs/:id', auth(), jobController.getJob);
 
 // Create job — delegates to controller/service (uses repositories via service)
 // Error handling migrated to new envelope: job.controller.createJob now uses apiResponse.error (success:false + error:{code,message} + _legacy)
-router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), validate(jobCreateSchema), jobController.createJob);
+// idempotency: a double-tap on "Post job" previously created two identical
+// job rows — POST /api/jobs/:id/bids and the award endpoint already carry
+// this same middleware, job creation was simply missed. Same opt-in
+// contract: a client that doesn't send an Idempotency-Key header gets no
+// protection from this middleware (still gets the frontend's disable-on-
+// click guard), one that does gets a cached replay of the first response.
+router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), idempotency, validate(jobCreateSchema), jobController.createJob);
 
 // Award — the money-moving transaction lives in services/award.service.js;
 // this wrapper only does HTTP (kept for backwards compat, not moved to job.controller to preserve award.service isolation).

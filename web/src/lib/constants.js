@@ -110,3 +110,16 @@ export function formatDateTime(iso) {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('en-AE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
+
+export const ANCILLARY_CHARGE_LABELS = { SALIK: 'Salik', ETOKEN: 'E-Token', DEMURRAGE: 'Demurrage/Waiting', INSPECTION_WAITING: 'Inspection waiting', OTHER: 'Other' };
+
+export const CURRENCIES = [
+  { code: 'AED', name: 'UAE Dirham', symbol: 'AED' },
+  { code: 'USD', name: 'US Dollar', symbol: '$' },
+  { code: 'EUR', name: 'Euro', symbol: '€' },
+  { code: 'SAR', name: 'Saudi Riyal', symbol: 'SAR' },
+  { code: 'QAR', name: 'Qatari Riyal', symbol: 'QAR' },
+  { code: 'OMR', name: 'Omani Rial', symbol: 'OMR' },
+  { code: 'BHD', name: 'Bahraini Dinar', symbol: 'BHD' },
+  { code: 'KWD', name: 'Kuwaiti Dinar', symbol: 'KWD' },
+];

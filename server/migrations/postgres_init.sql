@@ -519,6 +519,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE contract_rfps ADD COLUMN IF NOT EXISTS is_demo INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_users_is_demo ON users(is_demo);
+
+-- Payment tiers — see server/schema.js (the actual auto-migrating SQLite
+-- path this app runs on) for the full reasoning; mirrored here for the
+-- opt-in Postgres path.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS payment_tier TEXT NOT NULL DEFAULT 'SPOT_ESCROW';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS trust_score REAL NOT NULL DEFAULT 5.0;
 CREATE INDEX IF NOT EXISTS idx_jobs_is_demo ON jobs(is_demo);
 CREATE INDEX IF NOT EXISTS idx_contract_rfps_is_demo ON contract_rfps(is_demo);
 
@@ -540,6 +546,8 @@ CREATE TABLE IF NOT EXISTS ledger_transactions (
   job_id INTEGER REFERENCES jobs(id),
   payout_id INTEGER REFERENCES payouts(id),
   description TEXT,
+  prev_hash TEXT,
+  hash TEXT,
   created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
 );
 
@@ -598,6 +606,103 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_job_unique ON payouts(job_id);
 
+-- Live location via WhatsApp + DRIVER_ASSOCIATE Phase 1 — see server/schema.js.
+ALTER TABLE location_logs ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'BROWSER';
+
+CREATE TABLE IF NOT EXISTS trip_offers (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  driver_id INTEGER NOT NULL REFERENCES drivers(id),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','EXPIRED')),
+  decline_reason TEXT,
+  offered_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  responded_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_trip_offers_job ON trip_offers(job_id);
+CREATE INDEX IF NOT EXISTS idx_trip_offers_driver ON trip_offers(driver_id);
+
+CREATE TABLE IF NOT EXISTS driver_wallet_entries (
+  id SERIAL PRIMARY KEY,
+  driver_id INTEGER NOT NULL REFERENCES drivers(id),
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  gross_amount_aed REAL NOT NULL,
+  split_bps INTEGER NOT NULL,
+  driver_share_aed REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PAID')),
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  paid_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_wallet_entries_driver ON driver_wallet_entries(driver_id);
+
+INSERT INTO settings (key, value) VALUES ('driver_associate_default_split_bps', '8000') ON CONFLICT (key) DO NOTHING;
+
+-- WhatsApp two-way: channel + dedup tracking, and a per-phone 24h
+-- customer-service-window tracker — see server/schema.js.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'WEB';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS whatsapp_message_id TEXT;
+CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+  phone TEXT PRIMARY KEY,
+  last_inbound_at TEXT NOT NULL,
+  session_expires_at TEXT NOT NULL
+);
+
+-- Compliance-engine foundation for the future DRIVER_ASSOCIATE role
+-- (Change 25) — see server/schema.js for rationale.
+CREATE TABLE IF NOT EXISTS vehicles (
+  id SERIAL PRIMARY KEY,
+  carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plate_number TEXT,
+  plate_type TEXT CHECK(plate_type IN ('COMMERCIAL','PRIVATE')),
+  registration_expiry TEXT,
+  insurance_expiry TEXT,
+  permitted_emirates TEXT,
+  vehicle_reg_doc_storage_path TEXT,
+  vehicle_reg_doc_mime_type TEXT,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_vehicles_carrier ON vehicles(carrier_id);
+
+CREATE TABLE IF NOT EXISTS compliance_rules (
+  id SERIAL PRIMARY KEY,
+  rule_code TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL,
+  severity TEXT NOT NULL CHECK(severity IN ('RED','YELLOW','GREEN')),
+  field TEXT NOT NULL,
+  condition TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1
+);
+
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS visa_status TEXT;
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS visa_expiry TEXT;
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS license_category TEXT;
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS vehicle_id INTEGER REFERENCES vehicles(id);
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_free_zone_registered INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS mainland_work_permitted INTEGER NOT NULL DEFAULT 0;
+
+INSERT INTO compliance_rules (rule_code, description, severity, field, condition) VALUES
+  ('PRIVATE_PLATE', 'Private (non-commercial) plate performing paid freight work', 'RED', 'vehicle.plate_type', '{"op":"eq","value":"PRIVATE"}'),
+  ('VISA_INVALID', 'Visit-visa or no valid residence visa', 'RED', 'driver.visa_status', '{"op":"in","value":["VISIT","NONE"]}'),
+  ('VISA_EXPIRED', 'Residence visa expired', 'RED', 'driver.visa_expiry', '{"op":"expired"}'),
+  ('LICENSE_EXPIRED', 'Driver license expired', 'RED', 'driver.license_expiry', '{"op":"expired"}'),
+  ('VEHICLE_REG_EXPIRED', 'Vehicle registration expired', 'RED', 'vehicle.registration_expiry', '{"op":"expired"}'),
+  ('VEHICLE_INSURANCE_EXPIRED', 'Vehicle insurance expired', 'RED', 'vehicle.insurance_expiry', '{"op":"expired"}'),
+  ('MAINLAND_WITHOUT_PERMIT', 'Free-zone carrier on mainland without the allowed-to-work-mainland document — restrict to free-zone/port-only jobs', 'YELLOW', 'special:mainland_permit', '{"op":"special"}'),
+  ('OUTSIDE_PERMITTED_EMIRATES', 'Job outside this vehicle''s permitted emirates', 'YELLOW', 'special:permitted_emirates', '{"op":"special"}')
+ON CONFLICT (rule_code) DO NOTHING;
+-- Multi-container-type jobs (Change 2, Prompt 2) — see server/schema.js.
+CREATE TABLE IF NOT EXISTS job_line_items (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  container_size TEXT NOT NULL,
+  container_type TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_job_line_items_job ON job_line_items(job_id);
+
 INSERT INTO ledger_accounts (code, name, type) VALUES ('processor_clearing', 'Processor Clearing', 'ASSET') ON CONFLICT (code) DO NOTHING;
 INSERT INTO ledger_accounts (code, name, type) VALUES ('escrow_liability', 'Escrow Liability', 'LIABILITY') ON CONFLICT (code) DO NOTHING;
 INSERT INTO ledger_accounts (code, name, type) VALUES ('carrier_payable', 'Carrier Payable', 'LIABILITY') ON CONFLICT (code) DO NOTHING;
@@ -609,5 +714,181 @@ ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO settings (key, value) VALUES ('auto_release_hours', '24')
 ON CONFLICT (key) DO NOTHING;
+
+-- Terms & Conditions acceptance, pre-award negotiation/ancillary charges,
+-- haulier code/token, and EIR seal-number/two-stage photos — see
+-- server/schema.js (the actual auto-migrating SQLite path this app runs
+-- on) for the full reasoning; mirrored here for the opt-in Postgres path.
+CREATE TABLE IF NOT EXISTS terms_acceptances (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  terms_version TEXT NOT NULL,
+  context TEXT NOT NULL CHECK (context IN ('SIGNUP','JOB')),
+  job_id INTEGER REFERENCES jobs(id),
+  ip_address TEXT,
+  accepted_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_terms_acceptances_user ON terms_acceptances(user_id, context);
+
+CREATE TABLE IF NOT EXISTS bid_negotiations (
+  id SERIAL PRIMARY KEY,
+  bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+  sender_id INTEGER NOT NULL REFERENCES users(id),
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_bid_negotiations_bid ON bid_negotiations(bid_id);
+
+CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
+  id SERIAL PRIMARY KEY,
+  bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+  charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+  amount_aed REAL NOT NULL,
+  notes TEXT,
+  proposed_by INTEGER NOT NULL REFERENCES users(id),
+  agreed_by_shipper INTEGER NOT NULL DEFAULT 0,
+  agreed_by_carrier INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
+
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS terms_confirmed_at TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_code TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token_set_by INTEGER REFERENCES users(id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token_set_at TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS seal_number TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eir_photos_pickup TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eir_photos_delivery TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS seal_number_delivery TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS requires_seal INTEGER NOT NULL DEFAULT 1;
+-- Phase 3: equipment capacity, trust & safety, dispute typing/SLA/split —
+-- see server/schema.js (the actual auto-migrating SQLite path) for the
+-- full reasoning; mirrored here for the opt-in Postgres path.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS available_units INTEGER;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS externally_engaged_units INTEGER NOT NULL DEFAULT 0;
+UPDATE profiles SET available_units = fleet_size WHERE available_units IS NULL;
+
+CREATE TABLE IF NOT EXISTS carrier_capacity_events (
+  id SERIAL PRIMARY KEY,
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  job_id INTEGER REFERENCES jobs(id),
+  event_type TEXT NOT NULL CHECK (event_type IN ('AWARDED','RESTORED','EXTERNAL_ENGAGE','EXTERNAL_RELEASE')),
+  units_delta INTEGER NOT NULL,
+  note TEXT,
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_capacity_events_carrier ON carrier_capacity_events(carrier_id);
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS payment_reliability_score REAL NOT NULL DEFAULT 5.0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS reliability_score REAL NOT NULL DEFAULT 5.0;
+ALTER TABLE ratings ADD COLUMN IF NOT EXISTS driver_id INTEGER REFERENCES drivers(id);
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS ip_address TEXT;
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_agent TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS ip_address TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancellation_fee_aed REAL;
+
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS dispute_type TEXT;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS sla_deadline TEXT;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS split_shipper_pct REAL;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS split_carrier_pct REAL;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS police_report_filed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE disputes ADD COLUMN IF NOT EXISTS police_report_reference TEXT;
+-- Carrier onboarding: RTA permit + haulage insurance — see server/schema.js
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rta_permit_number TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rta_permit_doc_storage_path TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rta_permit_doc_mime_type TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_doc_storage_path TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_doc_mime_type TEXT;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_expiry TEXT;
+
+-- GIT cargo insurance (Change 20) — see server/schema.js.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cargo_value_aed REAL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS insurance_opt_in INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS job_insurance (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+  shipper_id INTEGER NOT NULL REFERENCES users(id),
+  provider TEXT NOT NULL DEFAULT 'internal',
+  cargo_value_aed REAL NOT NULL,
+  premium_aed REAL NOT NULL,
+  coverage_aed REAL NOT NULL,
+  rate_bps INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','CANCELLED','EXPIRED')),
+  policy_ref TEXT,
+  bound_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  cancelled_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_insurance_shipper ON job_insurance(shipper_id);
+INSERT INTO settings (key, value) VALUES ('insurance_rate_bps', '35') ON CONFLICT (key) DO NOTHING;
+
+-- Change 27 (Phase 7b) — see server/schema.js.
+CREATE TABLE IF NOT EXISTS forwarder_clients (
+  id SERIAL PRIMARY KEY,
+  forwarder_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_name TEXT NOT NULL,
+  contact_phone TEXT,
+  contact_email TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_forwarder_clients_owner ON forwarder_clients(forwarder_id);
+CREATE TABLE IF NOT EXISTS broker_carriers (
+  id SERIAL PRIMARY KEY,
+  broker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  carrier_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  added_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  UNIQUE(broker_id, carrier_id)
+);
+CREATE INDEX IF NOT EXISTS idx_broker_carriers_broker ON broker_carriers(broker_id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS broker_id INTEGER REFERENCES users(id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS forwarder_client_id INTEGER REFERENCES forwarder_clients(id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS broker_spread_bps INTEGER NOT NULL DEFAULT 0;
+
+-- Change 21 + 30 core — see server/schema.js.
+INSERT INTO ledger_accounts (code, name, type) VALUES ('fee_receivable', 'Fee Receivable', 'ASSET') ON CONFLICT (code) DO NOTHING;
+ALTER TABLE ledger_transactions ADD COLUMN IF NOT EXISTS prev_hash TEXT;
+ALTER TABLE ledger_transactions ADD COLUMN IF NOT EXISTS hash TEXT;
+CREATE TABLE IF NOT EXISTS platform_fees (
+  id SERIAL PRIMARY KEY,
+  fee_code TEXT NOT NULL,
+  job_id INTEGER REFERENCES jobs(id),
+  user_id INTEGER REFERENCES users(id),
+  amount_aed REAL NOT NULL,
+  amount_minor INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACCRUED' CHECK(status IN ('ACCRUED','COLLECTED','WAIVED')),
+  idempotency_key TEXT UNIQUE NOT NULL,
+  ledger_transaction_id INTEGER REFERENCES ledger_transactions(id),
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_platform_fees_job ON platform_fees(job_id);
+CREATE INDEX IF NOT EXISTS idx_platform_fees_code ON platform_fees(fee_code);
+CREATE TABLE IF NOT EXISTS admin_approvals (
+  id SERIAL PRIMARY KEY,
+  action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND')),
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  payload TEXT,
+  requested_by INTEGER NOT NULL REFERENCES users(id),
+  confirmed_by INTEGER REFERENCES users(id),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','CONFIRMED','REJECTED','EXECUTED')),
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  decided_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approvals(status);
+
+-- Phase 8 (Change 28 remainder) — see server/schema.js.
+CREATE TABLE IF NOT EXISTS job_stops (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  seq INTEGER NOT NULL,
+  stop_type TEXT NOT NULL CHECK(stop_type IN ('PICKUP','DROP','WAYPOINT')),
+  location TEXT NOT NULL,
+  address_detail TEXT,
+  lat REAL,
+  lng REAL,
+  completed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_job_stops_job ON job_stops(job_id, seq);
 
 COMMIT;

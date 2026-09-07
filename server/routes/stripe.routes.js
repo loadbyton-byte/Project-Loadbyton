@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const db = require('../db');
 const { auth, writeLimiter } = require('../middleware/auth');
 const { sendError } = require('../lib/http');
-const { writeAudit, notify } = require('../lib/helpers');
+const { writeAudit, notify, notifyAdmins } = require('../lib/helpers');
 const { createPaymentIntent, createTransfer, constructWebhookEvent, createConnectAccount, createAccountLink, retrieveAccount } = require('../lib/stripe');
 const { ledgerHash, verifyMultiSig, getHsmKeys } = require('../lib/hsm');
 const { providerInfo } = require('../lib/payments');
@@ -119,6 +119,35 @@ router.post('/api/webhooks/stripe', express.raw({type:'*/*'}), async (req,res) =
       await notify(job.shipper_id, 'Escrow held', `${job.job_code} escrow is now HELD — carrier may pick up.`, job.id, 'payout');
     }
   }
+
+  // Chargeback/dispute-reversal handling (planning register Change 24E) —
+  // previously entirely unhandled: only payment success/failure events
+  // were processed, so a real card chargeback had no automated response
+  // and no admin-console workflow at all.
+  if (event.type === 'charge.dispute.created') {
+    const dispute = event.data?.object || {};
+    const paymentIntentId = dispute.payment_intent;
+    const job = paymentIntentId ? await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(paymentIntentId) : null;
+    if (job && !['RELEASED', 'DISPUTED'].includes(job.escrow_status)) {
+      // Same freeze the existing DISPUTED status already uses elsewhere —
+      // reused, not duplicated.
+      await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
+      await db.prepare(
+        `INSERT INTO disputes (job_id, opened_by, reason, status, dispute_type) VALUES (?,?,?,?,?)`
+      ).run(job.id, job.shipper_id, `Stripe chargeback opened by the cardholder's bank (charge dispute id: ${dispute.id || 'unknown'})`, 'OPEN', 'PAYMENT_VAT');
+      await writeAudit({ headers: {}, actorId: 0, requestId: req.headers['x-request-id'] }, { userId: 0, action: 'CHARGEBACK_OPENED', details: `${job.job_code}: Stripe dispute ${dispute.id}`, entityType: 'job', entityId: job.id, beforeState: job.escrow_status, afterState: 'DISPUTED' });
+      await notifyAdmins('Chargeback opened', `${job.job_code}: a cardholder disputed this charge via their bank. Escrow frozen, evidence submission needed.`, job.id, 'dispute');
+    }
+  } else if (event.type === 'charge.dispute.closed') {
+    const dispute = event.data?.object || {};
+    const paymentIntentId = dispute.payment_intent;
+    const job = paymentIntentId ? await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(paymentIntentId) : null;
+    if (job) {
+      await writeAudit({ headers: {}, actorId: 0, requestId: req.headers['x-request-id'] }, { userId: 0, action: 'CHARGEBACK_CLOSED', details: `${job.job_code}: Stripe dispute ${dispute.id} closed, outcome ${dispute.status || 'unknown'}`, entityType: 'job', entityId: job.id });
+      await notifyAdmins('Chargeback closed', `${job.job_code}: the chargeback was closed (${dispute.status || 'unknown'}) — review and resolve the linked dispute manually.`, job.id, 'dispute');
+    }
+  }
+
   try {
     await db.prepare(`UPDATE payment_webhook_events SET status='PROCESSED', processed_at=datetime('now') WHERE provider='stripe' AND provider_event_id=?`).run(providerEventId);
   } catch {}

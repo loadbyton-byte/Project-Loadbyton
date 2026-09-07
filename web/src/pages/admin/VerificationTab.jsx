@@ -105,6 +105,8 @@ function VerificationTab() {
                     <div><dt className="text-ink-muted">Trade licence</dt><dd className="text-ink">{c.profile.trade_license_number || '—'}</dd></div>
                     <div><dt className="text-ink-muted">Fleet</dt><dd className="text-ink">{c.profile.fleet_size} ({c.profile.owned_chassis} owned)</dd></div>
                     <div><dt className="text-ink-muted">Insurance</dt><dd className="text-ink">{c.profile.insurance_uploaded ? 'Uploaded' : 'Missing'}</dd></div>
+                    <div><dt className="text-ink-muted">RTA permit</dt><dd className="text-ink">{c.profile.rta_permit_uploaded ? (c.profile.rta_permit_number || 'Uploaded') : 'Missing'}</dd></div>
+                    <div><dt className="text-ink-muted">Haulage insurance</dt><dd className="text-ink">{c.profile.haulage_insurance_uploaded ? (c.profile.haulage_insurance_expiry ? `Expires ${formatDate(c.profile.haulage_insurance_expiry)}` : 'Uploaded') : 'Missing'}</dd></div>
                   </dl>
                 </div>
               </div>

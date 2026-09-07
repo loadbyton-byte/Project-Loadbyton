@@ -1,10 +1,23 @@
 const db = require('../db');
 const { randomToken, jobCode } = require('../lib/http');
-const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT } = require('../lib/constants');
+const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT, TERMS_VERSION } = require('../lib/constants');
 const { isValidUaeLatLng } = require('../lib/helpers');
 
 async function createJobFromBody(body, req) {
-  const {
+  // T&C acceptance, per job — but only re-prompt if the shipper hasn't
+  // already agreed to the CURRENT terms version at all (signup or a
+  // previous job), to avoid checkbox fatigue on every single post/import
+  // row. A returning shipper on the current version needs no explicit
+  // flag; a brand-new shipper, or one whose last acceptance predates a
+  // terms bump, must send agreedToTerms: true or the job is rejected.
+  const alreadyAgreedToCurrentVersion = await db.prepare(
+    `SELECT 1 FROM terms_acceptances WHERE user_id=? AND terms_version=? LIMIT 1`
+  ).get(req.user.id, TERMS_VERSION);
+  if (!alreadyAgreedToCurrentVersion && !body.agreedToTerms) {
+    throw { status: 400, message: 'You must agree to the current Terms & Conditions before posting a job' };
+  }
+
+  let {
     shipmentType, containerSize, containerType, containerCount,
     pickupTerminal, deliveryArea, deliveryAddress,
     readyAt, deadline, targetPriceAed, notes,
@@ -14,8 +27,28 @@ async function createJobFromBody(body, req) {
     equipmentType, cargoType, loadingLocation, deliveryLocation,
     importPickupTerminal, importUnloadingLocation, importEmptyReturnLocation,
     exportEmptyPickupLocation, exportLoadingLocation, exportDepositTerminal,
-    scheduledPostAt,
+    scheduledPostAt, requiresSeal, lineItems, cargoValueAed, insuranceOptIn,
   } = body;
+
+  // Multi-container-type support: lineItems[0] (when present) becomes the
+  // job's own container_size/type/count columns — the "line item 1" record
+  // every existing consumer already reads directly — anything beyond that
+  // goes into job_line_items. Omitting lineItems entirely keeps the exact
+  // pre-existing single-container behavior.
+  const normalizedLineItems = Array.isArray(lineItems)
+    ? lineItems
+        .map((li) => ({
+          containerSize: li && li.containerSize,
+          containerType: li && li.containerType,
+          count: Math.max(1, Number(li && li.count) || 1),
+        }))
+        .filter((li) => li.containerSize && li.containerType)
+    : [];
+  if (normalizedLineItems.length > 0) {
+    containerSize = normalizedLineItems[0].containerSize;
+    containerType = normalizedLineItems[0].containerType;
+    containerCount = normalizedLineItems[0].count;
+  }
 
   const shipType = (shipmentType || 'LOCAL').toUpperCase();
   // For LOCAL jobs, loadingLocation/deliveryLocation map to pickupTerminal/deliveryArea
@@ -96,6 +129,69 @@ async function createJobFromBody(body, req) {
   );
 
   const jobId = Number(result.lastInsertRowid);
+
+  // payment_tier: not yet exposed in the job-posting UI or gated by any
+  // eligibility check (that's separate, not-yet-built work) — accepted
+  // here mainly so the tier logic in award.service.js/job.service.js is
+  // exercisable and testable. jobs.payment_tier already defaults to
+  // SPOT_ESCROW at the schema level, so an omitted/invalid value here is
+  // simply left at that default rather than validated as an error.
+  const { paymentTier } = body;
+  const VALID_PAYMENT_TIERS = ['SPOT_ESCROW', 'PAY_ON_DELIVERY', 'CONTRACT_CREDIT', 'OFF_PLATFORM'];
+  if (paymentTier && VALID_PAYMENT_TIERS.includes(paymentTier) && paymentTier !== 'SPOT_ESCROW') {
+    await db.prepare('UPDATE jobs SET payment_tier=? WHERE id=?').run(paymentTier, jobId);
+  }
+  if (!alreadyAgreedToCurrentVersion) {
+    const { byIp } = require('../lib/rateLimit');
+    await db.prepare(
+      `INSERT INTO terms_acceptances (user_id, terms_version, context, job_id, ip_address) VALUES (?,?,'JOB',?,?)`
+    ).run(req.user.id, TERMS_VERSION, jobId, byIp(req) || null);
+  }
+
+  // requires_seal: no existing field reliably implies sealed-vs-empty (see
+  // server/schema.js's comment) — defaults by shipment type (IMPORT/EXPORT
+  // typically sealed customs containers, LOCAL typically not), overridable
+  // by the shipper. The DB-level column default is 1, so only a LOCAL job
+  // (or an explicit override) needs this follow-up UPDATE.
+  const effectiveRequiresSeal = requiresSeal !== undefined ? (requiresSeal ? 1 : 0) : (shipType === 'LOCAL' ? 0 : 1);
+  if (effectiveRequiresSeal !== 1) {
+    await db.prepare('UPDATE jobs SET requires_seal=? WHERE id=?').run(effectiveRequiresSeal, jobId);
+  }
+  // Extra line items beyond the first (which became the job's own
+  // container_size/type/count above).
+  if (normalizedLineItems.length > 1) {
+    const insertLineItem = db.prepare('INSERT INTO job_line_items (job_id, container_size, container_type, count) VALUES (?,?,?,?)');
+    for (const li of normalizedLineItems.slice(1)) {
+      await insertLineItem.run(jobId, li.containerSize, li.containerType, li.count);
+    }
+  }
+  // GIT insurance opt-in (Change 20) — declared cargo value + flag at posting.
+  // Binding itself is a separate step (POST /api/jobs/:id/insurance/bind);
+  // this just records the shipper's declared value so quote/bind has it.
+  if (cargoValueAed !== undefined && cargoValueAed !== null && cargoValueAed !== '') {
+    const cv = Number(cargoValueAed);
+    if (!Number.isFinite(cv) || cv <= 0) throw { status: 400, message: 'cargoValueAed must be a positive number' };
+    await db.prepare('UPDATE jobs SET cargo_value_aed=?, insurance_opt_in=? WHERE id=?').run(cv, insuranceOptIn ? 1 : 0, jobId);
+  } else if (insuranceOptIn) {
+    throw { status: 400, message: 'cargoValueAed is required when opting into insurance' };
+  }
+  // Change 30 — priority placement: optional paid boost at posting. Recorded
+  // as a platform_fees + ledger row via chargeFee() (idempotent per job);
+  // collection rides existing rails (internal bookkeeping until billing).
+  if (body.priorityPlacement) {
+    try {
+      const { chargeFee } = require('../lib/ledger');
+      const { getSettings } = require('../lib/helpers');
+      const { priority_placement_fee_aed } = await getSettings();
+      const feeAed = Number(priority_placement_fee_aed) || 50;
+      await chargeFee(db, {
+        idempotencyKey: `priority-${jobId}`, feeCode: 'PRIORITY_PLACEMENT',
+        jobId, userId: req.user.id, amountAed: feeAed,
+        description: `Priority placement fee (job #${jobId}) AED ${feeAed}`,
+      });
+    } catch (e) { console.error(`[fees] priority charge failed for job ${jobId}:`, e.message); }
+  }
+
   return await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
 }
 

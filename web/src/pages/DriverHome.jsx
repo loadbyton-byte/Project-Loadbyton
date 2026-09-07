@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 import { formatDateTime } from '../lib/constants.js';
 import { Card, StatusBadge, EmptyState, ErrorState, Button } from '../components/ui.jsx';
 import { IconTruck, IconMapPin } from '../components/icons.jsx';
@@ -16,6 +17,7 @@ import { directionsUrl } from '../lib/googleMaps.js';
 export default function DriverHome() {
   usePageTitle('My job');
   const { logout } = useAuth();
+  const { t, isRtl } = useLocale();
   const [job, setJob] = useState(undefined); // undefined = loading, null = none assigned
   const [error, setError] = useState('');
 
@@ -26,19 +28,19 @@ export default function DriverHome() {
   useEffect(load, []);
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-ink">My job</h1>
-        <Button variant="secondary" size="sm" onClick={() => logout()}>Log out</Button>
+        <h1 className="font-display text-xl font-bold text-ink">{t('driver.myJob', 'My job')}</h1>
+        <Button variant="secondary" size="sm" onClick={() => logout()}>{t('driver.logout', 'Log out')}</Button>
       </div>
 
       <div className="mt-5">
         {job === undefined ? (
-          <p className="text-sm text-ink-muted">Loading…</p>
+          <p className="text-sm text-ink-muted">{t('driver.loading', 'Loading…')}</p>
         ) : error ? (
-          <ErrorState title="Couldn't load your job" description={error} onRetry={load} />
+          <ErrorState title={t('driver.loadError', "Couldn't load your job")} description={error} onRetry={load} />
         ) : job === null ? (
-          <EmptyState icon={<IconTruck size={26} />} title="No job assigned yet" description="Your dispatcher will assign you to a job — check back here once you're on one." />
+          <EmptyState icon={<IconTruck size={26} />} title={t('driver.empty.title', 'No job assigned yet')} description={t('driver.empty.description', "Your dispatcher will assign you to a job — check back here once you're on one.")} />
         ) : (
           <Card>
             <Card.Content>
@@ -57,9 +59,9 @@ export default function DriverHome() {
                   rel="noreferrer"
                   className="block rounded-lg p-3 -m-3 transition hover:bg-surface-container"
                 >
-                  <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted"><IconMapPin size={12} /> Pickup</p>
+                  <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted"><IconMapPin size={12} /> {t('driver.pickup', 'Pickup')}</p>
                   <p className="mt-1 text-sm font-medium text-brand-secondary underline-offset-2 hover:underline">{job.pickup_terminal?.replace(/_/g, ' ')}</p>
-                  <p className="mt-0.5 font-mono text-xs text-ink-muted">Ready {formatDateTime(job.ready_at)}</p>
+                  <p className="mt-0.5 font-mono text-xs text-ink-muted">{t('driver.readyAt', 'Ready {time}', { time: formatDateTime(job.ready_at) })}</p>
                 </a>
                 <a
                   href={directionsUrl({ originLat: job.pickup_lat, originLng: job.pickup_lng, destLat: job.delivery_lat, destLng: job.delivery_lng, destAddress: job.delivery_address || job.delivery_area?.replace(/_/g, ' ') })}
@@ -67,13 +69,13 @@ export default function DriverHome() {
                   rel="noreferrer"
                   className="block rounded-lg p-3 -m-3 transition hover:bg-surface-container"
                 >
-                  <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted"><IconMapPin size={12} /> Delivery</p>
+                  <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink-muted"><IconMapPin size={12} /> {t('driver.delivery', 'Delivery')}</p>
                   <p className="mt-1 text-sm font-medium text-brand-secondary underline-offset-2 hover:underline">{job.delivery_area?.replace(/_/g, ' ')}</p>
                   <p className="mt-0.5 text-sm text-ink-secondary">{job.delivery_address}</p>
-                  <p className="mt-0.5 font-mono text-xs text-ink-muted">Due {formatDateTime(job.deadline)}</p>
+                  <p className="mt-0.5 font-mono text-xs text-ink-muted">{t('driver.dueAt', 'Due {time}', { time: formatDateTime(job.deadline) })}</p>
                 </a>
               </div>
-              <p className="mt-3 text-xs text-ink-muted">Tap pickup or delivery to open directions in Google Maps.</p>
+              <p className="mt-3 text-xs text-ink-muted">{t('driver.directionsHint', 'Tap pickup or delivery to open directions in Google Maps.')}</p>
             </Card.Content>
           </Card>
         )}

@@ -1,5 +1,5 @@
-import React from 'react';
-import { IconStar, IconMapPin, IconAlert } from './icons.jsx';
+import React, { useEffect } from 'react';
+import { IconStar, IconMapPin, IconAlert, IconX } from './icons.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -234,7 +234,7 @@ export function BentoStat({ label, value, icon, tone = 'default', span, classNam
       style={{ background: tone === 'accent' ? 'var(--surface-container-high)' : 'var(--surface-container-low)', border: '1px solid var(--border-subtle)' }}
     >
       <div className={cx('min-w-0', span === 2 && 'flex flex-col gap-1')}>
-        <span className="block truncate font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{label}</span>
+        <span className={cx('block truncate font-mono text-[11px] font-semibold uppercase tracking-wider', tone === 'accent' ? 'text-ink-secondary' : 'text-ink-muted')}>{label}</span>
         <p className="tabular truncate font-display text-2xl font-extrabold text-ink">{value}</p>
       </div>
       {icon && <span className="shrink-0 text-brand-accent">{icon}</span>}
@@ -344,7 +344,7 @@ export function StatusTracker({ steps, currentIndex, terminal, className }) {
 // Shared by every message-thread screen (job messages, disputes, support).
 // `messages`: [{ id, body, senderLabel, mine, at, variant }] — variant lets
 // a dispute thread color an "ADMIN" bubble distinctly from the two parties.
-export function ChatBubble({ body, senderLabel, mine, at, variant }) {
+export function ChatBubble({ body, senderLabel, mine, at, variant, channel }) {
   const bg = mine ? 'var(--brand-primary)' : variant === 'admin' ? 'var(--surface-container-high)' : 'var(--surface-container-low)';
   const color = mine ? 'var(--text-inverse)' : 'var(--text-primary)';
   return (
@@ -353,7 +353,16 @@ export function ChatBubble({ body, senderLabel, mine, at, variant }) {
       <div className="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: bg, color, border: variant === 'admin' && !mine ? '1px solid var(--border-strong)' : 'none' }}>
         {body}
       </div>
-      {at && <span className="px-1 font-mono text-[10px] text-ink-muted">{at}</span>}
+      {(channel === 'WHATSAPP' || at) && (
+        <div className="flex items-center gap-1.5 px-1">
+          {channel === 'WHATSAPP' && (
+            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ background: 'var(--status-success-bg)', color: 'var(--status-success)' }}>
+              WhatsApp
+            </span>
+          )}
+          {at && <span className="font-mono text-[10px] text-ink-muted">{at}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -367,6 +376,25 @@ export function ChatThread({ messages, emptyLabel = 'No messages yet.', classNam
       {messages.map((m) => (
         <ChatBubble key={m.id} body={m.body} senderLabel={m.senderLabel} mine={m.mine} at={m.at} variant={m.variant} />
       ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Modal
+export function Modal({ open, onClose, title, children, className }) {
+  if (!open) return null;
+  return (
+    <div className={cx('fixed inset-0 z-50 flex items-center justify-center p-4', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-xl bg-white shadow-xl animate-slide-up overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+          <h2 id="modal-title" className="font-display text-lg font-semibold text-ink">{title}</h2>
+          <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-surface-container-high text-ink-muted transition-colors" aria-label="Close">
+            <IconX size={20} />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
     </div>
   );
 }

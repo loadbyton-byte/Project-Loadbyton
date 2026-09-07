@@ -105,12 +105,19 @@ export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, delivery
   useEffect(() => () => { mapRef.current?.remove(); mapRef.current = null; markersRef.current = {}; }, []);
 
   if (!hasAnyPoint) {
-    return <p className="text-sm text-ink-muted">No live location yet — carrier location appears every 3 min when IN_TRANSIT.</p>;
+    return <p className="text-sm text-ink-muted">No live location yet — appears every 3 min when IN_TRANSIT, or as soon as the driver shares their live location on WhatsApp.</p>;
   }
 
   const hasDest = deliveryLat != null && deliveryLng != null;
   return (
-    <div className="lb-livemap overflow-hidden rounded-xl border" style={{ borderColor: 'var(--border-default)', boxShadow: '0 2px 6px rgba(15,43,61,0.10)' }}>
+    // isolation: isolate contains Leaflet's internal z-index scale (up to
+    // 1000 for its corner controls, leaflet.css) inside this box's own
+    // stacking context. Without it, those controls compete directly with
+    // page-level fixed UI like ChatPopup's z-40 floating button — at
+    // whatever scroll position puts this map's bottom-right corner where
+    // the chat button sits, Leaflet's much-higher z-index would render its
+    // zoom/attribution controls on top of it.
+    <div className="lb-livemap overflow-hidden rounded-xl border" style={{ borderColor: 'var(--border-default)', boxShadow: '0 2px 6px rgba(15,43,61,0.10)', isolation: 'isolate' }}>
       <style>{`
         .lb-livemap .leaflet-control-attribution {
           background: rgba(255,255,255,0.75);
@@ -143,7 +150,14 @@ export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, delivery
       `}</style>
       <div ref={containerRef} className="h-[280px] w-full" />
       <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-ink-muted">
-        <span>{last ? `Live · ${locs.length} point${locs.length === 1 ? '' : 's'} · ${new Date(last.recorded_at).toLocaleTimeString()}` : 'Waiting for first ping…'}</span>
+        <span className="flex items-center gap-1.5">
+          {last ? `Live · ${locs.length} point${locs.length === 1 ? '' : 's'} · ${new Date(last.recorded_at).toLocaleTimeString()}` : 'Waiting for first ping…'}
+          {last?.source === 'WHATSAPP' && (
+            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ background: 'var(--status-success-bg)', color: 'var(--status-success)' }}>
+              via WhatsApp
+            </span>
+          )}
+        </span>
         {hasDest && (
           <a
             href={directionsUrl({ originLat: liveLat ?? pickupLat, originLng: liveLng ?? pickupLng, destLat: deliveryLat, destLng: deliveryLng })}

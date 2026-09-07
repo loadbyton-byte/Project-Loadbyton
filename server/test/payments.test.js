@@ -54,7 +54,7 @@ async function createAwardedJob(shipper, carrier, overrides = {}) {
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
 
-  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id });
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
   // The driver is not bound at bid/award time anymore — the carrier submits
   // them post-award (PATCH /api/jobs/:id/driver), required before PICKED_UP.

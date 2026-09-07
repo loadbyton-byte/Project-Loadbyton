@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel } from '../lib/constants.js';
+import { useLocale } from '../lib/i18n.jsx';
+import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -20,6 +21,7 @@ import BidForm from '../features/job/BidForm.jsx';
 import PaymentPanel from '../features/job/PaymentPanel.jsx';
 import JobEditForm from '../features/job/JobEditForm.jsx';
 import DocumentList from '../features/job/DocumentList.jsx';
+import HaulierCodeToken from '../features/job/HaulierCodeToken.jsx';
 import BackloadMatches from '../features/job/BackloadMatches.jsx';
 import PodForm from '../features/job/PodForm.jsx';
 import JobStatusTracker from '../features/job/JobStatusTracker.jsx';
@@ -69,12 +71,23 @@ export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t, isRtl } = useLocale();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editingJob, setEditingJob] = useState(false);
   const [awardConfirm, setAwardConfirm] = useState(null);
+  // Pre-award negotiation/ancillary-charges state — award.service.js now
+  // requires this bid's terms_confirmed_at to be set (or an explicit
+  // skipNegotiation) before it will award, so this modal is where that
+  // actually happens instead of a single-click award.
+  const [negotiationMessages, setNegotiationMessages] = useState([]);
+  const [ancillaryCharges, setAncillaryCharges] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [newChargeType, setNewChargeType] = useState('SALIK');
+  const [newChargeAmount, setNewChargeAmount] = useState('');
+  const [negotiationBusy, setNegotiationBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -170,14 +183,81 @@ export default function JobDetail() {
     }
   }
 
+  async function openAwardFlow(b) {
+    setAwardConfirm(b);
+    setNegotiationMessages([]);
+    setAncillaryCharges([]);
+    try {
+      const [neg, charges] = await Promise.all([api.getBidNegotiation(b.id), api.getAncillaryCharges(b.id)]);
+      setNegotiationMessages(neg.messages || []);
+      setAncillaryCharges(charges.charges || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function sendNegotiationMessage() {
+    if (!newMessage.trim()) return;
+    setNegotiationBusy(true);
+    try {
+      const res = await api.postBidNegotiation(awardConfirm.id, newMessage.trim());
+      setNegotiationMessages(res.messages || []);
+      setNewMessage('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setNegotiationBusy(false);
+    }
+  }
+
+  async function proposeCharge() {
+    const amount = Number(newChargeAmount);
+    if (!amount || amount <= 0) return setError('Enter a valid charge amount');
+    setNegotiationBusy(true);
+    try {
+      await api.proposeAncillaryCharge(awardConfirm.id, newChargeType, amount);
+      const charges = await api.getAncillaryCharges(awardConfirm.id);
+      setAncillaryCharges(charges.charges || []);
+      setNewChargeAmount('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setNegotiationBusy(false);
+    }
+  }
+
+  async function agreeCharge(chargeId) {
+    setNegotiationBusy(true);
+    try {
+      await api.agreeAncillaryCharge(awardConfirm.id, chargeId);
+      const charges = await api.getAncillaryCharges(awardConfirm.id);
+      setAncillaryCharges(charges.charges || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setNegotiationBusy(false);
+    }
+  }
+
+  const allChargesAgreed = ancillaryCharges.every((c) => c.agreed_by_shipper && c.agreed_by_carrier);
+
+  function skipAndAward() {
+    const bid = awardConfirm;
+    setAwardConfirm(null);
+    act(() => api.awardJob(job.id, bid.id, { skipNegotiation: true }));
+  }
+
   function confirmAward() {
     const bid = awardConfirm;
     setAwardConfirm(null);
-    act(() => api.awardJob(job.id, bid.id));
+    act(async () => {
+      await api.confirmBidTerms(bid.id);
+      await api.awardJob(job.id, bid.id);
+    });
   }
 
   return (
-    <div className="container-page py-10" dir="ltr">
+    <div className="container-page py-10" dir={isRtl ? 'rtl' : 'ltr'}>
       {awardConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
@@ -186,29 +266,84 @@ export default function JobDetail() {
           aria-label="Confirm award"
           onClick={(e) => { if (e.target === e.currentTarget) setAwardConfirm(null); }}
         >
-          <div className="w-full max-w-md rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
+          <div className="w-full max-w-lg rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)', maxHeight: '90vh', overflowY: 'auto' }}>
             <Card className="border-0 shadow-none">
               <Card.Header>
                 <Card.Title className="flex items-center gap-2">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>
-                  Award this bid?
+                  Discuss &amp; award this bid
                 </Card.Title>
               </Card.Header>
               <Card.Content>
                 <p className="text-sm text-ink">
-                  You're about to award <strong>{formatAED(awardConfirm.amount_aed)}</strong> to{' '}
+                  <strong>{formatAED(awardConfirm.amount_aed)}</strong> from{' '}
                   <strong>{awardConfirm.carrier_company || 'this carrier'}</strong>.
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
-                  <li>Every other bid on this job will be rejected</li>
+                  <li>Every other bid on this job will be rejected once assigned</li>
                   <li>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</li>
                   <li>Funds move into escrow and the job moves to "Awarded"</li>
                 </ul>
+
+                {/* Ancillary charges — Salik, e-token, demurrage, inspection
+                    waiting — each needs BOTH sides to agree before terms
+                    can be confirmed. */}
+                <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Ancillary charges</p>
+                  {ancillaryCharges.length === 0 && <p className="mt-1 text-sm text-ink-muted">None proposed yet.</p>}
+                  <ul className="mt-2 space-y-1.5">
+                    {ancillaryCharges.map((c) => (
+                      <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span>{c.charge_type} — {formatAED(c.amount_aed)}</span>
+                        {c.agreed_by_shipper && c.agreed_by_carrier ? (
+                          <Badge color="success">Agreed</Badge>
+                        ) : !c.agreed_by_shipper ? (
+                          <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
+                        ) : (
+                          <Badge color="neutral">Awaiting carrier</Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 flex gap-2">
+                    <Select value={newChargeType} onChange={(e) => setNewChargeType(e.target.value)} className="text-sm">
+                      <option value="SALIK">Salik</option>
+                      <option value="ETOKEN">E-Token</option>
+                      <option value="DEMURRAGE">Demurrage/Waiting</option>
+                      <option value="INSPECTION_WAITING">Inspection waiting</option>
+                      <option value="OTHER">Other</option>
+                    </Select>
+                    <Input type="number" min="1" placeholder="AED" value={newChargeAmount} onChange={(e) => setNewChargeAmount(e.target.value)} className="w-24" />
+                    <Button size="sm" variant="ghost" onClick={proposeCharge} loading={negotiationBusy}>Propose</Button>
+                  </div>
+                </div>
+
+                {/* Negotiation thread — pre-award commercial chat on this
+                    specific bid, separate from the post-award job chat. */}
+                <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Discuss with this carrier</p>
+                  <div className="mt-2 max-h-32 space-y-1.5 overflow-y-auto text-sm">
+                    {negotiationMessages.length === 0 && <p className="text-ink-muted">No messages yet.</p>}
+                    {negotiationMessages.map((m) => (
+                      <p key={m.id} className="rounded-md px-2 py-1" style={{ background: 'var(--surface-container)' }}>{m.message}</p>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="e.g. Any Salik charges expected?" className="flex-1" />
+                    <Button size="sm" variant="ghost" onClick={sendNegotiationMessage} loading={negotiationBusy}>Send</Button>
+                  </div>
+                </div>
+
                 <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
               </Card.Content>
-              <div className="flex justify-end gap-2 px-6 pb-6">
+              <div className="flex flex-wrap justify-end gap-2 px-6 pb-6">
                 <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
-                <Button variant="accent" onClick={confirmAward} loading={busy}>Confirm award</Button>
+                {ancillaryCharges.length === 0 && (
+                  <Button variant="ghost" onClick={skipAndAward} loading={busy}>No charges — award now</Button>
+                )}
+                <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed}>
+                  Confirm terms &amp; assign
+                </Button>
               </div>
             </Card>
           </div>
@@ -228,7 +363,7 @@ export default function JobDetail() {
         <div>
           <p className="font-mono text-xs text-ink-muted">{job.job_code}</p>
           <h1 className="mt-1 font-display text-2xl font-semibold text-ink">
-            <span className="mr-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-100)' : job.shipment_type === 'LOCAL' ? 'var(--status-success-bg)' : 'var(--lb-orange-100)', color: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-700)' : job.shipment_type === 'LOCAL' ? 'var(--status-success)' : 'var(--lb-orange-700)' }}>{job.shipment_type || 'IMPORT'}{job.status === 'DRAFT' && job.scheduled_post_at ? ` · publishes ${formatDateTime(job.scheduled_post_at)}` : ''}</span>
+            <span className="me-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-100)' : job.shipment_type === 'LOCAL' ? 'var(--status-success-bg)' : 'var(--lb-orange-100)', color: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-700)' : job.shipment_type === 'LOCAL' ? 'var(--status-success)' : 'var(--lb-orange-700)' }}>{job.shipment_type || 'IMPORT'}{job.status === 'DRAFT' && job.scheduled_post_at ? ` · publishes ${formatDateTime(job.scheduled_post_at)}` : ''}</span>
             {CONTAINER_EQUIPMENT.includes(job.equipment_type) ? `${job.container_size} ${formatLabel(job.container_type)}` : equipmentLabel(job.equipment_type)} · {formatLabel(job.pickup_terminal)} → {formatLabel(job.delivery_area)}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -237,10 +372,11 @@ export default function JobDetail() {
             <Badge color="neutral">{equipmentLabel(job.equipment_type)}</Badge>
             {job.container_count > 1 && <Badge color="accent">×{job.container_count} containers</Badge>}
             {job.truck_count > 1 && <Badge color="accent">×{job.truck_count} trucks</Badge>}
+            {job.extra_line_items?.length > 0 && <Badge color="accent">+{job.extra_line_items.length} more container type{job.extra_line_items.length === 1 ? '' : 's'}</Badge>}
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-ink-muted">{job.status === 'OPEN' ? 'Target price (per trip)' : 'Agreed price'}</p>
+        <div className={isRtl ? 'text-left' : 'text-right'}>
+          <p className="text-xs text-ink-muted">{job.status === 'OPEN' ? t('jobDetail.targetPrice', 'Target price (per trip)') : t('jobDetail.agreedPrice', 'Agreed price')}</p>
           <p className="tabular font-display text-2xl font-semibold text-ink">{formatAED(job.agreed_price_aed || job.max_budget_aed)}</p>
         </div>
       </div>
@@ -267,28 +403,37 @@ export default function JobDetail() {
       <div className="grid gap-6 lg:grid-cols-[1fr,340px]">
         <div>
           <Section
-            title="Shipment details"
-            action={canEditJob && !editingJob && <Button variant="ghost" size="sm" onClick={() => setEditingJob(true)}>Edit</Button>}
+            title={t('jobDetail.shipmentDetails', 'Shipment details')}
+            action={canEditJob && !editingJob && <Button variant="ghost" size="sm" onClick={() => setEditingJob(true)}>{t('jobDetail.edit', 'Edit')}</Button>}
           >
             {editingJob ? (
               <JobEditForm job={job} onDone={() => { setEditingJob(false); load(); }} onCancel={() => setEditingJob(false)} />
             ) : (
               <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-                <div><dt className="text-ink-muted">Equipment</dt><dd className="mt-0.5 font-medium text-ink">{equipmentLabel(job.equipment_type)}</dd></div>
-                <div><dt className="text-ink-muted">Cargo type</dt><dd className="mt-0.5 font-medium text-ink">{cargoTypeLabel(job.cargo_type)}</dd></div>
+                <div><dt className="text-ink-muted">{t('jobDetail.equipment', 'Equipment')}</dt><dd className="mt-0.5 font-medium text-ink">{equipmentLabel(job.equipment_type)}</dd></div>
+                <div><dt className="text-ink-muted">{t('jobDetail.cargoType', 'Cargo type')}</dt><dd className="mt-0.5 font-medium text-ink">{cargoTypeLabel(job.cargo_type)}</dd></div>
                 {job.cargo_weight_tons != null && (
-                  <div><dt className="text-ink-muted">Cargo weight</dt><dd className="mt-0.5 font-medium text-ink">{job.cargo_weight_tons} t</dd></div>
+                  <div><dt className="text-ink-muted">{t('jobDetail.cargoWeight', 'Cargo weight')}</dt><dd className="mt-0.5 font-medium text-ink">{job.cargo_weight_tons} t</dd></div>
                 )}
                 {CONTAINER_EQUIPMENT.includes(job.equipment_type) && (
-                  <div><dt className="text-ink-muted">Container #</dt><dd className="mt-0.5 font-medium text-ink">{job.container_number || '—'}</dd></div>
+                  <div><dt className="text-ink-muted">{t('jobDetail.containerNumber', 'Container #')}</dt><dd className="mt-0.5 font-medium text-ink">{job.container_number || '—'}</dd></div>
                 )}
                 {(job.container_count > 1 || job.truck_count > 1) && (
-                  <div><dt className="text-ink-muted">Volume</dt><dd className="mt-0.5 font-medium text-ink">{job.container_count > 1 ? `${job.container_count} containers` : `${job.truck_count} trucks`}</dd></div>
+                  <div><dt className="text-ink-muted">{t('jobDetail.volume', 'Volume')}</dt><dd className="mt-0.5 font-medium text-ink">{job.container_count > 1 ? `${job.container_count} containers` : `${job.truck_count} trucks`}</dd></div>
                 )}
-                <div><dt className="text-ink-muted">Ready at</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.ready_at)}</dd></div>
-                <div><dt className="text-ink-muted">Deadline</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.deadline)}</dd></div>
-                <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Delivery address</dt><dd className="mt-0.5 font-medium text-ink">{job.delivery_address}</dd></div>
-                {job.notes && <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Notes</dt><dd className="mt-0.5 text-ink-secondary">{job.notes}</dd></div>}
+                {job.extra_line_items?.length > 0 && (
+                  <div className="col-span-2 sm:col-span-3">
+                    <dt className="text-ink-muted">{t('jobDetail.lineItems', 'Container line items')}</dt>
+                    <dd className="mt-0.5 font-medium text-ink">
+                      {job.container_count}× {job.container_size} {formatLabel(job.container_type)}
+                      {job.extra_line_items.map((li) => `, ${li.count}× ${li.container_size} ${formatLabel(li.container_type)}`).join('')}
+                    </dd>
+                  </div>
+                )}
+                <div><dt className="text-ink-muted">{t('jobDetail.readyAt', 'Ready at')}</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.ready_at)}</dd></div>
+                <div><dt className="text-ink-muted">{t('jobDetail.deadline', 'Deadline')}</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.deadline)}</dd></div>
+                <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">{t('jobDetail.deliveryAddress', 'Delivery address')}</dt><dd className="mt-0.5 font-medium text-ink">{job.delivery_address}</dd></div>
+                {job.notes && <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">{t('jobDetail.notes', 'Notes')}</dt><dd className="mt-0.5 text-ink-secondary">{job.notes}</dd></div>}
               </dl>
             )}
           </Section>
@@ -382,11 +527,23 @@ export default function JobDetail() {
                           <span className="truncate">{b.carrier_company}</span> <RatingPill rating={b.carrier_rating} />
                         </p>
                       )}
+                      {!b.masked && b.ancillary_charges?.length > 0 && (
+                        <p className="mt-1 text-xs text-ink-secondary">
+                          +{b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0)} AED anticipated extras
+                          {' '}({b.ancillary_charges.map((c) => ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type).join(', ')})
+                        </p>
+                      )}
+                      {!b.masked && b.carrier_available_units != null && (
+                        <p className="mt-0.5 text-xs" style={{ color: b.carrier_available_units <= 0 ? 'var(--status-danger)' : 'var(--ink-muted)' }}>
+                          {b.carrier_available_units <= 0 ? '⚠ 0 declared available units' : `${b.carrier_available_units} unit(s) available`}
+                          {b.carrier_reliability_score != null && ` · reliability ${Number(b.carrier_reliability_score).toFixed(1)}`}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>
                       {isShipper && job.status === 'OPEN' && b.status === 'PENDING' && (
-                        <Button variant="accent" onClick={() => setAwardConfirm(b)} loading={busy}>Award</Button>
+                        <Button variant="accent" onClick={() => openAwardFlow(b)} loading={busy}>Discuss &amp; award</Button>
                       )}
                     </div>
                   </div>
@@ -400,8 +557,18 @@ export default function JobDetail() {
           </Section>
 
           <Section title="Documents">
-            <DocumentList documents={documents} jobId={job.id} onAdd={load} />
+            <DocumentList documents={documents} jobId={job.id} onAdd={load} isShipperParty={isShipper} isCarrierParty={isAwardedCarrier} />
           </Section>
+
+          {/* Haulier Code / Token — import/export only, and only once a
+              carrier is actually assigned. Modeled as free text, not tied
+              to DP World's specific process, so it holds up for an Abu
+              Dhabi Ports or Sharjah Ports job too. */}
+          {job.carrier_id && job.shipment_type !== 'LOCAL' && (isShipper || isAwardedCarrier) && (
+            <Section title="Haulier Code / Token">
+              <HaulierCodeToken job={job} isShipper={isShipper} isAwardedCarrier={isAwardedCarrier} onDone={load} />
+            </Section>
+          )}
 
           {job.status === 'COMPLETED' && (isShipper || isAwardedCarrier) && (
             <Section title="Rate your counterparty">
@@ -451,14 +618,66 @@ export default function JobDetail() {
           {['PICKED_UP','IN_TRANSIT','DELIVERED'].includes(job.status) && (
             <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} deliveryLat={job.delivery_lat} deliveryLng={job.delivery_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
           )}
-          {/* Phase 4: EIR for carrier at pickup */}
-          {isAwardedCarrier && ['PICKED_UP','IN_TRANSIT'].includes(job.status) && <div className="mb-6"><EirChecklist jobId={job.id} onDone={load} /></div>}
+          {/* Phase 4: EIR for carrier — captured at BOTH pickup and
+              delivery now, not just pickup, so a damage/shortage dispute
+              has evidence from both ends of the journey. Each stage only
+              renders until its own photos exist. */}
+          {isAwardedCarrier && ['PICKED_UP','IN_TRANSIT'].includes(job.status) && !job.eir_photos_pickup && (
+            <div className="mb-6"><EirChecklist jobId={job.id} stage="pickup" requiresSeal={!!job.requires_seal} onDone={load} /></div>
+          )}
+          {isAwardedCarrier && job.status === 'DELIVERED' && !job.eir_photos_delivery && (
+            <div className="mb-6"><EirChecklist jobId={job.id} stage="delivery" requiresSeal={!!job.requires_seal} onDone={load} /></div>
+          )}
           {isAwardedCarrier && BACKLOAD_ELIGIBLE_STATUSES.includes(job.status) && <BackloadMatches jobId={job.id} />}
 
           {job.status === 'DISPUTED' && (isShipper || isAwardedCarrier) && (
             <Link to={`/jobs/${job.id}/dispute`} className="btn-danger mb-6 w-full justify-center">
               <IconGavel size={15} /> View dispute
             </Link>
+          )}
+
+          {/* Tokenize Bill of Lading — shipper only, after award */}
+          {(isShipper || isAwardedCarrier) && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(job.status) && (
+            <Section title="Bill of Lading Token" className="mb-6">
+              <Card className="border-l-4" style={{ borderLeftColor: 'var(--brand-accent)' }}>
+                <Card.Content className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
+                  <div>
+                    <p className="font-medium text-ink">{t('jobDetail.tokenizeBL', 'Tokenize Bill of Lading')}</p>
+                    <p className="text-xs text-ink-muted">{t('jobDetail.tokenizeBLDesc', 'Create a verifiable, transferable digital token for this shipment\'s bill of lading')}</p>
+                  </div>
+                  <Button variant="accent" onClick={async () => {
+                    const result = await act(async () => {
+                      const res = await api.tokenizeBL(job.id, { shipmentType: job.shipment_type });
+                      return res;
+                    });
+                  }} loading={busy}>
+                    {t('jobDetail.tokenizeBLBtn', 'Tokenize BL')}
+                  </Button>
+                </Card.Content>
+              </Card>
+            </Section>
+          )}
+
+          {/* Currency selector — shipper can change job currency before award */}
+          {isShipper && ['OPEN', 'QUOTING'].includes(job.status) && (
+            <Section title={t('jobDetail.currency', 'Currency')} className="mb-6">
+              <Card className="border-l-4" style={{ borderLeftColor: 'var(--lb-orange-600)' }}>
+                <Card.Content className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
+                  <div>
+                    <p className="font-medium text-ink">{t('jobDetail.currencyLabel', 'Job Currency')}</p>
+                    <p className="text-xs text-ink-muted">{t('jobDetail.currencyDesc', 'Set the currency for this job. All bids and payments will use this currency.')}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={job.currency || 'AED'}
+                      onChange={(e) => act(async () => { await api.setJobCurrency(job.id, { currency: e.target.value }); })}
+                    >
+                      {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
+                    </Select>
+                  </div>
+                </Card.Content>
+              </Card>
+            </Section>
           )}
 
           <Card className="mb-6">

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <!-- Theme is light by default; a visitor's saved dark preference (set via
        the in-app toggle) is applied before first paint so there is never a
        light/dark flash. Absent a saved choice the page always renders light,
@@ -23,6 +23,15 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Loadbyton — UAE Road Freight & Container Drayage Marketplace" />
     <meta name="twitter:description" content="Post a freight job, get verified-carrier bids from across the UAE, and move it under escrow — with live tracking and payout on delivery." />
+    <!-- Default/root canonical — overwritten per-route by
+         scripts/vercel-static-seo.mjs and server/app.js's catch-all so every
+         indexed page points at its own URL, never the SPA shell's. -->
+    <link rel="canonical" href="https://loadbyton.com/" />
+    <!-- Search Console domain verification — content is set once the
+         property exists (see docs/DEVELOPER_GUIDE.md "Search Console"
+         section); harmless placeholder until then, verification just won't
+         pass. -->
+    <meta name="google-site-verification" content="%VITE_GSC_VERIFICATION%" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
@@ -57,8 +66,45 @@
     <noscript>
       <style>.reveal { opacity: 1 !important; transform: none !important; }</style>
     </noscript>
-    <script type="module" crossorigin src="/assets/index-B2UulVEP.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-Bw8sdmwX.css">
+    <!-- Organization structured data — static, applies to every route since
+         only <title>/meta/canonical are swapped per-page by
+         scripts/vercel-static-seo.mjs / server/app.js. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Loadbyton",
+        "url": "https://loadbyton.com/",
+        "logo": "https://loadbyton.com/brand/logo-mark.svg",
+        "description": "UAE road freight & container drayage marketplace connecting shippers with verified carriers across Dubai, Abu Dhabi, Sharjah and Fujairah.",
+        "areaServed": "AE"
+      }
+    </script>
+    <!-- Google Analytics (GA4) — defaults to the live Loadbyton property so
+         it works with no deploy-platform config; VITE_GA_MEASUREMENT_ID
+         (Vercel project env var) overrides it, e.g. for a separate staging
+         property. Any local/dev build with neither set falls through to the
+         same real ID, matching production — set VITE_GA_MEASUREMENT_ID to a
+         throwaway value locally if you don't want dev traffic in GA4. -->
+    <script>
+      (function () {
+        var envId = '%VITE_GA_MEASUREMENT_ID%';
+        var GA_ID = (envId && envId.indexOf('G-') === 0) ? envId : 'G-2TP4Z3QKH2';
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { window.dataLayer.push(arguments); }
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', GA_ID);
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-CKRLkWcv.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-CA0ubVVt.js">
+    <link rel="modulepreload" crossorigin href="/assets/query-D8oyKQwk.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-Det1FRXZ.css">
   </head>
   <body>
     <div id="root"></div>

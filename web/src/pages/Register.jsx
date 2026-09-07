@@ -8,12 +8,20 @@ import { IconTruck, IconPackage, IconArrowLeft, IconArrowRight, IconCheckCircle 
 
 const STEPS = ['Role', 'Business', 'Account'];
 
-// Client-side mirror of the server's UAE-format validators (server/index.js)
-// so a wrong format is caught before submit, not after a round trip. The
-// server enforces the same rules regardless — this only improves UX.
-const UAE_MOBILE_RE = /^(\+9715|05)\d{8}$/;
-const UAE_TRN_RE = /^\d{15}$/;
-const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
+  // Client-side mirror of the server's UAE-format validators (server/index.js)
+  // so a wrong format is caught before submit, not after a round trip. The
+  // server enforces the same rules regardless — this only improves UX.
+  const UAE_MOBILE_RE = /^(\+9715|05)\d{8}$/;
+  const UAE_TRN_RE = /^\d{15}$/;
+  const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
+
+  const ROLES = [
+    { label: 'SHIPPER', desc: 'Post freight jobs, get carrier bids, track under escrow' },
+    { label: 'CARRIER', desc: 'Browse open loads, bid, get paid on delivery' },
+    { label: 'FORWARDER', desc: 'Manage freight forwarding, client roster, assign loads' },
+    { label: 'BROKER', desc: 'Broker jobs, direct-assign carriers, earn broker spread' },
+    { label: 'OWNER_OPERATOR', desc: 'Own and operate your own fleet of trucks' },
+  ];
 
 export default function Register() {
   usePageTitle('Create your account');
@@ -21,7 +29,7 @@ export default function Register() {
   const { t } = useLocale();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [role, setRole] = useState(params.get('role') === 'CARRIER' ? 'CARRIER' : params.get('role') === 'SHIPPER' ? 'SHIPPER' : null);
+  const [role, setRole] = useState(params.get('role') === 'CARRIER' ? 'CARRIER' : ['SHIPPER','FORWARDER','BROKER','OWNER_OPERATOR'].includes(params.get('role')) ? params.get('role') : null);
   const [step, setStep] = useState(role ? 1 : 0);
   const [form, setForm] = useState({
     companyName: '', email: '', password: '', phone: '', trnNumber: '', tradeLicenseNumber: '', referralCode: '',
@@ -111,7 +119,7 @@ export default function Register() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100vh-4rem)] items-center justify-center py-10">
+    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-10">
       <Card className="w-full max-w-lg p-6 sm:p-8">
         <p className="font-display text-xl font-bold text-ink">Create your account</p>
         <p className="mt-1 text-sm text-ink-muted">Post drayage jobs, or bid on them — pick which one you are.</p>
@@ -138,26 +146,22 @@ export default function Register() {
         {/* Step 0 — get-started role choice */}
         {step === 0 && (
           <div className="mt-6 flex flex-col gap-3">
-            <button type="button" onClick={() => chooseRole('SHIPPER')} className="card flex items-center gap-4 p-5 text-left hover:shadow-elevated">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--surface-container-high)' }}>
-                <IconPackage size={22} className="text-brand-accent" />
-              </span>
-              <div className="flex-1">
-                <p className="font-display font-bold text-ink">I ship freight</p>
-                <p className="text-sm text-ink-muted">Post jobs, get verified-carrier bids, track under escrow.</p>
-              </div>
-              <IconArrowRight size={18} className="text-ink-muted" />
-            </button>
-            <button type="button" onClick={() => chooseRole('CARRIER')} className="card flex items-center gap-4 p-5 text-left hover:shadow-elevated">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--surface-container-high)' }}>
-                <IconTruck size={22} className="text-brand-accent" />
-              </span>
-              <div className="flex-1">
-                <p className="font-display font-bold text-ink">I move freight</p>
-                <p className="text-sm text-ink-muted">Browse open loads, bid, get paid on delivery.</p>
-              </div>
-              <IconArrowRight size={18} className="text-ink-muted" />
-            </button>
+            {ROLES.map((r) => (
+              <button key={r.label} type="button" onClick={() => chooseRole(r.label)} className="card flex items-center gap-4 p-5 text-left hover:shadow-elevated">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--surface-container-high)' }}>
+                  {r.label === 'SHIPPER' && <IconPackage size={22} className="text-brand-accent" />}
+                  {r.label === 'CARRIER' && <IconTruck size={22} className="text-brand-accent" />}
+                  {r.label === 'FORWARDER' && <IconCompass size={22} className="text-brand-accent" />}
+                  {r.label === 'BROKER' && <IconLayers size={22} className="text-brand-accent" />}
+                  {r.label === 'OWNER_OPERATOR' && <IconTrailer size={22} className="text-brand-accent" />}
+                </span>
+                <div className="flex-1">
+                  <p className="font-display font-bold text-ink">{r.label === 'SHIPPER' ? 'I ship freight' : r.label === 'CARRIER' ? 'I move freight' : r.label === 'FORWARDER' ? 'I forward freight' : r.label === 'BROKER' ? 'I broker freight' : 'I own and operate'}</p>
+                  <p className="text-sm text-ink-muted">{r.desc}</p>
+                </div>
+                <IconArrowRight size={18} className="text-ink-muted" />
+              </button>
+            ))}
           </div>
         )}
 
@@ -219,6 +223,19 @@ export default function Register() {
               <Label htmlFor="referral">Referral code (optional)</Label>
               <Input id="referral" value={form.referralCode} onChange={(e) => setForm({ ...form, referralCode: e.target.value })} placeholder="CAR-EMIRATES" />
             </div>
+            <label className="flex items-start gap-2 text-sm text-ink-secondary">
+              <input
+                type="checkbox"
+                required
+                checked={form.agreedToTerms || false}
+                onChange={(e) => setForm({ ...form, agreedToTerms: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                I have read and agree to the{' '}
+                <Link to="/terms" target="_blank" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</Link>
+              </span>
+            </label>
             {error && (
               <p className="rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>
                 {error}

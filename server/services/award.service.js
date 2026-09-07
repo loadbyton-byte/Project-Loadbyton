@@ -33,6 +33,20 @@ async function awardJob(req, res, jobId, bidId) {
   const preBid = await db.prepare('SELECT * FROM bids WHERE id=? AND job_id=?').get(bidId, jobId);
   if (!preBid) { res.status(404).json({ error: 'Bid not found' }); return; }
 
+  // Confirm-terms gate — a real pre-award negotiation/ancillary-charges
+  // workflow now exists (bid_negotiations, bid_ancillary_charges,
+  // POST /api/bids/:id/confirm-terms, all in server/routes/bids.routes.js).
+  // A shipper can still skip it outright for a simple job with nothing to
+  // discuss (skipNegotiation must be an explicit, visible choice on the
+  // frontend, not a silent default) — this is purely an added precondition
+  // before the existing transaction below; nothing inside that transaction
+  // changes.
+  const skipNegotiation = !!(req.body && req.body.skipNegotiation);
+  if (!preBid.terms_confirmed_at && !skipNegotiation) {
+    res.status(409).json({ error: 'Terms not yet confirmed for this bid — discuss and confirm terms first, or explicitly skip negotiation.' });
+    return;
+  }
+
   const { commission_rate_bps } = await getSettings();
   const commissionRate = commission_rate_bps / 10000;
   const agreedPrice = preBid.amount_aed;
@@ -68,13 +82,39 @@ async function awardJob(req, res, jobId, bidId) {
         const err = /** @type {any} */ (new Error('Job already awarded')); err.status = 409; throw err;
       }
 
+      // payment_tier branching — SPOT_ESCROW (the default, and every job
+      // created before this column existed) keeps exactly today's
+      // behavior: escrow HELD immediately, checkout required before
+      // pickup. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM defer
+      // escrow entirely — for PAY_ON_DELIVERY, job.service.js's
+      // updateJobStatus creates the actual checkout/ledger entry at the
+      // DELIVERED transition instead; CONTRACT_CREDIT and OFF_PLATFORM
+      // don't touch per-job escrow at all in this pass (CONTRACT_CREDIT's
+      // running credit-limit ledger is a separate, not-yet-built piece).
+      const isSpotEscrow = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
       await trx.query(
-        `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`,
+        isSpotEscrow
+          ? `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`
+          : `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, updated_at=datetime('now') WHERE id=?`,
         [bid.carrier_id, agreedPrice, jobId]
       );
 
       await trx.query(`UPDATE bids SET status='AWARDED' WHERE id=?`, [bidId]);
       await trx.query(`UPDATE bids SET status='REJECTED' WHERE job_id=? AND id != ?`, [jobId, bidId]);
+
+      // Equipment capacity — decrement the carrier's live available_units
+      // by this job's TOTAL unit count (line item 1 + job_line_items extras
+      // via lib/capacity.js), same transaction/lock discipline as
+      // everything else here. Not clamped below 0 deliberately: a
+      // negative number is a real, visible signal (this carrier is now
+      // over-committed), not something to silently hide by floor-ing it.
+      const { jobUnitCount } = require('../lib/capacity');
+      const unitCount = await jobUnitCount(preJob, { trx });
+      await trx.query(`UPDATE profiles SET available_units = available_units - ? WHERE user_id=?`, [unitCount, bid.carrier_id]);
+      await trx.query(
+        `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`,
+        [bid.carrier_id, jobId, 'AWARDED', -unitCount, `Awarded ${preJob.job_code}`]
+      );
 
       // Payout — unique on job_id prevents duplicates under race
       try {
@@ -105,16 +145,24 @@ async function awardJob(req, res, jobId, bidId) {
       // (status, bid updates, payout row) while the caller believes it
       // succeeded. Letting it throw lets db.transaction's own catch
       // rollback and report a real error instead.
-      const ledger = require('../lib/ledger');
-      await ledger.createTransaction(trx, {
-        idempotencyKey,
-        jobId,
-        description: `Award ${preJob.job_code} AED ${agreedPrice}`,
-        entries: [
-          { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
-          { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
-        ],
-      });
+      // For PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM, no funds are
+      // expected yet at award time — recording an escrow-liability entry
+      // here would be booking a receivable that doesn't exist until
+      // DELIVERED (PAY_ON_DELIVERY) or, for the other two tiers, ever
+      // on-platform in this pass. job.service.js's updateJobStatus creates
+      // the equivalent ledger entry for PAY_ON_DELIVERY at DELIVERED.
+      if (isSpotEscrow) {
+        const ledger = require('../lib/ledger');
+        await ledger.createTransaction(trx, {
+          idempotencyKey,
+          jobId,
+          description: `Award ${preJob.job_code} AED ${agreedPrice}`,
+          entries: [
+            { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
+            { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
+          ],
+        });
+      }
 
       // Audit atomically with the financial writes
       await trx.query(
