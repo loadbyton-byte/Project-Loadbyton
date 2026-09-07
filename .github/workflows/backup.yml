@@ -11,7 +11,18 @@ name: Database backup
 # change required, it Just Starts happening.
 #
 # Required repo secret (Settings -> Secrets and variables -> Actions):
-#   DIRECT_DATABASE_URL   Supabase's direct (non-pooled, port 5432) connection string
+#   DIRECT_DATABASE_URL   A non-pooled Postgres connection string pg_dump can
+#     use directly. On Supabase, do NOT use the "Direct connection" string
+#     from Project Settings -> Database -> Connection string on newer
+#     projects: it resolves to an IPv6-only address, and GitHub-hosted
+#     runners have no outbound IPv6 route, so pg_dump fails with
+#     "Network is unreachable" (confirmed happening on this repo 2026-09-04
+#     through 2026-09-06 -- three consecutive silent failures). Use the
+#     "Session pooler" string instead (same dashboard section, port 5432,
+#     IPv4-reachable, still a real session so pg_dump works normally --
+#     unlike the Transaction pooler on port 6543, which doesn't support the
+#     session-level operations pg_dump needs). Same secret name, just a
+#     different value.
 # Optional, once Cloudflare R2 exists (see docs/DEVELOPER_GUIDE.md):
 #   S3_BUCKET, S3_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 
