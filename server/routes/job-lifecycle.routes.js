@@ -26,6 +26,8 @@ const issueInvoice = /** @type {any} */ (invoiceMod).issueInvoice;
 const whatsappMod = require('../lib/whatsapp');
 const notifyDriverAsync = /** @type {any} */ (whatsappMod).notifyDriverAsync;
 /** @type {any} */
+const deliveryService = require('../services/delivery.service');
+/** @type {any} */
 const configMod = require('../lib/config');
 const FRONTEND_URL = /** @type {any} */ (configMod).FRONTEND_URL;
 /** @type {any} */
@@ -35,14 +37,12 @@ const sendError = /** @type {any} */ (httpMod).sendError;
 const apiResponse = require('../lib/apiResponse');
 /** @type {any} */
 const constantsMod = require('../lib/constants');
-const DOC_TYPES = /** @type {any} */ (constantsMod).DOC_TYPES;
 const STATUS_ORDER = /** @type {any} */ (constantsMod).STATUS_ORDER;
 const TRANSITIONS = /** @type {any} */ (constantsMod).TRANSITIONS;
 const DISPUTABLE_STATUSES = /** @type {any} */ (constantsMod).DISPUTABLE_STATUSES;
 const ANCILLARY_CHARGE_TYPES = /** @type {any} */ (constantsMod).ANCILLARY_CHARGE_TYPES;
 /** @type {any} */
 const helpersMod = require('../lib/helpers');
-const resolveUploadedFile = /** @type {any} */ (helpersMod).resolveUploadedFile;
 const normalizeUaeMobile = /** @type {any} */ (helpersMod).normalizeUaeMobile;
 const getSettings = /** @type {any} */ (helpersMod).getSettings;
 const writeAudit = /** @type {any} */ (helpersMod).writeAudit;
@@ -255,83 +255,14 @@ router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), id
   // Migrated POD errors to new envelope (apiResponse.error preserves _legacy)
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   if (job.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
-  if (job.status !== 'IN_TRANSIT') return apiResponse.error(req, res, 'FORBIDDEN', 'Job must be IN_TRANSIT to submit proof of delivery');
 
   const doc = /** @type {any} */ ((/** @type {any} */ (req.body) || {}).document);
-  let storagePath = null;
-  let mimeType = null;
-  if (doc && (doc.fileBase64 || doc.storageKey)) {
-    try {
-      // @ts-ignore
-      ({ storagePath, mimeType } = await resolveUploadedFile(String(job.id), { mimeType: doc.mimeType, fileBase64: doc.fileBase64, storageKey: doc.storageKey }));
-    } catch (/** @type {any} */ e) {
-      return apiResponse.error(req, res, 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
-    }
+  let updated;
+  try {
+    updated = await deliveryService.confirmDelivery(job, { actorId: req.actorId, doc, req });
+  } catch (/** @type {any} */ e) {
+    return apiResponse.error(req, res, e.status === 403 ? 'FORBIDDEN' : 'VALIDATION_FAILED', e.message || 'Upload failed', { status: e.status || 400 });
   }
-  await db.prepare(`UPDATE jobs SET status='DELIVERED', delivered_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(job.id);
-  // PAY_ON_DELIVERY tier (server/schema.js's jobs.payment_tier): award
-  // deliberately skipped escrow entirely for this tier (see
-  // award.service.js) — this is the point where payment actually becomes
-  // due instead. Mirrors exactly what SPOT_ESCROW's award does (escrow
-  // HELD, processor_payment_status REQUIRES_PAYMENT, the same
-  // processor_clearing/escrow_liability ledger entry), just deferred to
-  // here. Guarded so this only ever fires once per job even under a
-  // retried/duplicate POD submission (idempotency middleware already
-  // protects the request itself, but this is a second, cheaper guard).
-  if (job.payment_tier === 'PAY_ON_DELIVERY' && job.escrow_status === 'PENDING') {
-    const ledger = require('../lib/ledger');
-    await db.transaction(async (/** @type {any} */ trx) => {
-      const locked = await trx.query(`SELECT escrow_status, agreed_price_aed FROM jobs WHERE id=? FOR UPDATE`, [job.id]);
-      const current = locked.rows[0];
-      if (!current || current.escrow_status !== 'PENDING') return; // already handled by a concurrent request
-      await trx.query(
-        `UPDATE jobs SET escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`,
-        [job.id]
-      );
-      await ledger.createTransaction(trx, {
-        idempotencyKey: `pay-on-delivery-${job.id}`,
-        jobId: job.id,
-        description: `Payment due on delivery ${job.job_code} AED ${current.agreed_price_aed}`,
-        entries: [
-          { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(current.agreed_price_aed) },
-          { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(current.agreed_price_aed) },
-        ],
-      });
-    });
-    await notify(job.shipper_id, 'Payment due', `${job.job_code} was delivered — payment is now due (pay-on-delivery).`, job.id, 'payout');
-  }
-  // Equipment capacity — the trip is done, this carrier's truck/container
-  // slot is free again. Restores exactly what award.service.js decremented.
-  {
-    const unitCount = job.shipment_type === 'LOCAL' ? (job.truck_count || 1) : (job.container_count || 1);
-    await db.prepare(`UPDATE profiles SET available_units = available_units + ? WHERE user_id=?`).run(unitCount, job.carrier_id);
-    await db.prepare(
-      `INSERT INTO carrier_capacity_events (carrier_id, job_id, event_type, units_delta, note) VALUES (?,?,?,?,?)`
-    ).run(job.carrier_id, job.id, 'RESTORED', unitCount, `Delivered ${job.job_code}`);
-  }
-  if (doc && (doc.fileUrl || storagePath)) {
-    await db.prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)').run(
-      job.id,
-      req.actorId,
-      DOC_TYPES.includes(doc.docType) ? doc.docType : 'POD',
-      doc.title || 'Proof of Delivery',
-      doc.fileUrl || storagePath || '',
-      storagePath,
-      mimeType
-    );
-  }
-  await writeAudit(req, {
-    userId: req.actorId,
-    action: 'STATUS',
-    details: `${job.job_code}: POD submitted`,
-    entityType: 'job',
-    entityId: job.id,
-    beforeState: 'IN_TRANSIT',
-    afterState: 'DELIVERED',
-  });
-  const { auto_release_hours } = /** @type {any} */ (await getSettings());
-  await notify(job.shipper_id, 'Proof of delivery submitted', `Confirm delivery on ${job.job_code}, or it auto-releases in ${auto_release_hours}h.`, job.id, 'status');
-  const updated = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id));
   res.json({ job: updated });
 });
 

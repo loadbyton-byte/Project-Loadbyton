@@ -15,10 +15,30 @@
 // (WhatsApp -> SMS -> in-app; in-app notifications already fire regardless
 // via notify() in server/index.js, so nothing is lost while this is dark).
 
+const db = require('../db');
+
 const WHATSAPP_API_VERSION = 'v21.0';
+const SESSION_WINDOW_HOURS = 24;
 
 function isConfigured() {
   return !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+}
+
+// Meta only allows free-form (including interactive button/list) messages
+// within 24h of the contact's last inbound message — outside that window
+// only a pre-approved template may be sent. server/routes/whatsapp.routes.js
+// updates this row on every inbound webhook message.
+async function isSessionOpen(phone) {
+  const row = await db.prepare('SELECT session_expires_at FROM whatsapp_sessions WHERE phone=?').get(phone);
+  return !!row && new Date(row.session_expires_at) > new Date();
+}
+
+async function recordInboundSession(phone) {
+  const expiresAt = new Date(Date.now() + SESSION_WINDOW_HOURS * 3600 * 1000).toISOString();
+  await db.prepare(
+    `INSERT INTO whatsapp_sessions (phone, last_inbound_at, session_expires_at) VALUES (?, datetime('now'), ?)
+     ON CONFLICT(phone) DO UPDATE SET last_inbound_at=datetime('now'), session_expires_at=excluded.session_expires_at`
+  ).run(phone, expiresAt);
 }
 
 // `template` must already be an approved WhatsApp message template name
@@ -73,4 +93,81 @@ function notifyDriverAsync({ to, template, params }) {
   sendWhatsAppMessage({ to, template, params }).catch(() => {});
 }
 
-module.exports = { sendWhatsAppMessage, notifyDriverAsync, isConfigured };
+// Sends a Meta "interactive" button message (free-form, only valid inside
+// the 24h customer-service window). Used for the first real two-way bot
+// flow — see docs/WHATSAPP_SETUP.md for why this stays dark until Meta
+// approval is complete.
+async function sendInteractiveButtons({ to, bodyText, buttons }) {
+  if (!to) return { sent: false, reason: 'no_recipient' };
+  if (!isConfigured()) {
+    // eslint-disable-next-line no-console
+    console.log(`[whatsapp:dark] would send interactive buttons [${buttons.map((b) => b.id).join(', ')}] to ${to} — WHATSAPP_ACCESS_TOKEN not set`);
+    return { sent: false, reason: 'not_configured' };
+  }
+
+  const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const body = {
+    messaging_product: 'whatsapp',
+    to: to.replace(/[^\d+]/g, ''),
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: bodyText },
+      action: { buttons: buttons.map((b) => ({ type: 'reply', reply: { id: b.id, title: b.title } })) },
+    },
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      // eslint-disable-next-line no-console
+      console.error(`[whatsapp:error] ${res.status} sending interactive buttons to ${to}: ${errText}`);
+      return { sent: false, reason: 'provider_error', status: res.status };
+    }
+    return { sent: true };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[whatsapp:error] sending interactive buttons to ${to} failed:`, err.message);
+    return { sent: false, reason: 'network_error' };
+  }
+}
+
+// First real two-way bot flow: delivery confirmation. Sends an interactive
+// button prompt ("Delivered" / "Delayed" / "Issue") if the contact's 24h
+// session is open (e.g. they've messaged recently); otherwise falls back to
+// the pre-approved 'delivery_confirmation_prompt' template — Meta rejects
+// free-form outside the window, so this must never attempt one there, and
+// logs clearly instead of silently dropping the prompt.
+async function sendDeliveryConfirmationPrompt({ to, jobCode }) {
+  if (!to) return { sent: false, reason: 'no_recipient' };
+  const sessionOpen = await isSessionOpen(to).catch(() => false);
+  if (sessionOpen) {
+    return sendInteractiveButtons({
+      to,
+      bodyText: `${jobCode}: have you delivered this load?`,
+      buttons: [
+        { id: 'DELIVERED', title: 'Delivered' },
+        { id: 'DELAYED', title: 'Delayed' },
+        { id: 'ISSUE', title: 'Issue' },
+      ],
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[whatsapp:session] 24h window closed for ${to} — sending delivery_confirmation_prompt as a template instead of interactive buttons`);
+  return sendWhatsAppMessage({ to, template: 'delivery_confirmation_prompt', params: [jobCode] });
+}
+
+module.exports = {
+  sendWhatsAppMessage,
+  notifyDriverAsync,
+  isConfigured,
+  isSessionOpen,
+  recordInboundSession,
+  sendInteractiveButtons,
+  sendDeliveryConfirmationPrompt,
+};

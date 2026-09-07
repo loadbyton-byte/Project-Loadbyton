@@ -344,7 +344,7 @@ export function StatusTracker({ steps, currentIndex, terminal, className }) {
 // Shared by every message-thread screen (job messages, disputes, support).
 // `messages`: [{ id, body, senderLabel, mine, at, variant }] — variant lets
 // a dispute thread color an "ADMIN" bubble distinctly from the two parties.
-export function ChatBubble({ body, senderLabel, mine, at, variant }) {
+export function ChatBubble({ body, senderLabel, mine, at, variant, channel }) {
   const bg = mine ? 'var(--brand-primary)' : variant === 'admin' ? 'var(--surface-container-high)' : 'var(--surface-container-low)';
   const color = mine ? 'var(--text-inverse)' : 'var(--text-primary)';
   return (
@@ -353,7 +353,16 @@ export function ChatBubble({ body, senderLabel, mine, at, variant }) {
       <div className="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: bg, color, border: variant === 'admin' && !mine ? '1px solid var(--border-strong)' : 'none' }}>
         {body}
       </div>
-      {at && <span className="px-1 font-mono text-[10px] text-ink-muted">{at}</span>}
+      {(channel === 'WHATSAPP' || at) && (
+        <div className="flex items-center gap-1.5 px-1">
+          {channel === 'WHATSAPP' && (
+            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ background: 'var(--status-success-bg)', color: 'var(--status-success)' }}>
+              WhatsApp
+            </span>
+          )}
+          {at && <span className="font-mono text-[10px] text-ink-muted">{at}</span>}
+        </div>
+      )}
     </div>
   );
 }

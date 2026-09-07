@@ -174,6 +174,16 @@ async function updateJobStatus(jobId, nextStatus, req) {
     }
   }
 
+  if (nextStatus === 'IN_TRANSIT' && job.assigned_driver_phone) {
+    // First real two-way WhatsApp bot flow: delivery confirmation via
+    // interactive buttons once the driver is en route. Fire-and-forget,
+    // same as every other WhatsApp send site — never blocks the response.
+    try {
+      const { sendDeliveryConfirmationPrompt } = require('../lib/whatsapp');
+      sendDeliveryConfirmationPrompt({ to: job.assigned_driver_phone, jobCode: job.job_code });
+    } catch {}
+  }
+
   await writeAudit(req, {
     userId: req.actorId,
     action: 'STATUS',

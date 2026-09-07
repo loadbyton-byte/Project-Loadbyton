@@ -35,6 +35,8 @@ const _escrow = /** @type {any} */ (require('../services/escrow.service'));
 const runAutoReleaseSweep = _escrow.runAutoReleaseSweep;
 const _scheduling = /** @type {any} */ (require('../services/scheduling.service'));
 const publishScheduledJobs = _scheduling.publishScheduledJobs;
+const _complianceSweep = /** @type {any} */ (require('../services/compliance-sweep.service'));
+const runComplianceSweep = _complianceSweep.runComplianceSweep;
 const _rateLimit = /** @type {any} */ (require('../lib/rateLimit'));
 const getRedis = _rateLimit.getRedis;
 const pingRedis = _rateLimit.pingRedis;
@@ -134,6 +136,25 @@ router.post('/api/system/publish-scheduled', async (/** @type {any} */ req, /** 
 });
 
 setInterval(() => publishScheduledJobs(null).catch(() => {}), 60 * 1000).unref();
+
+router.post('/api/system/compliance-check', async (/** @type {any} */ req, /** @type {any} */ res) => {
+  const key = req.headers['x-internal-key'];
+  let authorized = typeof key === 'string' && timingSafeEqualStr(key, INTERNAL_KEY);
+  if (!authorized) {
+    const token = req.cookies.lb_session;
+    const session = token && await db.prepare('SELECT * FROM sessions WHERE session_token=?').get(token);
+    const user = session && await db.prepare('SELECT * FROM users WHERE id=?').get(session.user_id);
+    if (user && user.role === 'ADMIN') authorized = true;
+  }
+  if (!authorized) return sendError(res, 403, 'Admin session or x-internal-key required');
+  const result = await runComplianceSweep();
+  res.json({ ok: true, ...result });
+});
+
+// Once a day is plenty for expiry warnings (30/7/1-day granularity) —
+// unlike the money-critical sweeps above, nothing here needs minute-level
+// freshness.
+setInterval(() => runComplianceSweep().catch(() => {}), 24 * 3600 * 1000).unref();
 
 
 router.post(
