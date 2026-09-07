@@ -27,7 +27,7 @@ async function createJobFromBody(body, req) {
     equipmentType, cargoType, loadingLocation, deliveryLocation,
     importPickupTerminal, importUnloadingLocation, importEmptyReturnLocation,
     exportEmptyPickupLocation, exportLoadingLocation, exportDepositTerminal,
-    scheduledPostAt, requiresSeal, lineItems,
+    scheduledPostAt, requiresSeal, lineItems, cargoValueAed, insuranceOptIn,
   } = body;
 
   // Multi-container-type support: lineItems[0] (when present) becomes the
@@ -164,6 +164,16 @@ async function createJobFromBody(body, req) {
     for (const li of normalizedLineItems.slice(1)) {
       await insertLineItem.run(jobId, li.containerSize, li.containerType, li.count);
     }
+  }
+  // GIT insurance opt-in (Change 20) — declared cargo value + flag at posting.
+  // Binding itself is a separate step (POST /api/jobs/:id/insurance/bind);
+  // this just records the shipper's declared value so quote/bind has it.
+  if (cargoValueAed !== undefined && cargoValueAed !== null && cargoValueAed !== '') {
+    const cv = Number(cargoValueAed);
+    if (!Number.isFinite(cv) || cv <= 0) throw { status: 400, message: 'cargoValueAed must be a positive number' };
+    await db.prepare('UPDATE jobs SET cargo_value_aed=?, insurance_opt_in=? WHERE id=?').run(cv, insuranceOptIn ? 1 : 0, jobId);
+  } else if (insuranceOptIn) {
+    throw { status: 400, message: 'cargoValueAed is required when opting into insurance' };
   }
 
   return await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);

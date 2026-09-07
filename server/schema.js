@@ -790,6 +790,31 @@ module.exports = function initSchema(db) {
   const seedDriverAssociateSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   seedDriverAssociateSetting.run('driver_associate_default_split_bps', '8000');
 
+  // GIT cargo insurance (Change 20) — optional per-job line item. cargo_value
+  // + opt-in captured at posting (see validators/job.schema.js); the policy
+  // row below is created on bind. Premium settlement rides existing rails
+  // (escrow/admin) until Change 30's billing — stated honestly, not implied.
+  addColumn('jobs', 'cargo_value_aed', 'cargo_value_aed REAL');
+  addColumn('jobs', 'insurance_opt_in', 'insurance_opt_in INTEGER NOT NULL DEFAULT 0');
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS job_insurance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+    shipper_id INTEGER NOT NULL REFERENCES users(id),
+    provider TEXT NOT NULL DEFAULT 'internal',
+    cargo_value_aed REAL NOT NULL,
+    premium_aed REAL NOT NULL,
+    coverage_aed REAL NOT NULL,
+    rate_bps INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','CANCELLED','EXPIRED')),
+    policy_ref TEXT,
+    bound_at TEXT NOT NULL DEFAULT (datetime('now')),
+    cancelled_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_job_insurance_shipper ON job_insurance(shipper_id);
+  `);
+  db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('insurance_rate_bps', '35')`).run();
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

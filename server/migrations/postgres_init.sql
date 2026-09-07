@@ -801,4 +801,24 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_doc_storage_path
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_doc_mime_type TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_expiry TEXT;
 
+-- GIT cargo insurance (Change 20) — see server/schema.js.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cargo_value_aed REAL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS insurance_opt_in INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE IF NOT EXISTS job_insurance (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+  shipper_id INTEGER NOT NULL REFERENCES users(id),
+  provider TEXT NOT NULL DEFAULT 'internal',
+  cargo_value_aed REAL NOT NULL,
+  premium_aed REAL NOT NULL,
+  coverage_aed REAL NOT NULL,
+  rate_bps INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE','CANCELLED','EXPIRED')),
+  policy_ref TEXT,
+  bound_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  cancelled_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_job_insurance_shipper ON job_insurance(shipper_id);
+INSERT INTO settings (key, value) VALUES ('insurance_rate_bps', '35') ON CONFLICT (key) DO NOTHING;
+
 COMMIT;
