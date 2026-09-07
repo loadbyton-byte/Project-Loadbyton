@@ -147,7 +147,6 @@ export default function Dashboard() {
         lineItems: extraLineItems.length > 0
           ? [{ containerSize: form.containerSize, containerType: form.containerType, count: Number(form.containerCount) || 1 }, ...extraLineItems.map((li) => ({ ...li, count: Number(li.count) || 1 }))]
           : undefined,
-      });
       }, postJobIdempotencyKeyRef.current);
       const jobId = created.job?.id;
       if (form.packingList && jobId) {
