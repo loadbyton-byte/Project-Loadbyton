@@ -94,7 +94,7 @@ function auth(allowedRoles) {
       }
     }
 
-    if (actingSeatRole === 'DRIVER') {
+    if (actingSeatRole === 'DRIVER' || actingSeatRole === 'DRIVER_ASSOCIATE') {
       const permitted = DRIVER_SEAT_ALLOWED_ROUTES.some((r) => r.method === req.method && r.pattern.test(req.path));
       if (!permitted) return res.status(403).json({ error: 'Driver accounts can only view their assigned job and messages' });
     }

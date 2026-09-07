@@ -604,6 +604,38 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payouts_job_unique ON payouts(job_id);
 
+-- Live location via WhatsApp + DRIVER_ASSOCIATE Phase 1 — see server/schema.js.
+ALTER TABLE location_logs ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'BROWSER';
+
+CREATE TABLE IF NOT EXISTS trip_offers (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  driver_id INTEGER NOT NULL REFERENCES drivers(id),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','EXPIRED')),
+  decline_reason TEXT,
+  offered_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  responded_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_trip_offers_job ON trip_offers(job_id);
+CREATE INDEX IF NOT EXISTS idx_trip_offers_driver ON trip_offers(driver_id);
+
+CREATE TABLE IF NOT EXISTS driver_wallet_entries (
+  id SERIAL PRIMARY KEY,
+  driver_id INTEGER NOT NULL REFERENCES drivers(id),
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  carrier_id INTEGER NOT NULL REFERENCES users(id),
+  gross_amount_aed REAL NOT NULL,
+  split_bps INTEGER NOT NULL,
+  driver_share_aed REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PAID')),
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  paid_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_wallet_entries_driver ON driver_wallet_entries(driver_id);
+
+INSERT INTO settings (key, value) VALUES ('driver_associate_default_split_bps', '8000') ON CONFLICT (key) DO NOTHING;
+
 -- WhatsApp two-way: channel + dedup tracking, and a per-phone 24h
 -- customer-service-window tracker — see server/schema.js.
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'WEB';

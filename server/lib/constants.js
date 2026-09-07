@@ -66,7 +66,12 @@ const DEPOTS = ['JAFZA_DEPOT', 'AL_QUSAIS_DEPOT', 'KHALIFA_DEPOT', 'SHARJAH_DEPO
 // not mutable — account-level notices shouldn't be silenceable.
 const NOTIFICATION_TYPES = ['bid', 'award', 'status', 'payout', 'dispute', 'verification', 'message'];
 
-const SEAT_ROLES = ['OPS', 'FINANCE', 'VIEWER', 'DRIVER'];
+// DRIVER_ASSOCIATE: a pool driver who never bids and never sees the open
+// marketplace — a carrier pushes a specific job as a trip offer they
+// accept/decline over WhatsApp (see routes/whatsapp.routes.js). Distinct
+// from DRIVER (a carrier's own directly-employed roster driver with a web
+// login) — same restricted-seat mechanics, different acquisition model.
+const SEAT_ROLES = ['OPS', 'FINANCE', 'VIEWER', 'DRIVER', 'DRIVER_ASSOCIATE'];
 
 const BID_SORT_COLUMNS = {
   date_desc: 'b.created_at DESC',
