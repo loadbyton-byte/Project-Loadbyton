@@ -21,7 +21,7 @@ export default function VerifyEmail() {
   }, [token, refresh]);
 
   return (
-    <div className="container-page flex min-h-[calc(100vh-4rem)] items-center justify-center py-16">
+    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-16">
       <Card className="w-full max-w-md p-8 text-center">
         <p className="font-display text-xl font-semibold text-ink">Verify your email</p>
         {status === 'checking' && <p className="mt-3 text-sm text-ink-muted">Confirming…</p>}

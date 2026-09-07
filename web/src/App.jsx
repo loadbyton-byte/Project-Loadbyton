@@ -63,7 +63,7 @@ function ScrollToTop() {
 
 function FullScreenSpinner() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas">
+    <div className="flex min-h-dvh items-center justify-center bg-canvas">
       <Spinner size={28} className="text-brand-primary" />
     </div>
   );

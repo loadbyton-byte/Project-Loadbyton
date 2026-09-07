@@ -123,7 +123,7 @@ function ShellInner({ children }) {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
+    <div className="flex min-h-dvh flex-col bg-canvas">
       {user?.impersonating && (
         <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-center text-xs font-medium text-white" style={{ background: 'var(--status-danger)' }}>
           <span>Impersonating {user.profile?.company_name || user.email} — logged to the audit trail.</span>
@@ -158,9 +158,13 @@ function ShellInner({ children }) {
           works well there. */}
       <header
         className="sticky top-0 z-40 border-b backdrop-blur-md md:hidden"
-        style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)' }}
+        style={{
+          borderColor: 'var(--border-subtle)',
+          backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)',
+          paddingTop: 'env(safe-area-inset-top)',
+        }}
       >
-        <div className="flex h-14 items-center justify-between px-3">
+        <div className="flex h-14 items-center justify-between px-3" style={{ paddingLeft: 'max(0.75rem, env(safe-area-inset-left))', paddingRight: 'max(0.75rem, env(safe-area-inset-right))' }}>
           <button
             onClick={() => setDrawerOpen(true)}
             className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
@@ -266,7 +270,7 @@ function ShellInner({ children }) {
             navByRole's per-role link data, no new routing logic. */}
         {user && (
           <aside
-            className="hidden md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col md:border-r"
+            className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:flex-col md:border-r"
             style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}
           >
             <div className="flex h-14 items-center border-b px-5" style={{ borderColor: 'var(--border-subtle)' }}>

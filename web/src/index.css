@@ -231,6 +231,22 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* iOS Safari: removes the grey flash on tap for every interactive element —
+   :focus-visible above already covers real keyboard/a11y focus, so this
+   only affects the tap-flash, not accessibility. */
+a, button, [role="button"], input, textarea, select, summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Any container that scrolls its own content (chat panels, modal bodies,
+   the horizontal-scroll wrappers used for wide tables) needs this for
+   momentum scrolling on iOS Safari — without it, scrolling inside a fixed-
+   height container feels stuck/janky rather than the native inertial feel. */
+.overflow-y-auto, .overflow-x-auto, .overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
 h1, h2, h3, h4, .font-display {
   font-family: 'Geist', ui-sans-serif, sans-serif;
 }

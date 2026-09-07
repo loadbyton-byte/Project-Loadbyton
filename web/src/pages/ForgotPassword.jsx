@@ -25,7 +25,7 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100vh-4rem)] items-center justify-center py-16">
+    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-16">
       <Card className="w-full max-w-md p-8">
         <p className="font-display text-xl font-semibold text-ink">Reset your password</p>
         <p className="mt-1 text-sm text-ink-muted">We'll email you a link to set a new one.</p>
