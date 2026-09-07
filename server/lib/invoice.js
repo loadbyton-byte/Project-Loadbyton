@@ -54,6 +54,17 @@ async function nextInvoiceNumber(db) {
 // Issues an invoice for a job's payout if one doesn't already exist for it
 // (idempotent — safe to call from any release path without double-invoicing
 // a job that somehow gets touched twice).
+//
+// nextInvoiceNumber() computes the "next" number from a plain COUNT, not an
+// atomic sequence — two jobs completing at the same instant can compute the
+// same candidate number. invoices.invoice_number's UNIQUE constraint means
+// a genuine duplicate can never be persisted (the DB rejects the second
+// INSERT outright), but without a retry that just turned into a silent
+// invoice-issuance failure for one of the two jobs. Retry a few times with
+// a freshly recomputed number on exactly that failure — a real invoice
+// number collision self-heals; any other error still propagates.
+const MAX_INVOICE_NUMBER_RETRIES = 5;
+
 async function issueInvoice(db, jobId) {
   const existing = await db.prepare('SELECT * FROM invoices WHERE job_id=?').get(jobId);
   if (existing) return existing;
@@ -64,33 +75,44 @@ async function issueInvoice(db, jobId) {
   const carrierProfile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(payout.carrier_id);
 
   const { taxableAed, vatAed, totalAed } = vatBreakdown(payout.platform_fee_aed);
-  const invoiceNumber = await nextInvoiceNumber(db);
   const supplierTrn = process.env.PLATFORM_TRN || null;
 
-  const result = await db
-    .prepare(
-      `INSERT INTO invoices
-         (invoice_number, payout_id, job_id, carrier_id, supplier_trn, customer_trn,
-          gross_aed, commission_aed, vat_rate_bps, taxable_aed, vat_aed, total_aed)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-       RETURNING id`
-    )
-    .run(
-      invoiceNumber,
-      payout.id,
-      jobId,
-      payout.carrier_id,
-      supplierTrn,
-      carrierProfile ? decryptField(carrierProfile.trn_number) : null,
-      payout.gross_aed,
-      payout.platform_fee_aed,
-      VAT_RATE_BPS,
-      taxableAed,
-      vatAed,
-      totalAed
-    );
-
-  return db.prepare('SELECT * FROM invoices WHERE id=?').get(Number(result.lastInsertRowid));
+  for (let attempt = 1; attempt <= MAX_INVOICE_NUMBER_RETRIES; attempt++) {
+    const invoiceNumber = await nextInvoiceNumber(db);
+    try {
+      const result = await db
+        .prepare(
+          `INSERT INTO invoices
+             (invoice_number, payout_id, job_id, carrier_id, supplier_trn, customer_trn,
+              gross_aed, commission_aed, vat_rate_bps, taxable_aed, vat_aed, total_aed)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+           RETURNING id`
+        )
+        .run(
+          invoiceNumber,
+          payout.id,
+          jobId,
+          payout.carrier_id,
+          supplierTrn,
+          carrierProfile ? decryptField(carrierProfile.trn_number) : null,
+          payout.gross_aed,
+          payout.platform_fee_aed,
+          VAT_RATE_BPS,
+          taxableAed,
+          vatAed,
+          totalAed
+        );
+      return db.prepare('SELECT * FROM invoices WHERE id=?').get(Number(result.lastInsertRowid));
+    } catch (e) {
+      const isNumberCollision = e.message && /UNIQUE|duplicate key/i.test(e.message) && /invoice_number/i.test(e.message);
+      if (!isNumberCollision || attempt === MAX_INVOICE_NUMBER_RETRIES) throw e;
+      // Another concurrent call already took this number — loop and
+      // recompute a fresh one from the now-updated count.
+    }
+  }
+  // Unreachable (the loop always returns or throws), but keeps this
+  // function's return type honest for any static analysis reading it.
+  return null;
 }
 
 function renderInvoiceHtml({ invoice, job, carrierProfile }) {

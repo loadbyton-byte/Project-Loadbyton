@@ -19,10 +19,17 @@ async function processOutboxBatch(limit = 20) {
 
   for (const ev of events) {
     try {
+      // Atomic claim: this worker also runs on its own setInterval per
+      // process (below), with no distributed lock — the WHERE clause
+      // repeats the SELECT's status='PENDING' guard so a second instance
+      // that already claimed and processed this same event between the
+      // SELECT and here finds nothing left to update (0 changes) instead
+      // of re-processing it.
+      const claim = await db.prepare(`UPDATE outbox_events SET status='PROCESSED', processed_at=? WHERE id=? AND status='PENDING'`).run(new Date().toISOString(), ev.id);
+      if (!claim.changes) continue;
       // Future: dispatch to real handlers based on ev.event_type
       // e.g., if (ev.event_type === 'JOB_AWARDED') await sendAwardNotifications(JSON.parse(ev.payload))
       logger.info('outbox_processed', { eventId: ev.id, type: ev.event_type, aggregate: `${ev.aggregate_type}:${ev.aggregate_id}` });
-      await db.prepare(`UPDATE outbox_events SET status='PROCESSED', processed_at=? WHERE id=?`).run(new Date().toISOString(), ev.id);
     } catch (e) {
       logger.error('outbox_failed', { eventId: ev.id, error: e.message });
       try {

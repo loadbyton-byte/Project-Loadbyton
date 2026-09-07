@@ -12,7 +12,7 @@ const jobRepository = require('../repositories/job.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const bidRepository = require('../repositories/bid.repository');
 const { TRANSITIONS } = require('../lib/constants');
-const { getSettings, writeAudit, notify } = require('../lib/helpers');
+const { getSettings, writeAudit, notify, notifyAdmins } = require('../lib/helpers');
 const { issueInvoice } = require('../lib/invoice');
 const { executePayoutAsync, refundJobAsync } = require('./payout.service');
 
@@ -115,7 +115,17 @@ async function updateJobStatus(jobId, nextStatus, req) {
       return true;
     });
     if (released) {
-      try { await issueInvoice(db, id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${id}:`, e); }
+      // issueInvoice() already retries a colliding invoice number
+      // internally (server/lib/invoice.js) — a failure reaching here is a
+      // real, non-self-healing problem. Previously this was only
+      // console.error'd, so a completed job could silently end up with no
+      // invoice at all, visible nowhere an admin would actually see it.
+      try {
+        await issueInvoice(db, id);
+      } catch (e) {
+        console.error(`[invoice] issueInvoice failed for job ${id}:`, e);
+        try { await notifyAdmins('Invoice issuance failed', `Job ${job.job_code} (id ${id}) completed and released, but its invoice failed to issue: ${e.message}`, id, 'system'); } catch {}
+      }
       if (job.carrier_id) {
         try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
       }
@@ -239,12 +249,25 @@ async function getJob(jobId, user) {
     .all(job.id);
   const isOwnerShipper = user.id === job.shipper_id;
   const isAdmin = user.role === 'ADMIN';
-  if (job.status === 'OPEN' && !isOwnerShipper && !isAdmin) {
-    bids = bids.map((b) =>
-      b.carrier_id === user.id
-        ? b
-        : { ...b, amount_aed: null, eta_at: null, eta_minutes: null, driver_name: null, notes: null, carrier_company: null, masked: true }
-    );
+  if (!isOwnerShipper && !isAdmin) {
+    // Driver identity/contact must never leak to a carrier who isn't the
+    // bid's own owner, regardless of job status — previously this only
+    // masked driver_name (and never driver_phone at all, in any status)
+    // while job.status === 'OPEN', so once a job left OPEN (e.g. AWARDED)
+    // a losing bidder could call this endpoint and see the winning bid's
+    // driver_name/driver_phone in full, since isParticipantOrBidder()
+    // grants view access to any carrier who ever placed a bid, win or
+    // lose. Commercial fields (amount_aed, carrier_company) are useful,
+    // non-sensitive market information once bidding has closed, so those
+    // stay visible post-OPEN — only driver identity/contact stays masked.
+    const isOpenPhase = job.status === 'OPEN';
+    bids = bids.map((b) => {
+      if (b.carrier_id === user.id) return b;
+      const driverMasked = { ...b, driver_name: null, driver_phone: null, notes: null };
+      return isOpenPhase
+        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, masked: true }
+        : driverMasked;
+    });
   }
   const shipperProfile = await db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
   // Driver info for whoever can already see this job (shipper/carrier/admin
@@ -264,7 +287,22 @@ async function getJob(jobId, user) {
       };
     }
   }
-  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null, driver_info: driverInfo };
+  // The real, currently-live version of the driver-identity leak: job.*
+  // (a plain `SELECT *`, via jobRepository.findById) includes
+  // assigned_driver_name/assigned_driver_phone directly, and canViewJob()
+  // grants access to any carrier who ever placed a bid on this job, win or
+  // lose (isParticipantOrBidder has no status/outcome check on the bid).
+  // Only the shipper, the actually-awarded carrier, and admin should ever
+  // see who the winning carrier's driver is — a losing bidder gets these
+  // fields stripped, same as the bids[]-level masking above.
+  const isAwardedCarrier = user.id === job.carrier_id;
+  const driverIdentityVisible = isOwnerShipper || isAdmin || isAwardedCarrier;
+  const jobWithRating = {
+    ...job,
+    ...(driverIdentityVisible ? null : { assigned_driver_name: null, assigned_driver_phone: null }),
+    shipper_rating: shipperProfile ? shipperProfile.rating_avg : null,
+    driver_info: driverIdentityVisible ? driverInfo : null,
+  };
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
   const payout = await payoutRepository.findByJobId(job.id) || null;

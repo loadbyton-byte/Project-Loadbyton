@@ -78,6 +78,15 @@ export default function Dashboard() {
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [showForm]);
 
+  // A fresh key per time the form is opened for a new job — reused across
+  // retries of the same submit attempt (e.g. after a network error, before
+  // the form has closed) so the backend's idempotency middleware can
+  // replay the first response instead of creating a duplicate job.
+  const postJobIdempotencyKeyRef = React.useRef(null);
+  useEffect(() => {
+    if (showForm) postJobIdempotencyKeyRef.current = crypto.randomUUID();
+  }, [showForm]);
+
   function loadStats() {
     api.analytics().then((d) => setAnalytics(d.analytics)).catch(() => {});
     api.listTemplates().then((d) => setTemplates(d.templates.slice(0, 3))).catch(() => {});
@@ -113,7 +122,7 @@ export default function Dashboard() {
         containerCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.containerCount) || 1,
         truckCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.truckCount) || 1,
         scheduledPostAt: form.scheduleForLater && form.scheduledPostAt ? new Date(form.scheduledPostAt).toISOString() : undefined,
-      });
+      }, postJobIdempotencyKeyRef.current);
       const jobId = created.job?.id;
       if (form.packingList && jobId) {
         const b64 = await new Promise((resolve, reject) => {
