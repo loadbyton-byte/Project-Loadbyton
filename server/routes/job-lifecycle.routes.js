@@ -39,6 +39,7 @@ const DOC_TYPES = /** @type {any} */ (constantsMod).DOC_TYPES;
 const STATUS_ORDER = /** @type {any} */ (constantsMod).STATUS_ORDER;
 const TRANSITIONS = /** @type {any} */ (constantsMod).TRANSITIONS;
 const DISPUTABLE_STATUSES = /** @type {any} */ (constantsMod).DISPUTABLE_STATUSES;
+const ANCILLARY_CHARGE_TYPES = /** @type {any} */ (constantsMod).ANCILLARY_CHARGE_TYPES;
 /** @type {any} */
 const helpersMod = require('../lib/helpers');
 const resolveUploadedFile = /** @type {any} */ (helpersMod).resolveUploadedFile;
@@ -114,7 +115,25 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
     throw e;
   }
   const bidId = Number(/** @type {any} */ (result).lastInsertRowid);
-  await writeAudit(req, { userId: req.actorId, action: 'BID_CREATE', details: `Bid AED ${amount} on ${job.job_code}`, entityType: 'bid', entityId: bidId });
+
+  // Anticipated ancillary charges (Salik, e-token, demurrage, inspection
+  // waiting) declared up front, as part of the bid itself, not discovered
+  // only after the shipper picks a bid to negotiate with. Proposed by the
+  // carrier at bid time -> agreed_by_carrier is already true; the shipper
+  // reviews and agrees (or proposes their own) during the pre-award
+  // discussion (POST /api/bids/:id/ancillary-charges/:chargeId/agree).
+  const bidCharges = Array.isArray(b.ancillaryCharges) ? b.ancillaryCharges : [];
+  for (const c of bidCharges) {
+    if (!c || !ANCILLARY_CHARGE_TYPES.includes(c.chargeType)) continue;
+    const chargeAmount = Number(c.amountAed);
+    if (!chargeAmount || chargeAmount <= 0) continue;
+    await db.prepare(
+      `INSERT INTO bid_ancillary_charges (bid_id, charge_type, amount_aed, notes, proposed_by, agreed_by_shipper, agreed_by_carrier)
+       VALUES (?,?,?,?,?,0,1)`
+    ).run(bidId, c.chargeType, chargeAmount, c.notes || null, req.actorId);
+  }
+
+  await writeAudit(req, { userId: req.actorId, action: 'BID_CREATE', details: `Bid AED ${amount} on ${job.job_code}${bidCharges.length ? ` (+${bidCharges.length} ancillary charge(s))` : ''}`, entityType: 'bid', entityId: bidId });
   await notify(job.shipper_id, 'New bid received', `${req.user.profile.company_name} bid AED ${amount} on ${job.job_code}.`, job.id, 'bid');
   const bid = /** @type {any} */ (await db.prepare('SELECT * FROM bids WHERE id=?').get(bidId));
   res.status(201).json({ bid });

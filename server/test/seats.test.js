@@ -23,7 +23,7 @@ test('seats: OPS can operate the org, VIEWER cannot, deactivation is immediate',
   const rootEmail = `seat-root-${Date.now()}@example.ae`;
   const registered = await root.post('/api/auth/register', {
     email: rootEmail, password: 'demo1234', role: 'SHIPPER', companyName: 'Seat Test Shipping',
-    phone: '+971501112233', trnNumber: '100234567800003', tradeLicenseNumber: 'CN-1122334',
+    phone: '+971501112233', trnNumber: '100234567800003', tradeLicenseNumber: 'CN-1122334', agreedToTerms: true,
   });
   assert.equal(registered.status, 201, registered.raw);
   const rootId = registered.body.user.id;

@@ -259,14 +259,44 @@ async function getJob(jobId, user) {
        WHERE job_id=? ORDER BY amount_aed ASC`
     )
     .all(job.id);
+
+  // Ancillary charges (Salik/e-token/demurrage/inspection-waiting) are now
+  // declared at bid time and reviewed by the shipper alongside each bid's
+  // price — attach them here so the shipper sees a bidder's full expected
+  // cost in one place, rather than needing a separate call per bid.
+  if (bids.length) {
+    const allCharges = await db
+      .prepare(`SELECT * FROM bid_ancillary_charges WHERE bid_id IN (${bids.map(() => '?').join(',')}) ORDER BY created_at ASC`)
+      .all(...bids.map((b) => b.id));
+    const chargesByBid = new Map();
+    for (const c of allCharges) {
+      if (!chargesByBid.has(c.bid_id)) chargesByBid.set(c.bid_id, []);
+      chargesByBid.get(c.bid_id).push(c);
+    }
+    bids = bids.map((b) => ({ ...b, ancillary_charges: chargesByBid.get(b.id) || [] }));
+  }
+
   const isOwnerShipper = user.id === job.shipper_id;
   const isAdmin = user.role === 'ADMIN';
-  if (job.status === 'OPEN' && !isOwnerShipper && !isAdmin) {
-    bids = bids.map((b) =>
-      b.carrier_id === user.id
-        ? b
-        : { ...b, amount_aed: null, eta_at: null, eta_minutes: null, driver_name: null, notes: null, carrier_company: null, masked: true }
-    );
+  if (!isOwnerShipper && !isAdmin) {
+    // Driver identity/contact must never leak to a carrier who isn't the
+    // bid's own owner, regardless of job status (see the fix shipped
+    // separately for this — bringing the same logic in here since this
+    // branch predates it and this function is being touched anyway).
+    // Price, ancillary charges, and driver identity are ALL masked from
+    // every other bidder while the job is still OPEN — "no bidder should
+    // watch other bidders' price and everything, docs etc." Once the job
+    // leaves OPEN, price/company stay visible as useful market
+    // information, but driver identity/contact stays masked forever for
+    // anyone but the shipper, the actually-awarded carrier, or admin.
+    const isOpenPhase = job.status === 'OPEN';
+    bids = bids.map((b) => {
+      if (b.carrier_id === user.id) return b;
+      const driverMasked = { ...b, driver_name: null, driver_phone: null, notes: null };
+      return isOpenPhase
+        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, ancillary_charges: [], masked: true }
+        : driverMasked;
+    });
   }
   const shipperProfile = await db.prepare('SELECT rating_avg FROM profiles WHERE user_id=?').get(job.shipper_id);
   // Driver info for whoever can already see this job (shipper/carrier/admin
@@ -286,7 +316,22 @@ async function getJob(jobId, user) {
       };
     }
   }
-  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null, driver_info: driverInfo };
+  // The real, currently-live version of the driver-identity leak: job.*
+  // (a plain `SELECT *`, via jobRepository.findById) includes
+  // assigned_driver_name/assigned_driver_phone directly, and canViewJob()
+  // grants access to any carrier who ever placed a bid on this job, win or
+  // lose (isParticipantOrBidder has no status/outcome check on the bid).
+  // Only the shipper, the actually-awarded carrier, and admin should ever
+  // see who the winning carrier's driver is — a losing bidder gets these
+  // fields stripped, same as the bids[]-level masking above.
+  const isAwardedCarrier = user.id === job.carrier_id;
+  const driverIdentityVisible = isOwnerShipper || isAdmin || isAwardedCarrier;
+  const jobWithRating = {
+    ...job,
+    ...(driverIdentityVisible ? null : { assigned_driver_name: null, assigned_driver_phone: null }),
+    shipper_rating: shipperProfile ? shipperProfile.rating_avg : null,
+    driver_info: driverIdentityVisible ? driverInfo : null,
+  };
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
   const payout = await payoutRepository.findByJobId(job.id) || null;
