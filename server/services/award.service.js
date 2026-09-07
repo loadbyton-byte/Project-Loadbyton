@@ -33,6 +33,20 @@ async function awardJob(req, res, jobId, bidId) {
   const preBid = await db.prepare('SELECT * FROM bids WHERE id=? AND job_id=?').get(bidId, jobId);
   if (!preBid) { res.status(404).json({ error: 'Bid not found' }); return; }
 
+  // Confirm-terms gate — a real pre-award negotiation/ancillary-charges
+  // workflow now exists (bid_negotiations, bid_ancillary_charges,
+  // POST /api/bids/:id/confirm-terms, all in server/routes/bids.routes.js).
+  // A shipper can still skip it outright for a simple job with nothing to
+  // discuss (skipNegotiation must be an explicit, visible choice on the
+  // frontend, not a silent default) — this is purely an added precondition
+  // before the existing transaction below; nothing inside that transaction
+  // changes.
+  const skipNegotiation = !!(req.body && req.body.skipNegotiation);
+  if (!preBid.terms_confirmed_at && !skipNegotiation) {
+    res.status(409).json({ error: 'Terms not yet confirmed for this bid — discuss and confirm terms first, or explicitly skip negotiation.' });
+    return;
+  }
+
   const { commission_rate_bps } = await getSettings();
   const commissionRate = commission_rate_bps / 10000;
   const agreedPrice = preBid.amount_aed;

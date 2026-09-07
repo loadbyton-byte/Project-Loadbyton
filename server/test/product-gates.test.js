@@ -35,7 +35,7 @@ const VALID = {
 };
 
 test('signup rejects non-UAE phone, TRN, and trade licence formats', async () => {
-  const base = { email: uniqueEmail('bad'), password: 'demo1234', role: 'SHIPPER', companyName: 'Bad Data Co' };
+  const base = { email: uniqueEmail('bad'), password: 'demo1234', role: 'SHIPPER', companyName: 'Bad Data Co', agreedToTerms: true };
 
   const noPhone = await makeClient(server.baseUrl).post('/api/auth/register', { ...base, phone: '+971 4 221 5566' });
   assert.equal(noPhone.status, 400, 'a landline must not pass UAE mobile validation');
@@ -52,7 +52,7 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   const client = makeClient(server.baseUrl);
   const registered = await client.post('/api/auth/register', {
     email, password: 'demo1234', role: 'CARRIER', companyName: 'Pending Haulage Co',
-    phone: VALID.phone, trnNumber: VALID.trn, tradeLicenseNumber: VALID.licence,
+    phone: VALID.phone, trnNumber: VALID.trn, tradeLicenseNumber: VALID.licence, agreedToTerms: true,
   });
   assert.equal(registered.status, 201, registered.raw);
   assert.equal(registered.body.user.account_approval_status, 'PENDING', 'a fresh registration must be PENDING, not auto-approved');
@@ -162,7 +162,7 @@ test('documents are private until the bid is confirmed; uploads are for parties 
 
   // After the shipper confirms the winning bid, the carrier sees the documents.
   const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS' });
-  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id });
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
 
   const carrierViewAfter = await carrier.get(`/api/jobs/${jobId}`);
@@ -204,7 +204,7 @@ test('driver details are not collected at bid time and are required before PICKE
   assert.equal(bidRes.body.bid.driver_name, null);
   assert.equal(bidRes.body.bid.driver_phone, null);
 
-  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id });
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
   assert.equal(award.body.job.assigned_driver_name, null, 'award must not bind a driver');
 

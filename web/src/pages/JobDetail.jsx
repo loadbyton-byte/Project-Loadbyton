@@ -75,6 +75,16 @@ export default function JobDetail() {
   const [busy, setBusy] = useState(false);
   const [editingJob, setEditingJob] = useState(false);
   const [awardConfirm, setAwardConfirm] = useState(null);
+  // Pre-award negotiation/ancillary-charges state — award.service.js now
+  // requires this bid's terms_confirmed_at to be set (or an explicit
+  // skipNegotiation) before it will award, so this modal is where that
+  // actually happens instead of a single-click award.
+  const [negotiationMessages, setNegotiationMessages] = useState([]);
+  const [ancillaryCharges, setAncillaryCharges] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [newChargeType, setNewChargeType] = useState('SALIK');
+  const [newChargeAmount, setNewChargeAmount] = useState('');
+  const [negotiationBusy, setNegotiationBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -170,10 +180,77 @@ export default function JobDetail() {
     }
   }
 
+  async function openAwardFlow(b) {
+    setAwardConfirm(b);
+    setNegotiationMessages([]);
+    setAncillaryCharges([]);
+    try {
+      const [neg, charges] = await Promise.all([api.getBidNegotiation(b.id), api.getAncillaryCharges(b.id)]);
+      setNegotiationMessages(neg.messages || []);
+      setAncillaryCharges(charges.charges || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function sendNegotiationMessage() {
+    if (!newMessage.trim()) return;
+    setNegotiationBusy(true);
+    try {
+      const res = await api.postBidNegotiation(awardConfirm.id, newMessage.trim());
+      setNegotiationMessages(res.messages || []);
+      setNewMessage('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setNegotiationBusy(false);
+    }
+  }
+
+  async function proposeCharge() {
+    const amount = Number(newChargeAmount);
+    if (!amount || amount <= 0) return setError('Enter a valid charge amount');
+    setNegotiationBusy(true);
+    try {
+      await api.proposeAncillaryCharge(awardConfirm.id, newChargeType, amount);
+      const charges = await api.getAncillaryCharges(awardConfirm.id);
+      setAncillaryCharges(charges.charges || []);
+      setNewChargeAmount('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setNegotiationBusy(false);
+    }
+  }
+
+  async function agreeCharge(chargeId) {
+    setNegotiationBusy(true);
+    try {
+      await api.agreeAncillaryCharge(awardConfirm.id, chargeId);
+      const charges = await api.getAncillaryCharges(awardConfirm.id);
+      setAncillaryCharges(charges.charges || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setNegotiationBusy(false);
+    }
+  }
+
+  const allChargesAgreed = ancillaryCharges.every((c) => c.agreed_by_shipper && c.agreed_by_carrier);
+
+  function skipAndAward() {
+    const bid = awardConfirm;
+    setAwardConfirm(null);
+    act(() => api.awardJob(job.id, bid.id, { skipNegotiation: true }));
+  }
+
   function confirmAward() {
     const bid = awardConfirm;
     setAwardConfirm(null);
-    act(() => api.awardJob(job.id, bid.id));
+    act(async () => {
+      await api.confirmBidTerms(bid.id);
+      await api.awardJob(job.id, bid.id);
+    });
   }
 
   return (
@@ -186,29 +263,84 @@ export default function JobDetail() {
           aria-label="Confirm award"
           onClick={(e) => { if (e.target === e.currentTarget) setAwardConfirm(null); }}
         >
-          <div className="w-full max-w-md rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
+          <div className="w-full max-w-lg rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)', maxHeight: '90vh', overflowY: 'auto' }}>
             <Card className="border-0 shadow-none">
               <Card.Header>
                 <Card.Title className="flex items-center gap-2">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>
-                  Award this bid?
+                  Discuss &amp; award this bid
                 </Card.Title>
               </Card.Header>
               <Card.Content>
                 <p className="text-sm text-ink">
-                  You're about to award <strong>{formatAED(awardConfirm.amount_aed)}</strong> to{' '}
+                  <strong>{formatAED(awardConfirm.amount_aed)}</strong> from{' '}
                   <strong>{awardConfirm.carrier_company || 'this carrier'}</strong>.
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
-                  <li>Every other bid on this job will be rejected</li>
+                  <li>Every other bid on this job will be rejected once assigned</li>
                   <li>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</li>
                   <li>Funds move into escrow and the job moves to "Awarded"</li>
                 </ul>
+
+                {/* Ancillary charges — Salik, e-token, demurrage, inspection
+                    waiting — each needs BOTH sides to agree before terms
+                    can be confirmed. */}
+                <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Ancillary charges</p>
+                  {ancillaryCharges.length === 0 && <p className="mt-1 text-sm text-ink-muted">None proposed yet.</p>}
+                  <ul className="mt-2 space-y-1.5">
+                    {ancillaryCharges.map((c) => (
+                      <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                        <span>{c.charge_type} — {formatAED(c.amount_aed)}</span>
+                        {c.agreed_by_shipper && c.agreed_by_carrier ? (
+                          <Badge color="success">Agreed</Badge>
+                        ) : !c.agreed_by_shipper ? (
+                          <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
+                        ) : (
+                          <Badge color="neutral">Awaiting carrier</Badge>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2 flex gap-2">
+                    <Select value={newChargeType} onChange={(e) => setNewChargeType(e.target.value)} className="text-sm">
+                      <option value="SALIK">Salik</option>
+                      <option value="ETOKEN">E-Token</option>
+                      <option value="DEMURRAGE">Demurrage/Waiting</option>
+                      <option value="INSPECTION_WAITING">Inspection waiting</option>
+                      <option value="OTHER">Other</option>
+                    </Select>
+                    <Input type="number" min="1" placeholder="AED" value={newChargeAmount} onChange={(e) => setNewChargeAmount(e.target.value)} className="w-24" />
+                    <Button size="sm" variant="ghost" onClick={proposeCharge} loading={negotiationBusy}>Propose</Button>
+                  </div>
+                </div>
+
+                {/* Negotiation thread — pre-award commercial chat on this
+                    specific bid, separate from the post-award job chat. */}
+                <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Discuss with this carrier</p>
+                  <div className="mt-2 max-h-32 space-y-1.5 overflow-y-auto text-sm">
+                    {negotiationMessages.length === 0 && <p className="text-ink-muted">No messages yet.</p>}
+                    {negotiationMessages.map((m) => (
+                      <p key={m.id} className="rounded-md px-2 py-1" style={{ background: 'var(--surface-container)' }}>{m.message}</p>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="e.g. Any Salik charges expected?" className="flex-1" />
+                    <Button size="sm" variant="ghost" onClick={sendNegotiationMessage} loading={negotiationBusy}>Send</Button>
+                  </div>
+                </div>
+
                 <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
               </Card.Content>
-              <div className="flex justify-end gap-2 px-6 pb-6">
+              <div className="flex flex-wrap justify-end gap-2 px-6 pb-6">
                 <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
-                <Button variant="accent" onClick={confirmAward} loading={busy}>Confirm award</Button>
+                {ancillaryCharges.length === 0 && (
+                  <Button variant="ghost" onClick={skipAndAward} loading={busy}>No charges — award now</Button>
+                )}
+                <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed}>
+                  Confirm terms &amp; assign
+                </Button>
               </div>
             </Card>
           </div>
@@ -386,7 +518,7 @@ export default function JobDetail() {
                     <div className="flex shrink-0 items-center gap-3">
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>
                       {isShipper && job.status === 'OPEN' && b.status === 'PENDING' && (
-                        <Button variant="accent" onClick={() => setAwardConfirm(b)} loading={busy}>Award</Button>
+                        <Button variant="accent" onClick={() => openAwardFlow(b)} loading={busy}>Discuss &amp; award</Button>
                       )}
                     </div>
                   </div>
@@ -451,8 +583,16 @@ export default function JobDetail() {
           {['PICKED_UP','IN_TRANSIT','DELIVERED'].includes(job.status) && (
             <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} deliveryLat={job.delivery_lat} deliveryLng={job.delivery_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
           )}
-          {/* Phase 4: EIR for carrier at pickup */}
-          {isAwardedCarrier && ['PICKED_UP','IN_TRANSIT'].includes(job.status) && <div className="mb-6"><EirChecklist jobId={job.id} onDone={load} /></div>}
+          {/* Phase 4: EIR for carrier — captured at BOTH pickup and
+              delivery now, not just pickup, so a damage/shortage dispute
+              has evidence from both ends of the journey. Each stage only
+              renders until its own photos exist. */}
+          {isAwardedCarrier && ['PICKED_UP','IN_TRANSIT'].includes(job.status) && !job.eir_photos_pickup && (
+            <div className="mb-6"><EirChecklist jobId={job.id} stage="pickup" requiresSeal={!!job.requires_seal} onDone={load} /></div>
+          )}
+          {isAwardedCarrier && job.status === 'DELIVERED' && !job.eir_photos_delivery && (
+            <div className="mb-6"><EirChecklist jobId={job.id} stage="delivery" requiresSeal={!!job.requires_seal} onDone={load} /></div>
+          )}
           {isAwardedCarrier && BACKLOAD_ELIGIBLE_STATUSES.includes(job.status) && <BackloadMatches jobId={job.id} />}
 
           {job.status === 'DISPUTED' && (isShipper || isAwardedCarrier) && (

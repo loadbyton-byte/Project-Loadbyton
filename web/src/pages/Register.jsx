@@ -219,6 +219,19 @@ export default function Register() {
               <Label htmlFor="referral">Referral code (optional)</Label>
               <Input id="referral" value={form.referralCode} onChange={(e) => setForm({ ...form, referralCode: e.target.value })} placeholder="CAR-EMIRATES" />
             </div>
+            <label className="flex items-start gap-2 text-sm text-ink-secondary">
+              <input
+                type="checkbox"
+                required
+                checked={form.agreedToTerms || false}
+                onChange={(e) => setForm({ ...form, agreedToTerms: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                I have read and agree to the{' '}
+                <Link to="/terms" target="_blank" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</Link>
+              </span>
+            </label>
             {error && (
               <p className="rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>
                 {error}

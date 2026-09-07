@@ -632,6 +632,94 @@ module.exports = function initSchema(db) {
   seedSetting.run('auto_release_hours', '24');
 
   // ---------------------------------------------------------------------------
+  // Terms & Conditions acceptance — a readable Terms page (web/src/pages/
+  // Terms.jsx) existed with zero acceptance-recording mechanism anywhere.
+  // context distinguishes a one-time SIGNUP acceptance from a per-JOB one
+  // (job_id set only for the latter). terms_version is a plain string
+  // (server/lib/constants.js's TERMS_VERSION) bumped by hand whenever
+  // Terms.jsx's content materially changes — comparing a user's latest
+  // acceptance for a context against the current version is what lets a
+  // returning user skip re-accepting until it actually changes.
+  // ---------------------------------------------------------------------------
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS terms_acceptances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    terms_version TEXT NOT NULL,
+    context TEXT NOT NULL CHECK (context IN ('SIGNUP','JOB')),
+    job_id INTEGER REFERENCES jobs(id),
+    ip_address TEXT,
+    accepted_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_terms_acceptances_user ON terms_acceptances(user_id, context);
+  `);
+
+  // ---------------------------------------------------------------------------
+  // Pre-award negotiation + itemized ancillary charges + haulier code/token.
+  // Deliberately a SEPARATE table from messages/message_threads, which are
+  // scoped to jobs.carrier_id and only make sense once a carrier is
+  // assigned — pre-award negotiation is commercial back-and-forth on a
+  // specific bid, before any carrier is chosen, a different semantic than
+  // post-award job chat. bid_ancillary_charges' two agreed_by flags require
+  // BOTH the shipper and the carrier to independently confirm a charge line
+  // before it counts as agreed — neither side can unilaterally mark it so.
+  // ---------------------------------------------------------------------------
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS bid_negotiations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+    sender_id INTEGER NOT NULL REFERENCES users(id),
+    message TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_bid_negotiations_bid ON bid_negotiations(bid_id);
+
+  CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+    charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+    amount_aed REAL NOT NULL,
+    notes TEXT,
+    proposed_by INTEGER NOT NULL REFERENCES users(id),
+    agreed_by_shipper INTEGER NOT NULL DEFAULT 0,
+    agreed_by_carrier INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
+  `);
+  addColumn('bids', 'terms_confirmed_at', 'terms_confirmed_at TEXT');
+
+  // Haulier code/token — modeled as free text, not tied to DP World's
+  // specific process, so it still works for an Abu Dhabi Ports or Sharjah
+  // Ports job where the actual mechanism differs (see the register's
+  // Change 6 note: the marketing "whole UAE" positioning must hold up in
+  // practice, not just in copy).
+  addColumn('jobs', 'haulier_code', 'haulier_code TEXT');
+  addColumn('jobs', 'haulier_token', 'haulier_token TEXT');
+  addColumn('jobs', 'haulier_token_set_by', 'haulier_token_set_by INTEGER REFERENCES users(id)');
+  addColumn('jobs', 'haulier_token_set_at', 'haulier_token_set_at TEXT');
+
+  // EIR: a seal *number* (the actual verifiable fact in a damage/tamper
+  // dispute — the photo alone only proves a seal existed, not which one)
+  // captured alongside the existing photo checklist, plus splitting the
+  // single eir_photos column into pickup/delivery stages so both ends of
+  // the journey are documented, not just pickup.
+  addColumn('jobs', 'seal_number', 'seal_number TEXT');
+  addColumn('jobs', 'eir_photos_pickup', 'eir_photos_pickup TEXT');
+  addColumn('jobs', 'eir_photos_delivery', 'eir_photos_delivery TEXT');
+  addColumn('jobs', 'seal_number_delivery', 'seal_number_delivery TEXT');
+  // Whether this job's container is sealed (carrying goods) vs. empty/
+  // unsealed (a local move, or an empty-container repositioning leg) —
+  // decides whether the EIR checklist requires 1 photo (Seal) or 2
+  // (Right Side, Left Side). No existing field reliably implies this:
+  // CARGO_TYPES has no "empty" value, and shipment_type/container_type
+  // don't distinguish a loaded leg from an empty one either — checked
+  // directly rather than guessed. Defaults by shipment_type (IMPORT/EXPORT
+  // typically sealed customs containers; LOCAL typically not) but is a
+  // real, shipper-editable field at posting time, not just a fixed rule.
+  addColumn('jobs', 'requires_seal', "requires_seal INTEGER NOT NULL DEFAULT 1");
+
+  // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.
   // ---------------------------------------------------------------------------
 

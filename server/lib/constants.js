@@ -1,6 +1,17 @@
 const CONTAINER_SIZES = ['20FT', '40FT', '40HC', 'REEFER'];
 const CONTAINER_TYPES = ['DRY', 'REEFER', 'HAZMAT', 'OPEN_TOP', 'FLAT_RACK'];
-const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'PACKING_LIST', 'OTHER'];
+// DO/BOE/GATE_PASS/POD_TEMPLATE/INSPECTION_PROOF: the post-assignment
+// document-exchange set. DO/BOE/POD_TEMPLATE-download are carrier-facing
+// (delivery order, bill of entry, downloading the shipper's POD template);
+// GATE_PASS and POD_TEMPLATE (the upload) are shipper-facing. All reuse
+// the existing job_documents table and access pattern — see
+// job-extras.routes.js's uploader/type checks.
+const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'PACKING_LIST', 'OTHER', 'DO', 'BOE', 'GATE_PASS', 'POD_TEMPLATE', 'INSPECTION_PROOF'];
+
+// Bumped by hand whenever web/src/pages/Terms.jsx's content materially
+// changes — a user re-accepts only when this changes since their last
+// recorded acceptance for that context, not on every job/signup.
+const TERMS_VERSION = '2026-09-01';
 const STATUS_ORDER = ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
 
 // Real UAE geography, not a heuristic — every value in TERMINALS/AREAS sits
@@ -108,4 +119,5 @@ module.exports = {
   BID_SORT_COLUMNS, JOB_SORT_COLUMNS, ESCROW_STATUSES,
   TRANSITIONS, DISPUTABLE_STATUSES,
   BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM,
+  TERMS_VERSION,
 };
