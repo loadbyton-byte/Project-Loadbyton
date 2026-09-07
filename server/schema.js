@@ -615,6 +615,26 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
   addColumn('contract_rfps', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
 
+  // Multi-container-type jobs (Change 2, Prompt 2) — jobs.container_size/
+  // container_type/container_count stays the "line item 1" record for
+  // every existing job (zero migration needed, every current consumer
+  // that reads those three columns directly keeps working unchanged);
+  // this table holds any ADDITIONAL line items beyond the first for a job
+  // that needs a mix (e.g. 2x 40HC + 1x 20FT in one posting). A carrier
+  // still bids once, lump-sum, on the whole job — award/escrow logic is
+  // unchanged, this is purely a richer description of what's being moved.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS job_line_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    container_size TEXT NOT NULL,
+    container_type TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_job_line_items_job ON job_line_items(job_id);
+  `);
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

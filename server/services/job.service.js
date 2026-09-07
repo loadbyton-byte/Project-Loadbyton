@@ -264,7 +264,11 @@ async function getJob(jobId, user) {
       };
     }
   }
-  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null, driver_info: driverInfo };
+  // Extra container-type line items beyond the job's own container_size/
+  // type/count columns (which already represent line item 1) — empty for
+  // every job posted before multi-line-item support existed.
+  const extraLineItems = await db.prepare('SELECT id, container_size, container_type, count FROM job_line_items WHERE job_id=? ORDER BY id').all(job.id);
+  const jobWithRating = { ...job, shipper_rating: shipperProfile ? shipperProfile.rating_avg : null, driver_info: driverInfo, extra_line_items: extraLineItems };
   const allDocs = (await isParticipantOrBidder(job, user)) ? await db.prepare('SELECT * FROM job_documents WHERE job_id=? ORDER BY created_at').all(job.id) : [];
   const documents = allDocs.filter((d) => canSeeDocument(job, d, user));
   const payout = await payoutRepository.findByJobId(job.id) || null;

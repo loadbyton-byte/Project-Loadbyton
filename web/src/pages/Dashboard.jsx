@@ -52,6 +52,10 @@ export default function Dashboard() {
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(emptyJob);
+  // Extra container-type line items beyond the primary size/type/count
+  // above — empty by default, so a job posted without touching this stays
+  // exactly the single-container request it always was.
+  const [extraLineItems, setExtraLineItems] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
@@ -67,6 +71,11 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [search]);
   useEffect(() => { setOffset(0); }, [filter, sort, debouncedSearch]);
+
+  // Closing the modal by any path (Escape, backdrop click, X, Cancel)
+  // should also drop any in-progress extra container-type rows, not just a
+  // successful submit — otherwise reopening the form shows stale rows.
+  useEffect(() => { if (!showForm) setExtraLineItems([]); }, [showForm]);
 
   // Popup modal: close on Escape, lock body scroll
   useEffect(() => {
@@ -113,6 +122,12 @@ export default function Dashboard() {
         containerCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.containerCount) || 1,
         truckCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.truckCount) || 1,
         scheduledPostAt: form.scheduleForLater && form.scheduledPostAt ? new Date(form.scheduledPostAt).toISOString() : undefined,
+        // Only sent when the shipper actually used the "add another
+        // container type" rows — omitting lineItems keeps the exact
+        // pre-existing single-container request shape otherwise.
+        lineItems: extraLineItems.length > 0
+          ? [{ containerSize: form.containerSize, containerType: form.containerType, count: Number(form.containerCount) || 1 }, ...extraLineItems.map((li) => ({ ...li, count: Number(li.count) || 1 }))]
+          : undefined,
       });
       const jobId = created.job?.id;
       if (form.packingList && jobId) {
@@ -131,6 +146,7 @@ export default function Dashboard() {
         }
       }
       setForm(emptyJob);
+      setExtraLineItems([]);
       setShowForm(false);
       addToast({
         type: 'status_change',
@@ -235,6 +251,49 @@ export default function Dashboard() {
                     <Select value={form.containerType} onChange={(e) => setForm({ ...form, containerType: e.target.value })}>
                       {CONTAINER_TYPES.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
                     </Select>
+                  </div>
+                  {/* Multi-container-type support: needs more than one size/
+                      type in the same job (e.g. 2x 40HC + 1x 20FT) instead
+                      of posting separate jobs. Optional — empty by default. */}
+                  <div className="sm:col-span-2 flex flex-col gap-2">
+                    {extraLineItems.map((li, idx) => (
+                      <div key={idx} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: 'var(--border-default)' }}>
+                        <Select
+                          value={li.containerSize}
+                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerSize: e.target.value } : it)))}
+                          className="flex-1"
+                        >
+                          {CONTAINER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </Select>
+                        <Select
+                          value={li.containerType}
+                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerType: e.target.value } : it)))}
+                          className="flex-1"
+                        >
+                          {CONTAINER_TYPES.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
+                        </Select>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={li.count}
+                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, count: e.target.value } : it)))}
+                          className="w-20"
+                          aria-label="Count"
+                        />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setExtraLineItems((items) => items.filter((_, i) => i !== idx))} aria-label="Remove line item">
+                          <IconX size={14} />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="self-start"
+                      onClick={() => setExtraLineItems((items) => [...items, { containerSize: CONTAINER_SIZES[0], containerType: CONTAINER_TYPES[0], count: 1 }])}
+                    >
+                      <IconPlus size={13} /> Add another container type
+                    </Button>
                   </div>
                 </>
               ) : form.equipmentType === 'CUSTOM' ? (

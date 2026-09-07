@@ -4,7 +4,7 @@ const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMEN
 const { isValidUaeLatLng } = require('../lib/helpers');
 
 async function createJobFromBody(body, req) {
-  const {
+  let {
     shipmentType, containerSize, containerType, containerCount,
     pickupTerminal, deliveryArea, deliveryAddress,
     readyAt, deadline, targetPriceAed, notes,
@@ -14,8 +14,28 @@ async function createJobFromBody(body, req) {
     equipmentType, cargoType, loadingLocation, deliveryLocation,
     importPickupTerminal, importUnloadingLocation, importEmptyReturnLocation,
     exportEmptyPickupLocation, exportLoadingLocation, exportDepositTerminal,
-    scheduledPostAt,
+    scheduledPostAt, lineItems,
   } = body;
+
+  // Multi-container-type support: lineItems[0] (when present) becomes the
+  // job's own container_size/type/count columns — the "line item 1" record
+  // every existing consumer already reads directly — anything beyond that
+  // goes into job_line_items. Omitting lineItems entirely keeps the exact
+  // pre-existing single-container behavior.
+  const normalizedLineItems = Array.isArray(lineItems)
+    ? lineItems
+        .map((li) => ({
+          containerSize: li && li.containerSize,
+          containerType: li && li.containerType,
+          count: Math.max(1, Number(li && li.count) || 1),
+        }))
+        .filter((li) => li.containerSize && li.containerType)
+    : [];
+  if (normalizedLineItems.length > 0) {
+    containerSize = normalizedLineItems[0].containerSize;
+    containerType = normalizedLineItems[0].containerType;
+    containerCount = normalizedLineItems[0].count;
+  }
 
   const shipType = (shipmentType || 'LOCAL').toUpperCase();
   // For LOCAL jobs, loadingLocation/deliveryLocation map to pickupTerminal/deliveryArea
@@ -96,6 +116,16 @@ async function createJobFromBody(body, req) {
   );
 
   const jobId = Number(result.lastInsertRowid);
+
+  // Extra line items beyond the first (which became the job's own
+  // container_size/type/count above).
+  if (normalizedLineItems.length > 1) {
+    const insertLineItem = db.prepare('INSERT INTO job_line_items (job_id, container_size, container_type, count) VALUES (?,?,?,?)');
+    for (const li of normalizedLineItems.slice(1)) {
+      await insertLineItem.run(jobId, li.containerSize, li.containerType, li.count);
+    }
+  }
+
   return await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
 }
 

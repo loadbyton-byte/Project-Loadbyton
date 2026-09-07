@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
@@ -69,6 +70,7 @@ export default function JobDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t, isRtl } = useLocale();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [error, setError] = useState('');
@@ -177,7 +179,7 @@ export default function JobDetail() {
   }
 
   return (
-    <div className="container-page py-10" dir="ltr">
+    <div className="container-page py-10" dir={isRtl ? 'rtl' : 'ltr'}>
       {awardConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
@@ -228,7 +230,7 @@ export default function JobDetail() {
         <div>
           <p className="font-mono text-xs text-ink-muted">{job.job_code}</p>
           <h1 className="mt-1 font-display text-2xl font-semibold text-ink">
-            <span className="mr-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-100)' : job.shipment_type === 'LOCAL' ? 'var(--status-success-bg)' : 'var(--lb-orange-100)', color: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-700)' : job.shipment_type === 'LOCAL' ? 'var(--status-success)' : 'var(--lb-orange-700)' }}>{job.shipment_type || 'IMPORT'}{job.status === 'DRAFT' && job.scheduled_post_at ? ` · publishes ${formatDateTime(job.scheduled_post_at)}` : ''}</span>
+            <span className="me-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-100)' : job.shipment_type === 'LOCAL' ? 'var(--status-success-bg)' : 'var(--lb-orange-100)', color: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-700)' : job.shipment_type === 'LOCAL' ? 'var(--status-success)' : 'var(--lb-orange-700)' }}>{job.shipment_type || 'IMPORT'}{job.status === 'DRAFT' && job.scheduled_post_at ? ` · publishes ${formatDateTime(job.scheduled_post_at)}` : ''}</span>
             {CONTAINER_EQUIPMENT.includes(job.equipment_type) ? `${job.container_size} ${formatLabel(job.container_type)}` : equipmentLabel(job.equipment_type)} · {formatLabel(job.pickup_terminal)} → {formatLabel(job.delivery_area)}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -237,10 +239,11 @@ export default function JobDetail() {
             <Badge color="neutral">{equipmentLabel(job.equipment_type)}</Badge>
             {job.container_count > 1 && <Badge color="accent">×{job.container_count} containers</Badge>}
             {job.truck_count > 1 && <Badge color="accent">×{job.truck_count} trucks</Badge>}
+            {job.extra_line_items?.length > 0 && <Badge color="accent">+{job.extra_line_items.length} more container type{job.extra_line_items.length === 1 ? '' : 's'}</Badge>}
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-ink-muted">{job.status === 'OPEN' ? 'Target price (per trip)' : 'Agreed price'}</p>
+        <div className={isRtl ? 'text-left' : 'text-right'}>
+          <p className="text-xs text-ink-muted">{job.status === 'OPEN' ? t('jobDetail.targetPrice', 'Target price (per trip)') : t('jobDetail.agreedPrice', 'Agreed price')}</p>
           <p className="tabular font-display text-2xl font-semibold text-ink">{formatAED(job.agreed_price_aed || job.max_budget_aed)}</p>
         </div>
       </div>
@@ -267,28 +270,37 @@ export default function JobDetail() {
       <div className="grid gap-6 lg:grid-cols-[1fr,340px]">
         <div>
           <Section
-            title="Shipment details"
-            action={canEditJob && !editingJob && <Button variant="ghost" size="sm" onClick={() => setEditingJob(true)}>Edit</Button>}
+            title={t('jobDetail.shipmentDetails', 'Shipment details')}
+            action={canEditJob && !editingJob && <Button variant="ghost" size="sm" onClick={() => setEditingJob(true)}>{t('jobDetail.edit', 'Edit')}</Button>}
           >
             {editingJob ? (
               <JobEditForm job={job} onDone={() => { setEditingJob(false); load(); }} onCancel={() => setEditingJob(false)} />
             ) : (
               <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-                <div><dt className="text-ink-muted">Equipment</dt><dd className="mt-0.5 font-medium text-ink">{equipmentLabel(job.equipment_type)}</dd></div>
-                <div><dt className="text-ink-muted">Cargo type</dt><dd className="mt-0.5 font-medium text-ink">{cargoTypeLabel(job.cargo_type)}</dd></div>
+                <div><dt className="text-ink-muted">{t('jobDetail.equipment', 'Equipment')}</dt><dd className="mt-0.5 font-medium text-ink">{equipmentLabel(job.equipment_type)}</dd></div>
+                <div><dt className="text-ink-muted">{t('jobDetail.cargoType', 'Cargo type')}</dt><dd className="mt-0.5 font-medium text-ink">{cargoTypeLabel(job.cargo_type)}</dd></div>
                 {job.cargo_weight_tons != null && (
-                  <div><dt className="text-ink-muted">Cargo weight</dt><dd className="mt-0.5 font-medium text-ink">{job.cargo_weight_tons} t</dd></div>
+                  <div><dt className="text-ink-muted">{t('jobDetail.cargoWeight', 'Cargo weight')}</dt><dd className="mt-0.5 font-medium text-ink">{job.cargo_weight_tons} t</dd></div>
                 )}
                 {CONTAINER_EQUIPMENT.includes(job.equipment_type) && (
-                  <div><dt className="text-ink-muted">Container #</dt><dd className="mt-0.5 font-medium text-ink">{job.container_number || '—'}</dd></div>
+                  <div><dt className="text-ink-muted">{t('jobDetail.containerNumber', 'Container #')}</dt><dd className="mt-0.5 font-medium text-ink">{job.container_number || '—'}</dd></div>
                 )}
                 {(job.container_count > 1 || job.truck_count > 1) && (
-                  <div><dt className="text-ink-muted">Volume</dt><dd className="mt-0.5 font-medium text-ink">{job.container_count > 1 ? `${job.container_count} containers` : `${job.truck_count} trucks`}</dd></div>
+                  <div><dt className="text-ink-muted">{t('jobDetail.volume', 'Volume')}</dt><dd className="mt-0.5 font-medium text-ink">{job.container_count > 1 ? `${job.container_count} containers` : `${job.truck_count} trucks`}</dd></div>
                 )}
-                <div><dt className="text-ink-muted">Ready at</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.ready_at)}</dd></div>
-                <div><dt className="text-ink-muted">Deadline</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.deadline)}</dd></div>
-                <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Delivery address</dt><dd className="mt-0.5 font-medium text-ink">{job.delivery_address}</dd></div>
-                {job.notes && <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">Notes</dt><dd className="mt-0.5 text-ink-secondary">{job.notes}</dd></div>}
+                {job.extra_line_items?.length > 0 && (
+                  <div className="col-span-2 sm:col-span-3">
+                    <dt className="text-ink-muted">{t('jobDetail.lineItems', 'Container line items')}</dt>
+                    <dd className="mt-0.5 font-medium text-ink">
+                      {job.container_count}× {job.container_size} {formatLabel(job.container_type)}
+                      {job.extra_line_items.map((li) => `, ${li.count}× ${li.container_size} ${formatLabel(li.container_type)}`).join('')}
+                    </dd>
+                  </div>
+                )}
+                <div><dt className="text-ink-muted">{t('jobDetail.readyAt', 'Ready at')}</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.ready_at)}</dd></div>
+                <div><dt className="text-ink-muted">{t('jobDetail.deadline', 'Deadline')}</dt><dd className="mt-0.5 font-medium text-ink">{formatDateTime(job.deadline)}</dd></div>
+                <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">{t('jobDetail.deliveryAddress', 'Delivery address')}</dt><dd className="mt-0.5 font-medium text-ink">{job.delivery_address}</dd></div>
+                {job.notes && <div className="col-span-2 sm:col-span-3"><dt className="text-ink-muted">{t('jobDetail.notes', 'Notes')}</dt><dd className="mt-0.5 text-ink-secondary">{job.notes}</dd></div>}
               </dl>
             )}
           </Section>
