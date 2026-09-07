@@ -118,3 +118,93 @@ test('confirm-terms succeeds with zero ancillary charges (nothing to discuss on 
   const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId });
   assert.equal(award.status, 200, award.raw);
 });
+
+test('a carrier can declare ancillary charges at bid time, and the shipper sees them; a competing bidder never sees another bidder\'s price, charges, or docs while OPEN', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrierA = makeClient(server.baseUrl);
+  await carrierA.login('carrier@dubaidrayage.com', 'demo1234');
+  const carrierB = makeClient(server.baseUrl);
+  await carrierB.login('falcon@containerxpress.ae', 'demo1234');
+
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Test Warehouse — bid-time charges regression',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    maxBudgetAed: 900,
+  });
+  assert.equal(created.status, 201, created.raw);
+  const jobId = created.body.job.id;
+
+  // Carrier A declares two anticipated charges as part of the bid itself.
+  const bidA = await carrierA.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 700, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed',
+    ancillaryCharges: [{ chargeType: 'SALIK', amountAed: 25 }, { chargeType: 'DEMURRAGE', amountAed: 150 }],
+  });
+  assert.equal(bidA.status, 201, bidA.raw);
+
+  const bidB = await carrierB.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 720, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+    ancillaryCharges: [{ chargeType: 'ETOKEN', amountAed: 40 }],
+  });
+  assert.equal(bidB.status, 201, bidB.raw);
+
+  // Shipper sees both bids in full, each with its own declared charges,
+  // already agreed_by_carrier (the proposer) but not yet by the shipper.
+  const asShipper = await shipper.get(`/api/jobs/${jobId}`);
+  const shipperBidA = asShipper.body.bids.find((b) => b.id === bidA.body.bid.id);
+  assert.equal(shipperBidA.ancillary_charges.length, 2);
+  assert.ok(shipperBidA.ancillary_charges.every((c) => c.agreed_by_carrier === 1 && c.agreed_by_shipper === 0));
+  const shipperBidB = asShipper.body.bids.find((b) => b.id === bidB.body.bid.id);
+  assert.equal(shipperBidB.ancillary_charges.length, 1);
+  assert.equal(shipperBidB.ancillary_charges[0].charge_type, 'ETOKEN');
+
+  // Carrier B (a competing bidder) must never see carrier A's price or
+  // ancillary charges while the job is still OPEN — "no bidder should
+  // watch other bidders' price and everything, docs etc."
+  const asCarrierB = await carrierB.get(`/api/jobs/${jobId}`);
+  const bidAAsSeenByB = asCarrierB.body.bids.find((b) => b.id === bidA.body.bid.id);
+  assert.equal(bidAAsSeenByB.masked, true);
+  assert.equal(bidAAsSeenByB.amount_aed, null, 'a competing bidder must not see another bidder\'s price while OPEN');
+  assert.deepEqual(bidAAsSeenByB.ancillary_charges, [], 'a competing bidder must not see another bidder\'s ancillary charges while OPEN');
+  // Carrier B must still see their OWN bid in full.
+  const ownBidAsSeenByB = asCarrierB.body.bids.find((b) => b.id === bidB.body.bid.id);
+  assert.equal(ownBidAsSeenByB.amount_aed, 720);
+  assert.equal(ownBidAsSeenByB.ancillary_charges.length, 1);
+});
+
+test('a losing bidder can see the winning bid\'s price/charges post-award (market info) but never the driver\'s name/phone', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const winner = makeClient(server.baseUrl);
+  await winner.login('carrier@dubaidrayage.com', 'demo1234');
+  const loser = makeClient(server.baseUrl);
+  await loser.login('falcon@containerxpress.ae', 'demo1234');
+
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Test Warehouse — post-award masking regression',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    maxBudgetAed: 900,
+  });
+  const jobId = created.body.job.id;
+  const winningBid = await winner.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 700, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+    ancillaryCharges: [{ chargeType: 'SALIK', amountAed: 25 }],
+  });
+  const losingBid = await loser.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 750, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+  });
+  assert.equal(losingBid.status, 201, losingBid.raw);
+
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: winningBid.body.bid.id, skipNegotiation: true });
+  assert.equal(award.status, 200, award.raw);
+  await winner.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Ahmed Al Mazrouei', driverPhone: '0551112222' });
+
+  const asLoser = await loser.get(`/api/jobs/${jobId}`);
+  assert.equal(asLoser.body.job.assigned_driver_name, null, 'driver identity must stay masked from a losing bidder after award');
+  assert.equal(asLoser.body.job.assigned_driver_phone, null);
+  const winningBidAsSeenByLoser = asLoser.body.bids.find((b) => b.id === winningBid.body.bid.id);
+  assert.equal(winningBidAsSeenByLoser.amount_aed, 700, 'price stays visible post-award as market info');
+  assert.equal(winningBidAsSeenByLoser.ancillary_charges.length, 1, 'ancillary charges stay visible post-award, same treatment as price');
+});

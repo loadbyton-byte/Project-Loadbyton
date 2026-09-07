@@ -6,11 +6,9 @@
  */
 const db = require('../db');
 const apiResponse = require('../lib/apiResponse');
-const { BID_SORT_COLUMNS } = require('../lib/constants');
+const { BID_SORT_COLUMNS, ANCILLARY_CHARGE_TYPES } = require('../lib/constants');
 const { writeAudit, notify } = require('../lib/helpers');
 const { auth } = require('../middleware/auth');
-
-const ANCILLARY_CHARGE_TYPES = ['SALIK', 'ETOKEN', 'DEMURRAGE', 'INSPECTION_WAITING', 'OTHER'];
 
 // Access for the pre-award negotiation/ancillary-charges surface: only the
 // job's shipper, or the specific bid's own carrier — nobody else, not even

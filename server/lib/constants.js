@@ -12,6 +12,8 @@ const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'PACKING
 // changes — a user re-accepts only when this changes since their last
 // recorded acceptance for that context, not on every job/signup.
 const TERMS_VERSION = '2026-09-01';
+
+const ANCILLARY_CHARGE_TYPES = ['SALIK', 'ETOKEN', 'DEMURRAGE', 'INSPECTION_WAITING', 'OTHER'];
 const STATUS_ORDER = ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
 
 // Real UAE geography, not a heuristic — every value in TERMINALS/AREAS sits
@@ -119,5 +121,5 @@ module.exports = {
   BID_SORT_COLUMNS, JOB_SORT_COLUMNS, ESCROW_STATUSES,
   TRANSITIONS, DISPUTABLE_STATUSES,
   BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM,
-  TERMS_VERSION,
+  TERMS_VERSION, ANCILLARY_CHARGE_TYPES,
 };

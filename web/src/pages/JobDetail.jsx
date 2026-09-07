@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel } from '../lib/constants.js';
+import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -20,6 +20,7 @@ import BidForm from '../features/job/BidForm.jsx';
 import PaymentPanel from '../features/job/PaymentPanel.jsx';
 import JobEditForm from '../features/job/JobEditForm.jsx';
 import DocumentList from '../features/job/DocumentList.jsx';
+import HaulierCodeToken from '../features/job/HaulierCodeToken.jsx';
 import BackloadMatches from '../features/job/BackloadMatches.jsx';
 import PodForm from '../features/job/PodForm.jsx';
 import JobStatusTracker from '../features/job/JobStatusTracker.jsx';
@@ -514,6 +515,12 @@ export default function JobDetail() {
                           <span className="truncate">{b.carrier_company}</span> <RatingPill rating={b.carrier_rating} />
                         </p>
                       )}
+                      {!b.masked && b.ancillary_charges?.length > 0 && (
+                        <p className="mt-1 text-xs text-ink-secondary">
+                          +{b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0)} AED anticipated extras
+                          {' '}({b.ancillary_charges.map((c) => ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type).join(', ')})
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>
@@ -532,8 +539,18 @@ export default function JobDetail() {
           </Section>
 
           <Section title="Documents">
-            <DocumentList documents={documents} jobId={job.id} onAdd={load} />
+            <DocumentList documents={documents} jobId={job.id} onAdd={load} isShipperParty={isShipper} isCarrierParty={isAwardedCarrier} />
           </Section>
+
+          {/* Haulier Code / Token — import/export only, and only once a
+              carrier is actually assigned. Modeled as free text, not tied
+              to DP World's specific process, so it holds up for an Abu
+              Dhabi Ports or Sharjah Ports job too. */}
+          {job.carrier_id && job.shipment_type !== 'LOCAL' && (isShipper || isAwardedCarrier) && (
+            <Section title="Haulier Code / Token">
+              <HaulierCodeToken job={job} isShipper={isShipper} isAwardedCarrier={isAwardedCarrier} onDone={load} />
+            </Section>
+          )}
 
           {job.status === 'COMPLETED' && (isShipper || isAwardedCarrier) && (
             <Section title="Rate your counterparty">

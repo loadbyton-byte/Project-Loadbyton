@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
-import { EQUIPMENT_TYPES, formatAED } from '../../lib/constants.js';
+import { EQUIPMENT_TYPES, formatAED, ANCILLARY_CHARGE_LABELS } from '../../lib/constants.js';
 import { Button, Input, Label, Select, Textarea, Badge } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
+import { IconClose } from '../../components/icons.jsx';
 
 export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
   const { addToast } = useToasts();
@@ -13,8 +14,24 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
     truckType: defaultEquipment || EQUIPMENT_TYPES[0],
     notes: '',
   });
+  // Anticipated ancillary charges declared up front, at bid time — the
+  // shipper reviews these alongside the price for every bidder, instead
+  // of only discovering them after picking one bid to negotiate with.
+  // Still refinable in the pre-award discussion (server/routes/bids.routes.js's
+  // negotiation/ancillary-charges endpoints) once the shipper picks a bid.
+  const [ancillaryCharges, setAncillaryCharges] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  function addCharge() {
+    setAncillaryCharges([...ancillaryCharges, { chargeType: 'SALIK', amountAed: '' }]);
+  }
+  function updateCharge(i, patch) {
+    setAncillaryCharges(ancillaryCharges.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  }
+  function removeCharge(i) {
+    setAncillaryCharges(ancillaryCharges.filter((_, idx) => idx !== i));
+  }
 
   useEffect(() => {
     if (!verified) {
@@ -36,6 +53,11 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
       setError('Please choose an ETA date/time.');
       return;
     }
+    const cleanCharges = ancillaryCharges.filter((c) => c.chargeType && Number(c.amountAed) > 0);
+    if (ancillaryCharges.some((c) => c.chargeType && !(Number(c.amountAed) > 0))) {
+      setError('Every ancillary charge needs a valid amount, or remove it.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -44,6 +66,7 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
         etaAt: new Date(form.etaAt).toISOString(),
         truckType: form.truckType,
         notes: form.notes,
+        ancillaryCharges: cleanCharges.map((c) => ({ chargeType: c.chargeType, amountAed: Number(c.amountAed) })),
       });
       addToast({ type: 'bid', title: 'Bid placed', body: `Your bid of ${formatAED(form.amount)} AED was submitted.` });
       onDone();
@@ -85,6 +108,22 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
           <Label>Notes</Label>
           <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Any special requirements or notes for the shipper" />
           <p className="mt-1 text-xs text-ink-muted">Driver details aren't shared at bid time — you'll add your assigned driver after the shipper awards you this job.</p>
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Anticipated extra charges (optional)</Label>
+          <p className="mt-0.5 text-xs text-ink-muted">Salik, e-token, demurrage/waiting, inspection waiting — declared up front so the shipper sees your full expected cost before deciding, not after.</p>
+          <div className="mt-2 space-y-2">
+            {ancillaryCharges.map((c, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Select value={c.chargeType} onChange={(e) => updateCharge(i, { chargeType: e.target.value })} className="flex-1">
+                  {Object.entries(ANCILLARY_CHARGE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </Select>
+                <Input type="number" min="1" placeholder="AED" value={c.amountAed} onChange={(e) => updateCharge(i, { amountAed: e.target.value })} className="w-28" />
+                <button type="button" onClick={() => removeCharge(i)} className="text-ink-muted hover:text-status-danger" aria-label="Remove charge"><IconClose size={16} /></button>
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="ghost" size="sm" onClick={addCharge} className="mt-2">+ Add a charge</Button>
         </div>
       </div>
       {error && <p className="mt-3 text-sm text-status-danger">{error}</p>}
