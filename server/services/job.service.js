@@ -124,6 +124,26 @@ async function updateJobStatus(jobId, nextStatus, req) {
         const payout = await payoutRepository.findByJobId(id) || await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(id);
         await executePayoutAsync(job, payout, req);
       } catch {}
+
+      // DRIVER_ASSOCIATE Phase 1: the driver's wallet cut of a job they
+      // actually executed — a running ledger entry, not yet an automated
+      // weekly payout (see server/schema.js's driver_wallet_entries
+      // comment; the carrier marks entries paid, same honest scoping as
+      // every other manual-settlement piece in this codebase today).
+      try {
+        if (job.assigned_driver_id) {
+          const driver = await db.prepare('SELECT * FROM drivers WHERE id=?').get(job.assigned_driver_id);
+          const seatUser = driver && driver.seat_user_id ? await db.prepare('SELECT seat_role FROM users WHERE id=?').get(driver.seat_user_id) : null;
+          if (seatUser && seatUser.seat_role === 'DRIVER_ASSOCIATE' && job.agreed_price_aed) {
+            const { driver_associate_default_split_bps } = await getSettings();
+            const splitBps = Number(driver_associate_default_split_bps) || 8000;
+            const driverShare = Math.round(job.agreed_price_aed * (splitBps / 10000) * 100) / 100;
+            await db.prepare(
+              'INSERT INTO driver_wallet_entries (driver_id, job_id, carrier_id, gross_amount_aed, split_bps, driver_share_aed) VALUES (?,?,?,?,?,?)'
+            ).run(driver.id, job.id, job.carrier_id, job.agreed_price_aed, splitBps, driverShare);
+          }
+        }
+      } catch (e) { console.error(`[wallet] driver_wallet_entries insert failed for job ${id}:`, e); }
     }
   }
 

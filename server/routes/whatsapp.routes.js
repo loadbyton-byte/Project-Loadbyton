@@ -12,6 +12,7 @@
 const crypto = require('node:crypto');
 const db = require('../db');
 const { confirmDelivery } = require('../services/delivery.service');
+const { bindDriverToJob } = require('../services/driver-assignment.service');
 const { recordInboundSession } = require('../lib/whatsapp');
 const { resolveOrCreateThread } = require('../lib/messaging');
 const router = require('express').Router();
@@ -56,6 +57,7 @@ function extractContent(msg) {
     return `[Bot reply] ${msg.interactive.button_reply.title}`;
   }
   if (msg.type === 'image') return '[Photo attachment]';
+  if (msg.type === 'location') return `[Shared location] ${msg.location.latitude}, ${msg.location.longitude}`;
   return null;
 }
 
@@ -68,15 +70,19 @@ async function resolveSender(last9) {
     .prepare(`SELECT * FROM drivers WHERE is_active=1 AND REPLACE(REPLACE(REPLACE(phone,'+',''),'-',''),' ','') LIKE '%' || ?`)
     .get(last9);
   if (driver) {
-    const job = await db
-      .prepare(`SELECT * FROM jobs WHERE assigned_driver_id=? AND status IN ('AWARDED','PICKED_UP','IN_TRANSIT') ORDER BY updated_at DESC LIMIT 1`)
-      .get(driver.id);
+    // A DRIVER_ASSOCIATE with a PENDING trip offer isn't assigned_driver_id
+    // yet (that only happens on acceptance) — check for a live offer first,
+    // so ACCEPT_TRIP/DECLINE_TRIP has a job to act on before binding exists.
+    const tripOffer = await db.prepare(`SELECT * FROM trip_offers WHERE driver_id=? AND status='PENDING' ORDER BY offered_at DESC LIMIT 1`).get(driver.id);
+    const job = tripOffer
+      ? await db.prepare('SELECT * FROM jobs WHERE id=?').get(tripOffer.job_id)
+      : await db.prepare(`SELECT * FROM jobs WHERE assigned_driver_id=? AND status IN ('AWARDED','PICKED_UP','IN_TRANSIT') ORDER BY updated_at DESC LIMIT 1`).get(driver.id);
     if (driver.seat_user_id) {
-      return { senderId: driver.seat_user_id, job, driver, threadRoles: ['DRIVER', 'CARRIER'] };
+      return { senderId: driver.seat_user_id, job, driver, tripOffer, threadRoles: ['DRIVER', 'CARRIER'] };
     }
     // Roster driver with no login of their own yet — attributed to the
     // carrier, same as the ad-hoc case below.
-    return { senderId: driver.carrier_id, job, driver, threadRoles: ['CARRIER', 'SHIPPER'] };
+    return { senderId: driver.carrier_id, job, driver, tripOffer, threadRoles: ['CARRIER', 'SHIPPER'] };
   }
 
   // Most drivers are bound to a job ad-hoc (PATCH /api/jobs/:id/driver's
@@ -106,13 +112,63 @@ async function resolveSender(last9) {
   return { senderId: null, job: null, driver: null, threadRoles: null };
 }
 
+// A DRIVER_ASSOCIATE accepting a trip offer runs through the exact same
+// compliance-engine gate (server/lib/compliance.js) as every other
+// dispatch decision — "no private plates," "auto-pause on expired docs"
+// must hold at acceptance time, not just at signup, per the register's own
+// requirement. On pass, binds the driver via the same
+// driver-assignment.service.js path the web dashboard's reassign flow
+// uses — one implementation, not a second copy of the bind logic.
+async function handleTripOfferResponse(tripOffer, job, driver, accepted) {
+  const { sendWhatsAppMessage } = require('../lib/whatsapp');
+  const { notify } = require('../lib/helpers');
+
+  if (!accepted) {
+    await db.prepare(`UPDATE trip_offers SET status='DECLINED', responded_at=datetime('now') WHERE id=?`).run(tripOffer.id);
+    await notify(tripOffer.carrier_id, 'Trip offer declined', `${driver.name} declined the trip offer for ${job.job_code}.`, job.id, 'system');
+    return;
+  }
+
+  const { evaluateCompliance } = require('../lib/compliance');
+  const vehicle = driver.vehicle_id ? await db.prepare('SELECT * FROM vehicles WHERE id=?').get(driver.vehicle_id) : null;
+  const carrierProfile = await db.prepare('SELECT * FROM profiles WHERE user_id=?').get(driver.carrier_id);
+  const result = await evaluateCompliance(driver, vehicle, job, carrierProfile);
+
+  if (!result.pass) {
+    await db.prepare(`UPDATE trip_offers SET status='DECLINED', decline_reason=?, responded_at=datetime('now') WHERE id=?`).run(
+      result.blockers.map((b) => b.description).join('; '),
+      tripOffer.id
+    );
+    await notify(tripOffer.carrier_id, 'Trip offer blocked — compliance', `${driver.name} cannot take ${job.job_code}: ${result.blockers.map((b) => b.description).join('; ')}`, job.id, 'system');
+    sendWhatsAppMessage({ to: driver.phone, template: 'trip_offer_blocked', params: [job.job_code] }).catch(() => {});
+    return;
+  }
+
+  await db.prepare(`UPDATE trip_offers SET status='ACCEPTED', responded_at=datetime('now') WHERE id=?`).run(tripOffer.id);
+  await bindDriverToJob(job, { driverId: driver.id, driverName: driver.name, driverPhone: driver.phone, actorId: driver.carrier_id, req: null });
+}
+
 async function handleInboundMessage(msg) {
   const digits = String(msg.from || '').replace(/\D/g, '');
   if (!digits) return;
   await recordInboundSession(digits).catch(() => {});
 
-  const { senderId, job, threadRoles } = await resolveSender(last9Digits(digits));
+  const { senderId, job, driver, tripOffer, threadRoles } = await resolveSender(last9Digits(digits));
   const content = extractContent(msg);
+
+  // Live location, shared over WhatsApp — lands in the exact same
+  // location_logs table/GET endpoint the browser-Geolocation path already
+  // feeds (LiveMap.jsx), so the shipper/carrier dashboard needs no new UI:
+  // it just sees points tagged source='WHATSAPP' alongside any others.
+  if (msg.type === 'location' && job && msg.location) {
+    const lat = Number(msg.location.latitude);
+    const lng = Number(msg.location.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      await db
+        .prepare(`INSERT INTO location_logs (job_id, carrier_id, lat, lng, source) VALUES (?,?,?,?,'WHATSAPP')`)
+        .run(job.id, job.carrier_id, lat, lng);
+    }
+  }
 
   if (senderId && job && content) {
     let threadId = null;
@@ -143,6 +199,9 @@ async function handleInboundMessage(msg) {
         // eslint-disable-next-line no-console
         console.error(`[whatsapp:webhook] confirmDelivery failed for job ${job.id}:`, err.message);
       }
+    }
+    if ((buttonId === 'ACCEPT_TRIP' || buttonId === 'DECLINE_TRIP') && tripOffer) {
+      await handleTripOfferResponse(tripOffer, job, driver, buttonId === 'ACCEPT_TRIP');
     }
     // 'DELAYED' / 'ISSUE' — logged as an inbound message above for a human
     // to follow up on; no automated status transition for those in this

@@ -23,10 +23,9 @@ const payments = require('../lib/payments');
 const invoiceMod = require('../lib/invoice');
 const issueInvoice = /** @type {any} */ (invoiceMod).issueInvoice;
 /** @type {any} */
-const whatsappMod = require('../lib/whatsapp');
-const notifyDriverAsync = /** @type {any} */ (whatsappMod).notifyDriverAsync;
-/** @type {any} */
 const deliveryService = require('../services/delivery.service');
+/** @type {any} */
+const { bindDriverToJob } = require('../services/driver-assignment.service');
 /** @type {any} */
 const configMod = require('../lib/config');
 const FRONTEND_URL = /** @type {any} */ (configMod).FRONTEND_URL;
@@ -194,30 +193,44 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
     if (!normalizedPhone) return sendError(res, 400, 'driverPhone is required and must be a valid UAE mobile number');
   }
 
-  await db.prepare(`UPDATE jobs SET assigned_driver_name=?, assigned_driver_phone=?, assigned_driver_id=?, updated_at=datetime('now') WHERE id=?`).run(
-    driverName,
-    normalizedPhone,
-    resolvedDriverId,
-    job.id
-  );
-  await writeAudit(req, {
-    userId: req.actorId,
-    action: 'DRIVER_REASSIGN',
-    details: `${job.job_code}: driver changed from ${job.assigned_driver_name || 'unset'} (${job.assigned_driver_phone || 'unset'}) to ${driverName} (${normalizedPhone})`,
-    entityType: 'job',
-    entityId: job.id,
-    beforeState: job.assigned_driver_phone || 'unset',
-    afterState: normalizedPhone,
-  });
-  await notify(job.shipper_id, 'Driver reassigned', `${job.job_code}: the assigned driver was changed to ${driverName}.`, job.id, 'status');
-  // @ts-ignore
-  notifyDriverAsync({
-    to: normalizedPhone,
-    template: 'job_awarded_pickup_details',
-    params: [driverName, job.job_code, job.pickup_terminal],
-  });
-  const updated = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id));
+  const updated = await bindDriverToJob(job, { driverId: resolvedDriverId, driverName, driverPhone: normalizedPhone, actorId: req.actorId, req });
   res.json({ job: updated });
+});
+
+// DRIVER_ASSOCIATE Phase 1: push this job as a trip offer to a specific
+// pool driver instead of binding them immediately (PATCH .../driver above
+// stays the direct-assign path for a carrier's own roster). The driver
+// accepts/declines over WhatsApp (server/routes/whatsapp.routes.js) — only
+// on acceptance does bindDriverToJob actually run.
+router.post('/api/jobs/:id/trip-offer', auth(['CARRIER']), requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
+  const job = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id));
+  if (!job) return sendError(res, 404, 'Job not found');
+  if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
+  if (!['AWARDED', 'PICKED_UP'].includes(job.status)) return sendError(res, 403, 'Trip offers can only be sent before delivery');
+
+  const { driverId } = /** @type {any} */ (req.body) || {};
+  const driver = await db.prepare('SELECT * FROM drivers WHERE id=? AND carrier_id=? AND is_active=1').get(driverId, req.user.id);
+  if (!driver) return sendError(res, 404, 'Driver not found in your roster');
+  if (!driver.seat_user_id) return sendError(res, 400, 'This driver has no login yet — create one first (POST /api/fleet/drivers/:id/seat)');
+  const seatUser = await db.prepare('SELECT seat_role FROM users WHERE id=?').get(driver.seat_user_id);
+  if (!seatUser || seatUser.seat_role !== 'DRIVER_ASSOCIATE') return sendError(res, 400, 'Trip offers are only for DRIVER_ASSOCIATE seats — use PATCH .../driver to assign a regular roster driver directly');
+
+  const pending = await db.prepare(`SELECT id FROM trip_offers WHERE job_id=? AND status='PENDING'`).get(job.id);
+  if (pending) return sendError(res, 409, 'A trip offer is already pending on this job');
+
+  const result = await db.prepare('INSERT INTO trip_offers (job_id, carrier_id, driver_id) VALUES (?,?,?) RETURNING id').run(job.id, req.user.id, driver.id);
+  const { sendInteractiveButtons } = require('../lib/whatsapp');
+  sendInteractiveButtons({
+    to: driver.phone,
+    bodyText: `New trip: ${job.job_code}, ${job.pickup_terminal} → ${job.delivery_area}. Accept this job?`,
+    buttons: [
+      { id: 'ACCEPT_TRIP', title: 'Accept' },
+      { id: 'DECLINE_TRIP', title: 'Decline' },
+    ],
+  }).catch(() => {});
+
+  await writeAudit(req, { userId: req.actorId, action: 'TRIP_OFFER_SENT', details: `${job.job_code}: trip offer sent to ${driver.name}`, entityType: 'job', entityId: job.id });
+  res.status(201).json({ tripOffer: await db.prepare('SELECT * FROM trip_offers WHERE id=?').get(Number(result.lastInsertRowid)) });
 });
 
 router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), idempotency, async (/** @type {any} */ req, /** @type {any} */ res) => {

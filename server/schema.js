@@ -697,6 +697,60 @@ module.exports = function initSchema(db) {
   seedRule.run('MAINLAND_WITHOUT_PERMIT', 'Free-zone carrier on mainland without the allowed-to-work-mainland document — restrict to free-zone/port-only jobs', 'YELLOW', 'special:mainland_permit', JSON.stringify({ op: 'special' }));
   seedRule.run('OUTSIDE_PERMITTED_EMIRATES', 'Job outside this vehicle\'s permitted emirates', 'YELLOW', 'special:permitted_emirates', JSON.stringify({ op: 'special' }));
 
+  // Live location via WhatsApp — a driver's shared-location message lands
+  // here through the exact same location_logs table/GET endpoint the
+  // browser-Geolocation path already uses (LiveMap.jsx), so the dashboard
+  // needs no new UI to show it; `source` just distinguishes which channel
+  // produced a given point. Existing rows default to 'BROWSER' — nothing
+  // retroactively reclassified.
+  addColumn('location_logs', 'source', "source TEXT NOT NULL DEFAULT 'BROWSER'");
+
+  // DRIVER_ASSOCIATE Phase 1 (Change 25) — a carrier pushes a specific job
+  // to a specific driver-associate; the driver accepts/declines over
+  // WhatsApp (see server/routes/whatsapp.routes.js), never bids, never
+  // sees the open marketplace. driver_id references the existing drivers
+  // roster row (reused, not a parallel driver entity) — what's new is the
+  // seat_role='DRIVER_ASSOCIATE' distinction (lib/constants.js's
+  // SEAT_ROLES) and this offer/accept flow around it.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS trip_offers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    carrier_id INTEGER NOT NULL REFERENCES users(id),
+    driver_id INTEGER NOT NULL REFERENCES drivers(id),
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','ACCEPTED','DECLINED','EXPIRED')),
+    decline_reason TEXT,
+    offered_at TEXT NOT NULL DEFAULT (datetime('now')),
+    responded_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_trip_offers_job ON trip_offers(job_id);
+  CREATE INDEX IF NOT EXISTS idx_trip_offers_driver ON trip_offers(driver_id);
+
+  -- One entry per completed job a DRIVER_ASSOCIATE executed — the running
+  -- ledger behind "wallet + weekly payout." The actual weekly cadence is a
+  -- carrier-driven action (mark-paid) for this first pass, not yet an
+  -- automated payout schedule — stated honestly rather than implying more
+  -- automation than exists, matching this codebase's existing pattern for
+  -- every other "real ledger, manual settlement" piece (e.g. internal
+  -- payment mode).
+  CREATE TABLE IF NOT EXISTS driver_wallet_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    driver_id INTEGER NOT NULL REFERENCES drivers(id),
+    job_id INTEGER NOT NULL REFERENCES jobs(id),
+    carrier_id INTEGER NOT NULL REFERENCES users(id),
+    gross_amount_aed REAL NOT NULL,
+    split_bps INTEGER NOT NULL,
+    driver_share_aed REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PAID')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_wallet_entries_driver ON driver_wallet_entries(driver_id);
+  `);
+
+  const seedDriverAssociateSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  seedDriverAssociateSetting.run('driver_associate_default_split_bps', '8000');
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

@@ -105,7 +105,7 @@ export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, delivery
   useEffect(() => () => { mapRef.current?.remove(); mapRef.current = null; markersRef.current = {}; }, []);
 
   if (!hasAnyPoint) {
-    return <p className="text-sm text-ink-muted">No live location yet — carrier location appears every 3 min when IN_TRANSIT.</p>;
+    return <p className="text-sm text-ink-muted">No live location yet — appears every 3 min when IN_TRANSIT, or as soon as the driver shares their live location on WhatsApp.</p>;
   }
 
   const hasDest = deliveryLat != null && deliveryLng != null;
@@ -143,7 +143,14 @@ export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, delivery
       `}</style>
       <div ref={containerRef} className="h-[280px] w-full" />
       <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-ink-muted">
-        <span>{last ? `Live · ${locs.length} point${locs.length === 1 ? '' : 's'} · ${new Date(last.recorded_at).toLocaleTimeString()}` : 'Waiting for first ping…'}</span>
+        <span className="flex items-center gap-1.5">
+          {last ? `Live · ${locs.length} point${locs.length === 1 ? '' : 's'} · ${new Date(last.recorded_at).toLocaleTimeString()}` : 'Waiting for first ping…'}
+          {last?.source === 'WHATSAPP' && (
+            <span className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ background: 'var(--status-success-bg)', color: 'var(--status-success)' }}>
+              via WhatsApp
+            </span>
+          )}
+        </span>
         {hasDest && (
           <a
             href={directionsUrl({ originLat: liveLat ?? pickupLat, originLng: liveLng ?? pickupLng, destLat: deliveryLat, destLng: deliveryLng })}

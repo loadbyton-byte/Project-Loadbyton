@@ -97,7 +97,14 @@ router.post('/api/fleet/drivers/:id/seat', auth(['CARRIER']), requireSeatRole([]
   if (!driver) return sendError(res, 404, 'Driver not found');
   if (driver.seat_user_id) return sendError(res, 400, 'This driver already has a login');
 
-  const { password } = req.body || {};
+  const { password, seatRole } = req.body || {};
+  // DRIVER_ASSOCIATE: a pool driver pushed trip offers over WhatsApp, never
+  // bidding, never seeing the open marketplace — same restricted-seat
+  // mechanism as a regular DRIVER seat (see middleware/auth.js), just a
+  // different acquisition model. Defaults to DRIVER, matching this
+  // endpoint's existing behavior exactly when the caller doesn't ask for
+  // the associate variant.
+  const finalSeatRole = seatRole === 'DRIVER_ASSOCIATE' ? 'DRIVER_ASSOCIATE' : 'DRIVER';
   const finalPassword = password && String(password).length >= 8 ? String(password) : crypto.randomBytes(9).toString('base64url');
   const email = `${driver.phone.replace(/[^0-9]/g, '')}@drivers.loadbyton.internal`;
   if (await db.prepare('SELECT id FROM users WHERE email=?').get(email)) {
@@ -107,7 +114,7 @@ router.post('/api/fleet/drivers/:id/seat', auth(['CARRIER']), requireSeatRole([]
   const passwordHash = bcrypt.hashSync(finalPassword, 10);
   const result = await db
     .prepare('INSERT INTO users (email, password_hash, role, tier, org_owner_id, seat_role, display_name, is_verified) VALUES (?,?,?,?,?,?,?,?) RETURNING id')
-    .run(email, passwordHash, req.user.role, 'BRONZE', req.user.id, 'DRIVER', driver.name, req.user.is_verified ? 1 : 0);
+    .run(email, passwordHash, req.user.role, 'BRONZE', req.user.id, finalSeatRole, driver.name, req.user.is_verified ? 1 : 0);
   const seatUserId = Number(result.lastInsertRowid);
   await db.prepare(`UPDATE drivers SET seat_user_id=?, updated_at=datetime('now') WHERE id=?`).run(seatUserId, driver.id);
 
@@ -166,6 +173,39 @@ router.get('/api/fleet/drivers/:id/documents/:docType', auth(), asyncHandler(asy
   res.set('Content-Type', driver[`${column}_mime_type`] || 'application/octet-stream');
   if (file.s3) file.stream.pipe(res);
   else res.sendFile(file.localPath);
+}));
+
+// DRIVER_ASSOCIATE Phase 1: the carrier's view of every associate driver's
+// wallet ledger — one running list across all drivers, not per-driver,
+// since a carrier managing several pool drivers wants to settle them
+// together. driver_id filter is optional (one driver's history).
+router.get('/api/fleet/driver-associates/wallet', auth(['CARRIER']), asyncHandler(async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT dwe.*, d.name as driver_name, j.job_code
+       FROM driver_wallet_entries dwe
+       JOIN drivers d ON d.id = dwe.driver_id
+       JOIN jobs j ON j.id = dwe.job_id
+       WHERE dwe.carrier_id=? ORDER BY dwe.created_at DESC LIMIT 200`
+    )
+    .all(req.user.id);
+  res.json({ entries: rows });
+}));
+
+// Marks one wallet entry paid — the carrier's own settlement action.
+// Real weekly automation is explicit follow-up work, not built here (see
+// server/schema.js's driver_wallet_entries comment).
+router.post('/api/fleet/driver-associates/wallet/:entryId/mark-paid', auth(['CARRIER']), requireSeatRole(['OPS']), asyncHandler(async (req, res) => {
+  const entry = await db.prepare('SELECT * FROM driver_wallet_entries WHERE id=? AND carrier_id=?').get(req.params.entryId, req.user.id);
+  if (!entry) return sendError(res, 404, 'Wallet entry not found');
+  if (entry.status === 'PAID') return sendError(res, 400, 'Already marked paid');
+  await db.prepare(`UPDATE driver_wallet_entries SET status='PAID', paid_at=datetime('now') WHERE id=?`).run(entry.id);
+  const driver = await db.prepare('SELECT * FROM drivers WHERE id=?').get(entry.driver_id);
+  if (driver && driver.seat_user_id) {
+    const { notify } = require('../lib/helpers');
+    await notify(driver.seat_user_id, 'Payout marked paid', `AED ${entry.driver_share_aed} for a completed trip has been marked paid.`, entry.job_id, 'payout');
+  }
+  res.json({ entry: await db.prepare('SELECT * FROM driver_wallet_entries WHERE id=?').get(entry.id) });
 }));
 
 module.exports = router;
