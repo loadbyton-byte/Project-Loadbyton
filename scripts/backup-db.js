@@ -78,7 +78,17 @@ function backupPostgres() {
   const sqlFile = path.join(OUTPUT_DIR, `loadbyton-${timestamp()}.sql`);
   const result = spawnSync('pg_dump', ['--format=plain', '--file', sqlFile, dumpUrl], { shell: false });
   if (result.status !== 0) {
-    console.error(`[backup] pg_dump failed: ${result.stderr?.toString() || 'unknown error'}`);
+    const stderr = result.stderr?.toString() || 'unknown error';
+    console.error(`[backup] pg_dump failed: ${stderr}`);
+    // "Network is unreachable" here almost always means the connection
+    // string resolved to an IPv6-only address and this runner has no
+    // outbound IPv6 route -- Supabase's "Direct connection" string does
+    // this on newer projects. See .github/workflows/backup.yml's header
+    // comment: switch DIRECT_DATABASE_URL to the "Session pooler" string
+    // instead (same port 5432, IPv4-reachable).
+    if (/network is unreachable/i.test(stderr)) {
+      console.error('[backup] Hint: this looks like an IPv6-only connection string on an IPv6-less runner. Use Supabase\'s "Session pooler" connection string (Project Settings -> Database) for DIRECT_DATABASE_URL instead of "Direct connection" -- see .github/workflows/backup.yml.');
+    }
     process.exit(1);
   }
   const gzFile = `${sqlFile}.gz`;

@@ -615,6 +615,26 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
   addColumn('contract_rfps', 'is_demo', 'is_demo INTEGER NOT NULL DEFAULT 0');
 
+  // Payment tiers — a job's escrow/checkout model, set at posting time.
+  // SPOT_ESCROW (the default, and today's only behavior) escrows the full
+  // price at award, before pickup. PAY_ON_DELIVERY defers that to the
+  // DELIVERED transition instead — see award.service.js and
+  // job.service.js's updateJobStatus. CONTRACT_CREDIT and OFF_PLATFORM
+  // skip per-job escrow entirely; CONTRACT_CREDIT's running credit-limit
+  // ledger is deliberately not built yet, this column just lets a job be
+  // tagged as belonging to that model without per-job escrow blocking it.
+  // Every existing job backfills to SPOT_ESCROW via this DEFAULT, so
+  // today's behavior is byte-for-byte unchanged for anything already in
+  // the database.
+  addColumn('jobs', 'payment_tier', "payment_tier TEXT NOT NULL DEFAULT 'SPOT_ESCROW'");
+  // Shipper-side payment-history signal — distinct from a carrier's
+  // rating_avg (a delivery-quality rating in the other direction) and
+  // named separately on purpose so the two are never conflated. Not yet
+  // computed from real signals or gated on anywhere; the field exists so
+  // payment_tier eligibility has something concrete to check against once
+  // that gating is built.
+  addColumn('profiles', 'trust_score', 'trust_score REAL NOT NULL DEFAULT 5.0');
+
   // Seed canonical ledger accounts — idempotent
   const seedAccount = db.prepare('INSERT OR IGNORE INTO ledger_accounts (code, name, type) VALUES (?, ?, ?)');
   seedAccount.run('processor_clearing', 'Processor Clearing', 'ASSET');

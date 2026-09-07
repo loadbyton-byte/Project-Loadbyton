@@ -12,7 +12,7 @@ const jobRepository = require('../repositories/job.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const bidRepository = require('../repositories/bid.repository');
 const { TRANSITIONS } = require('../lib/constants');
-const { getSettings, writeAudit, notify } = require('../lib/helpers');
+const { getSettings, writeAudit, notify, notifyAdmins } = require('../lib/helpers');
 const { issueInvoice } = require('../lib/invoice');
 const { executePayoutAsync, refundJobAsync } = require('./payout.service');
 
@@ -77,6 +77,28 @@ async function updateJobStatus(jobId, nextStatus, req) {
     throw e;
   }
 
+  // Money-before-move gate — previously a carrier could mark a job
+  // PICKED_UP with zero check that payment was ever confirmed. Verified
+  // directly in award.service.js: escrow_status is set to 'HELD'
+  // UNCONDITIONALLY the instant a job is awarded — before any real
+  // payment attempt, let alone confirmation — so HELD alone proves
+  // nothing about whether money has actually moved. It only becomes
+  // 'FUNDED' once real receipt is confirmed: either a processor webhook
+  // (server/routes/stripe.routes.js) or, in today's internal-bookkeeping
+  // mode, an admin explicitly calling POST /api/admin/confirm-receipt
+  // (server/routes/admin.routes.js). The gate below requires FUNDED
+  // specifically — requiring only HELD would be a no-op, since every
+  // AWARDED SPOT_ESCROW job already has escrow_status='HELD' by
+  // definition. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM are defined
+  // by NOT requiring escrow before pickup — that's the whole point of
+  // those tiers — so they must never be blocked by this check.
+  const isSpotEscrowTier = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
+  if (nextStatus === 'PICKED_UP' && isSpotEscrowTier && job.escrow_status !== 'FUNDED') {
+    const e = new Error('Payment not yet confirmed — pickup unlocks once payment receipt is confirmed.');
+    e.status = 400;
+    throw e;
+  }
+
   // Primary status update via repository (uses repository to satisfy modularization)
   await jobRepository.updateStatus(id, { status: nextStatus });
 
@@ -115,7 +137,17 @@ async function updateJobStatus(jobId, nextStatus, req) {
       return true;
     });
     if (released) {
-      try { await issueInvoice(db, id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${id}:`, e); }
+      // issueInvoice() already retries a colliding invoice number
+      // internally (server/lib/invoice.js) — a failure reaching here is a
+      // real, non-self-healing problem. Previously this was only
+      // console.error'd, so a completed job could silently end up with no
+      // invoice at all, visible nowhere an admin would actually see it.
+      try {
+        await issueInvoice(db, id);
+      } catch (e) {
+        console.error(`[invoice] issueInvoice failed for job ${id}:`, e);
+        try { await notifyAdmins('Invoice issuance failed', `Job ${job.job_code} (id ${id}) completed and released, but its invoice failed to issue: ${e.message}`, id, 'system'); } catch {}
+      }
       if (job.carrier_id) {
         try { await notify(job.carrier_id, 'Funds on the way', `${job.job_code} was confirmed delivered. Payout released.`, id, 'payout'); } catch {}
       }
@@ -258,7 +290,7 @@ async function getJob(jobId, user) {
   const isAdmin = user.role === 'ADMIN';
   if (!isOwnerShipper && !isAdmin) {
     // Driver identity/contact must never leak to a carrier who isn't the
-    // bid's own owner, regardless of job status (see the fix shipped
+  // bid's own owner, regardless of job status (see the fix shipped
     // separately for this — bringing the same logic in here since this
     // branch predates it and this function is being touched anyway).
     // Price, ancillary charges, and driver identity are ALL masked from
@@ -267,12 +299,22 @@ async function getJob(jobId, user) {
     // leaves OPEN, price/company stay visible as useful market
     // information, but driver identity/contact stays masked forever for
     // anyone but the shipper, the actually-awarded carrier, or admin.
+    // bid's own owner, regardless of job status — previously this only
+    // masked driver_name (and never driver_phone at all, in any status)
+    // while job.status === 'OPEN', so once a job left OPEN (e.g. AWARDED)
+    // a losing bidder could call this endpoint and see the winning bid's
+    // driver_name/driver_phone in full, since isParticipantOrBidder()
+    // grants view access to any carrier who ever placed a bid, win or
+    // lose. Commercial fields (amount_aed, carrier_company) are useful,
+    // non-sensitive market information once bidding has closed, so those
+    // stay visible post-OPEN — only driver identity/contact stays masked.
     const isOpenPhase = job.status === 'OPEN';
     bids = bids.map((b) => {
       if (b.carrier_id === user.id) return b;
       const driverMasked = { ...b, driver_name: null, driver_phone: null, notes: null };
       return isOpenPhase
         ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, ancillary_charges: [], masked: true }
+        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, masked: true }
         : driverMasked;
     });
   }

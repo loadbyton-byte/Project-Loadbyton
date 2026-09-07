@@ -170,7 +170,10 @@
     --brand-accent: #FF5449;
     --brand-accent-hover: #FF7A70;
     --brand-accent-bg: #3D1616;
-    --status-success: var(--lb-teal-500);
+    /* Was --lb-teal-500 (#43A047) — only 3.9:1 against --status-success-bg,
+       under WCAG AA's 4.5:1 for normal text. #56D364 keeps the same green
+       hue, just lighter, giving 6.7:1 on the same background. */
+    --status-success: #56D364;
     --status-success-bg: #123832;
     --status-warning: #FFA733;
     --status-warning-bg: #3D2A10;
@@ -207,7 +210,10 @@
   --brand-accent: #FF5449;
   --brand-accent-hover: #FF7A70;
   --brand-accent-bg: #3D1616;
-  --status-success: var(--lb-teal-500);
+  /* Was --lb-teal-500 (#43A047) — only 3.9:1 against --status-success-bg,
+     under WCAG AA's 4.5:1 for normal text. #56D364 keeps the same green
+     hue, just lighter, giving 6.7:1 on the same background. */
+  --status-success: #56D364;
   --status-success-bg: #123832;
   --status-warning: #FFA733;
   --status-warning-bg: #3D2A10;
