@@ -54,6 +54,14 @@ export default function Dashboard() {
   const [form, setForm] = useState(emptyJob);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Progressive disclosure: most shippers already have a standing
+  // acceptance of the current Terms version (from signup, or an earlier
+  // job) — the backend silently skips requiring this per job in that case
+  // (see server/validators/job.schema.js). This checkbox only appears
+  // after a first submit attempt actually comes back needing it, instead
+  // of showing on every single post and causing checkbox fatigue.
+  const [needsTermsCheckbox, setNeedsTermsCheckbox] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('date_desc');
   const [search, setSearch] = useState('');
@@ -122,6 +130,8 @@ export default function Dashboard() {
         containerCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.containerCount) || 1,
         truckCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.truckCount) || 1,
         scheduledPostAt: form.scheduleForLater && form.scheduledPostAt ? new Date(form.scheduledPostAt).toISOString() : undefined,
+        agreedToTerms,
+      });
       }, postJobIdempotencyKeyRef.current);
       const jobId = created.job?.id;
       if (form.packingList && jobId) {
@@ -151,11 +161,15 @@ export default function Dashboard() {
       load();
     } catch (err) {
       setError(err.message);
-      addToast({
-        type: 'system_message',
-        title: 'Error',
-        body: err.message,
-      });
+      if (/agree to the current Terms/i.test(err.message)) {
+        setNeedsTermsCheckbox(true);
+      } else {
+        addToast({
+          type: 'system_message',
+          title: 'Error',
+          body: err.message,
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -449,11 +463,17 @@ export default function Dashboard() {
                   placeholder={CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 'Gate pass instructions, contact on site, etc.' : 'What is being moved — e.g. "40 tonnes of aggregate, site access via gate 4."'}
                 />
               </div>
+              {needsTermsCheckbox && (
+                <label className="sm:col-span-2 flex items-start gap-2 text-sm text-ink-secondary">
+                  <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5" />
+                  <span>I have read and agree to the current <a href="/terms" target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</a> (updated since your last acceptance)</span>
+                </label>
+              )}
               {error && <p className="sm:col-span-2 rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>{error}</p>}
             </Card.Content>
             <Card.Footer>
               <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button type="submit" loading={submitting}>Post job</Button>
+              <Button type="submit" loading={submitting} disabled={needsTermsCheckbox && !agreedToTerms}>Post job</Button>
             </Card.Footer>
           </form>
         </Card>

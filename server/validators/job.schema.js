@@ -1,9 +1,22 @@
 const db = require('../db');
 const { randomToken, jobCode } = require('../lib/http');
-const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT } = require('../lib/constants');
+const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT, TERMS_VERSION } = require('../lib/constants');
 const { isValidUaeLatLng } = require('../lib/helpers');
 
 async function createJobFromBody(body, req) {
+  // T&C acceptance, per job — but only re-prompt if the shipper hasn't
+  // already agreed to the CURRENT terms version at all (signup or a
+  // previous job), to avoid checkbox fatigue on every single post/import
+  // row. A returning shipper on the current version needs no explicit
+  // flag; a brand-new shipper, or one whose last acceptance predates a
+  // terms bump, must send agreedToTerms: true or the job is rejected.
+  const alreadyAgreedToCurrentVersion = await db.prepare(
+    `SELECT 1 FROM terms_acceptances WHERE user_id=? AND terms_version=? LIMIT 1`
+  ).get(req.user.id, TERMS_VERSION);
+  if (!alreadyAgreedToCurrentVersion && !body.agreedToTerms) {
+    throw { status: 400, message: 'You must agree to the current Terms & Conditions before posting a job' };
+  }
+
   const {
     shipmentType, containerSize, containerType, containerCount,
     pickupTerminal, deliveryArea, deliveryAddress,
@@ -14,7 +27,7 @@ async function createJobFromBody(body, req) {
     equipmentType, cargoType, loadingLocation, deliveryLocation,
     importPickupTerminal, importUnloadingLocation, importEmptyReturnLocation,
     exportEmptyPickupLocation, exportLoadingLocation, exportDepositTerminal,
-    scheduledPostAt,
+    scheduledPostAt, requiresSeal,
   } = body;
 
   const shipType = (shipmentType || 'LOCAL').toUpperCase();
@@ -97,6 +110,21 @@ async function createJobFromBody(body, req) {
 
   const jobId = Number(result.lastInsertRowid);
 
+  if (!alreadyAgreedToCurrentVersion) {
+    const { byIp } = require('../lib/rateLimit');
+    await db.prepare(
+      `INSERT INTO terms_acceptances (user_id, terms_version, context, job_id, ip_address) VALUES (?,?,'JOB',?,?)`
+    ).run(req.user.id, TERMS_VERSION, jobId, byIp(req) || null);
+  }
+
+  // requires_seal: no existing field reliably implies sealed-vs-empty (see
+  // server/schema.js's comment) — defaults by shipment type (IMPORT/EXPORT
+  // typically sealed customs containers, LOCAL typically not), overridable
+  // by the shipper. The DB-level column default is 1, so only a LOCAL job
+  // (or an explicit override) needs this follow-up UPDATE.
+  const effectiveRequiresSeal = requiresSeal !== undefined ? (requiresSeal ? 1 : 0) : (shipType === 'LOCAL' ? 0 : 1);
+  if (effectiveRequiresSeal !== 1) {
+    await db.prepare('UPDATE jobs SET requires_seal=? WHERE id=?').run(effectiveRequiresSeal, jobId);
   // payment_tier: not yet exposed in the job-posting UI or gated by any
   // eligibility check (that's separate, not-yet-built work) — accepted
   // here mainly so the tier logic in award.service.js/job.service.js is

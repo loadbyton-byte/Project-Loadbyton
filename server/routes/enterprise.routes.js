@@ -23,27 +23,48 @@ router.post('/api/jobs/:id/etoken', auth(['CARRIER']), async (req,res)=>{
   res.json({ ok:true });
 });
 
-// EIR 3-photo checklist — Seal, Right, Left — becomes immutable ledger via job_documents
+// EIR photo checklist — becomes immutable ledger via job_documents.
+// Branches on jobs.requires_seal: a sealed (goods-carrying) job needs only
+// 1 photo (Seal) plus the seal number itself (the actual verifiable fact
+// in a damage/tamper dispute — a photo alone only proves *a* seal existed,
+// not which one); an unsealed/empty job needs 2 (Right Side, Left Side).
+// Captured at BOTH pickup and delivery (?stage=pickup|delivery) — this used
+// to be pickup-only, leaving no evidence at all for the delivery end of a
+// damage/shortage dispute.
 router.post('/api/jobs/:id/eir', auth(['CARRIER']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
   if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
-  const { photos } = req.body||{}; // [{title, fileBase64|storageKey, mimeType}]
-  if(!Array.isArray(photos)||photos.length!==3) return apiResponse.error(req,res,'VALIDATION_FAILED','EIR requires exactly 3 photos: Seal, Right Side, Left Side');
-  const labels=['Seal','Right Side','Left Side'];
+  const stage = req.query.stage === 'delivery' ? 'delivery' : 'pickup';
+  const { photos, sealNumber } = req.body||{}; // photos: [{title, fileBase64|storageKey, mimeType}]
+  const requiresSeal = !!job.requires_seal;
+  const expectedCount = requiresSeal ? 1 : 2;
+  const labels = requiresSeal ? ['Seal'] : ['Right Side', 'Left Side'];
+  if(!Array.isArray(photos)||photos.length!==expectedCount) {
+    return apiResponse.error(req,res,'VALIDATION_FAILED',`EIR requires exactly ${expectedCount} photo(s): ${labels.join(', ')}`);
+  }
+  if (requiresSeal && (!sealNumber || !String(sealNumber).trim())) {
+    return apiResponse.error(req,res,'VALIDATION_FAILED','sealNumber is required for a sealed job — the photo alone does not record which seal was used');
+  }
   const { resolveUploadedFile } = require('../lib/helpers');
   const stored=[];
-  for(let i=0;i<3;i++){
+  for(let i=0;i<expectedCount;i++){
     const p=photos[i];
     if(!(p.fileBase64||p.storageKey)||!p.mimeType) return apiResponse.error(req,res,'VALIDATION_FAILED',`Photo ${i+1} missing fileBase64/storageKey or mimeType`);
     const { storagePath } = await resolveUploadedFile(String(job.id), { mimeType: p.mimeType, fileBase64: p.fileBase64, storageKey: p.storageKey });
-    const title = `EIR ${labels[i]} — ${job.job_code}`;
+    const title = `EIR ${labels[i]} (${stage}) — ${job.job_code}`;
     await db.prepare(`INSERT INTO job_documents (job_id,uploader_id,doc_type,title,file_url,storage_path,mime_type) VALUES (?,?,?,?,?,?,?)`).run(job.id, req.user.id, 'EIR', title, storagePath, storagePath, p.mimeType);
     stored.push(storagePath);
   }
-  await db.prepare(`UPDATE jobs SET eir_photos=?, updated_at=datetime('now') WHERE id=?`).run(JSON.stringify(stored), job.id);
-  await writeAudit(req,{userId:req.actorId, action:'EIR_UPLOADED', details:`${job.job_code} EIR 3 photos`, entityType:'job', entityId:job.id});
-  res.json({ ok:true, photos: stored });
+  const photosColumn = stage === 'delivery' ? 'eir_photos_delivery' : 'eir_photos_pickup';
+  const sealColumn = stage === 'delivery' ? 'seal_number_delivery' : 'seal_number';
+  const sets = [`${photosColumn}=?`, `updated_at=datetime('now')`];
+  const params = [JSON.stringify(stored)];
+  if (requiresSeal) { sets.push(`${sealColumn}=?`); params.push(String(sealNumber).trim()); }
+  params.push(job.id);
+  await db.prepare(`UPDATE jobs SET ${sets.join(', ')} WHERE id=?`).run(...params);
+  await writeAudit(req,{userId:req.actorId, action:'EIR_UPLOADED', details:`${job.job_code} EIR ${stage} (${expectedCount} photo(s)${requiresSeal ? `, seal ${sealNumber}` : ''})`, entityType:'job', entityId:job.id});
+  res.json({ ok:true, stage, photos: stored });
 });
 
 // Demurrage/detention alarm check — called by cron or carrier dashboard

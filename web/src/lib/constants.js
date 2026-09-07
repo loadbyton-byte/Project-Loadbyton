@@ -110,3 +110,5 @@ export function formatDateTime(iso) {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString('en-AE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
+
+export const ANCILLARY_CHARGE_LABELS = { SALIK: 'Salik', ETOKEN: 'E-Token', DEMURRAGE: 'Demurrage/Waiting', INSPECTION_WAITING: 'Inspection waiting', OTHER: 'Other' };

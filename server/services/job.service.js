@@ -269,10 +269,36 @@ async function getJob(jobId, user) {
        WHERE job_id=? ORDER BY amount_aed ASC`
     )
     .all(job.id);
+
+  // Ancillary charges (Salik/e-token/demurrage/inspection-waiting) are now
+  // declared at bid time and reviewed by the shipper alongside each bid's
+  // price — attach them here so the shipper sees a bidder's full expected
+  // cost in one place, rather than needing a separate call per bid.
+  if (bids.length) {
+    const allCharges = await db
+      .prepare(`SELECT * FROM bid_ancillary_charges WHERE bid_id IN (${bids.map(() => '?').join(',')}) ORDER BY created_at ASC`)
+      .all(...bids.map((b) => b.id));
+    const chargesByBid = new Map();
+    for (const c of allCharges) {
+      if (!chargesByBid.has(c.bid_id)) chargesByBid.set(c.bid_id, []);
+      chargesByBid.get(c.bid_id).push(c);
+    }
+    bids = bids.map((b) => ({ ...b, ancillary_charges: chargesByBid.get(b.id) || [] }));
+  }
+
   const isOwnerShipper = user.id === job.shipper_id;
   const isAdmin = user.role === 'ADMIN';
   if (!isOwnerShipper && !isAdmin) {
     // Driver identity/contact must never leak to a carrier who isn't the
+  // bid's own owner, regardless of job status (see the fix shipped
+    // separately for this — bringing the same logic in here since this
+    // branch predates it and this function is being touched anyway).
+    // Price, ancillary charges, and driver identity are ALL masked from
+    // every other bidder while the job is still OPEN — "no bidder should
+    // watch other bidders' price and everything, docs etc." Once the job
+    // leaves OPEN, price/company stay visible as useful market
+    // information, but driver identity/contact stays masked forever for
+    // anyone but the shipper, the actually-awarded carrier, or admin.
     // bid's own owner, regardless of job status — previously this only
     // masked driver_name (and never driver_phone at all, in any status)
     // while job.status === 'OPEN', so once a job left OPEN (e.g. AWARDED)
@@ -287,6 +313,7 @@ async function getJob(jobId, user) {
       if (b.carrier_id === user.id) return b;
       const driverMasked = { ...b, driver_name: null, driver_phone: null, notes: null };
       return isOpenPhase
+        ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, ancillary_charges: [], masked: true }
         ? { ...driverMasked, amount_aed: null, eta_at: null, eta_minutes: null, carrier_company: null, masked: true }
         : driverMasked;
     });

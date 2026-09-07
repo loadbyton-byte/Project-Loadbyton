@@ -72,7 +72,7 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   assert.equal(bidRes.body.bid.driver_name, null);
   assert.equal(bidRes.body.bid.driver_phone, null);
 
-  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId });
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
   assert.equal(award.body.job.status, 'AWARDED');
   assert.equal(award.body.job.escrow_status, 'HELD');
@@ -81,7 +81,7 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   // Idempotency: a second award attempt on the same job must fail, not
   // silently succeed or double-charge escrow. This is the exact guarantee
   // Critical path: prevents double-award race condition.
-  const doubleAward = await shipper.post(`/api/jobs/${jobId}/award`, { bidId });
+  const doubleAward = await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
   assert.equal(doubleAward.status, 409, 'a job already AWARDED must reject a second award attempt');
 
   // TODO-2: the driver is deliberately NOT bound at award time anymore —

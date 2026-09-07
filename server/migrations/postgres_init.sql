@@ -616,4 +616,52 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('auto_release_hours', '24')
 ON CONFLICT (key) DO NOTHING;
 
+-- Terms & Conditions acceptance, pre-award negotiation/ancillary charges,
+-- haulier code/token, and EIR seal-number/two-stage photos — see
+-- server/schema.js (the actual auto-migrating SQLite path this app runs
+-- on) for the full reasoning; mirrored here for the opt-in Postgres path.
+CREATE TABLE IF NOT EXISTS terms_acceptances (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  terms_version TEXT NOT NULL,
+  context TEXT NOT NULL CHECK (context IN ('SIGNUP','JOB')),
+  job_id INTEGER REFERENCES jobs(id),
+  ip_address TEXT,
+  accepted_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_terms_acceptances_user ON terms_acceptances(user_id, context);
+
+CREATE TABLE IF NOT EXISTS bid_negotiations (
+  id SERIAL PRIMARY KEY,
+  bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+  sender_id INTEGER NOT NULL REFERENCES users(id),
+  message TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_bid_negotiations_bid ON bid_negotiations(bid_id);
+
+CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
+  id SERIAL PRIMARY KEY,
+  bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+  charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+  amount_aed REAL NOT NULL,
+  notes TEXT,
+  proposed_by INTEGER NOT NULL REFERENCES users(id),
+  agreed_by_shipper INTEGER NOT NULL DEFAULT 0,
+  agreed_by_carrier INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
+
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS terms_confirmed_at TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_code TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token_set_by INTEGER REFERENCES users(id);
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token_set_at TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS seal_number TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eir_photos_pickup TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eir_photos_delivery TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS seal_number_delivery TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS requires_seal INTEGER NOT NULL DEFAULT 1;
+
 COMMIT;
