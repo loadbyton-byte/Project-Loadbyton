@@ -129,6 +129,25 @@ function requireSeatRole(allowedSeatRoles) {
   };
 }
 
+// "New account starts PENDING and is read-only until an admin approves it"
+// — stated in Shell.jsx's own banner ("posting, bidding, and other actions
+// are disabled until an admin approves it") and disabled client-side on
+// Dashboard.jsx's Post-a-job button, but never enforced server-side until
+// this middleware: a PENDING account calling the API directly (bypassing
+// the disabled button) could post jobs, bid, and dispatch freely. REJECTED
+// accounts are already blocked entirely by auth()'s `is_active=1` check
+// (verification.service.js sets is_active=0 on rejection) — this only
+// needs to cover the PENDING case.
+function requireApproved() {
+  return async (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+    if (req.user.account_approval_status && req.user.account_approval_status !== 'APPROVED') {
+      return res.status(403).json({ error: 'Your account is pending admin approval — this action is disabled until then.' });
+    }
+    next();
+  };
+}
+
 function requirePermission(permission) {
   return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
@@ -173,4 +192,4 @@ async function revokeAllSessions(userId) {
   await db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);
 }
 
-module.exports = { auth, requireSeatRole, requirePermission, requireReauth, revokeAllSessions, writeLimiter, isThrottled, recordFailure, clearThrottle, roleSatisfies };
+module.exports = { auth, requireSeatRole, requireApproved, requirePermission, requireReauth, revokeAllSessions, writeLimiter, isThrottled, recordFailure, clearThrottle, roleSatisfies };

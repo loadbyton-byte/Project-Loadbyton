@@ -28,7 +28,7 @@ export default function EdiConsignments() {
       const data = await api.listConsignments();
       setConsignments(data.consignments || []);
     } catch (e) {
-      addToast(e.message || 'Failed to load consignments', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Failed to load consignments' });
     } finally {
       setLoading(false);
     }
@@ -46,44 +46,44 @@ export default function EdiConsignments() {
     <div className="container-page max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink">{t('edi.title') || 'EDI Consignments'}</h1>
-          <p className="text-ink-muted mt-1">{t('edi.desc') || 'Manage EDI consignments and transitions'}</p>
+          <h1 className="font-display text-2xl font-bold text-ink">{t('edi.title', 'EDI Consignments')}</h1>
+          <p className="text-ink-muted mt-1">{t('edi.desc', 'Manage EDI consignments and transitions')}</p>
         </div>
         <Button onClick={async () => {
           try {
             await api.ingestEdi({ test: true });
-            addToast('EDI ingest triggered', 'success');
+            addToast({ type: 'status_change', title: 'EDI ingest triggered' });
             fetchConsignments();
-          } catch (e) { addToast(e.message || 'Failed', 'error'); }
+          } catch (e) { addToast({ type: 'system_message', title: e.message || 'Failed' }); }
         }}>
-          <IconPlus size={16} className="mr-2" /> {t('edi.ingest') || 'Ingest EDI'}
+          <IconPlus size={16} className="mr-2" /> {t('edi.ingest', 'Ingest EDI')}
         </Button>
       </div>
 
       <div className="mb-4">
         <div className="relative max-w-md">
           <IconSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <Input type="text" placeholder={t('edi.searchPlaceholder') || 'Search consignments...'} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <Input type="text" placeholder={t('edi.searchPlaceholder', 'Search consignments...')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
       </div>
 
       {filtered.length === 0 ? (
         <Card className="p-12 text-center">
           <IconPackage size={48} className="mx-auto text-ink-muted mb-4" />
-          <h3 className="font-semibold text-ink mb-2">{t('edi.none') || 'No consignments'}</h3>
-          <p className="text-ink-muted mb-6">{t('edi.noneDesc') || 'Ingest EDI files to see consignments here'}</p>
+          <h3 className="font-semibold text-ink mb-2">{t('edi.none', 'No consignments')}</h3>
+          <p className="text-ink-muted mb-6">{t('edi.noneDesc', 'Ingest EDI files to see consignments here')}</p>
         </Card>
       ) : (
         <Card className="overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wider text-ink-muted bg-surface-container-high">
-                <th className="px-4 py-3">{t('edi.consignmentId') || 'Consignment ID'}</th>
-                <th className="px-4 py-3">{t('edi.origin') || 'Origin'}</th>
-                <th className="px-4 py-3">{t('edi.destination') || 'Destination'}</th>
-                <th className="px-4 py-3">{t('edi.status') || 'Status'}</th>
-                <th className="px-4 py-3">{t('edi.linkedJob') || 'Linked Job'}</th>
-                <th className="px-4 py-3">{t('edi.updated') || 'Updated'}</th>
+                <th className="px-4 py-3">{t('edi.consignmentId', 'Consignment ID')}</th>
+                <th className="px-4 py-3">{t('edi.origin', 'Origin')}</th>
+                <th className="px-4 py-3">{t('edi.destination', 'Destination')}</th>
+                <th className="px-4 py-3">{t('edi.status', 'Status')}</th>
+                <th className="px-4 py-3">{t('edi.linkedJob', 'Linked Job')}</th>
+                <th className="px-4 py-3">{t('edi.updated', 'Updated')}</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>

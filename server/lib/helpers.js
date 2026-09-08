@@ -259,10 +259,47 @@ async function writeAudit(req, { userId = null, action, details = null, entityTy
   // between the two lib modules.
   const ipAddress = req ? (req.headers?.['cf-connecting-ip'] || req.ip || null) : null;
   const userAgent = req ? (req.headers?.['user-agent'] || null) : null;
-  await db.prepare(
-    `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id, ip_address, user_agent)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`
-  ).run(userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null, ipAddress, userAgent);
+  // Change 21's tamper-evident hash chain — schema had prev_hash/hash
+  // columns from the start, but this insert never populated them (a real
+  // gap found in review: the audit trail wasn't actually tamper-evident
+  // despite having the schema for it, only ledger_transactions was).
+  // routes/audit.routes.js's GET /api/admin/audit/verify already defines
+  // and checks a specific formula (sha256(prev|action|entityType|entityId|
+  // createdAt)) — matching it exactly here, not inventing a second one,
+  // otherwise that endpoint would report every new row as a tamper break.
+  // created_at is generated explicitly (not the column's own DB-time
+  // DEFAULT) so its exact value is known before the row exists — audit_log
+  // is append-only (triggers block UPDATE/DELETE — see schema.js), so
+  // unlike lib/ledger.js's createTransaction (insert, then backfill the
+  // hash via UPDATE) this hash must be computed before the one and only
+  // INSERT this row ever gets.
+  //
+  // Deliberately NOT wrapped in db.transaction(): writeAudit() is called
+  // from many places already inside their own transaction (award, cancel,
+  // dispute-resolve, refund) — nesting a second BEGIN there is a hard
+  // SQLite error ("cannot start a transaction within a transaction"),
+  // which silently dropped the audit row for exactly those money-critical
+  // actions until this was caught. db.query() runs standalone (joining
+  // whatever transaction, if any, is already open on this connection),
+  // matching how audit_log inserts have always behaved — the trade-off is
+  // no FOR UPDATE lock on the chain tip, so two truly concurrent writers
+  // could theoretically fork the chain; verifyChain() already treats a
+  // fork as a reported break rather than a crash, the same "best effort
+  // under concurrency" already accepted for the ledger's own chain.
+  let prevHash = 'GENESIS';
+  try {
+    const prevRow = await db.query(`SELECT hash FROM audit_log WHERE hash IS NOT NULL ORDER BY id DESC LIMIT 1`, []);
+    prevHash = prevRow.rows[0]?.hash || 'GENESIS';
+  } catch (e) {
+    console.error('[audit] hash-chain tip lookup failed, chaining from GENESIS:', e.message);
+  }
+  const createdAt = new Date().toISOString();
+  const hash = crypto.createHash('sha256').update(`${prevHash}|${action}|${entityType || ''}|${entityId || ''}|${createdAt}`).digest('hex');
+  await db.query(
+    `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id, ip_address, user_agent, prev_hash, hash, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null, ipAddress, userAgent, prevHash, hash, createdAt]
+  );
 }
 
 /**

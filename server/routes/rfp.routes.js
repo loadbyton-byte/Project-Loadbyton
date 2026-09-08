@@ -1,11 +1,11 @@
 const db = require('../db');
 const { sendError } = require('../lib/http');
 const { writeAudit, notify } = require('../lib/helpers');
-const { auth, requireSeatRole } = require('../middleware/auth');
+const { auth, requireSeatRole, requireApproved } = require('../middleware/auth');
 const router = require('express').Router();
 
 // Create RFP — enterprise contract lane
-router.post('/api/rfps', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req,res)=>{
+router.post('/api/rfps', auth(['SHIPPER']), requireApproved(), requireSeatRole(['OPS']), async (req,res)=>{
   const { title, description, origin, destination, totalContainers, durationMonths, budgetAed } = req.body||{};
   if(!title||!origin||!destination||!totalContainers||!durationMonths||!budgetAed) return sendError(res,400,'Missing RFP fields');
   // durationMonths becomes the loop count for the monthly-milestone insert
@@ -59,15 +59,15 @@ router.get('/api/rfps/:id', auth(), async (req,res)=>{
   let bids;
   if (isOwner || isAdmin) {
     // The party who needs to compare and award sees every bid.
-    bids = await db.prepare('SELECT * FROM rfp_bids WHERE rfp_id=? ORDER BY amount_aed').all(rfp.id);
+    bids = await db.prepare('SELECT b.*, p.company_name as carrier_company FROM rfp_bids b LEFT JOIN profiles p ON p.user_id = b.carrier_id WHERE b.rfp_id=? ORDER BY b.amount_aed').all(rfp.id);
   } else {
     // A carrier browsing/considering this RFP only ever sees their own
     // bid, never a competitor's pricing or proposal text.
-    bids = await db.prepare('SELECT * FROM rfp_bids WHERE rfp_id=? AND carrier_id=? ORDER BY amount_aed').all(rfp.id, req.user.id);
+    bids = await db.prepare('SELECT b.*, p.company_name as carrier_company FROM rfp_bids b LEFT JOIN profiles p ON p.user_id = b.carrier_id WHERE b.rfp_id=? AND b.carrier_id=? ORDER BY b.amount_aed').all(rfp.id, req.user.id);
   }
   res.json({ rfp, bids, milestones });
 });
-router.post('/api/rfps/:id/bids', auth(['CARRIER']), async (req,res)=>{
+router.post('/api/rfps/:id/bids', auth(['CARRIER']), requireApproved(), async (req,res)=>{
   const rfp = await db.prepare('SELECT * FROM contract_rfps WHERE id=?').get(req.params.id);
   if(!rfp||rfp.status!=='OPEN') return sendError(res,400,'RFP not open');
   const { amountAed, etaDays, proposal } = req.body||{};
@@ -76,7 +76,7 @@ router.post('/api/rfps/:id/bids', auth(['CARRIER']), async (req,res)=>{
   await notify(rfp.shipper_id, 'RFP bid received', `New bid on ${rfp.title}`, null, 'bid');
   res.status(201).json({ ok:true });
 });
-router.post('/api/rfps/:id/award', auth(['SHIPPER']), async (req,res)=>{
+router.post('/api/rfps/:id/award', auth(['SHIPPER']), requireApproved(), async (req,res)=>{
   const rfp = await db.prepare('SELECT * FROM contract_rfps WHERE id=?').get(req.params.id);
   if(!rfp||rfp.shipper_id!==req.user.id) return sendError(res,403,'Not your RFP');
   const { bidId } = req.body||{};

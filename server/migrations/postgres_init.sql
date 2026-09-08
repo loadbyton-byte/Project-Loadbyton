@@ -806,6 +806,7 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS haulage_insurance_expiry TEXT;
 -- GIT cargo insurance (Change 20) — see server/schema.js.
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cargo_value_aed REAL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS insurance_opt_in INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS priority_boost_until TEXT;
 CREATE TABLE IF NOT EXISTS job_insurance (
   id SERIAL PRIMARY KEY,
   job_id INTEGER NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,

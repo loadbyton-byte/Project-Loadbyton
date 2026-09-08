@@ -29,9 +29,9 @@ export default function AccountDeletion() {
       a.download = `loadbyton-export-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      addToast('Data exported', 'success');
+      addToast({ type: 'status_change', title: 'Data exported' });
     } catch (e) {
-      addToast(e.message || 'Export failed', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Export failed' });
     } finally {
       setExporting(false);
     }
@@ -39,16 +39,16 @@ export default function AccountDeletion() {
 
   async function handleDelete() {
     if (confirmText !== 'DELETE') {
-      addToast('Type "DELETE" to confirm', 'error');
+      addToast({ type: 'system_message', title: 'Type "DELETE" to confirm' });
       return;
     }
     setDeleting(true);
     try {
       await api.deleteAccount();
-      addToast('Account deleted', 'success');
+      addToast({ type: 'status_change', title: 'Account deleted' });
       logout();
     } catch (e) {
-      addToast(e.message || 'Deletion failed', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Deletion failed' });
     } finally {
       setDeleting(false);
     }
@@ -58,19 +58,19 @@ export default function AccountDeletion() {
     <div className="container-page max-w-2xl">
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2">
-          <IconUser size={24} /> {t('account.settings') || 'Account Settings'}
+          <IconUser size={24} /> {t('account.settings', 'Account Settings')}
         </h1>
-        <p className="text-ink-muted mt-1">{t('account.desc') || 'Manage your account data and privacy'}</p>
+        <p className="text-ink-muted mt-1">{t('account.desc', 'Manage your account data and privacy')}</p>
       </div>
 
       <Card className="mb-6 p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-ink">{t('account.exportData') || 'Export Your Data'}</h3>
-            <p className="text-sm text-ink-muted mt-1">{t('account.exportDesc') || 'Download a copy of all your data (jobs, bids, documents, messages, etc.) in JSON format'}</p>
+            <h3 className="font-semibold text-ink">{t('account.exportData', 'Export Your Data')}</h3>
+            <p className="text-sm text-ink-muted mt-1">{t('account.exportDesc', 'Download a copy of all your data (jobs, bids, documents, messages, etc.) in JSON format')}</p>
           </div>
           <Button onClick={handleExport} loading={exporting}>
-            <IconDownload size={16} className="mr-2" /> {t('account.exportBtn') || 'Export Data'}
+            <IconDownload size={16} className="mr-2" /> {t('account.exportBtn', 'Export Data')}
           </Button>
         </div>
       </Card>
@@ -79,14 +79,14 @@ export default function AccountDeletion() {
         <div className="flex items-center gap-3 mb-4">
           <IconAlert size={24} className="text-status-warning" />
           <div>
-            <h3 className="font-semibold text-ink">{t('account.dangerZone') || 'Danger Zone'}</h3>
-            <p className="text-sm text-ink-muted">{t('account.dangerDesc') || 'Irreversible actions — proceed with caution'}</p>
+            <h3 className="font-semibold text-ink">{t('account.dangerZone', 'Danger Zone')}</h3>
+            <p className="text-sm text-ink-muted">{t('account.dangerDesc', 'Irreversible actions — proceed with caution')}</p>
           </div>
         </div>
 
         <div className="border-t pt-4" style={{ borderColor: 'var(--status-warning-bg)' }}>
           <Button variant="ghost" onClick={() => setDangerZone(true)}>
-            <IconAlert size={16} className="mr-2" /> {t('account.deleteAccount') || 'Delete Account'}
+            <IconAlert size={16} className="mr-2" /> {t('account.deleteAccount', 'Delete Account')}
           </Button>
         </div>
       </Card>
@@ -97,17 +97,17 @@ export default function AccountDeletion() {
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <IconAlert size={24} className="text-status-danger" />
-                <h3 className="font-display text-lg font-bold text-ink">{t('account.confirmDelete') || 'Confirm Account Deletion'}</h3>
+                <h3 className="font-display text-lg font-bold text-ink">{t('account.confirmDelete', 'Confirm Account Deletion')}</h3>
               </div>
-              <p className="text-ink-secondary mb-6">{t('account.deleteWarning') || 'This action is irreversible. All your jobs, bids, documents, messages, and payment history will be permanently deleted. This cannot be undone.'}</p>
+              <p className="text-ink-secondary mb-6">{t('account.deleteWarning', 'This action is irreversible. All your jobs, bids, documents, messages, and payment history will be permanently deleted. This cannot be undone.')}</p>
               <div className="mb-4">
-                <Label htmlFor="confirmDelete">{t('account.typeDelete') || 'Type "DELETE" to confirm'}</Label>
+                <Label htmlFor="confirmDelete">{t('account.typeDelete', 'Type "DELETE" to confirm')}</Label>
                 <Input id="confirmDelete" type="text" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="DELETE" className="mt-1 font-mono" />
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" className="flex-1" onClick={() => setDangerZone(false)}>{t('common.cancel') || 'Cancel'}</Button>
+                <Button variant="ghost" className="flex-1" onClick={() => setDangerZone(false)}>{t('common.cancel', 'Cancel')}</Button>
                 <Button variant="danger" className="flex-1" onClick={handleDelete} loading={deleting} disabled={confirmText !== 'DELETE'}>
-                  <IconUser size={16} className="mr-2" /> {t('account.deleteBtn') || 'Delete My Account'}
+                  <IconUser size={16} className="mr-2" /> {t('account.deleteBtn', 'Delete My Account')}
                 </Button>
               </div>
             </div>

@@ -55,6 +55,7 @@ const parseDbDate = /** @type {any} */ (helpersMod).parseDbDate;
 const authMod = require('../middleware/auth');
 const auth = /** @type {any} */ (authMod).auth;
 const requireSeatRole = /** @type {any} */ (authMod).requireSeatRole;
+const requireApproved = /** @type {any} */ (authMod).requireApproved;
 const writeLimiter = /** @type {any} */ (authMod).writeLimiter;
 /** @type {any} */
 const rateLimitMod = require('../lib/rateLimit');
@@ -75,7 +76,7 @@ const jobController = require('../controllers/job.controller');
 // @ts-ignore
 const router = require('express').Router();
 
-router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, requireSeatRole(['OPS']), idempotency, async (/** @type {any} */ req, /** @type {any} */ res) => {
+router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, requireApproved(), requireSeatRole(['OPS']), idempotency, async (/** @type {any} */ req, /** @type {any} */ res) => {
   const job = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id));
   if (!job) return sendError(res, 404, 'Job not found');
   // BROKER passes the CARRIER guard via roleSatisfies (they also post jobs),
@@ -249,7 +250,7 @@ router.patch('/api/jobs/:id/driver', auth(['CARRIER']), requireSeatRole(['OPS'])
 // stays the direct-assign path for a carrier's own roster). The driver
 // accepts/declines over WhatsApp (server/routes/whatsapp.routes.js) — only
 // on acceptance does bindDriverToJob actually run.
-router.post('/api/jobs/:id/trip-offer', auth(['CARRIER']), requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
+router.post('/api/jobs/:id/trip-offer', auth(['CARRIER']), requireApproved(), requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
   const job = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id));
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
@@ -278,6 +279,20 @@ router.post('/api/jobs/:id/trip-offer', auth(['CARRIER']), requireSeatRole(['OPS
 
   await writeAudit(req, { userId: req.actorId, action: 'TRIP_OFFER_SENT', details: `${job.job_code}: trip offer sent to ${driver.name}`, entityType: 'job', entityId: job.id });
   res.status(201).json({ tripOffer: await db.prepare('SELECT * FROM trip_offers WHERE id=?').get(Number(result.lastInsertRowid)) });
+});
+
+// Full offer history for this job — TripOffers.jsx's page had no way to
+// show a pending offer or any past ones (a real gap found in review: the
+// page assumed this data would just show up on GET /api/jobs/:id, which
+// it never did).
+router.get('/api/jobs/:id/trip-offers', auth(['CARRIER']), async (/** @type {any} */ req, /** @type {any} */ res) => {
+  const job = /** @type {any} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id));
+  if (!job) return sendError(res, 404, 'Job not found');
+  if (job.carrier_id !== req.user.id) return sendError(res, 403, 'Not your job');
+  const offers = await db
+    .prepare(`SELECT o.*, d.name as driver_name FROM trip_offers o JOIN drivers d ON d.id = o.driver_id WHERE o.job_id=? ORDER BY o.offered_at DESC`)
+    .all(job.id);
+  res.json({ offers });
 });
 
 router.post('/api/jobs/:id/pod', auth(['CARRIER']), requireSeatRole(['OPS']), idempotency, async (/** @type {any} */ req, /** @type {any} */ res) => {

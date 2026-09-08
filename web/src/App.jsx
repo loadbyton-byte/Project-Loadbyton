@@ -114,8 +114,13 @@ function RequireAuth({ roles, children }) {
   // full carrier dashboard — the backend already blocks its API calls
   // (middleware/auth.js's DRIVER_SEAT_ALLOWED_ROUTES), but it should never
   // even render those pages. Checked before the roles check so it applies
-  // uniformly regardless of what a route asks for.
-  if (actingAs?.seatRole === 'DRIVER') return <Navigate to="/driver" replace />;
+  // uniformly regardless of what a route asks for. DRIVER_ASSOCIATE (a
+  // pool driver pushed trip offers over WhatsApp) is the same restricted
+  // seat mechanism with a different acquisition model — a real gap found
+  // in review: it fell through this check entirely and rendered the full
+  // owner-role dashboard in the browser (no data leak, since the backend
+  // still 403s every call, but the UI itself was wrong).
+  if (actingAs?.seatRole === 'DRIVER' || actingAs?.seatRole === 'DRIVER_ASSOCIATE') return <Navigate to="/driver" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to={roleHome(user.role)} replace />;
   return children;
 }
@@ -127,7 +132,7 @@ function DriverOnly({ children }) {
   const location = useLocation();
   if (loading) return <FullScreenSpinner />;
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (actingAs?.seatRole !== 'DRIVER') return <Navigate to={homePath(user, actingAs)} replace />;
+  if (actingAs?.seatRole !== 'DRIVER' && actingAs?.seatRole !== 'DRIVER_ASSOCIATE') return <Navigate to={homePath(user, actingAs)} replace />;
   return children;
 }
 

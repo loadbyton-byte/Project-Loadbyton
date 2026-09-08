@@ -32,20 +32,22 @@ export default function TripOffers() {
       const [jobData, driversData, offersData] = await Promise.all([
         api.getJob(id),
         api.listDrivers(),
-        // Note: no direct API for trip_offers list yet, we'll get from job data
+        api.listTripOffers(id),
       ]);
-      setJob(jobData);
+      setJob(jobData.job);
       setDrivers(driversData.drivers || []);
-      // Fetch trip offers for this job
-      // There's no dedicated endpoint, but we can check job for pending offer
+      setOffers(offersData.offers || []);
     } catch (e) {
-      addToast(e.message || t('tripOffer.errorLoad') || 'Failed to load data', 'error');
+      addToast({ type: 'system_message', title: e.message || t('tripOffer.errorLoad', 'Failed to load data') });
     } finally {
       setLoading(false);
     }
   }
 
-  const activeOffer = job?.trip_offer;
+  // Most recent offer — the card below branches on its status (PENDING/
+  // ACCEPTED/other); the history list further down shows every offer,
+  // including this one.
+  const activeOffer = offers[0] || null;
   const eligibleDrivers = drivers.filter(d => d.seat_user_id && d.is_active);
 
   async function handleSendOffer(e) {
@@ -53,12 +55,12 @@ export default function TripOffers() {
     setSubmitting(true);
     try {
       await api.createTripOffer(id, { driverId: selectedDriver.id });
-      addToast(t('tripOffer.sent') || 'Trip offer sent to driver', 'success');
+      addToast({ type: 'status_change', title: t('tripOffer.sent', 'Trip offer sent to driver') });
       setShowModal(false);
       setSelectedDriver(null);
       fetchData();
     } catch (e) {
-      addToast(e.message || t('tripOffer.sendError') || 'Failed to send offer', 'error');
+      addToast({ type: 'system_message', title: e.message || t('tripOffer.sendError', 'Failed to send offer') });
     } finally {
       setSubmitting(false);
     }
@@ -72,8 +74,8 @@ export default function TripOffers() {
     return (
       <div className="container-page max-w-3xl text-center py-12">
         <IconAlert size={48} className="mx-auto text-status-warning mb-4" />
-        <h2 className="font-display text-xl font-bold text-ink mb-2">{t('common.notFound') || 'Job not found'}</h2>
-        <Button onClick={() => navigate(-1)}>{t('common.back') || 'Go Back'}</Button>
+        <h2 className="font-display text-xl font-bold text-ink mb-2">{t('common.notFound', 'Job not found')}</h2>
+        <Button onClick={() => navigate(-1)}>{t('common.back', 'Go Back')}</Button>
       </div>
     );
   }
@@ -82,10 +84,10 @@ export default function TripOffers() {
     <div className="container-page max-w-3xl">
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
-          <h1 className="font-display text-2xl font-bold text-ink">{t('tripOffer.title') || 'Trip Offers'}</h1>
+          <h1 className="font-display text-2xl font-bold text-ink">{t('tripOffer.title', 'Trip Offers')}</h1>
           <Badge color="neutral">{job.job_code}</Badge>
         </div>
-        <p className="text-ink-muted">{job.pickup_terminal} → {job.delivery_area} · {t('tripOffer.status') || 'Status'}: <span className="font-medium capitalize">{job.status.toLowerCase().replace('_', ' ')}</span></p>
+        <p className="text-ink-muted">{job.pickup_terminal} → {job.delivery_area} · {t('tripOffer.status', 'Status')}: <span className="font-medium capitalize">{job.status.toLowerCase().replace('_', ' ')}</span></p>
       </div>
 
       {/* Active Offer */}
@@ -93,8 +95,8 @@ export default function TripOffers() {
         <h3 className="font-semibold text-ink mb-4 flex items-center gap-2">
           <IconBell size={20} className={activeOffer?.status === 'PENDING' ? 'text-brand-primary' : 'text-status-success'} />
           {activeOffer ? (
-            activeOffer.status === 'PENDING' ? t('tripOffer.pendingOffer') : t('tripOffer.acceptedOffer')
-          ) : t('tripOffer.noActiveOffer')}
+            activeOffer.status === 'PENDING' ? t('tripOffer.pendingOffer', 'Pending offer') : t('tripOffer.acceptedOffer', 'Offer accepted')
+          ) : t('tripOffer.noActiveOffer', 'No active offer')}
         </h3>
 
         {activeOffer && activeOffer.status === 'PENDING' ? (
@@ -107,12 +109,12 @@ export default function TripOffers() {
                   </div>
                   <div>
                     <p className="font-medium text-ink">{activeOffer.driver_name || activeOffer.driver_id}</p>
-                    <p className="text-sm text-ink-muted">{t('tripOffer.sentAt') || 'Sent'}: {activeOffer.created_at ? new Date(activeOffer.created_at).toLocaleString() : '—'}</p>
+                    <p className="text-sm text-ink-muted">{t('tripOffer.sentAt', 'Sent')}: {activeOffer.created_at ? new Date(activeOffer.created_at).toLocaleString() : '—'}</p>
                   </div>
                 </div>
-                <Badge color="warning">{t('tripOffer.pending') || 'Pending'}</Badge>
+                <Badge color="warning">{t('tripOffer.pending', 'Pending')}</Badge>
               </div>
-              <p className="text-sm text-ink-muted mt-2">{t('tripOffer.driverDeciding') || 'Driver is deciding via WhatsApp. They can Accept or Decline.'}</p>
+              <p className="text-sm text-ink-muted mt-2">{t('tripOffer.driverDeciding', 'Driver is deciding via WhatsApp. They can Accept or Decline.')}</p>
             </div>
           </div>
         ) : activeOffer && activeOffer.status === 'ACCEPTED' ? (
@@ -120,22 +122,22 @@ export default function TripOffers() {
             <div className="flex items-center gap-3">
               <IconCheckCircle size={22} className="text-status-success" />
               <div>
-                <p className="font-medium text-ink">{t('tripOffer.accepted') || 'Offer accepted by driver'}</p>
-                <p className="text-sm text-ink-muted">{activeOffer.driver_name || 'Driver'} {t('tripOffer.isAssigned') || 'is now assigned to this job'}</p>
+                <p className="font-medium text-ink">{t('tripOffer.accepted', 'Offer accepted by driver')}</p>
+                <p className="text-sm text-ink-muted">{activeOffer.driver_name || 'Driver'} {t('tripOffer.isAssigned', 'is now assigned to this job')}</p>
               </div>
             </div>
           </div>
         ) : (
           <div className="text-center py-8 text-ink-muted">
             <IconTruck size={32} className="mx-auto mb-3 opacity-50" />
-            <p>{t('tripOffer.noOfferDesc') || 'No active trip offer. Send one to a driver from your roster.'}</p>
+            <p>{t('tripOffer.noOfferDesc', 'No active trip offer. Send one to a driver from your roster.')}</p>
             {!activeOffer && eligibleDrivers.length > 0 && (
               <Button onClick={() => setShowModal(true)} className="mt-4">
-                <IconPlus size={16} className="mr-2" /> {t('tripOffer.sendOffer') || 'Send Trip Offer'}
+                <IconPlus size={16} className="mr-2" /> {t('tripOffer.sendOffer', 'Send Trip Offer')}
               </Button>
             )}
             {!activeOffer && eligibleDrivers.length === 0 && (
-              <p className="mt-2 text-sm">{t('tripOffer.noEligibleDrivers') || 'No eligible drivers with login seats. Create driver seats first.'}</p>
+              <p className="mt-2 text-sm">{t('tripOffer.noEligibleDrivers', 'No eligible drivers with login seats. Create driver seats first.')}</p>
             )}
           </div>
         )}
@@ -143,10 +145,10 @@ export default function TripOffers() {
 
       {/* History */}
       <Card className="p-6">
-        <h3 className="font-semibold text-ink mb-4">{t('tripOffer.history') || 'Offer History'}</h3>
-        {job.trip_offers && job.trip_offers.length > 0 ? (
+        <h3 className="font-semibold text-ink mb-4">{t('tripOffer.history', 'Offer History')}</h3>
+        {offers.length > 0 ? (
           <div className="space-y-3">
-            {job.trip_offers.map((offer) => (
+            {offers.map((offer) => (
               <div key={offer.id} className="p-4 rounded-lg border" style={{ borderColor: 'var(--outline-variant)' }}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -164,17 +166,17 @@ export default function TripOffers() {
             ))}
           </div>
         ) : (
-          <p className="text-center py-8 text-ink-muted">{t('tripOffer.noHistory') || 'No offers sent yet'}</p>
+          <p className="text-center py-8 text-ink-muted">{t('tripOffer.noHistory', 'No offers sent yet')}</p>
         )}
       </Card>
 
       {/* Send Offer Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={t('tripOffer.sendOfferModal') || 'Send Trip Offer'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <p className="text-sm text-ink-muted">{t('tripOffer.selectDriver') || 'Select a driver with a login seat (DRIVER_ASSOCIATE)'}</p>
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={t('tripOffer.sendOfferModal', 'Send Trip Offer')}>
+        <form onSubmit={handleSendOffer} className="space-y-4">
+          <p className="text-sm text-ink-muted">{t('tripOffer.selectDriver', 'Select a driver with a login seat (DRIVER_ASSOCIATE)')}</p>
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {eligibleDrivers.length === 0 ? (
-              <p className="text-center py-4 text-ink-muted">{t('tripOffer.noEligibleDrivers') || 'No drivers with login seats. Create seats first in My Drivers.'}</p>
+              <p className="text-center py-4 text-ink-muted">{t('tripOffer.noEligibleDrivers', 'No drivers with login seats. Create seats first in My Drivers.')}</p>
             ) : (
               eligibleDrivers.map((d) => (
                 <label key={d.id} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-surface-container-high transition-colors">
@@ -192,8 +194,8 @@ export default function TripOffers() {
             )}
           </div>
           <div className="flex gap-2 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} className="flex-1">{t('common.cancel') || 'Cancel'}</Button>
-            <Button type="submit" loading={submitting} disabled={!selectedDriver} className="flex-1">{t('tripOffer.sendBtn') || 'Send Offer'}</Button>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} className="flex-1">{t('common.cancel', 'Cancel')}</Button>
+            <Button type="submit" loading={submitting} disabled={!selectedDriver} className="flex-1">{t('tripOffer.sendBtn', 'Send Offer')}</Button>
           </div>
         </form>
       </Modal>

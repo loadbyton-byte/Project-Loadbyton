@@ -89,21 +89,11 @@ test('bind without any cargo value fails closed (400) — never a silent or fake
 });
 
 test('broker provider without URL/KEY stays dark: bind is 503, never a fake bound record', async () => {
-  // NOTE: harness freePort() derives from pid, so a second server in the
-  // same file must take an explicit PORT or it collides with the file's
-  // main server (and silently tests the wrong server). The harness builds
-  // baseUrl from its own port choice, so address the override explicitly.
+  // A second server in the same file, on an explicit port — harness.js's
+  // startServer() now honors an explicit PORT in extraEnv for its own
+  // baseUrl/health-check too, so no manual port-polling workaround needed.
   const brokerServer = await startServer({ INSURANCE_PROVIDER: 'broker', PORT: '4311' });
-  const brokerBase = 'http://127.0.0.1:4311';
-  // startServer's readiness probe hits its own pid-derived port, not our
-  // PORT override — poll the real port until this child finishes booting.
-  for (let i = 0; i < 100; i++) {
-    try {
-      const h = await fetch(`${brokerBase}/api/health`);
-      if (h.ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 150));
-  }
+  const brokerBase = brokerServer.baseUrl;
   try {
     const shipper = makeClient(brokerBase);
     await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');

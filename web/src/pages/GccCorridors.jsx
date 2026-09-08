@@ -28,7 +28,7 @@ export default function GccCorridors() {
       setCountries(countriesData.countries || []);
       setCorridors(corridorsData.corridors || []);
     } catch (e) {
-      addToast(e.message || 'Failed to load GCC data', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Failed to load GCC data' });
     } finally {
       setLoading(false);
     }
@@ -39,13 +39,13 @@ export default function GccCorridors() {
   return (
     <div className="container-page max-w-5xl">
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-ink">{t('gcc.title') || 'GCC Corridors'}</h1>
-        <p className="text-ink-muted mt-1">{t('gcc.desc') || 'Pre-configured corridors and country rules for cross-border freight'}</p>
+        <h1 className="font-display text-2xl font-bold text-ink">{t('gcc.title', 'GCC Corridors')}</h1>
+        <p className="text-ink-muted mt-1">{t('gcc.desc', 'Pre-configured corridors and country rules for cross-border freight')}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <Card.Header><Card.Title className="flex items-center gap-2"><IconFlag size={20} /> {t('gcc.countries') || 'GCC Countries'}</Card.Title></Card.Header>
+          <Card.Header><Card.Title className="flex items-center gap-2"><IconFlag size={20} /> {t('gcc.countries', 'GCC Countries')}</Card.Title></Card.Header>
           <Card.Content>
             {countries.length === 0 ? (
               <EmptyState icon={<IconFlag size={28} />} title="No countries" description="No GCC countries configured" />
@@ -69,7 +69,7 @@ export default function GccCorridors() {
         </Card>
 
         <Card>
-          <Card.Header><Card.Title className="flex items-center gap-2"><IconMapPin size={20} /> {t('gcc.corridors') || 'Corridors'}</Card.Title></Card.Header>
+          <Card.Header><Card.Title className="flex items-center gap-2"><IconMapPin size={20} /> {t('gcc.corridors', 'Corridors')}</Card.Title></Card.Header>
           <Card.Content>
             {corridors.length === 0 ? (
               <EmptyState icon={<IconMapPin size={28} />} title="No corridors" description="No GCC corridors configured" />

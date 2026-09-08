@@ -27,7 +27,7 @@ export default function BrokerCarriers() {
       const data = await api.listBrokerCarriers();
       setCarriers(data.carriers || []);
     } catch (e) {
-      addToast(e.message || t('broker.errorLoad') || 'Failed to load carriers', 'error');
+      addToast({ type: 'system_message', title: e.message || t('broker.errorLoad', 'Failed to load carriers') });
     } finally {
       setLoading(false);
     }
@@ -38,12 +38,12 @@ export default function BrokerCarriers() {
     setSubmitting(true);
     try {
       await api.addBrokerCarrier(form);
-      addToast(t('broker.added') || 'Carrier added to roster', 'success');
+      addToast({ type: 'status_change', title: t('broker.added', 'Carrier added to roster') });
       setShowModal(false);
       setForm({ email: '', companyName: '', spreadBps: 0 });
       fetchCarriers();
     } catch (e) {
-      addToast(e.message || t('broker.addError') || 'Failed to add carrier', 'error');
+      addToast({ type: 'system_message', title: e.message || t('broker.addError', 'Failed to add carrier') });
     } finally {
       setSubmitting(false);
     }
@@ -59,11 +59,11 @@ export default function BrokerCarriers() {
     <div className="container-page max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink">{t('broker.carrierRoster') || 'Carrier Roster'}</h1>
-          <p className="text-ink-muted mt-1">{t('broker.carrierRosterDesc') || 'Manage your verified carriers for direct-assign'}</p>
+          <h1 className="font-display text-2xl font-bold text-ink">{t('broker.carrierRoster', 'Carrier Roster')}</h1>
+          <p className="text-ink-muted mt-1">{t('broker.carrierRosterDesc', 'Manage your verified carriers for direct-assign')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
-          <IconPlus size={16} className="mr-2" /> {t('broker.addCarrier') || 'Add Carrier'}
+          <IconPlus size={16} className="mr-2" /> {t('broker.addCarrier', 'Add Carrier')}
         </Button>
       </div>
 
@@ -72,16 +72,16 @@ export default function BrokerCarriers() {
       ) : filteredCarriers.length === 0 ? (
         <Card className="p-12 text-center">
           <IconTruck size={48} className="mx-auto text-ink-muted mb-4" />
-          <h3 className="font-semibold text-ink mb-2">{t('broker.noCarriers') || 'No carriers in roster'}</h3>
-          <p className="text-ink-muted mb-6">{t('broker.noCarriersDesc') || 'Add verified carriers to enable direct-assign'}</p>
-          <Button onClick={() => setShowModal(true)}><IconPlus size={16} className="mr-2" /> {t('broker.addFirstCarrier') || 'Add First Carrier'}</Button>
+          <h3 className="font-semibold text-ink mb-2">{t('broker.noCarriers', 'No carriers in roster')}</h3>
+          <p className="text-ink-muted mb-6">{t('broker.noCarriersDesc', 'Add verified carriers to enable direct-assign')}</p>
+          <Button onClick={() => setShowModal(true)}><IconPlus size={16} className="mr-2" /> {t('broker.addFirstCarrier', 'Add First Carrier')}</Button>
         </Card>
       ) : (
         <>
           <div className="mb-4">
             <div className="relative max-w-md">
               <IconSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-              <Input type="text" placeholder={t('broker.searchPlaceholder') || 'Search carriers...'} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+              <Input type="text" placeholder={t('broker.searchPlaceholder', 'Search carriers...')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
             </div>
           </div>
 
@@ -89,11 +89,11 @@ export default function BrokerCarriers() {
             <table className="w-full">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-ink-muted bg-surface-container-high">
-                  <th className="px-4 py-3">{t('broker.carrier') || 'Carrier'}</th>
-                  <th className="px-4 py-3">{t('broker.trn') || 'TRN'}</th>
-                  <th className="px-4 py-3">{t('broker.verified') || 'Verified'}</th>
-                  <th className="px-4 py-3">{t('broker.defaultSpread') || 'Default Spread'}</th>
-                  <th className="px-4 py-3">{t('broker.added') || 'Added'}</th>
+                  <th className="px-4 py-3">{t('broker.carrier', 'Carrier')}</th>
+                  <th className="px-4 py-3">{t('broker.trn', 'TRN')}</th>
+                  <th className="px-4 py-3">{t('broker.verified', 'Verified')}</th>
+                  <th className="px-4 py-3">{t('broker.defaultSpread', 'Default Spread')}</th>
+                  <th className="px-4 py-3">{t('broker.added', 'Added')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant">
@@ -124,25 +124,25 @@ export default function BrokerCarriers() {
         </>
       )}
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} title={t('broker.addCarrierModal') || 'Add Carrier to Roster'}>
+      <Modal open={showModal} onClose={() => setShowModal(false)} title={t('broker.addCarrierModal', 'Add Carrier to Roster')}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="email">{t('broker.carrierEmail') || 'Carrier Email'}</Label>
+            <Label htmlFor="email">{t('broker.carrierEmail', 'Carrier Email')}</Label>
             <Input id="email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="carrier@company.ae" />
-            <p className="mt-1 text-xs text-ink-muted">{t('broker.emailHint') || 'Must be a registered and verified carrier on Loadbyton'}</p>
+            <p className="mt-1 text-xs text-ink-muted">{t('broker.emailHint', 'Must be a registered and verified carrier on Loadbyton')}</p>
           </div>
           <div>
-            <Label htmlFor="companyName">{t('broker.companyName') || 'Company Name'}</Label>
+            <Label htmlFor="companyName">{t('broker.companyName', 'Company Name')}</Label>
             <Input id="companyName" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} placeholder="Al-Majid Transport" />
           </div>
           <div>
-            <Label htmlFor="spreadBps">{t('broker.defaultSpread') || 'Default Broker Spread (bps)'}</Label>
+            <Label htmlFor="spreadBps">{t('broker.defaultSpread', 'Default Broker Spread (bps)')}</Label>
             <Input id="spreadBps" type="number" min="0" max="2000" step="10" value={form.spreadBps} onChange={(e) => setForm({ ...form, spreadBps: Number(e.target.value) })} placeholder="100" />
-            <p className="mt-1 text-xs text-ink-muted">{t('broker.spreadHint') || '0-2000 bps (0-20%). Applied to direct-assign if not overridden per job.'}</p>
+            <p className="mt-1 text-xs text-ink-muted">{t('broker.spreadHint', '0-2000 bps (0-20%). Applied to direct-assign if not overridden per job.')}</p>
           </div>
           <div className="flex gap-2 pt-4">
-            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} className="flex-1">{t('common.cancel') || 'Cancel'}</Button>
-            <Button type="submit" loading={submitting} className="flex-1">{t('broker.addCarrierBtn') || 'Add Carrier'}</Button>
+            <Button type="button" variant="secondary" onClick={() => setShowModal(false)} className="flex-1">{t('common.cancel', 'Cancel')}</Button>
+            <Button type="submit" loading={submitting} className="flex-1">{t('broker.addCarrierBtn', 'Add Carrier')}</Button>
           </div>
         </form>
       </Modal>

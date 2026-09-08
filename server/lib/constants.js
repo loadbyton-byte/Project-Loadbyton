@@ -80,13 +80,20 @@ const BID_SORT_COLUMNS = {
   price_asc: 'b.amount_aed ASC',
 };
 
+// Priority placement (Change 30): a shipper pays a fee at posting to have
+// their job sort ahead of others while boosted. This is the actual
+// "boost" — without it, the fee charged at creation bought nothing (a
+// real bug found in review: money moved, no effect). Prefixing every sort
+// option with the boost condition means it applies regardless of which
+// sort a carrier has picked, not just the default.
+const PRIORITY_BOOST_ORDER = `CASE WHEN jobs.priority_boost_until IS NOT NULL AND jobs.priority_boost_until > datetime('now') THEN 0 ELSE 1 END`;
 const JOB_SORT_COLUMNS = {
-  date_desc: 'jobs.created_at DESC',
-  date_asc: 'jobs.created_at ASC',
-  price_desc: 'COALESCE(jobs.agreed_price_aed, jobs.max_budget_aed) DESC',
-  price_asc: 'COALESCE(jobs.agreed_price_aed, jobs.max_budget_aed) ASC',
-  deadline_asc: 'jobs.deadline ASC',
-  deadline_desc: 'jobs.deadline DESC',
+  date_desc: `${PRIORITY_BOOST_ORDER}, jobs.created_at DESC`,
+  date_asc: `${PRIORITY_BOOST_ORDER}, jobs.created_at ASC`,
+  price_desc: `${PRIORITY_BOOST_ORDER}, COALESCE(jobs.agreed_price_aed, jobs.max_budget_aed) DESC`,
+  price_asc: `${PRIORITY_BOOST_ORDER}, COALESCE(jobs.agreed_price_aed, jobs.max_budget_aed) ASC`,
+  deadline_asc: `${PRIORITY_BOOST_ORDER}, jobs.deadline ASC`,
+  deadline_desc: `${PRIORITY_BOOST_ORDER}, jobs.deadline DESC`,
 };
 
 const ESCROW_STATUSES = ['PENDING', 'HELD', 'FUNDED', 'RELEASED', 'DISPUTED'];

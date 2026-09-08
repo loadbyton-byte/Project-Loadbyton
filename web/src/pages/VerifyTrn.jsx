@@ -20,16 +20,16 @@ export default function VerifyTrn() {
 
   async function handleCheck() {
     if (!UAE_TRN_RE.test(trn)) {
-      addToast('TRN must be exactly 15 digits', 'error');
+      addToast({ type: 'system_message', title: 'TRN must be exactly 15 digits' });
       return;
     }
     setChecking(true);
     try {
       const data = await api.verifyTrn(trn);
       setResult(data);
-      addToast(data.valid ? 'TRN is valid' : 'TRN not found', data.valid ? 'success' : 'warning');
+      addToast({ type: data.valid ? 'status_change' : 'system_message', title: data.valid ? 'TRN is valid' : 'TRN not found' });
     } catch (e) {
-      addToast(e.message || 'Verification failed', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Verification failed' });
     } finally {
       setChecking(false);
     }
@@ -37,21 +37,21 @@ export default function VerifyTrn() {
 
   async function handleBulkCheck() {
     // For future bulk check
-    addToast('Bulk check not yet implemented', 'warning');
+    addToast({ type: 'system_message', title: 'Bulk check not yet implemented' });
   }
 
   return (
     <div className="container-page max-w-2xl">
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2">
-          <IconShield size={24} /> {t('verify.title') || 'TRN Verification'}
+          <IconShield size={24} /> {t('verify.title', 'TRN Verification')}
         </h1>
-        <p className="text-ink-muted mt-1">{t('verify.desc') || 'Verify UAE Tax Registration Numbers'}</p>
+        <p className="text-ink-muted mt-1">{t('verify.desc', 'Verify UAE Tax Registration Numbers')}</p>
       </div>
 
       <Card className="p-6 space-y-4">
         <div>
-          <Label htmlFor="trn">{t('verify.trnLabel') || 'TRN Number'}</Label>
+          <Label htmlFor="trn">{t('verify.trnLabel', 'TRN Number')}</Label>
           <div className="flex gap-2 mt-1">
             <Input
               id="trn"
@@ -64,16 +64,16 @@ export default function VerifyTrn() {
               className="flex-1"
             />
             <Button onClick={handleCheck} loading={checking} disabled={!UAE_TRN_RE.test(trn)}>
-              <IconSearch size={16} className="mr-2" /> {t('verify.checkBtn') || 'Check TRN'}
+              <IconSearch size={16} className="mr-2" /> {t('verify.checkBtn', 'Check TRN')}
             </Button>
           </div>
-          <p className="mt-1 text-xs text-ink-muted">{t('verify.hint') || 'Enter a 15-digit UAE Tax Registration Number'}</p>
+          <p className="mt-1 text-xs text-ink-muted">{t('verify.hint', 'Enter a 15-digit UAE Tax Registration Number')}</p>
         </div>
 
         {result && (
           <div className="border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-ink">{t('verify.result') || 'Verification Result'}</h3>
+              <h3 className="font-semibold text-ink">{t('verify.result', 'Verification Result')}</h3>
 <Badge color={result.valid ? 'success' : 'danger'}>
                   {result.valid ? (<span><IconCheckCircle size={12} className="mr-1" /> Valid</span>) : (<span><IconAlert size={12} className="mr-1" /> Invalid</span>)}
                 </Badge>
@@ -89,7 +89,7 @@ export default function VerifyTrn() {
 
         <div className="border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
           <Button variant="secondary" onClick={handleBulkCheck}>
-            <IconCheckCircle size={16} className="mr-2" /> {t('verify.bulkCheck') || 'Bulk Check'}
+            <IconCheckCircle size={16} className="mr-2" /> {t('verify.bulkCheck', 'Bulk Check')}
           </Button>
         </div>
       </Card>

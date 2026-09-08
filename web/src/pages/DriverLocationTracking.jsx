@@ -53,11 +53,11 @@ export default function DriverLocationTracking() {
 
   function startTracking() {
     if (!navigator.geolocation) {
-      addToast('Geolocation not supported', 'error');
+      addToast({ type: 'system_message', title: 'Geolocation not supported' });
       return;
     }
     setTracking(true);
-    addToast('Live tracking started', 'success');
+    addToast({ type: 'status_change', title: 'Live tracking started' });
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
@@ -80,7 +80,7 @@ export default function DriverLocationTracking() {
         }
       },
       (err) => {
-        addToast(`Tracking error: ${err.message}`, 'error');
+        addToast({ type: 'system_message', title: `Tracking error: ${err.message}` });
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -92,7 +92,7 @@ export default function DriverLocationTracking() {
       watchIdRef.current = null;
     }
     setTracking(false);
-    addToast('Live tracking stopped', 'info');
+    addToast({ type: 'system_message', title: 'Live tracking stopped' });
   }
 
   useEffect(() => {
@@ -108,9 +108,9 @@ export default function DriverLocationTracking() {
     <div className="container-page max-w-4xl">
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2">
-          <IconTruck size={24} /> {t('driver.tracking') || 'Live Location Tracking'}
+          <IconTruck size={24} /> {t('driver.tracking', 'Live Location Tracking')}
         </h1>
-        <p className="text-ink-muted mt-1">{t('driver.trackingDesc') || 'Share your real-time location during active jobs'}</p>
+        <p className="text-ink-muted mt-1">{t('driver.trackingDesc', 'Share your real-time location during active jobs')}</p>
       </div>
 
       {job && (

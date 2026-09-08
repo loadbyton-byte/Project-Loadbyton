@@ -10,15 +10,34 @@
 // built into Node 22.
 
 const { spawn } = require('node:child_process');
+const net = require('node:net');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 
+// A PID-modulo scheme here (`4100 + process.pid % 400`) reliably collided
+// once the suite grew past a single serial file: `node --test` runs test
+// FILES concurrently by default, and CI's tighter PID range made two
+// spawned child processes land on the exact same port often enough to fail
+// real CI runs (harness.js's login() got a "fetch failed" against a port
+// already bound by a different file's server) — reproduced directly in
+// CI run 34174619234's local-transport.test.js failures. Asking the OS for
+// an actual free ephemeral port (bind to :0, read back what it picked,
+// release it) is the standard fix and has no such collision class — the
+// brief window between releasing it here and the child binding it is the
+// same one every "let the OS pick, then hand it to a child process" pattern
+// accepts, and is far narrower than the modulo scheme's guaranteed-collision
+// window under real concurrency.
 function freePort() {
-  // Ports in this range are unlikely to collide with dev servers (4000,
-  // 5173) or common local services. Not airtight under heavy parallelism,
-  // but this suite runs as a single serial file.
-  return 4100 + (process.pid % 400);
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.unref();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
 }
 
 async function waitForHealth(baseUrl, timeoutMs = 15000) {
@@ -37,7 +56,20 @@ async function waitForHealth(baseUrl, timeoutMs = 15000) {
 
 async function startServer(extraEnv = {}) {
   const dbPath = path.join(os.tmpdir(), `loadbyton-test-${process.pid}-${Symbol().description || 'db'}-${Math.random().toString(36).slice(2)}.db`);
-  const port = freePort();
+  // An explicit PORT in extraEnv (a handful of tests that need a second,
+  // predictable server alongside the first) wins over freePort() — this
+  // was silently ignored before (baseUrl/waitForHealth always used the
+  // freePort() value even when extraEnv.PORT told the *child* to listen
+  // elsewhere), which happened to go unnoticed only because the old
+  // PID-modulo freePort() returned the exact same value on every call
+  // within one test file/process, so a second server's health check
+  // coincidentally passed by polling the FIRST server instead — exactly
+  // the "silently tests the wrong server" failure mode a comment in
+  // insurance.test.js already flagged and worked around downstream. Now
+  // that freePort() asks the OS for a real, different port each call, that
+  // coincidence no longer holds, which is what surfaced this as a real bug
+  // rather than a latent one.
+  const port = extraEnv.PORT ? Number(extraEnv.PORT) : await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
 
   const child = spawn(process.execPath, [path.join(__dirname, '..', 'index.js')], {

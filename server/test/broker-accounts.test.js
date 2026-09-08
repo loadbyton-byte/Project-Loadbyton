@@ -7,8 +7,11 @@ const { startServer, makeClient } = require('./harness');
 
 let server;
 
+let admin;
 test.before(async () => {
   server = await startServer();
+  admin = makeClient(server.baseUrl);
+  await admin.login('admin@loadbyton.ae', 'demo1234');
 });
 
 test.after(async () => {
@@ -29,10 +32,43 @@ async function register(client, role) {
   return { email, id: r.body.user.id };
 }
 
+// A real bug found in review: account_approval_status was never checked
+// server-side anywhere, so this exact registration flow could post a job
+// and direct-assign/award it through real escrow with zero admin review —
+// the very thing the PENDING/read-only model exists to prevent. Approving
+// here is the fix's regression proof: these actions must now require it.
+async function approve(userId) {
+  const r = await admin.post(`/api/admin/approve/${userId}`, { action: 'approve' });
+  assert.equal(r.status, 200, r.raw);
+}
+
+test('a PENDING account is blocked from posting jobs, and every write action named in the review, until an admin approves it', async () => {
+  const anon = makeClient(server.baseUrl);
+  const shp = await register(anon, 'SHIPPER');
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login(shp.email, 'demo1234');
+
+  const blocked = await shipper.post('/api/jobs', {
+    containerSize: '40FT', containerType: 'DRY',
+    pickupTerminal: 'JEBEL_ALI_T2', deliveryArea: 'JAFZA_SOUTH', deliveryAddress: 'X',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+  });
+  assert.equal(blocked.status, 403, 'a PENDING shipper must not be able to post a job, even via a role it does satisfy');
+
+  await approve(shp.id);
+  const allowed = await shipper.post('/api/jobs', {
+    containerSize: '40FT', containerType: 'DRY',
+    pickupTerminal: 'JEBEL_ALI_T2', deliveryArea: 'JAFZA_SOUTH', deliveryAddress: 'X',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+  });
+  assert.equal(allowed.status, 201, allowed.raw);
+});
+
 test('new roles register; forwarder client roster CRUD works', async () => {
   const anon = makeClient(server.baseUrl);
   const fwd = await register(anon, 'FORWARDER');
   assert.ok(fwd.id);
+  await approve(fwd.id);
 
   const fwdClient = makeClient(server.baseUrl);
   // register auto-logs-in as the new user via cookie on `anon`; use fresh login
@@ -52,6 +88,7 @@ test('new roles register; forwarder client roster CRUD works', async () => {
 test('broker roster + direct-assign awards via the real award transaction; one-hop enforced', async () => {
   const anon = makeClient(server.baseUrl);
   const brk = await register(anon, 'BROKER');
+  await approve(brk.id);
   const broker = makeClient(server.baseUrl);
   await broker.login(brk.email, 'demo1234');
 
@@ -80,9 +117,12 @@ test('broker roster + direct-assign awards via the real award transaction; one-h
   assert.equal(assign.body.job.status, 'AWARDED');
   assert.equal(assign.body.job.carrier_id, carrierMe.body.user.id);
 
-  // One-hop: a second broker cannot touch this brokered job.
+  // One-hop: a second broker cannot touch this brokered job. Approved so
+  // the 403 below is actually the one-hop rule firing, not the (now real)
+  // approval gate masking it.
   const anon2 = makeClient(server.baseUrl);
   const brk2 = await register(anon2, 'BROKER');
+  await approve(brk2.id);
   const broker2 = makeClient(server.baseUrl);
   await broker2.login(brk2.email, 'demo1234');
   const rebroker = await broker2.post(`/api/jobs/${jobId}/direct-assign`, {
@@ -98,6 +138,7 @@ test('broker roster + direct-assign awards via the real award transaction; one-h
 test('broker accounts cannot bid — direct-assign is their only win path (no self-dealing)', async () => {
   const anon = makeClient(server.baseUrl);
   const brk = await register(anon, 'BROKER');
+  await approve(brk.id);
   const broker = makeClient(server.baseUrl);
   await broker.login(brk.email, 'demo1234');
 
@@ -121,6 +162,7 @@ test('broker accounts cannot bid — direct-assign is their only win path (no se
 test('owner-operator registers and can bid like a carrier', async () => {
   const anon = makeClient(server.baseUrl);
   const oop = await register(anon, 'OWNER_OPERATOR');
+  await approve(oop.id);
   const oopClient = makeClient(server.baseUrl);
   await oopClient.login(oop.email, 'demo1234');
 

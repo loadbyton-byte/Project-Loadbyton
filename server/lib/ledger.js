@@ -103,14 +103,20 @@ async function createTransaction(trx, { idempotencyKey, jobId = null, payoutId =
   // rewriting history). Pre-chain-era rows (hash NULL) are skipped, not
   // flagged, so existing production history verifies clean.
   try {
+    // FOR UPDATE (real on Postgres, a no-op strip on SQLite's single-writer
+    // path — same pattern as every other row-locked path in this codebase,
+    // e.g. escrow release/payout completion) — without it, two concurrent
+    // transactions could both read the same tip and both chain from it,
+    // which verifyChain then reports as a tamper-looking "prev_hash
+    // mismatch" break caused by ordinary concurrent traffic, not tampering.
     const prevRow = await trx.query(
-      `SELECT hash FROM ledger_transactions WHERE id != ? AND hash IS NOT NULL ORDER BY id DESC LIMIT 1`,
+      `SELECT hash FROM ledger_transactions WHERE id != ? AND hash IS NOT NULL ORDER BY id DESC LIMIT 1 FOR UPDATE`,
       [txId]
     );
     txPrev = prevRow.rows[0]?.hash || 'GENESIS';
     const h = crypto.createHash('sha256');
     h.update(`${txPrev}|${idempotencyKey}|${jobId ?? ''}|${payoutId ?? ''}|`);
-    for (const e of entries) h.update(`${e.account}:${e.side}:${e.amountMinor};`);
+    for (const e of entries) h.update(`${e.account}:${e.side}:${e.amountMinor}:${e.currency || 'AED'};`);
     txHash = h.digest('hex');
     await trx.query(`UPDATE ledger_transactions SET prev_hash=?, hash=? WHERE id=?`, [txPrev, txHash, txId]);
   } catch (e) {

@@ -217,12 +217,12 @@ Object.assign(api, {
   createCompliance: (id, body) => post(`/jobs/${id}/compliance`, body),
   tokenizeBL: (id, body) => post(`/jobs/${id}/tokenize`, body),
   predictEta: (body) => post('/ml/predict-eta', body),
-  auditChain: () => get('/audit/chain'),
-  auditVerify: () => get('/audit/chain/verify'),
-  // Insurance
-  getInsuranceQuote: (id, body) => post(`/jobs/${id}/insurance/quote`, body),
+  // Insurance — quote has no job id in its path (it's pure rate-card math,
+  // not job-scoped); only bind/cancel are.
+  getInsuranceQuote: (body) => post('/insurance/quote', body),
   bindInsurance: (id, body) => post(`/jobs/${id}/insurance/bind`, body),
   cancelInsurance: (id) => post(`/jobs/${id}/insurance/cancel`, {}),
+  getPolicy: (id) => get(`/jobs/${id}/insurance`),
   // Direct assign / Broker / Forwarder
   directAssign: (id, body) => post(`/jobs/${id}/direct-assign`, body),
   listBrokerCarriers: () => get('/broker/carriers'),
@@ -231,6 +231,7 @@ Object.assign(api, {
   addForwarderClient: (body) => post('/forwarder/clients', body),
   // Trip offers
   createTripOffer: (id, body) => post(`/jobs/${id}/trip-offer`, body),
+  listTripOffers: (id) => get(`/jobs/${id}/trip-offers`),
   // Stops
   listStops: (id) => get(`/jobs/${id}/stops`),
   createStop: (id, body) => post(`/jobs/${id}/stops`, body),
@@ -254,22 +255,7 @@ Object.assign(api, {
   // Stripe Connect
   stripeConnectOnboard: () => post('/stripe/connect/onboard', {}),
   stripeConnectStatus: () => get('/stripe/connect/status'),
-  // Verification
-  verifyTrn: (trn) => get(`/verify/trn/${encodeURIComponent(trn)}`),
-  verifyCheck: (body) => post('/verify/check', body),
-  verifyGate: () => get('/verify/gate'),
-  // Currency
-  currencyRates: () => get('/currency/rates'),
-  setJobCurrency: (id, body) => post(`/jobs/${id}/currency`, body),
-  // RFP
-  listRfps: () => get('/rfps'),
-  getRfp: (id) => get(`/rfps/${id}`),
-  createRfp: (body) => post('/rfps', body),
-  bidRfp: (id, body) => post(`/rfps/${id}/bids`, body),
-  awardRfp: (id, bidId) => post(`/rfps/${id}/award`, { bidId }),
-  // EDI
-  ingestEdi: (body) => post('/edi/ingest', body),
-  listConsignments: () => get('/edi/consignments'),
+  // EDI (continued)
   getConsignment: (id) => get(`/edi/consignments/${id}`),
   transitionConsignment: (id, body) => post(`/edi/consignments/${id}/transition`, body),
   // GCC

@@ -189,6 +189,10 @@ async function createJobFromBody(body, req) {
         jobId, userId: req.user.id, amountAed: feeAed,
         description: `Priority placement fee (job #${jobId}) AED ${feeAed}`,
       });
+      // The actual boost the fee pays for — 6h ahead of other jobs in every
+      // Open Loads sort (lib/constants.js's JOB_SORT_COLUMNS). Only set
+      // after the charge succeeds, so a failed charge never boosts for free.
+      await db.prepare(`UPDATE jobs SET priority_boost_until=datetime('now', '+6 hours') WHERE id=?`).run(jobId);
     } catch (e) { console.error(`[fees] priority charge failed for job ${jobId}:`, e.message); }
   }
 

@@ -3,8 +3,9 @@
 // INSURANCE_BROKER_URL + INSURANCE_BROKER_API_KEY are set.
 const db = require('../db');
 const { sendError } = require('../lib/http');
-const { auth } = require('../middleware/auth');
+const { auth, requireApproved } = require('../middleware/auth');
 const insurance = require('../lib/insurance');
+const { chargeFee } = require('../lib/ledger');
 
 const router = require('express').Router();
 
@@ -14,7 +15,7 @@ router.post('/api/insurance/quote', auth(), async (req, res) => {
   res.json({ quote: q });
 });
 
-router.post('/api/jobs/:id/insurance/bind', auth(['SHIPPER']), async (req, res) => {
+router.post('/api/jobs/:id/insurance/bind', auth(['SHIPPER']), requireApproved(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');
@@ -50,6 +51,15 @@ router.post('/api/jobs/:id/insurance/bind', auth(['SHIPPER']), async (req, res) 
       )
       .run(job.id, req.user.id, p, q.cargoValueAed, q.premiumAed, q.coverageAed, q.rateBps, policyRef);
     policy = await db.prepare(`SELECT * FROM job_insurance WHERE id=?`).get(Number(r.lastInsertRowid));
+    // The premium was computed and quoted but never actually charged — a
+    // real bug found in review (a "bound" policy with no matching money
+    // movement anywhere). Same chargeFee() rail every other platform fee
+    // uses; idempotent per policy so a retry never double-charges.
+    await chargeFee(db, {
+      idempotencyKey: `insurance-${policy.id}`, feeCode: 'GIT_INSURANCE_PREMIUM',
+      jobId: job.id, userId: req.user.id, amountAed: q.premiumAed,
+      description: `GIT insurance premium (${job.job_code}, policy ${policyRef}) AED ${q.premiumAed}`,
+    });
   } catch (e) {
     // Double-submit race vs the pre-check above: job_id is UNIQUE.
     if (e.code === '23505' || (e.code === 'ERR_SQLITE_ERROR' && /UNIQUE constraint failed/.test(e.message))) {

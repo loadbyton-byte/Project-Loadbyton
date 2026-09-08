@@ -24,6 +24,7 @@ const apiResponse = require('../lib/apiResponse'); // new envelope for createJob
 const authMod = require('../middleware/auth');
 const auth = /** @type {any} */ (authMod).auth;
 const requireSeatRole = /** @type {any} */ (authMod).requireSeatRole;
+const requireApproved = /** @type {any} */ (authMod).requireApproved;
 const writeLimiter = /** @type {any} */ (authMod).writeLimiter;
 /** @type {any} */
 const validateMod = require('../middleware/validate');
@@ -42,7 +43,7 @@ const router = require('express').Router();
 router.get('/api/jobs', auth(), jobController.listJobs);
 
 // Bulk import — delegates to controller (which delegates to service + repositories)
-router.post('/api/jobs/import', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), jobController.importJobs);
+router.post('/api/jobs/import', auth(['SHIPPER']), writeLimiter, requireApproved(), requireSeatRole(['OPS']), jobController.importJobs);
 
 // Edit job details (PATCH /api/jobs/:id) — delegates to service with fixed BOOLEAN_JOB_FIELDS / isValidUaeLatLng
 router.patch('/api/jobs/:id', auth(['SHIPPER']), requireSeatRole(['OPS']), jobController.editJob);
@@ -58,11 +59,11 @@ router.get('/api/jobs/:id', auth(), jobController.getJob);
 // contract: a client that doesn't send an Idempotency-Key header gets no
 // protection from this middleware (still gets the frontend's disable-on-
 // click guard), one that does gets a cached replay of the first response.
-router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), idempotency, validate(jobCreateSchema), jobController.createJob);
+router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireApproved(), requireSeatRole(['OPS']), idempotency, validate(jobCreateSchema), jobController.createJob);
 
 // Award — the money-moving transaction lives in services/award.service.js;
 // this wrapper only does HTTP (kept for backwards compat, not moved to job.controller to preserve award.service isolation).
-router.post('/api/jobs/:id/award', auth(['SHIPPER']), writeLimiter, requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
+router.post('/api/jobs/:id/award', auth(['SHIPPER']), writeLimiter, requireApproved(), requireSeatRole(['OPS']), async (/** @type {any} */ req, /** @type {any} */ res) => {
   const { bidId } = /** @type {any} */ (req.body) || {};
   const { awardJob } = /** @type {any} */ (require('../services/award.service'));
   await awardJob(req, res, Number(/** @type {any} */ (req.params).id), /** @type {any} */ (bidId));

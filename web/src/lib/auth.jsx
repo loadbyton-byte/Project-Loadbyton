@@ -121,6 +121,14 @@ export function useAuth() {
 export function roleHome(role) {
   if (role === 'SHIPPER') return '/dashboard';
   if (role === 'CARRIER') return '/open-loads';
+  // FORWARDER/BROKER alias to SHIPPER-like posting (roleSatisfies in
+  // middleware/auth.js); OWNER_OPERATOR aliases to CARRIER-like
+  // browsing/bidding — both /dashboard and /open-loads already allow all
+  // three roles (see App.jsx's route guards). A real bug found in review:
+  // these three fell through to '/', the public marketing page, on every
+  // login.
+  if (role === 'FORWARDER' || role === 'BROKER') return '/dashboard';
+  if (role === 'OWNER_OPERATOR') return '/open-loads';
   if (role === 'ADMIN') return '/admin';
   return '/';
 }
@@ -130,6 +138,6 @@ export function roleHome(role) {
 // would send a driver to the full carrier dashboard. actingAs.seatRole is
 // the one place that distinction actually shows up on the client.
 export function homePath(user, actingAs) {
-  if (actingAs?.seatRole === 'DRIVER') return '/driver';
+  if (actingAs?.seatRole === 'DRIVER' || actingAs?.seatRole === 'DRIVER_ASSOCIATE') return '/driver';
   return roleHome(user.role);
 }
