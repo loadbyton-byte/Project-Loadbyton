@@ -141,6 +141,19 @@
   --status-info-bg: var(--lb-blue-50);
 
   --lb-shadow-elevated: 0 4px 10px rgba(15,43,61,0.12);
+
+  /* Change 1b (dashboard/app-shell redesign) — the persistent sidebar is
+     deliberately dark-chrome in both themes (a "dark rail" pattern, same
+     idea as Vercel/Linear's sidebars), not a surface that flips to white
+     in light mode — that would lose the redesign's whole visual identity
+     for the majority of users who stay in light mode. It's still a real,
+     themed semantic token (not a hardcoded color bypassing the theme
+     system): --lb-ink-900 in light mode reads as accent chrome against
+     the warm-cream canvas; the dark-mode override one step below uses
+     --lb-ink-800 instead of repeating --bg-surface's own --lb-ink-900, so
+     the sidebar still reads as a distinct raised panel against the
+     already-dark canvas/surface tones, rather than blending into them. */
+  --sidebar-bg: var(--lb-ink-900);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -181,6 +194,7 @@
     --status-danger-bg: #3D1616;
     --status-info: var(--lb-blue-300);
     --status-info-bg: #122540;
+    --sidebar-bg: var(--lb-ink-800);
   }
 }
 
@@ -221,6 +235,7 @@
   --status-danger-bg: #3D1616;
   --status-info: var(--lb-blue-300);
   --status-info-bg: #122540;
+  --sidebar-bg: var(--lb-ink-800);
 }
 
 * { border-color: var(--border-default); }

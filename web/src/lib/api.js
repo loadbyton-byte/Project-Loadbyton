@@ -150,6 +150,10 @@ export const api = {
   listContracts: () => get('/contracts'),
   createContract: (body) => post('/contracts', body),
   analytics: () => get('/analytics/mine'),
+  getLaneQuote: (terminal, area) => {
+    const qs = new URLSearchParams(Object.entries({ terminal, area }).filter(([, v]) => v !== undefined && v !== ''));
+    return get(`/lanes/quote?${qs}`);
+  },
   earnings: () => get('/earnings'),
   invoices: () => get('/invoices'),
   notifications: () => get('/notifications'),

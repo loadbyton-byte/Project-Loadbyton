@@ -35,66 +35,88 @@ export function Logo({ dark = false, className = '', to = '/' }) {
 // Role-based nav — drives both the desktop sidebar and the mobile drawer,
 // so there is exactly one source of truth for "what links does this role
 // see" (see CLAUDE.md's navigation note for why that matters).
+//
+// `group` (Change 1b — dashboard/app-shell redesign) buckets each role's
+// flat link list into labeled sections, matching the mockup's
+// Workspace/Finance/Account pattern — purely a rendering grouping, no new
+// routes or permission logic; SidebarNav below groups by this field, and a
+// role whose group set differs from another's (e.g. ADMIN has no Finance
+// items) just renders fewer section headers, nothing else changes.
 function navByRole(t) {
   return {
     SHIPPER: [
-      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} /> },
-      { to: '/templates', label: t('nav.templates', 'Templates'), icon: <IconHistory size={20} /> },
-      { to: '/contracts', label: t('nav.contracts', 'Contract lanes'), icon: <IconFile size={20} /> },
-      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
-      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
-      { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} /> },
-      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
+      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} />, group: 'Workspace' },
+      { to: '/templates', label: t('nav.templates', 'Templates'), icon: <IconHistory size={20} />, group: 'Workspace' },
+      { to: '/contracts', label: t('nav.contracts', 'Contract lanes'), icon: <IconFile size={20} />, group: 'Workspace' },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
+      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
+      { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
     ],
     CARRIER: [
-      { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} /> },
-      { to: '/my-bids', label: t('nav.myBids', 'My bids'), icon: <IconGavel size={20} /> },
-      { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} /> },
-      { to: '/drivers', label: t('nav.drivers', 'My drivers'), icon: <IconTruck size={20} /> },
-      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
-      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
-      { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
-      { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} /> },
-      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
+      { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} />, group: 'Workspace' },
+      { to: '/my-bids', label: t('nav.myBids', 'My bids'), icon: <IconGavel size={20} />, group: 'Workspace' },
+      { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} />, group: 'Workspace' },
+      { to: '/drivers', label: t('nav.drivers', 'My drivers'), icon: <IconTruck size={20} />, group: 'Workspace' },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
+      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
+      { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} />, group: 'Finance' },
+      { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} />, group: 'Finance' },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
     ],
     FORWARDER: [
-      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} /> },
-      { to: '/forwarder/clients', label: t('nav.forwarderClients', 'Client roster'), icon: <IconUser size={20} /> },
-      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
-      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
-      { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} /> },
-      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
+      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} />, group: 'Workspace' },
+      { to: '/forwarder/clients', label: t('nav.forwarderClients', 'Client roster'), icon: <IconUser size={20} />, group: 'Workspace' },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
+      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
+      { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
     ],
     BROKER: [
-      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} /> },
-      { to: '/broker/carriers', label: t('nav.brokerCarriers', 'Carrier roster'), icon: <IconTruck size={20} /> },
-      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
-      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
-      { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} /> },
-      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
+      { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} />, group: 'Workspace' },
+      { to: '/broker/carriers', label: t('nav.brokerCarriers', 'Carrier roster'), icon: <IconTruck size={20} />, group: 'Workspace' },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
+      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
+      { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
     ],
     OWNER_OPERATOR: [
-      { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} /> },
-      { to: '/my-bids', label: t('nav.myBids', 'My bids'), icon: <IconGavel size={20} /> },
-      { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} /> },
-      { to: '/drivers', label: t('nav.drivers', 'My drivers'), icon: <IconTruck size={20} /> },
-      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
-      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} /> },
-      { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} /> },
-      { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} /> },
-      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} /> },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
+      { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} />, group: 'Workspace' },
+      { to: '/my-bids', label: t('nav.myBids', 'My bids'), icon: <IconGavel size={20} />, group: 'Workspace' },
+      { to: '/won-jobs', label: t('nav.wonJobs', 'Won jobs'), icon: <IconCheckCircle size={20} />, group: 'Workspace' },
+      { to: '/drivers', label: t('nav.drivers', 'My drivers'), icon: <IconTruck size={20} />, group: 'Workspace' },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
+      { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
+      { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} />, group: 'Finance' },
+      { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} />, group: 'Finance' },
+      { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
     ],
     ADMIN: [
-      { to: '/admin', label: t('nav.admin', 'Admin console'), icon: <IconSettings size={20} /> },
-      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} /> },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} /> },
+      { to: '/admin', label: t('nav.admin', 'Admin console'), icon: <IconSettings size={20} />, group: 'Workspace' },
+      { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
+      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
     ],
   };
+}
+
+// Groups a flat nav-item list into [{ group, items }] in first-seen order —
+// used by both the desktop sidebar and (for visual consistency) the mobile
+// drawer, so a role's group order only needs to be right once, in the data
+// above.
+function groupNavItems(items) {
+  const order = [];
+  const byGroup = new Map();
+  for (const item of items) {
+    const g = item.group || 'Workspace';
+    if (!byGroup.has(g)) { byGroup.set(g, []); order.push(g); }
+    byGroup.get(g).push(item);
+  }
+  return order.map((g) => ({ group: g, items: byGroup.get(g) }));
 }
 
 export function Shell({ children }) {
@@ -243,16 +265,35 @@ function ShellInner({ children }) {
 
             <div className="flex-1 overflow-y-auto px-5 pb-5">
             <nav className="flex flex-col gap-1.5">
-              {(user ? navItems : guestLinks).map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={closeDrawer}
-                  className={({ isActive }) => cx('rounded-lg px-3 py-2.5 text-sm font-semibold', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
+              {user ? (
+                groupNavItems(navItems).map(({ group, items }) => (
+                  <div key={group}>
+                    <p className="px-3 pb-1 pt-3 font-mono text-[10px] font-bold uppercase tracking-widest text-ink-muted first:pt-0">{group}</p>
+                    {items.map((item) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={closeDrawer}
+                        className={({ isActive }) => cx('flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
+                      >
+                        {item.icon}
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                ))
+              ) : (
+                guestLinks.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={closeDrawer}
+                    className={({ isActive }) => cx('rounded-lg px-3 py-2.5 text-sm font-semibold', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))
+              )}
             </nav>
 
             <div className="my-4 border-t" style={{ borderColor: 'var(--border-subtle)' }} />
@@ -303,44 +344,78 @@ function ShellInner({ children }) {
             navByRole's per-role link data, no new routing logic. */}
         {user && (
           <aside
-            className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-60 md:shrink-0 md:flex-col md:border-r"
-            style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}
+            className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
+            style={{ background: 'var(--sidebar-bg)' }}
           >
-            <div className="flex h-14 items-center border-b px-5" style={{ borderColor: 'var(--border-subtle)' }}>
-              <Logo />
+            <div className="flex h-14 items-center gap-2.5 px-5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm font-extrabold text-white" style={{ background: 'var(--brand-accent)' }}>
+                {(user?.profile?.company_name?.[0] || 'L').toUpperCase()}
+              </span>
+              <span className="truncate font-display text-base font-bold text-white">Loadbyton</span>
             </div>
 
-            <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) => cx('flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-semibold transition-colors', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
-                >
-                  {item.icon}
-                  {item.label}
-                </NavLink>
+            <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
+              {groupNavItems(navItems).map(({ group, items }) => (
+                <div key={group}>
+                  <p className="px-2.5 pb-1.5 pt-4 font-mono text-[10px] font-bold uppercase tracking-widest first:pt-1" style={{ color: '#5E7A8C' }}>
+                    {group}
+                  </p>
+                  {items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        cx(
+                          'relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13.5px] font-medium transition-colors',
+                          isActive ? 'text-white' : 'hover:text-white'
+                        )
+                      }
+                      style={({ isActive }) => ({
+                        color: isActive ? '#fff' : '#C7D6DD',
+                        background: isActive ? 'rgba(255,255,255,.08)' : 'transparent',
+                      })}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {/* Left accent bar — same motif as the Dashboard's
+                              KPI tiles (BentoStat's accentBar), so the active
+                              nav state and the stat cards read as one visual
+                              system rather than two unrelated treatments. */}
+                          {isActive && (
+                            <span className="absolute inset-y-1 -left-0.5 w-[3px] rounded-full" style={{ background: 'var(--brand-accent)' }} />
+                          )}
+                          <span style={{ color: isActive ? 'var(--brand-accent)' : 'inherit', opacity: isActive ? 1 : 0.85 }}>{item.icon}</span>
+                          {item.label}
+                        </>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
               ))}
             </nav>
 
-            <div className="border-t p-3" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="mb-2 rounded-md px-3 py-2.5" style={{ background: 'var(--surface-container)' }}>
-                <p className="truncate text-sm font-semibold text-ink">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
-                <p className="text-xs text-ink-muted">{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+            <div className="flex items-center gap-2.5 px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,.08)' }}>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: 'var(--brand-secondary)' }}>
+                {(actingAs ? actingAs.displayName || actingAs.email : user.email)?.[0]?.toUpperCase() || '?'}
+              </span>
+              <div className="min-w-0 flex-1 text-xs">
+                <p className="truncate font-semibold text-white">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
+                <p className="truncate" style={{ color: '#8FA6B3' }}>{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
               </div>
-              <Link to="/profile" className="mb-1 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-semibold text-ink-secondary hover:bg-surface-container">
-                <IconUser size={16} /> Profile &amp; settings
-              </Link>
-              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-semibold text-ink-secondary hover:bg-surface-container">
-                {theme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />}
-                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              </button>
-              <button onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')} className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-ink-secondary hover:bg-surface-container">
-                {locale === 'ar' ? 'English' : 'العربية'}
-              </button>
-              <button onClick={handleLogout} className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-surface-container" style={{ color: 'var(--status-danger)' }}>
-                <IconLogOut size={16} /> Log out
-              </button>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                  {theme === 'dark' ? <IconSun size={14} /> : <IconMoon size={14} />}
+                </button>
+                <button onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')} className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white/70 hover:bg-white/10 hover:text-white" aria-label={locale === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}>
+                  {locale === 'ar' ? 'EN' : 'ع'}
+                </button>
+                <Link to="/profile" className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label="Profile & settings">
+                  <IconUser size={14} />
+                </Link>
+                <button onClick={handleLogout} className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label="Log out">
+                  <IconLogOut size={14} />
+                </button>
+              </div>
             </div>
           </aside>
         )}

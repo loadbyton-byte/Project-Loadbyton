@@ -242,8 +242,30 @@ const BENTO_TONE_TOKENS = {
   warning: { bg: 'var(--status-warning-bg)', value: 'var(--status-warning)' },
   danger: { bg: 'var(--status-danger-bg)', value: 'var(--status-danger)' },
 };
-export function BentoStat({ label, value, icon, tone = 'default', span, className }) {
+// `accentBar` (Change 1b, app-shell redesign mockup) — a second visual
+// variant: a plain card with a 3px colored left border instead of a tinted
+// background, the semantic tone carried by that bar rather than the whole
+// tile. Same accent-bar motif as the sidebar's active-nav-item indicator
+// (Shell.jsx), so the two read as one system. Opt-in and additive — every
+// existing caller (Analytics.jsx, Earnings.jsx, OpenLoads.jsx, and
+// Dashboard.jsx's own pre-existing tiles) omits it and keeps today's
+// tinted-background look exactly as-is.
+export function BentoStat({ label, value, icon, delta, tone = 'default', span, accentBar, className }) {
   const semantic = BENTO_TONE_TOKENS[tone];
+  const accentColor = semantic ? semantic.value : 'var(--brand-accent)';
+  if (accentBar) {
+    return (
+      <div
+        className={cx('relative flex min-h-12 flex-col gap-1 overflow-hidden rounded-lg p-4', className)}
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+      >
+        <span className="absolute inset-y-0 left-0 w-[3px] rtl:left-auto rtl:right-0" style={{ background: accentColor }} />
+        <span className="block truncate font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{label}</span>
+        <p className="tabular truncate font-display text-2xl font-bold text-ink">{value}</p>
+        {delta && <span className="text-[11.5px] font-semibold" style={{ color: 'var(--status-success)' }}>{delta}</span>}
+      </div>
+    );
+  }
   return (
     <div
       // 48px+ tap target (the mockup's stat-tile requirement): p-4 (16px)
