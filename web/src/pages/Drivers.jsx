@@ -158,16 +158,16 @@ export default function Drivers() {
         <Card.Content>
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="col-span-3 sm:col-span-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Total Fleet</p>
+              <p className="mt-1 tabular font-display text-3xl font-bold text-ink">{capacity?.fleet_size ?? '—'}</p>
+            </div>
+            <div className="col-span-3 sm:col-span-1">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Available Units</p>
-              <p className="mt-1 tabular font-display text-3xl font-bold text-ink">{capacity?.available_units ?? '—'}</p>
+              <p className="mt-1 tabular font-display text-3xl font-bold" style={{ color: 'var(--status-success)' }}>{capacity?.available_units ?? '—'}</p>
             </div>
             <div className="col-span-3 sm:col-span-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Engaged</p>
-              <p className="mt-1 tabular font-display text-3xl font-bold text-brand-primary">{capacity?.engaged_units ?? '—'}</p>
-            </div>
-            <div className="col-span-3 sm:col-span-1">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Released</p>
-              <p className="mt-1 tabular font-display text-3xl font-bold" style={{ color: 'var(--status-success)' }}>{capacity?.released_units ?? '—'}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Externally Engaged</p>
+              <p className="mt-1 tabular font-display text-3xl font-bold text-brand-primary">{capacity?.externally_engaged_units ?? '—'}</p>
             </div>
           </div>
           <form onSubmit={engageExternalUnits} className="mt-4 flex flex-col sm:flex-row gap-2">

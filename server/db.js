@@ -143,31 +143,31 @@ if (usePostgres) {
   async function runMigrationWithRetry(maxRetries = 5) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // Check the LAST table postgres_init.sql creates (outbox_events),
-        // not the first (users) — the whole file runs as one explicit
-        // BEGIN/COMMIT transaction so this "should" be all-or-nothing, but
-        // checking the first table is still the wrong signal if 'users' can
-        // ever exist without the rest (a differently-provisioned database,
-        // an interrupted/partial run from before this fix, etc.): it makes
-        // this check falsely conclude migration is done and skip it
-        // forever, permanently missing every later table. Every statement
-        // in the file is IF NOT EXISTS / ON CONFLICT DO NOTHING, so
-        // re-running it when some — but not all — tables exist is always
-        // safe and fills in exactly what's missing.
-        const check = await pool.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables
-            WHERE table_schema = 'public' AND table_name = 'outbox_events'
-          )
-        `);
-        if (!check.rows[0].exists) {
-          console.log('[db] Tables missing — running migration...');
-          const fs = require('fs');
-          const path = require('path');
-          const sql = fs.readFileSync(path.join(__dirname, 'migrations', 'postgres_init.sql'), 'utf8');
-          await pool.query(sql);
-          console.log('[db] Migration completed');
-        }
+        // Always run the migration file on every boot — never gate it on
+        // "does some table already exist". A prior version of this function
+        // skipped the whole file once `outbox_events` existed, on the
+        // reasoning that migration was "done". But postgres_init.sql is an
+        // accumulating file: new `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+        // / `CREATE TABLE IF NOT EXISTS` lines get appended to the bottom
+        // as the app grows, same as schema.js's addColumn() calls do for
+        // SQLite. schema.js re-runs every one of those on every boot
+        // (that's what keeps a local SQLite DB self-healing as columns are
+        // added); this Postgres path did not, so any table/column added to
+        // this file *after* a given production database's first
+        // successful migration silently never applied to it — a real
+        // production bug, not a hypothetical one (an already-provisioned
+        // database keeps querying columns it was never given, throwing
+        // "column does not exist" on exactly those routes, until someone
+        // runs this file by hand). The file's own header already documents
+        // why this is safe to always re-run: every statement is
+        // idempotent (IF NOT EXISTS / ON CONFLICT DO NOTHING), wrapped in
+        // one BEGIN/COMMIT transaction.
+        console.log('[db] Running migration (idempotent — safe to re-run on an existing database)...');
+        const fs = require('fs');
+        const path = require('path');
+        const sql = fs.readFileSync(path.join(__dirname, 'migrations', 'postgres_init.sql'), 'utf8');
+        await pool.query(sql);
+        console.log('[db] Migration completed');
         return;
       } catch (e) {
         console.error(`[db] Migration attempt ${attempt}/${maxRetries} failed:`, e.message);
