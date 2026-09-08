@@ -250,10 +250,12 @@ Object.assign(api, {
   createStop: (id, body) => post(`/jobs/${id}/stops`, body),
   completeStop: (id, stopId) => post(`/jobs/${id}/stops/${stopId}/complete`, {}),
   deleteStop: (id, stopId) => del(`/jobs/${id}/stops/${stopId}`),
-  // Admin reject approval
-  adminReject: (id) => post(`/admin/approvals/${id}/reject`, {}),
-  // Admin approvals request
-  adminRequestApproval: (body) => post('/admin/approvals/request', body),
+  // Two-person action-approval flow (server/routes/admin-approvals.routes.js)
+  // — distinct from adminApprovals()/adminApprove() above, which are the
+  // pending-account-registration queue, a different feature entirely that
+  // happened to collide on this exact GET path before the server-side rename.
+  adminReject: (id) => post(`/admin/action-approvals/${id}/reject`, {}),
+  adminRequestApproval: (body) => post('/admin/action-approvals/request', body),
   // Admin reconciliation / platform fees / ledger
   adminReconciliation: () => get('/admin/reconciliation'),
   adminPlatformFees: () => get('/admin/platform-fees'),
