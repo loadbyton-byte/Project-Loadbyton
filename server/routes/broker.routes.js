@@ -13,7 +13,7 @@
 // any other broker, and targets must be CARRIER/OWNER_OPERATOR in-roster.
 const db = require('../db');
 const { sendError } = require('../lib/http');
-const { auth } = require('../middleware/auth');
+const { auth, requireApproved } = require('../middleware/auth');
 const { awardJob } = require('../services/award.service');
 
 const router = require('express').Router();
@@ -35,7 +35,7 @@ router.get('/api/forwarder/clients', auth(['FORWARDER', 'ADMIN']), async (req, r
   res.json({ clients: rows });
 });
 
-router.post('/api/forwarder/clients', auth(['FORWARDER']), async (req, res) => {
+router.post('/api/forwarder/clients', auth(['FORWARDER']), requireApproved(), async (req, res) => {
   const { clientName, contactPhone, contactEmail } = req.body || {};
   if (!clientName || !String(clientName).trim()) return sendError(res, 400, 'clientName is required');
   const r = await db
@@ -56,7 +56,7 @@ router.get('/api/broker/carriers', auth(['BROKER', 'ADMIN']), async (req, res) =
   res.json({ carriers: rows });
 });
 
-router.post('/api/broker/carriers', auth(['BROKER']), async (req, res) => {
+router.post('/api/broker/carriers', auth(['BROKER']), requireApproved(), async (req, res) => {
   const { carrierId } = req.body || {};
   const carrier = await db.prepare(`SELECT * FROM users WHERE id=?`).get(Number(carrierId));
   if (!carrier) return sendError(res, 404, 'Carrier not found');
@@ -74,7 +74,7 @@ router.post('/api/broker/carriers', auth(['BROKER']), async (req, res) => {
 
 // --- Direct assign (broker + forwarder): open job → specific carrier ---
 // Body: { carrierId, amountAed, etaAt?, brokerSpreadBps? (brokers only) }
-router.post('/api/jobs/:id/direct-assign', auth(['BROKER', 'FORWARDER']), async (req, res) => {
+router.post('/api/jobs/:id/direct-assign', auth(['BROKER', 'FORWARDER']), requireApproved(), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   const ownership = ownJobOr403(job, req.user);
   if (ownership === 'missing') return sendError(res, 404, 'Job not found');

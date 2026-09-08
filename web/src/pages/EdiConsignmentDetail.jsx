@@ -7,13 +7,18 @@ import { Button, Card, Badge, EmptyState, ErrorState } from '../components/ui.js
 import { useToasts } from '../components/Toast.jsx';
 import { IconArrowLeft, IconPackage, IconMapPin, IconClock, IconArrowRight } from '../components/icons.jsx';
 
+// Matches server/routes/edi.routes.js's actual accepted transition
+// statuses exactly (CREATED/IN_TRANSIT/DELIVERED/COMPLETED/CANCELLED) — a
+// real bug found in review: this map previously used a different, invented
+// vocabulary (DRAFT/SUBMITTED/ACKNOWLEDGED/EXCEPTION) that never matched a
+// real consignment's status, so the transition feature only ever coincided
+// with working for IN_TRANSIT and was dead for every other real state.
 const TRANSITIONS = {
-  DRAFT: ['SUBMITTED'],
-  SUBMITTED: ['ACKNOWLEDGED', 'EXCEPTION'],
-  ACKNOWLEDGED: ['IN_TRANSIT', 'EXCEPTION'],
-  IN_TRANSIT: ['DELIVERED', 'EXCEPTION'],
-  DELIVERED: [],
-  EXCEPTION: ['SUBMITTED'],
+  CREATED: ['IN_TRANSIT', 'CANCELLED'],
+  IN_TRANSIT: ['DELIVERED', 'CANCELLED'],
+  DELIVERED: ['COMPLETED'],
+  COMPLETED: [],
+  CANCELLED: [],
 };
 
 export default function EdiConsignmentDetail() {
@@ -47,10 +52,10 @@ export default function EdiConsignmentDetail() {
     if (!window.confirm(`Transition to ${newStatus}?`)) return;
     try {
       await api.transitionConsignment(id, { status: newStatus });
-      addToast(`Status updated to ${newStatus}`, 'success');
+      addToast({ type: 'status_change', title: `Status updated to ${newStatus}` });
       fetchConsignment();
     } catch (e) {
-      addToast(e.message || 'Failed to transition', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Failed to transition' });
     }
   }
 
@@ -58,7 +63,11 @@ export default function EdiConsignmentDetail() {
   if (error) return <div className="container-page py-10"><ErrorState title="Couldn't load consignment" description={error} onRetry={fetchConsignment} /></div>;
   if (!consignment) return <div className="container-page py-10 text-center"><IconPackage size={48} className="mx-auto text-ink-muted mb-4" /><h2 className="font-display text-xl font-bold text-ink mb-2">Consignment not found</h2><Button onClick={() => navigate(-1)}>Go Back</Button></div>;
 
+  // GET /api/edi/consignments/:id returns { consignment, linkedJob } —
+  // linkedJob is a sibling key ({ job_code, status } | null), never a
+  // nested field on the consignment row itself.
   const c = consignment.consignment;
+  const linkedJob = consignment.linkedJob;
   const allowed = TRANSITIONS[c.status] || [];
 
   return (
@@ -69,8 +78,8 @@ export default function EdiConsignmentDetail() {
 
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-2">
-          <h1 className="font-display text-2xl font-bold text-ink">{c.consignment_id}</h1>
-          <Badge color={c.status === 'DELIVERED' ? 'success' : c.status === 'EXCEPTION' ? 'danger' : c.status === 'IN_TRANSIT' ? 'warning' : 'neutral'}>{c.status}</Badge>
+          <h1 className="font-display text-2xl font-bold text-ink">{c.id}</h1>
+          <Badge color={c.status === 'DELIVERED' || c.status === 'COMPLETED' ? 'success' : c.status === 'CANCELLED' ? 'danger' : c.status === 'IN_TRANSIT' ? 'warning' : 'neutral'}>{c.status}</Badge>
         </div>
         <p className="text-ink-muted">{c.origin} → {c.destination}</p>
       </div>
@@ -80,11 +89,18 @@ export default function EdiConsignmentDetail() {
         <Card.Content className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div><dt className="text-ink-muted">Origin</dt><dd className="mt-0.5 font-medium text-ink">{c.origin}</dd></div>
           <div><dt className="text-ink-muted">Destination</dt><dd className="mt-0.5 font-medium text-ink">{c.destination}</dd></div>
-          <div><dt className="text-ink-muted">Equipment</dt><dd className="mt-0.5 font-medium text-ink">{c.equipment_type || '—'}</dd></div>
-          <div><dt className="text-ink-muted">Cargo</dt><dd className="mt-0.5 font-medium text-ink">{c.cargo_type || '—'}</dd></div>
-          <div><dt className="text-ink-muted">Weight</dt><dd className="mt-0.5 font-medium text-ink">{c.weight_tons ? `${c.weight_tons} t` : '—'}</dd></div>
+          <div><dt className="text-ink-muted">Source</dt><dd className="mt-0.5 font-medium text-ink">{c.source}</dd></div>
+          <div><dt className="text-ink-muted">Mode</dt><dd className="mt-0.5 font-medium text-ink">{c.mode}</dd></div>
           <div><dt className="text-ink-muted">Updated</dt><dd className="mt-0.5 font-medium text-ink">{c.updated_at ? new Date(c.updated_at).toLocaleString() : '—'}</dd></div>
-          {c.linked_job && <div><dt className="text-ink-muted">Linked Job</dt><dd className="mt-0.5 font-medium text-ink flex items-center gap-2">{c.linked_job.job_code} <Button variant="ghost" size="sm" onClick={() => navigate(`/jobs/${c.linked_job.id}`)}>View Job</Button></dd></div>}
+          {linkedJob && (
+            <div>
+              <dt className="text-ink-muted">Linked Job</dt>
+              <dd className="mt-0.5 font-medium text-ink flex items-center gap-2">
+                {linkedJob.job_code}
+                <Button variant="ghost" size="sm" onClick={() => navigate(`/jobs/${c.linked_job_id}`)}>View Job</Button>
+              </dd>
+            </div>
+          )}
         </Card.Content>
       </Card>
 
@@ -99,23 +115,6 @@ export default function EdiConsignmentDetail() {
                   <IconArrowRight size={14} className="mr-1" /> {status}
                 </Button>
               ))}
-            </div>
-          </Card.Content>
-        </Card>
-      )}
-
-      {c.job_code && (
-        <Card>
-          <Card.Header><Card.Title>Linked Job</Card.Title></Card.Header>
-          <Card.Content>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-ink">{c.job_code}</p>
-                <p className="text-sm text-ink-muted">Status: {c.job_status || '—'}</p>
-              </div>
-              <Button variant="accent" onClick={() => navigate(`/jobs/${c.linked_job_id}`)}>
-                <IconArrowRight size={14} className="mr-2" /> Open Job
-              </Button>
             </div>
           </Card.Content>
         </Card>

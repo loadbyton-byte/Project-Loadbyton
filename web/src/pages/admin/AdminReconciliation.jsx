@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { useLocale } from '../../lib/i18n.jsx';
-import { Card, Badge, ErrorState, Stat } from '../../components/ui.jsx';
+import { Card, Badge, ErrorState, Stat, Button } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { IconSync, IconCheckCircle, IconAlert } from '../../components/icons.jsx';
 
@@ -32,7 +32,7 @@ export default function AdminReconciliation() {
   }
 
   async function runReconciliation() {
-    addToast('Reconciliation started', 'info');
+    addToast({ type: 'system_message', title: 'Reconciliation started' });
     // Would call a reconciliation endpoint
   }
 
@@ -43,8 +43,8 @@ export default function AdminReconciliation() {
     <div className="container-page max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink">{t('admin.reconciliation') || 'Reconciliation'}</h1>
-          <p className="text-ink-muted mt-1">{t('admin.reconciliationDesc') || 'Cross-system financial reconciliation'}</p>
+          <h1 className="font-display text-2xl font-bold text-ink">{t('admin.reconciliation', 'Reconciliation')}</h1>
+          <p className="text-ink-muted mt-1">{t('admin.reconciliationDesc', 'Cross-system financial reconciliation')}</p>
         </div>
         <Button variant="secondary" onClick={runReconciliation}><IconSync size={16} className="mr-2" /> Run Now</Button>
       </div>

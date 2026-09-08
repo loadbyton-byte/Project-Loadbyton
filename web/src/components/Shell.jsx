@@ -112,7 +112,7 @@ function ShellInner({ children }) {
   // auth.jsx's session model), so it would otherwise get the full carrier
   // nav despite RequireAuth (App.jsx) redirecting every one of those routes
   // straight back to /driver. Its whole app is that one page — no sidebar.
-  const navItems = actingAs?.seatRole === 'DRIVER' ? [] : (user ? navByRole(t)[user.role] || [] : []);
+  const navItems = (actingAs?.seatRole === 'DRIVER' || actingAs?.seatRole === 'DRIVER_ASSOCIATE') ? [] : (user ? navByRole(t)[user.role] || [] : []);
   const { addToast } = useToasts();
 
   function closeDrawer() {

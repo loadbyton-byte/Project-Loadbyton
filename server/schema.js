@@ -796,6 +796,9 @@ module.exports = function initSchema(db) {
   // (escrow/admin) until Change 30's billing — stated honestly, not implied.
   addColumn('jobs', 'cargo_value_aed', 'cargo_value_aed REAL');
   addColumn('jobs', 'insurance_opt_in', 'insurance_opt_in INTEGER NOT NULL DEFAULT 0');
+  // Priority placement (Change 30) — the actual boost the fee pays for; see
+  // lib/constants.js's JOB_SORT_COLUMNS for where this is read.
+  addColumn('jobs', 'priority_boost_until', 'priority_boost_until TEXT');
   db.exec(`
   CREATE TABLE IF NOT EXISTS job_insurance (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

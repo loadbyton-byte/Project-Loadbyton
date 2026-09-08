@@ -4,7 +4,7 @@ import { usePageTitle } from '../../lib/seo.jsx';
 import { useLocale } from '../../lib/i18n.jsx';
 import { Button, Card, Badge, ErrorState, Select, Input, Label } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
-import { IconSync, IconPackage, IconTag } from '../../components/icons.jsx';
+import { IconSync, IconPackage, IconTag, IconWallet } from '../../components/icons.jsx';
 
 export default function AdminPlatformFees() {
   usePageTitle('Platform Fees');
@@ -34,10 +34,10 @@ export default function AdminPlatformFees() {
   async function updateFee(feeType, value) {
     try {
       await api.adminUpdateSettings({ [feeType]: value });
-      addToast('Fee updated', 'success');
+      addToast({ type: 'status_change', title: 'Fee updated' });
       fetchData();
     } catch (e) {
-      addToast(e.message || 'Failed to update', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Failed to update' });
     }
   }
 
@@ -50,15 +50,15 @@ export default function AdminPlatformFees() {
     <div className="container-page max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2"><IconDollarSign size={24} /> {t('admin.platformFees') || 'Platform Fees'}</h1>
-          <p className="text-ink-muted mt-1">{t('admin.platformFeesDesc') || 'Configure platform fee rates'}</p>
+          <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2"><IconWallet size={24} /> {t('admin.platformFees', 'Platform Fees')}</h1>
+          <p className="text-ink-muted mt-1">{t('admin.platformFeesDesc', 'Configure platform fee rates')}</p>
         </div>
       </div>
 
       <Card className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="col-span-2">
-            <Label>{t('admin.commissionRate') || 'Commission Rate (bps)'}</Label>
+            <Label>{t('admin.commissionRate', 'Commission Rate (bps)')}</Label>
             <div className="flex items-center gap-2">
               <Input type="number" min="0" max="10000" value={fees.commission_rate_bps || 0} onChange={(e) => updateFee('commission_rate_bps', Number(e.target.value))} className="w-32" />
               <span className="text-ink-muted">bps (100 bps = 1%)</span>
@@ -66,17 +66,17 @@ export default function AdminPlatformFees() {
           </div>
 
           <div>
-            <Label>{t('admin.cancellationFee') || 'Cancellation Fee (bps)'}</Label>
+            <Label>{t('admin.cancellationFee', 'Cancellation Fee (bps)')}</Label>
             <Input type="number" min="0" max="10000" value={fees.cancellation_fee_bps || 0} onChange={(e) => updateFee('cancellation_fee_bps', Number(e.target.value))} className="w-32" />
           </div>
 
           <div>
-            <Label>{t('admin.priorityFee') || 'Priority Fee (bps)'}</Label>
+            <Label>{t('admin.priorityFee', 'Priority Fee (bps)')}</Label>
             <Input type="number" min="0" max="10000" value={fees.priority_fee_bps || 0} onChange={(e) => updateFee('priority_fee_bps', Number(e.target.value))} className="w-32" />
           </div>
 
           <div className="col-span-2">
-            <Label>{t('admin.autoReleaseHours') || 'Auto-release Hours'}</Label>
+            <Label>{t('admin.autoReleaseHours', 'Auto-release Hours')}</Label>
             <Input type="number" min="1" max="168" value={fees.auto_release_hours || 24} onChange={(e) => updateFee('auto_release_hours', Number(e.target.value))} className="w-32" />
           </div>
         </div>

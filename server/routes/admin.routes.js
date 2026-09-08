@@ -136,7 +136,7 @@ router.get('/api/admin/approvals', auth(['ADMIN']), async (req, res) => {
     .prepare(
       `SELECT u.*, p.company_name, p.trn_number, p.trade_license_number, p.phone, p.fleet_size, p.owned_chassis, p.insurance_uploaded, p.coverage_zones
        FROM users u JOIN profiles p ON p.user_id = u.id
-       WHERE u.role IN ('SHIPPER','CARRIER') AND u.account_approval_status='PENDING'
+       WHERE u.role IN ('SHIPPER','CARRIER','FORWARDER','BROKER','OWNER_OPERATOR') AND u.account_approval_status='PENDING'
        ORDER BY u.created_at ASC`
     )
     .all();

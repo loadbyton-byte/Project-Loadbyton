@@ -37,9 +37,9 @@ export default function AdminLedgerVerify() {
     try {
       const res = await api.verifyAuditChain();
       setData(res);
-      addToast('Verification complete', 'success');
+      addToast({ type: 'status_change', title: 'Verification complete' });
     } catch (e) {
-      addToast(e.message || 'Verification failed', 'error');
+      addToast({ type: 'system_message', title: e.message || 'Verification failed' });
     } finally {
       setVerifying(false);
     }
@@ -55,10 +55,10 @@ export default function AdminLedgerVerify() {
     <div className="container-page max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2"><IconShield size={24} /> {t('admin.ledgerVerify') || 'Ledger Chain Verification'}</h1>
-          <p className="text-ink-muted mt-1">{t('admin.ledgerVerifyDesc') || 'Verify integrity of the append-only ledger hash chain'}</p>
+          <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2"><IconShield size={24} /> {t('admin.ledgerVerify', 'Ledger Chain Verification')}</h1>
+          <p className="text-ink-muted mt-1">{t('admin.ledgerVerifyDesc', 'Verify integrity of the append-only ledger hash chain')}</p>
         </div>
-        <Button onClick={runVerification} loading={verifying}><IconSync size={16} className="mr-2" /> {t('admin.runVerification') || 'Run Verification'}</Button>
+        <Button onClick={runVerification} loading={verifying}><IconSync size={16} className="mr-2" /> {t('admin.runVerification', 'Run Verification')}</Button>
       </div>
 
       <div className="mb-6">
@@ -68,17 +68,17 @@ export default function AdminLedgerVerify() {
           </div>
           <div>
             <p className="font-display text-xl font-bold" style={{ color: valid ? 'var(--status-success)' : 'var(--status-danger)' }}>
-              {valid ? t('admin.chainValid') || 'Chain Valid' : t('admin.chainBroken') || 'Chain Broken'}
+              {valid ? t('admin.chainValid', 'Chain Valid') : t('admin.chainBroken', 'Chain Broken')}
             </p>
             <p className="text-sm" style={{ color: valid ? 'var(--status-success)' : 'var(--status-danger)' }}>
-              {valid ? t('admin.allChecksPassed') || 'All integrity checks passed' : t('admin.integrityIssues') || 'Integrity issues detected'}
+              {valid ? t('admin.allChecksPassed', 'All integrity checks passed') : t('admin.integrityIssues', 'Integrity issues detected')}
             </p>
           </div>
         </div>
       </div>
 
       <Card>
-        <Card.Header><Card.Title>{t('admin.checks') || 'Verification Checks'}</Card.Title></Card.Header>
+        <Card.Header><Card.Title>{t('admin.checks', 'Verification Checks')}</Card.Title></Card.Header>
         <Card.Content>
           {checks.length > 0 ? (
             <div className="space-y-3">

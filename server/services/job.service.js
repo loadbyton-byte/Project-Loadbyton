@@ -115,32 +115,34 @@ async function updateJobStatus(jobId, nextStatus, req) {
     const cancellationFeeAed = Math.round((job.agreed_price_aed || 0) * cancellation_fee_bps_after_award / 10000 * 100) / 100;
     const netRefundAed = Math.max(0, (job.agreed_price_aed || 0) - cancellationFeeAed);
     // Row-locked + idempotency-guarded — two concurrent cancel requests
-    // for the same job must not both fire a refund.
+    // for the same job must not both fire a refund. The fee-ledger entry
+    // (Change 30) now runs INSIDE this same transaction — a review finding
+    // caught it previously running after commit in its own try/catch, so a
+    // failure there (or the process dying between the two) left the
+    // shipper correctly refunded net-of-fee but with no ledger record the
+    // fee was ever collected, silently under-reporting revenue with
+    // nothing to catch the gap. chargeFee(trx, ...) joins this transaction
+    // rather than opening its own (see lib/ledger.js).
+    const { chargeFee } = require('../lib/ledger');
     const cancelled = await db.transaction(async (trx) => {
       const locked = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [id]);
       const currentEscrow = locked.rows[0]?.escrow_status;
       if (currentEscrow === 'RELEASED') return false; // already handled by a concurrent request
       await trx.query(`UPDATE jobs SET escrow_status='RELEASED', cancellation_fee_aed=? WHERE id=?`, [cancellationFeeAed, id]);
       await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [id]);
+      if (cancellationFeeAed > 0) {
+        await chargeFee(trx, {
+          idempotencyKey: `cancel-fee-${id}`, feeCode: 'CANCELLATION_FEE',
+          jobId: id, userId: job.shipper_id, amountAed: cancellationFeeAed,
+          description: `Cancellation fee ${job.job_code} AED ${cancellationFeeAed}`,
+        });
+      }
       return true;
     });
     if (cancelled && job.escrow_status === 'FUNDED') {
       // fire-and-forget refund (processor path) — do not await failure.
       // Refunds the net amount (after the fee), not the full price.
       try { refundJobAsync(job, netRefundAed); } catch {}
-    }
-    // Change 30 — the cancellation fee is now a real platform_fees +
-    // ledger row via chargeFee() (idempotent per job), not just a column
-    // on the job. Zero-fee cancellations (free tier / pre-award) skip it.
-    if (cancelled && cancellationFeeAed > 0) {
-      try {
-        const { chargeFee } = require('../lib/ledger');
-        await chargeFee(db, {
-          idempotencyKey: `cancel-fee-${id}`, feeCode: 'CANCELLATION_FEE',
-          jobId: id, userId: job.shipper_id, amountAed: cancellationFeeAed,
-          description: `Cancellation fee ${job.job_code} AED ${cancellationFeeAed}`,
-        });
-      } catch (e) { console.error(`[fees] cancel-fee charge failed for job ${id}:`, e.message); }
     }
     // A carrier backing out after commitment is exactly the "no-show"
     // scenario this reliability score exists to catch — a shipper
