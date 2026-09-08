@@ -15,7 +15,15 @@
 // (WhatsApp -> SMS -> in-app; in-app notifications already fire regardless
 // via notify() in server/index.js, so nothing is lost while this is dark).
 
-const db = require('../db');
+// Lazily required (not at module load) — a bare require('./lib/whatsapp')
+// for sendWhatsAppMessage/isConfigured must not open the shared default
+// SQLite file as a side effect. It did until this fix: test/whatsapp.test.js
+// predates isSessionOpen/recordInboundSession below and never expected this
+// module to touch a database at all, so it doesn't isolate its own DB_PATH
+// the way harness-based tests do — a top-level `require('../db')` here made
+// running it alongside other test files racy ("database is locked"),
+// reproducible under node --test's default file-level concurrency.
+function getDb() { return require('../db'); }
 
 const WHATSAPP_API_VERSION = 'v21.0';
 const SESSION_WINDOW_HOURS = 24;
@@ -29,13 +37,13 @@ function isConfigured() {
 // only a pre-approved template may be sent. server/routes/whatsapp.routes.js
 // updates this row on every inbound webhook message.
 async function isSessionOpen(phone) {
-  const row = await db.prepare('SELECT session_expires_at FROM whatsapp_sessions WHERE phone=?').get(phone);
+  const row = await getDb().prepare('SELECT session_expires_at FROM whatsapp_sessions WHERE phone=?').get(phone);
   return !!row && new Date(row.session_expires_at) > new Date();
 }
 
 async function recordInboundSession(phone) {
   const expiresAt = new Date(Date.now() + SESSION_WINDOW_HOURS * 3600 * 1000).toISOString();
-  await db.prepare(
+  await getDb().prepare(
     `INSERT INTO whatsapp_sessions (phone, last_inbound_at, session_expires_at) VALUES (?, datetime('now'), ?)
      ON CONFLICT(phone) DO UPDATE SET last_inbound_at=datetime('now'), session_expires_at=excluded.session_expires_at`
   ).run(phone, expiresAt);
