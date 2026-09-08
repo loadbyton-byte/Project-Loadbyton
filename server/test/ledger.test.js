@@ -183,11 +183,21 @@ test('createTransaction handles duplicate idempotency replay', async () => {
 });
 
 test('getAccountBalance returns balance from db', async () => {
+  // Mocks .prepare(sql).get(accountCode), not .query() — the real function
+  // now calls db.prepare() specifically because db.js's Postgres query()
+  // passthrough never translates `?` placeholders (only prepare() does);
+  // a .query()-shaped mock here previously couldn't have caught that real
+  // production bug (it returns canned data regardless of what SQL string
+  // is passed), which is exactly how it shipped unnoticed.
   const mockDb = {
-    query: async (sql, params) => {
+    prepare: (sql) => {
       assert.match(sql, /SELECT COALESCE/);
-      assert.equal(params[0], 'carrier_payable');
-      return { rows: [{ balance: 12345 }] };
+      return {
+        get: async (accountCode) => {
+          assert.equal(accountCode, 'carrier_payable');
+          return { balance: 12345 };
+        },
+      };
     },
   };
   const bal = await getAccountBalance(mockDb, 'carrier_payable');
@@ -195,10 +205,10 @@ test('getAccountBalance returns balance from db', async () => {
 });
 
 test('getAccountBalance returns 0 when null/empty', async () => {
-  const mockDb1 = { query: async () => ({ rows: [{ balance: null }] }) };
+  const mockDb1 = { prepare: () => ({ get: async () => ({ balance: null }) }) };
   assert.equal(await getAccountBalance(mockDb1, 'empty'), 0);
-  const mockDb2 = { query: async () => ({ rows: [] }) };
+  const mockDb2 = { prepare: () => ({ get: async () => undefined }) };
   assert.equal(await getAccountBalance(mockDb2, 'missing'), 0);
-  const mockDb3 = { query: async () => ({ rows: [{ balance: 0 }] }) };
+  const mockDb3 = { prepare: () => ({ get: async () => ({ balance: 0 }) }) };
   assert.equal(await getAccountBalance(mockDb3, 'zero'), 0);
 });

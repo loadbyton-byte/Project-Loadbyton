@@ -286,20 +286,33 @@ async function writeAudit(req, { userId = null, action, details = null, entityTy
   // could theoretically fork the chain; verifyChain() already treats a
   // fork as a reported break rather than a crash, the same "best effort
   // under concurrency" already accepted for the ledger's own chain.
+  // db.prepare(sql).run()/.all() — NOT db.query(sql, params) — is what
+  // translates SQLite-style `?` placeholders to Postgres's `$1,$2,...`
+  // (db.js's toPg(), applied inside prepare() but NOT inside the top-level
+  // query() passthrough). A prior version of this function called
+  // db.query() directly with `?` placeholders, which is valid SQLite but a
+  // raw Postgres syntax error ("syntax error at or near ','", 42601) —
+  // every writeAudit() call, including the one on every successful login
+  // (auth.routes.js's POST /api/auth/login), 500'd in production the
+  // instant it ran against Postgres, invisible in this repo's SQLite-only
+  // test suite. Neither db.query() nor db.prepare() joins an
+  // already-open Postgres transaction either way (both grab a fresh
+  // connection from the pool) — this change only fixes the placeholder
+  // translation, it doesn't reopen the nested-transaction issue the
+  // db.query() switch was originally made to fix.
   let prevHash = 'GENESIS';
   try {
-    const prevRow = await db.query(`SELECT hash FROM audit_log WHERE hash IS NOT NULL ORDER BY id DESC LIMIT 1`, []);
-    prevHash = prevRow.rows[0]?.hash || 'GENESIS';
+    const prevRows = await db.prepare(`SELECT hash FROM audit_log WHERE hash IS NOT NULL ORDER BY id DESC LIMIT 1`).all();
+    prevHash = prevRows[0]?.hash || 'GENESIS';
   } catch (e) {
     console.error('[audit] hash-chain tip lookup failed, chaining from GENESIS:', e.message);
   }
   const createdAt = new Date().toISOString();
   const hash = crypto.createHash('sha256').update(`${prevHash}|${action}|${entityType || ''}|${entityId || ''}|${createdAt}`).digest('hex');
-  await db.query(
+  await db.prepare(
     `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id, ip_address, user_agent, prev_hash, hash, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null, ipAddress, userAgent, prevHash, hash, createdAt]
-  );
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null, ipAddress, userAgent, prevHash, hash, createdAt);
 }
 
 /**
