@@ -12,7 +12,20 @@ const crypto = require('node:crypto');
 // same directory rather than a sibling server/lib/data/ that .gitignore's
 // server/data/uploads/ rule doesn't cover.
 const UPLOADS_DIR = path.join(path.dirname(process.env.DB_PATH || path.join(__dirname, '..', 'data', 'loadbyton.db')), 'uploads');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Best-effort only — every actual local-disk write path (putObject below)
+// already creates its own destination directory on demand right before
+// writing, so this eager mkdir is a startup nicety, not a requirement. A
+// thrown error here previously took down this entire module — and by
+// extension nearly every route file, since almost all of them require it
+// transitively — which is how one host's /data permission issue (an
+// unwritable bind-mounted volume, e.g. wrong UID ownership) turned into
+// the whole API 404ing on every route including /api/health, even with
+// S3 fully configured and this directory never actually used.
+try {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+} catch (e) {
+  console.warn('[storage] could not create local uploads dir at startup (non-fatal — S3, if configured, is unaffected; a local-disk upload will retry this at write time):', e.message);
+}
 
 let s3Client = null;
 let s3Bucket = null;

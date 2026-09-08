@@ -20,8 +20,14 @@ server/data
 *.sqlite
 *.sqlite3
 
-# Docs, tests, tooling — not needed at runtime
+# Docs, tests, tooling — not needed at runtime, EXCEPT openapi.yaml, which
+# server/routes/docs.routes.js reads at runtime to serve GET /api/docs.
+# Excluding all of docs/ here (as this used to) meant that file was never
+# in the build context to copy in the first place — Dockerfile and
+# deploy/oracle-cloud/Dockerfile's own `COPY docs ./docs` had nothing to
+# copy, silently producing an image that always 404s the docs page.
 docs
+!docs/openapi.yaml
 e2e
 **/*.test.js
 **/*.spec.js
