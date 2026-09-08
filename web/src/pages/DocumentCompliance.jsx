@@ -20,7 +20,12 @@ export default function DocumentCompliance() {
   const { user, refresh } = useAuth();
   const { addToast } = useToasts();
   const p = user.profile || {};
-  const isCarrier = user.role === 'CARRIER';
+  // OWNER_OPERATOR is a real CARRIER-equivalent everywhere on the backend
+  // (middleware/auth.js's roleSatisfies()) — matching that here so an
+  // owner-operator who can now reach this page (App.jsx's route guard) also
+  // sees the driver-roster/document UI a CARRIER sees, not a stripped-down
+  // page that renders but has none of it.
+  const isCarrier = user.role === 'CARRIER' || user.role === 'OWNER_OPERATOR';
 
   const [uploadingDocType, setUploadingDocType] = useState(null);
   const [drivers, setDrivers] = useState(null);
