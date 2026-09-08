@@ -226,8 +226,13 @@ export default function Dashboard() {
 
       {analytics && (
         <section className="mt-4 grid grid-cols-2 gap-3">
-          <BentoStat label={t('dashboard.stat.activeJobs', 'Active jobs')} value={analytics.activeJobs} />
-          <BentoStat label={t('dashboard.stat.completed', 'Completed')} value={analytics.jobsCompleted} />
+          {/* Semantic status colors per Change 1 mockup §2 — Active reads as
+              in-progress (info/blue), Completed as done (success/teal); Total
+              spent stays neutral (a raw figure, not a status) and Savings
+              keeps its existing accent tone (metric set unchanged, styling
+              only). */}
+          <BentoStat label={t('dashboard.stat.activeJobs', 'Active jobs')} value={analytics.activeJobs} tone="info" />
+          <BentoStat label={t('dashboard.stat.completed', 'Completed')} value={analytics.jobsCompleted} tone="success" />
           <BentoStat label={t('dashboard.stat.totalSpent', 'Total spent')} value={formatAED(analytics.totalSpentAED)} icon={<IconWallet size={22} />} />
           <BentoStat label={t('dashboard.stat.savings', 'Savings vs. market')} value={`${analytics.savingsPercent}%`} tone="accent" />
         </section>
@@ -562,7 +567,13 @@ export default function Dashboard() {
           <EmptyState className="mt-3" title="No jobs yet" description="Post your first drayage job to start getting carrier bids." action={<Button onClick={() => setShowForm(true)}>Post a job</Button>} />
         ) : (
           <div className="mt-3">
-            <div className="flex flex-wrap items-end gap-3">
+            {/* Sticky filter bar (Change 1 mockup §2) — top-14 clears
+                Shell.jsx's own sticky h-14 header (mobile and desktop both),
+                z-20 keeps it below that header's z-30/z-40 so nothing
+                overlaps; the solid --bg-canvas background (the real page
+                background token, not a card surface) stops scrolled job
+                cards from showing through underneath it. */}
+            <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-end gap-3 px-4 py-3 sm:mx-0 sm:px-0" style={{ background: 'var(--bg-canvas)' }}>
               <div className="min-w-[140px]">
                 <Label>Filter by status</Label>
                 <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full">

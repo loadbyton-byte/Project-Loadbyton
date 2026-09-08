@@ -227,17 +227,39 @@ export function Stat({ label, value, sub, tone = 'default' }) {
 // with (label-caps + a big number). A 2-up (or wider, with span) grid cell —
 // unlike Stat above (a standalone card), this is meant to sit inside a
 // `grid grid-cols-2 gap-3` wrapper the page provides.
+//
+// Semantic tones (Change 1, docs/UI_MODERNIZATION_MOCKUP.md §2 "Stat
+// tiles"): 'info'/'success'/'warning'/'danger' tint the card from the same
+// --status-* tokens StatusBadge already uses elsewhere, so a tile's color
+// carries real meaning (e.g. "Active jobs" reads as in-progress, "Completed"
+// reads as done) instead of every tile being visually interchangeable.
+// 'default'/'accent' keep their pre-existing look — every caller that
+// predates this (Analytics.jsx, Earnings.jsx, OpenLoads.jsx) never passes
+// the new tones and is unaffected.
+const BENTO_TONE_TOKENS = {
+  info: { bg: 'var(--status-info-bg)', value: 'var(--status-info)' },
+  success: { bg: 'var(--status-success-bg)', value: 'var(--status-success)' },
+  warning: { bg: 'var(--status-warning-bg)', value: 'var(--status-warning)' },
+  danger: { bg: 'var(--status-danger-bg)', value: 'var(--status-danger)' },
+};
 export function BentoStat({ label, value, icon, tone = 'default', span, className }) {
+  const semantic = BENTO_TONE_TOKENS[tone];
   return (
     <div
-      className={cx('flex flex-col gap-1 rounded-lg p-4', span === 2 && 'col-span-2 flex-row items-center justify-between', className)}
-      style={{ background: tone === 'accent' ? 'var(--surface-container-high)' : 'var(--surface-container-low)', border: '1px solid var(--border-subtle)' }}
+      // 48px+ tap target (the mockup's stat-tile requirement): p-4 (16px)
+      // padding around two stacked text rows already clears this, min-h-12
+      // makes it explicit rather than incidental.
+      className={cx('flex min-h-12 flex-col gap-1 rounded-lg p-4', span === 2 && 'col-span-2 flex-row items-center justify-between', className)}
+      style={{ background: semantic ? semantic.bg : tone === 'accent' ? 'var(--surface-container-high)' : 'var(--surface-container-low)', border: '1px solid var(--border-subtle)' }}
     >
+      {/* min-w-0 + span=2's flex-row both use the logical `me-` gap-based
+          layout already (flex `gap`, not a margin side), so this reads
+          correctly mirrored under dir="rtl" with no extra RTL-specific class. */}
       <div className={cx('min-w-0', span === 2 && 'flex flex-col gap-1')}>
         <span className={cx('block truncate font-mono text-[11px] font-semibold uppercase tracking-wider', tone === 'accent' ? 'text-ink-secondary' : 'text-ink-muted')}>{label}</span>
-        <p className="tabular truncate font-display text-2xl font-extrabold text-ink">{value}</p>
+        <p className="tabular truncate font-display text-2xl font-extrabold" style={{ color: semantic ? semantic.value : 'var(--ink)' }}>{value}</p>
       </div>
-      {icon && <span className="shrink-0 text-brand-accent">{icon}</span>}
+      {icon && <span className="shrink-0" style={{ color: semantic ? semantic.value : 'var(--brand-accent)' }}>{icon}</span>}
     </div>
   );
 }

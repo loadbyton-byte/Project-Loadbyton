@@ -39,11 +39,11 @@ Desktop build cannot verify safe-area/dvh. Before calling Change 1 done:
 
 ## 5. Sign-off checklist (Aarif)
 
-- [ ] Approved: card-row direction (price-right vs price-below on small screens).
-- [ ] Approved: stat-tile set (Active / Completed / Spend / Savings — keep or swap Savings for Reliability?).
-- [ ] Approved: primary-action-per-row rule (Discuss & award vs View).
-- [ ] Approved: dark-mode tile contrast on real device.
-- [ ] Decision: keep free UI-kit mapping (no licensed kit purchase).
+- [x] Approved: card-row direction — price-right (mirrors in RTL, matches current desktop reading order).
+- [x] Approved: stat-tile set — keep Active / Completed / Spend / Savings as-is, restyled only.
+- [x] Approved: primary-action-per-row rule — Discuss & award (unchanged behavior).
+- [ ] Approved: dark-mode tile contrast on real device (still owed — desktop build can't verify this).
+- [x] Decision: keep free UI-kit mapping (no licensed kit purchase).
 
 On approval, implementation is a frontend-only pass over
 `Dashboard.jsx`, `JobDetail.jsx`, `DriverHome.jsx`, `index.css` tokens —
