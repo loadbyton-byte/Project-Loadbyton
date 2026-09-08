@@ -136,11 +136,18 @@ async function createTransaction(trx, { idempotencyKey, jobId = null, payoutId =
  * @returns {Promise<number>}
  */
 async function getAccountBalance(db, accountCode) {
-  const r = await db.query(
-    `SELECT COALESCE(SUM(CASE WHEN side='DEBIT' THEN amount_minor ELSE -amount_minor END), 0) as balance FROM ledger_entries WHERE account_code=?`,
-    [accountCode]
-  );
-  return Number(r.rows[0]?.balance || 0);
+  // db.prepare(sql).get(), not db.query(sql, params) — same fix as
+  // lib/helpers.js's writeAudit(): db.js's toPg() (which turns `?` into
+  // Postgres's `$1,$2,...`) only runs inside prepare(), not the top-level
+  // query() passthrough. This call site is always passed the raw global
+  // db (see services/reconciliation.service.js), never a transaction's
+  // trx, so it hit the same Postgres syntax error — silently swallowed by
+  // every caller's .catch(() => 0), which meant admin reconciliation
+  // reported every ledger balance as 0 rather than surfacing the crash.
+  const row = await db.prepare(
+    `SELECT COALESCE(SUM(CASE WHEN side='DEBIT' THEN amount_minor ELSE -amount_minor END), 0) as balance FROM ledger_entries WHERE account_code=?`
+  ).get(accountCode);
+  return Number(row?.balance || 0);
 }
 
 // Change 30 core — chargeFee(): the single helper every monetization line
