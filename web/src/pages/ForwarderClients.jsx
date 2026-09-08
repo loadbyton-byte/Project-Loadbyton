@@ -15,7 +15,14 @@ export default function ForwarderClients() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ companyName: '', contactName: '', email: '', phone: '', trn: '' });
+  // Matches the real schema (server/schema.js's forwarder_clients table)
+  // exactly: client_name, contact_phone, contact_email — that's the whole
+  // row. This page previously invented a contactName/email/trn vocabulary
+  // that never existed on the backend at all (no contact-person name field,
+  // no TRN column) — invisible until real seed data first populated this
+  // table today, since an empty list never exercises the display filter or
+  // a real submit.
+  const [form, setForm] = useState({ clientName: '', contactPhone: '', contactEmail: '' });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -40,7 +47,7 @@ export default function ForwarderClients() {
       await api.addForwarderClient(form);
       addToast({ type: 'status_change', title: t('forwarder.added', 'Client added to roster') });
       setShowModal(false);
-      setForm({ companyName: '', contactName: '', email: '', phone: '', trn: '' });
+      setForm({ clientName: '', contactPhone: '', contactEmail: '' });
       fetchClients();
     } catch (e) {
       addToast({ type: 'system_message', title: e.message || t('forwarder.addError', 'Failed to add client') });
@@ -49,12 +56,14 @@ export default function ForwarderClients() {
     }
   }
 
-  const filteredClients = clients.filter((c) =>
-    c.company_name.toLowerCase().includes(search.toLowerCase()) ||
-    c.contact_name.toLowerCase().includes(search.toLowerCase()) ||
-    c.email.toLowerCase().includes(search.toLowerCase()) ||
-    c.trn?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredClients = clients.filter((c) => {
+    const needle = search.toLowerCase();
+    return (
+      c.client_name?.toLowerCase().includes(needle) ||
+      c.contact_email?.toLowerCase().includes(needle) ||
+      c.contact_phone?.toLowerCase().includes(needle)
+    );
+  });
 
   return (
     <div className="container-page max-w-5xl">
@@ -91,9 +100,8 @@ export default function ForwarderClients() {
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-ink-muted bg-surface-container-high">
                   <th className="px-4 py-3">{t('forwarder.client', 'Client')}</th>
-                  <th className="px-4 py-3">{t('forwarder.contact', 'Contact')}</th>
+                  <th className="px-4 py-3">{t('forwarder.phone', 'Phone')}</th>
                   <th className="px-4 py-3">{t('forwarder.email', 'Email')}</th>
-                  <th className="px-4 py-3">{t('forwarder.trn', 'TRN')}</th>
                   <th className="px-4 py-3">{t('forwarder.added', 'Added')}</th>
                 </tr>
               </thead>
@@ -106,13 +114,12 @@ export default function ForwarderClients() {
                           <IconPackage size={18} />
                         </div>
                         <div>
-                          <p className="font-medium text-ink">{c.company_name}</p>
+                          <p className="font-medium text-ink">{c.client_name}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-ink">{c.contact_name}</td>
-                    <td className="px-4 py-3 text-sm text-ink-muted">{c.email}</td>
-                    <td className="px-4 py-3 font-mono text-sm text-ink">{c.trn || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-ink">{c.contact_phone || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-ink-muted">{c.contact_email || '—'}</td>
                     <td className="px-4 py-3 text-sm text-ink-muted">{c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}</td>
                   </tr>
                 ))}
@@ -125,27 +132,17 @@ export default function ForwarderClients() {
       <Modal open={showModal} onClose={() => setShowModal(false)} title={t('forwarder.addClientModal', 'Add Client to Roster')}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="companyName">{t('forwarder.companyName', 'Company Name')}</Label>
-            <Input id="companyName" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} placeholder="Emirates Steel" />
+            <Label htmlFor="clientName">{t('forwarder.companyName', 'Client Name')}</Label>
+            <Input id="clientName" required value={form.clientName} onChange={(e) => setForm({ ...form, clientName: e.target.value })} placeholder="Emirates Steel" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="contactName">{t('forwarder.contactName', 'Contact Name')}</Label>
-              <Input id="contactName" required value={form.contactName} onChange={(e) => setForm({ ...form, contactName: e.target.value })} placeholder="Ahmed Al-Mansoori" />
+              <Label htmlFor="contactPhone">{t('forwarder.phone', 'Phone')}</Label>
+              <Input id="contactPhone" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} placeholder="05XXXXXXXX" />
             </div>
             <div>
-              <Label htmlFor="email">{t('forwarder.email', 'Email')}</Label>
-              <Input id="email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="contact@company.ae" />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="phone">{t('forwarder.phone', 'Phone')}</Label>
-              <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="05XXXXXXXX" />
-            </div>
-            <div>
-              <Label htmlFor="trn">{t('forwarder.trn', 'TRN (optional)')}</Label>
-              <Input id="trn" value={form.trn} onChange={(e) => setForm({ ...form, trn: e.target.value })} placeholder="100000000000000" />
+              <Label htmlFor="contactEmail">{t('forwarder.email', 'Email')}</Label>
+              <Input id="contactEmail" type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} placeholder="contact@company.ae" />
             </div>
           </div>
           <div className="flex gap-2 pt-4">
