@@ -15,6 +15,7 @@ ENV NODE_ENV=production
 COPY server/package.json server/package-lock.json ./server/
 RUN cd server && npm ci --omit=dev
 COPY server ./server
+COPY docs ./docs
 COPY --from=build /app/web/dist ./web/dist
 
 # /data is where the persistent block-volume mount goes (see README.md) —
