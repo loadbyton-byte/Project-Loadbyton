@@ -44,7 +44,7 @@ async function executeApproval(approval, confirmer, req) {
   });
 }
 
-router.post('/api/admin/approvals/request', auth(['ADMIN']), async (req, res) => {
+router.post('/api/admin/action-approvals/request', auth(['ADMIN']), async (req, res) => {
   const { actionType, jobId, reason } = req.body || {};
   if (!EXECUTABLE.includes(actionType)) {
     return apiResponse.error(req, res, 'VALIDATION_FAILED', `actionType must be one of: ${EXECUTABLE.join(', ')}`);
@@ -61,7 +61,16 @@ router.post('/api/admin/approvals/request', auth(['ADMIN']), async (req, res) =>
   res.status(201).json({ approval });
 });
 
-router.get('/api/admin/approvals', auth(['ADMIN']), async (req, res) => {
+// Was '/api/admin/approvals' (GET) — collided with admin.routes.js's route
+// of the exact same path (the pending-account-approval queue, a completely
+// different feature: users.account_approval_status, not this file's
+// admin_approvals table). Express resolves a path collision by first
+// registration order (admin.routes.js is required before this file in
+// app.js's route list), so this handler was 100% dead/unreachable code —
+// any caller of GET /api/admin/approvals always got the account queue's
+// {queue: [...]} shape, never this table's {approvals: [...]}. Renamed the
+// whole action-approvals group together so it can't collide again.
+router.get('/api/admin/action-approvals', auth(['ADMIN']), async (req, res) => {
   const { status } = req.query || {};
   const rows = status && ['PENDING', 'CONFIRMED', 'REJECTED', 'EXECUTED'].includes(String(status).toUpperCase())
     ? await db.prepare(`SELECT * FROM admin_approvals WHERE status=? ORDER BY created_at DESC LIMIT 100`).all(String(status).toUpperCase())
@@ -69,7 +78,7 @@ router.get('/api/admin/approvals', auth(['ADMIN']), async (req, res) => {
   res.json({ approvals: rows });
 });
 
-router.post('/api/admin/approvals/:id/confirm', auth(['ADMIN']), async (req, res) => {
+router.post('/api/admin/action-approvals/:id/confirm', auth(['ADMIN']), async (req, res) => {
   const approval = await db.prepare(`SELECT * FROM admin_approvals WHERE id=?`).get(req.params.id);
   if (!approval) return sendError(res, 404, 'Approval request not found');
   if (approval.status !== 'PENDING') return sendError(res, 409, `Request is already ${approval.status}`);
@@ -84,7 +93,7 @@ router.post('/api/admin/approvals/:id/confirm', auth(['ADMIN']), async (req, res
   res.json({ approval: await db.prepare(`SELECT * FROM admin_approvals WHERE id=?`).get(approval.id) });
 });
 
-router.post('/api/admin/approvals/:id/reject', auth(['ADMIN']), async (req, res) => {
+router.post('/api/admin/action-approvals/:id/reject', auth(['ADMIN']), async (req, res) => {
   const approval = await db.prepare(`SELECT * FROM admin_approvals WHERE id=?`).get(req.params.id);
   if (!approval) return sendError(res, 404, 'Approval request not found');
   if (approval.status !== 'PENDING') return sendError(res, 409, `Request is already ${approval.status}`);

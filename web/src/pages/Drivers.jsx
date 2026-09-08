@@ -30,8 +30,13 @@ export default function Drivers() {
     setDriversError('');
     Promise.all([
       api.listDrivers().then((d) => setDrivers(d.drivers)).catch((err) => { setDrivers([]); setDriversError(err.message); }),
-      api.getFleetCapacity().then((c) => setCapacity(c.capacity)).catch(() => setCapacity(null)),
-      api.get('/fleet/driver-associates/wallet').then((w) => setWalletEntries(w.entries || [])).catch(() => setWalletEntries([])),
+      // GET /api/fleet/capacity returns {fleet_size, available_units,
+      // externally_engaged_units, events} directly, not wrapped under a
+      // `.capacity` key — setCapacity(c.capacity) was always feeding the
+      // state `undefined`, so every field below silently fell back to its
+      // '—' placeholder regardless of the account's real fleet data.
+      api.getFleetCapacity().then((c) => setCapacity(c)).catch(() => setCapacity(null)),
+      api.listDriverAssociateWallet().then((w) => setWalletEntries(w.entries || [])).catch(() => setWalletEntries([])),
     ]);
   }
   useEffect(load, []);
@@ -126,7 +131,7 @@ export default function Drivers() {
     if (!window.confirm(`Mark AED ${amount} as paid for this driver?`)) return;
     setWalletBusyFor(entryId);
     try {
-      await api.post(`/fleet/driver-associates/wallet/${entryId}/mark-paid`, {});
+      await api.markWalletEntryPaid(entryId);
       addToast({ type: 'status_change', title: 'Marked paid', body: `AED ${amount} marked as paid.` });
       load();
     } catch (err) {

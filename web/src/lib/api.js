@@ -130,6 +130,15 @@ export const api = {
   getFleetCapacity: () => get('/fleet/capacity'),
   externalEngageUnits: (units, note) => post('/fleet/capacity/external-engage', { units, note }),
   releaseExternalUnits: (units) => post('/fleet/capacity/release', { units }),
+  // Driver-associate wallet (server/routes/fleet.routes.js). Was previously
+  // called from Drivers.jsx as api.get(...)/api.post(...) directly — get/
+  // post/patch/del are module-local helpers in this file, never attached to
+  // the exported `api` object, so those calls threw "api.get is not a
+  // function" and crashed the whole page for every carrier account (no
+  // try/catch around it in React's render path). Named wrapper methods,
+  // matching every other endpoint in this file, fix it at the actual cause.
+  listDriverAssociateWallet: () => get('/fleet/driver-associates/wallet'),
+  markWalletEntryPaid: (entryId) => post(`/fleet/driver-associates/wallet/${entryId}/mark-paid`, {}),
 
   // driver seat's own view
   driverJob: () => get('/driver/job'),
@@ -241,10 +250,12 @@ Object.assign(api, {
   createStop: (id, body) => post(`/jobs/${id}/stops`, body),
   completeStop: (id, stopId) => post(`/jobs/${id}/stops/${stopId}/complete`, {}),
   deleteStop: (id, stopId) => del(`/jobs/${id}/stops/${stopId}`),
-  // Admin reject approval
-  adminReject: (id) => post(`/admin/approvals/${id}/reject`, {}),
-  // Admin approvals request
-  adminRequestApproval: (body) => post('/admin/approvals/request', body),
+  // Two-person action-approval flow (server/routes/admin-approvals.routes.js)
+  // — distinct from adminApprovals()/adminApprove() above, which are the
+  // pending-account-registration queue, a different feature entirely that
+  // happened to collide on this exact GET path before the server-side rename.
+  adminReject: (id) => post(`/admin/action-approvals/${id}/reject`, {}),
+  adminRequestApproval: (body) => post('/admin/action-approvals/request', body),
   // Admin reconciliation / platform fees / ledger
   adminReconciliation: () => get('/admin/reconciliation'),
   adminPlatformFees: () => get('/admin/platform-fees'),

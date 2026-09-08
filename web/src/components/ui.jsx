@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { IconStar, IconMapPin, IconAlert, IconX } from './icons.jsx';
+import { IconStar, IconMapPin, IconAlert, IconX, IconCheck } from './icons.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -366,10 +366,22 @@ export function StatusTracker({ steps, currentIndex, terminal, className }) {
         return (
           <React.Fragment key={step.key}>
             <div className="flex flex-col items-center gap-1.5" style={{ width: 0, minWidth: 'fit-content' }}>
+              {/* Change 1b Phase D — a checkmark for a completed step and
+                  the step's own number for an upcoming one (the mockup's
+                  timeline glyphs) reads as more informative at a glance
+                  than a bare dot; the active step keeps its filled-dot +
+                  pulse (nothing to check off yet, it's in progress). */}
               <span
-                className={cx('relative flex h-3.5 w-3.5 items-center justify-center rounded-full', active && 'animate-pulse')}
-                style={{ background: done || active ? color : 'var(--surface-container-high)', border: done || active ? 'none' : '2px solid var(--outline-variant)' }}
-              />
+                className={cx('relative flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold', active && 'animate-pulse')}
+                style={{
+                  background: done || active ? color : 'var(--surface-container-high)',
+                  color: done || active ? 'var(--text-on-accent)' : 'var(--text-muted)',
+                  border: done || active ? 'none' : '2px solid var(--outline-variant)',
+                  boxShadow: active ? `0 0 0 4px color-mix(in srgb, ${color} 20%, transparent)` : 'none',
+                }}
+              >
+                {done ? <IconCheck size={11} /> : active ? null : i + 1}
+              </span>
               <span className={cx('whitespace-nowrap font-mono text-[10px] font-semibold uppercase tracking-wide', done || active ? 'text-ink' : 'text-ink-muted')}>
                 {step.label}
               </span>

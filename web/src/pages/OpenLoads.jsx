@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { formatAED, formatDate, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel } from '../lib/constants.js';
-import { EmptyState, ErrorState, Badge, Select, Input, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
-import { IconAlert, IconPackage, IconSearch } from '../components/icons.jsx';
+import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel } from '../lib/constants.js';
+import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button } from '../components/ui.jsx';
+import { IconAlert, IconPackage, IconSearch, IconMapPin } from '../components/icons.jsx';
 
 const PAGE_SIZE = 20;
 const SORT_OPTIONS = [
@@ -15,6 +15,41 @@ const SORT_OPTIONS = [
   { value: 'price_asc', label: 'Target price: low to high' },
   { value: 'deadline_asc', label: 'Deadline: soonest' },
 ];
+
+// "18h left" / "1d 4h left" / "Past due" — the mockup's deadline column
+// reads as time-to-act, not a calendar date, which matters more when
+// scanning a dense list of bid opportunities under time pressure than the
+// exact date does. Scoped to this page only; formatDate (an actual
+// calendar date) stays the norm everywhere else that isn't a scan-and-bid
+// list.
+function timeLeft(iso) {
+  if (!iso) return '—';
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return 'Past due';
+  const totalMinutes = Math.round(ms / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  if (days > 0) return `${days}d ${hours}h left`;
+  if (hours > 0) return `${hours}h left`;
+  return `${Math.max(1, totalMinutes)}m left`;
+}
+
+// Same per-shipment-type origin/destination derivation the old JobCard grid
+// used inline (twice) — extracted once so the table row below isn't a
+// third copy of this exact ternary chain.
+function jobOrigin(j) {
+  if (j.shipment_type === 'EXPORT') return j.export_empty_pickup_location ? depotLabel(j.export_empty_pickup_location) : formatLabel(j.pickup_terminal);
+  if (j.shipment_type === 'LOCAL') return formatLabel(j.loading_location || j.pickup_terminal);
+  return formatLabel(j.import_pickup_terminal || j.pickup_terminal);
+}
+function jobDestination(j) {
+  if (j.shipment_type === 'EXPORT') return formatLabel(j.export_deposit_terminal || j.pickup_terminal);
+  if (j.shipment_type === 'LOCAL') return formatLabel(j.delivery_location || j.delivery_area);
+  return formatLabel(j.import_unloading_location || j.delivery_area);
+}
+function jobEquipmentLabel(j) {
+  return CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} · ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type);
+}
 
 export default function OpenLoads() {
   usePageTitle('Open loads');
@@ -104,37 +139,87 @@ export default function OpenLoads() {
           />
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Dense table (Change 1b Phase C) — Open Loads is a scan-many/
+                bid-fast list, not a browse-a-few-and-read gallery, so a
+                table row per job (job code, route, equipment, target price,
+                deadline countdown, one action) fits the task better than
+                the card grid Dashboard/Won Jobs/My Bids still use for their
+                own, lower-density lists. Desktop-first: below sm, falls
+                back to a stacked card layout (a 7-column table doesn't
+                survive a 375px screen no matter how it's styled). */}
+            <Card className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b" style={{ borderColor: 'var(--border-default)' }}>
+                    {['Job', 'Route', 'Equipment', 'Target price', 'Deadline', ''].map((h) => (
+                      <th key={h} className="whitespace-nowrap px-4 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((j) => (
+                    <tr
+                      key={j.id}
+                      onClick={() => navigate(`/jobs/${j.id}`)}
+                      className="cursor-pointer border-b last:border-0 hover:bg-surface-container"
+                      style={{ borderColor: 'var(--border-subtle)' }}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-semibold text-ink-muted">{j.job_code}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5 font-medium text-ink">
+                          <IconMapPin size={13} className="shrink-0 text-ink-muted" />
+                          <span className="truncate">{jobOrigin(j)}</span>
+                          <span className="shrink-0 text-ink-muted">→</span>
+                          <span className="truncate">{jobDestination(j)}</span>
+                        </div>
+                        {j.cargo_weight_tons != null && <p className="mt-0.5 text-xs text-ink-muted">{j.cargo_type ? `${cargoTypeLabel(j.cargo_type)} · ` : ''}{j.cargo_weight_tons} t</p>}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">{jobEquipmentLabel(j)}</td>
+                      <td className="tabular whitespace-nowrap px-4 py-3 font-semibold text-ink">{formatAED(j.max_budget_aed)}</td>
+                      <td className="tabular whitespace-nowrap px-4 py-3 text-ink-secondary">{timeLeft(j.deadline)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <Button
+                          size="sm"
+                          variant="accent"
+                          disabled={!user?.is_verified}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/jobs/${j.id}`); }}
+                        >
+                          {user?.is_verified ? 'Bid' : 'Locked'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+
+            {/* Mobile fallback — same data, stacked cards (a table can't
+                usefully compress to a narrow screen; this reuses the same
+                per-shipment-type helpers as the table above, not a
+                duplicate data mapping). */}
+            <div className="flex flex-col gap-3 sm:hidden">
               {jobs.map((j) => (
-                <JobCard
+                <button
                   key={j.id}
+                  type="button"
                   onClick={() => navigate(`/jobs/${j.id}`)}
-                  jobCode={j.job_code}
-                  topRight={
-                    <div className="flex flex-col items-end gap-1">
-                    </div>
-                  }
-                  priceLabel={`Target ${formatAED(j.max_budget_aed)}`}
-                  origin={j.shipment_type === 'EXPORT' ? (j.export_empty_pickup_location ? depotLabel(j.export_empty_pickup_location) : formatLabel(j.pickup_terminal)) : j.shipment_type === 'LOCAL' ? formatLabel(j.loading_location || j.pickup_terminal) : formatLabel(j.import_pickup_terminal || j.pickup_terminal)}
-                  destination={j.shipment_type === 'EXPORT' ? formatLabel(j.export_deposit_terminal || j.pickup_terminal) : j.shipment_type === 'LOCAL' ? formatLabel(j.delivery_location || j.delivery_area) : formatLabel(j.import_unloading_location || j.delivery_area)}
-                  chips={[
-                    j.shipment_type || 'IMPORT',
-                    CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
-                    ...(j.cargo_type ? [cargoTypeLabel(j.cargo_type)] : []),
-                    ...(j.cargo_weight_tons != null ? [`${j.cargo_weight_tons} t`] : []),
-                    ...(j.container_count > 1 ? [`×${j.container_count} containers`] : []),
-                    ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
-                    ...(j.shipment_type === 'IMPORT' && j.import_empty_return_location ? [`→ ${depotLabel(j.import_empty_return_location)}`] : []),
-                    ...(j.shipment_type === 'EXPORT' && j.export_loading_location ? [`via ${formatLabel(j.export_loading_location)}`] : []),
-                    ...(j.shipment_type === 'LOCAL' && j.ready_at ? [`loads ${new Date(j.ready_at).toLocaleDateString()}`] : []),
-                  ]}
-                  meta={
-                    <span className="flex items-center justify-between">
-                      <span>Deadline {formatDate(j.deadline)}</span>
-                      <RatingPill rating={j.shipper_rating} />
-                    </span>
-                  }
-                />
+                  className="card flex flex-col gap-2 p-4 text-left"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-mono text-xs font-semibold text-ink-muted">{j.job_code}</span>
+                    <span className="tabular shrink-0 font-display text-sm font-bold text-ink">{formatAED(j.max_budget_aed)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                    <IconMapPin size={13} className="shrink-0 text-ink-muted" />
+                    <span className="truncate">{jobOrigin(j)}</span>
+                    <span className="shrink-0 text-ink-muted">→</span>
+                    <span className="truncate">{jobDestination(j)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-ink-muted">
+                    <span>{jobEquipmentLabel(j)}</span>
+                    <span className="tabular">{timeLeft(j.deadline)}</span>
+                  </div>
+                </button>
               ))}
             </div>
             <Pagination total={total} limit={PAGE_SIZE} offset={offset} onChange={setOffset} />

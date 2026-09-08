@@ -42,14 +42,14 @@ test('two-person rule: requester cannot self-confirm; second admin executes rele
 
   const jobId = await postAwardFund(shipper, carrier, admin1);
 
-  const req1 = await admin1.post('/api/admin/approvals/request', {
+  const req1 = await admin1.post('/api/admin/action-approvals/request', {
     actionType: 'MANUAL_ESCROW_RELEASE', jobId, reason: 'carrier completed off-system',
   });
   assert.equal(req1.status, 201, req1.raw);
   assert.equal(req1.body.approval.status, 'PENDING');
   const approvalId = req1.body.approval.id;
 
-  const selfConfirm = await admin1.post(`/api/admin/approvals/${approvalId}/confirm`, {});
+  const selfConfirm = await admin1.post(`/api/admin/action-approvals/${approvalId}/confirm`, {});
   assert.equal(selfConfirm.status, 403, 'requester must never confirm their own request');
   assert.match(selfConfirm.raw, /Two-person/);
 
@@ -69,8 +69,9 @@ test('two-person rule: requester cannot self-confirm; second admin executes rele
 
   const admin2 = makeClient(server.baseUrl);
   // login as the promoted user (password demo1234)
-  const users = await admin1.get('/api/admin/approvals?status=PENDING');
-  assert.equal(users.status, 200);
+  const pending = await admin1.get('/api/admin/action-approvals?status=PENDING');
+  assert.equal(pending.status, 200);
+  assert.ok(pending.body.approvals.some((a) => a.id === approvalId), 'the pending request must appear in the action-approvals queue');
   void admin2;
 
   // Reuse admin1's session cookie jar trick: log in with the second admin's
@@ -85,7 +86,7 @@ test('two-person rule: requester cannot self-confirm; second admin executes rele
   db2.close();
   await a2.login(u2.email, 'demo1234');
 
-  const confirm = await a2.post(`/api/admin/approvals/${approvalId}/confirm`, {});
+  const confirm = await a2.post(`/api/admin/action-approvals/${approvalId}/confirm`, {});
   assert.equal(confirm.status, 200, confirm.raw);
   assert.equal(confirm.body.approval.status, 'EXECUTED');
 

@@ -218,8 +218,17 @@ export default function App() {
           <Route path="/jobs/:id/dispute" element={<RequireAuth><JobDispute /></RequireAuth>} />
           <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
-          <Route path="/documents" element={<RequireAuth roles={['SHIPPER', 'CARRIER']}><DocumentCompliance /></RequireAuth>} />
-          <Route path="/messages" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'ADMIN']}><Messages /></RequireAuth>} />
+          {/* FORWARDER/BROKER/OWNER_OPERATOR added — Shell.jsx's navByRole()
+              already links these roles to both pages (they're real
+              SHIPPER/CARRIER-equivalents via middleware/auth.js's
+              roleSatisfies() aliasing, which the backend routes these pages
+              call already honor), but RequireAuth's `roles` check here does
+              a strict user.role match, not the alias-aware one — a genuine
+              gap found in review: clicking either nav link from those three
+              roles silently bounced back to their own dashboard with no
+              error, since neither page's route allowed their literal role. */}
+          <Route path="/documents" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><DocumentCompliance /></RequireAuth>} />
+          <Route path="/messages" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR', 'ADMIN']}><Messages /></RequireAuth>} />
           <Route path="/driver" element={<DriverOnly><DriverHome /></DriverOnly>} />
 
           <Route path="*" element={<NotFound />} />

@@ -8,7 +8,13 @@ const { auth } = require('../middleware/auth');
 const router = require('express').Router();
 
 router.get('/api/driver/job', auth(['CARRIER']), async (req, res) => {
-  if (req.user.actingSeatRole !== 'DRIVER') return res.status(403).json({ error: 'Not a driver account' });
+  // DRIVER_ASSOCIATE (pool driver, WhatsApp trip offers) needs this exact
+  // read too — middleware/auth.js's DRIVER_SEAT_ALLOWED_ROUTES already lets
+  // both seat roles reach this route; this check was never updated to
+  // match, so every DRIVER_ASSOCIATE seat 403'd here regardless — the one
+  // data call DriverHome.jsx makes, so their home page was permanently
+  // broken.
+  if (req.user.actingSeatRole !== 'DRIVER' && req.user.actingSeatRole !== 'DRIVER_ASSOCIATE') return res.status(403).json({ error: 'Not a driver account' });
 
   const driver = await db.prepare('SELECT id FROM drivers WHERE seat_user_id=?').get(req.user.actingSeatId);
   if (!driver) return res.json({ job: null });
