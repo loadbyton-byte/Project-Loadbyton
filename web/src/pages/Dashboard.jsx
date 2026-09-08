@@ -28,6 +28,9 @@ const SORT_OPTIONS = [
   { value: 'deadline_asc', label: 'Deadline: soonest' },
 ];
 
+// Change 1b Phase E — post-a-job as a 3-step wizard, matching the mockup.
+const POST_JOB_STEPS = ['Shipment type', 'Equipment & volume', 'Locations & timing'];
+
 const emptyJob = {
   shipmentType: 'IMPORT',
   loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
@@ -63,6 +66,12 @@ export default function Dashboard() {
   // above — empty by default, so a job posted without touching this stays
   // exactly the single-container request it always was.
   const [extraLineItems, setExtraLineItems] = useState([]);
+  // Change 1b Phase E — post-a-job as a 3-step wizard (Shipment type ->
+  // Equipment & volume -> Locations & timing), matching the mockup. Every
+  // field/handler below is the exact same one the old single-scroll form
+  // used; only which step's block renders (and thus which fields are
+  // mounted, hence HTML5-validated, at any given moment) has changed.
+  const [postStep, setPostStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   // Progressive disclosure: most shippers already have a standing
@@ -90,7 +99,10 @@ export default function Dashboard() {
   // Closing the modal by any path (Escape, backdrop click, X, Cancel)
   // should also drop any in-progress extra container-type rows, not just a
   // successful submit — otherwise reopening the form shows stale rows.
-  useEffect(() => { if (!showForm) setExtraLineItems([]); }, [showForm]);
+  // Same reset covers the step position (Change 1b Phase E) — a fresh
+  // "Post a job" always starts at step 1, not wherever the last session
+  // left off.
+  useEffect(() => { if (!showForm) { setExtraLineItems([]); setPostStep(0); } }, [showForm]);
 
   // Popup modal: close on Escape, lock body scroll
   useEffect(() => {
@@ -261,294 +273,381 @@ export default function Dashboard() {
                 <button type="button" onClick={() => setShowForm(false)} className="rounded-full p-1.5 text-ink-muted hover:bg-surface-container hover:text-ink" aria-label="Close"><IconClose size={18} /></button>
               </Card.Header>
           <form onSubmit={onCreate}>
-            <Card.Content className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label>Equipment type</Label>
-                <Select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })}>
-                  {EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
-                </Select>
-                <p className="mt-1 text-xs text-ink-muted">
-                  {CONTAINER_EQUIPMENT.includes(form.equipmentType)
-                    ? 'Container-carrying equipment — set the container size and type below.'
-                    : 'General freight — describe the cargo in the notes field below instead of a container size.'}
-                </p>
+            <Card.Content>
+              {/* Stepper header (Change 1b Phase E) — matches the mockup's
+                  boxed step indicator: a filled accent box for the active
+                  step, a checkmark for a done one, a bare number for
+                  upcoming. Clicking a done step's box jumps back to it
+                  (matches "Back" behavior) without needing to re-click
+                  Back repeatedly. */}
+              <div className="mb-5 flex gap-2">
+                {POST_JOB_STEPS.map((label, i) => {
+                  const done = i < postStep;
+                  const active = i === postStep;
+                  return (
+                    <button
+                      type="button"
+                      key={label}
+                      onClick={() => done && setPostStep(i)}
+                      disabled={!done}
+                      className="flex flex-1 items-center gap-2 rounded-md border px-3 py-2.5 text-left transition-colors"
+                      style={{
+                        borderColor: active ? 'var(--brand-accent)' : done ? 'var(--status-success)' : 'var(--border-default)',
+                        background: active ? 'var(--brand-accent-bg)' : 'var(--bg-surface)',
+                        cursor: done ? 'pointer' : 'default',
+                      }}
+                    >
+                      <span
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+                        style={{
+                          background: active ? 'var(--brand-accent)' : done ? 'var(--status-success)' : 'var(--surface-container-high)',
+                          color: active || done ? 'var(--text-on-accent)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {done ? <IconCheck size={11} /> : i + 1}
+                      </span>
+                      <span className="truncate text-xs font-semibold text-ink">{label}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {form.shipmentType === 'LOCAL' ? (
-                <div>
-                  <Label>No. of vehicles required</Label>
-                  <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
-                  <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
-                </div>
-              ) : (
-                <div>
-                  <Label>No. of containers</Label>
-                  <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
-                  <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+              {/* Step 1 — Shipment type. Everything below (equipment, cargo,
+                  locations) depends on this choice, so it comes first —
+                  the old single-scroll form buried the picker in the
+                  middle, after equipment fields that don't actually need
+                  it to render sensibly, but the stepper's own logical
+                  order should lead with the choice everything else reads. */}
+              {postStep === 0 && (
+                <div className="sm:col-span-2">
+                  <Label>Shipment direction</Label>
+                  <div className="mt-1 flex rounded-lg border p-1" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
+                    {SHIPMENT_TYPES.map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setForm({ ...form, shipmentType: st })}
+                        className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
+                        style={form.shipmentType === st ? { background: 'var(--bg-raised)', borderColor: 'var(--border-default)' } : {}}
+                      >
+                        {shipmentTypeLabel(st)}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-ink-muted">
+                    {form.shipmentType === 'IMPORT'
+                      ? 'Container is picked at the port terminal, delivered to your customer, empty returns to depot.'
+                      : form.shipmentType === 'EXPORT'
+                        ? 'Empty is picked at depot, loaded at your site, then deposited at the port.'
+                        : 'Inland move with any road equipment — box truck, pickup, flatbed or custom. No container needed.'}
+                  </p>
                 </div>
               )}
-              <div className="sm:col-span-2">
-                <Label>Cargo type</Label>
-                <Select value={form.cargoType} onChange={(e) => setForm({ ...form, cargoType: e.target.value })}>
-                  {CARGO_TYPES.map((t) => <option key={t} value={t}>{cargoTypeLabel(t)}</option>)}
-                </Select>
-                <p className="mt-1 text-xs text-ink-muted">What's inside the load — helps carriers judge handling requirements before bidding.</p>
-              </div>
-              {CONTAINER_EQUIPMENT.includes(form.equipmentType) ? (
+
+              {/* Step 2 — Equipment & volume */}
+              {postStep === 1 && (
                 <>
-                  <div>
-                    <Label>Container size</Label>
-                    <Select value={form.containerSize} onChange={(e) => setForm({ ...form, containerSize: e.target.value })}>
-                      {CONTAINER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  <div className="sm:col-span-2">
+                    <Label>Equipment type</Label>
+                    <Select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })}>
+                      {EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
                     </Select>
+                    <p className="mt-1 text-xs text-ink-muted">
+                      {CONTAINER_EQUIPMENT.includes(form.equipmentType)
+                        ? 'Container-carrying equipment — set the container size and type below.'
+                        : 'General freight — describe the cargo in the notes field below instead of a container size.'}
+                    </p>
                   </div>
-                  <div>
-                    <Label>Container type</Label>
-                    <Select value={form.containerType} onChange={(e) => setForm({ ...form, containerType: e.target.value })}>
-                      {CONTAINER_TYPES.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
+                  {form.shipmentType === 'LOCAL' ? (
+                    <div>
+                      <Label>No. of vehicles required</Label>
+                      <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
+                      <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <Label>No. of containers</Label>
+                      <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
+                      <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                    </div>
+                  )}
+                  <div className="sm:col-span-2">
+                    <Label>Cargo type</Label>
+                    <Select value={form.cargoType} onChange={(e) => setForm({ ...form, cargoType: e.target.value })}>
+                      {CARGO_TYPES.map((t) => <option key={t} value={t}>{cargoTypeLabel(t)}</option>)}
                     </Select>
+                    <p className="mt-1 text-xs text-ink-muted">What's inside the load — helps carriers judge handling requirements before bidding.</p>
                   </div>
-                  {/* Multi-container-type support: needs more than one size/
-                      type in the same job (e.g. 2x 40HC + 1x 20FT) instead
-                      of posting separate jobs. Optional — empty by default. */}
-                  <div className="sm:col-span-2 flex flex-col gap-2">
-                    {extraLineItems.map((li, idx) => (
-                      <div key={idx} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: 'var(--border-default)' }}>
-                        <Select
-                          value={li.containerSize}
-                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerSize: e.target.value } : it)))}
-                          className="flex-1"
-                        >
+                  {CONTAINER_EQUIPMENT.includes(form.equipmentType) ? (
+                    <>
+                      <div>
+                        <Label>Container size</Label>
+                        <Select value={form.containerSize} onChange={(e) => setForm({ ...form, containerSize: e.target.value })}>
                           {CONTAINER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
                         </Select>
-                        <Select
-                          value={li.containerType}
-                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerType: e.target.value } : it)))}
-                          className="flex-1"
-                        >
+                      </div>
+                      <div>
+                        <Label>Container type</Label>
+                        <Select value={form.containerType} onChange={(e) => setForm({ ...form, containerType: e.target.value })}>
                           {CONTAINER_TYPES.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
                         </Select>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={li.count}
-                          onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, count: e.target.value } : it)))}
-                          className="w-20"
-                          aria-label="Count"
-                        />
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setExtraLineItems((items) => items.filter((_, i) => i !== idx))} aria-label="Remove line item">
-                          <IconX size={14} />
+                      </div>
+                      {/* Multi-container-type support: needs more than one size/
+                          type in the same job (e.g. 2x 40HC + 1x 20FT) instead
+                          of posting separate jobs. Optional — empty by default. */}
+                      <div className="sm:col-span-2 flex flex-col gap-2">
+                        {extraLineItems.map((li, idx) => (
+                          <div key={idx} className="flex items-center gap-2 rounded-lg border p-2.5" style={{ borderColor: 'var(--border-default)' }}>
+                            <Select
+                              value={li.containerSize}
+                              onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerSize: e.target.value } : it)))}
+                              className="flex-1"
+                            >
+                              {CONTAINER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                            </Select>
+                            <Select
+                              value={li.containerType}
+                              onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, containerType: e.target.value } : it)))}
+                              className="flex-1"
+                            >
+                              {CONTAINER_TYPES.map((t) => <option key={t} value={t}>{formatLabel(t)}</option>)}
+                            </Select>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={li.count}
+                              onChange={(e) => setExtraLineItems((items) => items.map((it, i) => (i === idx ? { ...it, count: e.target.value } : it)))}
+                              className="w-20"
+                              aria-label="Count"
+                            />
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setExtraLineItems((items) => items.filter((_, i) => i !== idx))} aria-label="Remove line item">
+                              <IconX size={14} />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="self-start"
+                          onClick={() => setExtraLineItems((items) => [...items, { containerSize: CONTAINER_SIZES[0], containerType: CONTAINER_TYPES[0], count: 1 }])}
+                        >
+                          <IconPlus size={13} /> Add another container type
                         </Button>
                       </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="self-start"
-                      onClick={() => setExtraLineItems((items) => [...items, { containerSize: CONTAINER_SIZES[0], containerType: CONTAINER_TYPES[0], count: 1 }])}
-                    >
-                      <IconPlus size={13} /> Add another container type
-                    </Button>
-                  </div>
-                </>
-              ) : form.equipmentType === 'CUSTOM' ? (
-                <div className="sm:col-span-2">
-                  <Label>Truck / requirement (required for custom)</Label>
-                  <Input
-                    required
-                    value={form.customRequirement}
-                    onChange={(e) => setForm({ ...form, customRequirement: e.target.value })}
-                    placeholder='e.g. "Double-deck trailer with 20 ft deck, load securement harness included"'
-                  />
-                  <p className="mt-1 text-xs text-ink-muted">Carriers see this as the job's requirement and bid with their own matching equipment.</p>
-                </div>
-              ) : null}
-              <div className="sm:col-span-2">
-                <Label>Shipment direction</Label>
-                <div className="mt-1 flex rounded-lg border p-1" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
-                  {SHIPMENT_TYPES.map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setForm({ ...form, shipmentType: st })}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
-                      style={form.shipmentType === st ? { background: 'var(--bg-raised)', borderColor: 'var(--border-default)' } : {}}
-                    >
-                      {shipmentTypeLabel(st)}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1 text-xs text-ink-muted">
-                  {form.shipmentType === 'IMPORT'
-                    ? 'Container is picked at the port terminal, delivered to your customer, empty returns to depot.'
-                    : form.shipmentType === 'EXPORT'
-                      ? 'Empty is picked at depot, loaded at your site, then deposited at the port.'
-                      : 'Inland move with any road equipment — box truck, pickup, flatbed or custom. No container needed.'}
-                </p>
-              </div>
-              {form.shipmentType === 'LOCAL' ? (
-                <>
-                  <div>
-                    <Label>Loading location <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.loadingLocation}
-                      onChange={(e) => setForm({ ...form, loadingLocation: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
-                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, loadingLocation: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
-                      placeholder="Warehouse, yard, site — e.g. Al Quoz Industrial 3"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Where the truck loads your cargo.</p>
-                  </div>
-                  <div>
-                    <Label>Delivery location <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.deliveryLocation}
-                      onChange={(e) => setForm({ ...form, deliveryLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
-                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, deliveryLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
-                      placeholder="Drop-off address or area"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Where the cargo is unloaded.</p>
-                  </div>
-                </>
-              ) : form.shipmentType === 'IMPORT' ? (
-                <>
-                  <div>
-                    <Label>Container pickup at terminal <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.importPickupTerminal}
-                      onChange={(e) => setForm({ ...form, importPickupTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
-                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, importPickupTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
-                      placeholder="Search terminals…"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — where the laden container is picked up.</p>
-                  </div>
-                  <div>
-                    <Label>Unloading location (delivery) <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.importUnloadingLocation}
-                      onChange={(e) => setForm({ ...form, importUnloadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
-                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, importUnloadingLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
-                      placeholder="Search delivery address…"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — where cargo is unloaded.</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label>Empty container return location <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.importEmptyReturnLocation}
-                      onChange={(e) => setForm({ ...form, importEmptyReturnLocation: e.target.value })}
-                      onPlaceSelect={({ address }) => setForm((f) => ({ ...f, importEmptyReturnLocation: address }))}
-                      placeholder="Search depots…"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — depot where empty is returned (detention clock stops here).</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <Label>Empty pickup location <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.exportEmptyPickupLocation}
-                      onChange={(e) => setForm({ ...form, exportEmptyPickupLocation: e.target.value })}
-                      onPlaceSelect={({ address }) => setForm((f) => ({ ...f, exportEmptyPickupLocation: address }))}
-                      placeholder="Search depots…"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — depot where empty container is picked up.</p>
-                  </div>
-                  <div>
-                    <Label>Loading location <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.exportLoadingLocation}
-                      onChange={(e) => setForm({ ...form, exportLoadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
-                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, exportLoadingLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
-                      placeholder="Search shipper site address…"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — shipper site where container is stuffed.</p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label>Deposit location (port/terminal) <span className="text-status-danger">*</span></Label>
-                    <PlaceAutocomplete
-                      required
-                      value={form.exportDepositTerminal}
-                      onChange={(e) => setForm({ ...form, exportDepositTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
-                      onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, exportDepositTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
-                      placeholder="Search terminals…"
-                    />
-                    <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — terminal where laden container is deposited.</p>
-                  </div>
+                    </>
+                  ) : form.equipmentType === 'CUSTOM' ? (
+                    <div className="sm:col-span-2">
+                      <Label>Truck / requirement (required for custom)</Label>
+                      <Input
+                        required
+                        value={form.customRequirement}
+                        onChange={(e) => setForm({ ...form, customRequirement: e.target.value })}
+                        placeholder='e.g. "Double-deck trailer with 20 ft deck, load securement harness included"'
+                      />
+                      <p className="mt-1 text-xs text-ink-muted">Carriers see this as the job's requirement and bid with their own matching equipment.</p>
+                    </div>
+                  ) : null}
                 </>
               )}
-              <div className="sm:col-span-2">
-                <Label>Delivery address detail</Label>
-                <Input value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} placeholder="Street, warehouse, building, contact" />
-                <p className="mt-1 text-xs text-ink-muted">Precise address for the unloading/loading location above.</p>
-              </div>
-              <div>
-                <Label>Cargo weight (tons)</Label>
-                <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
-                <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
-              </div>
-              <div className="sm:col-span-2">
-                <Label>{form.shipmentType === 'LOCAL' ? 'Loading date & time' : 'Ready at'}</Label>
-                <Input type="datetime-local" required value={form.readyAt} onChange={(e) => setForm({ ...form, readyAt: e.target.value })} />
-                <p className="mt-1 text-xs text-ink-muted">
-                  No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from your ready time.
-                </p>
-              </div>
-              <div>
-                <Label>Target price (AED, per trip)</Label>
-                <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
-                <p className="mt-1 text-xs text-ink-muted">The price you're targeting for this trip — not a hard cap; higher bids still arrive, flagged.</p>
-              </div>
-              <div className="sm:col-span-2 grid gap-3 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
-                <div>
-                  <Label>Packing list (PDF, optional)</Label>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(e) => setForm({ ...form, packingList: e.target.files && e.target.files[0] ? e.target.files[0] : null })}
-                    className="mt-1 block w-full text-sm text-ink-secondary file:mr-3 file:rounded-md file:border-0 file:bg-[var(--brand-accent)] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
-                  />
-                  <p className="mt-1 text-xs text-ink-muted">Attached to this job; the awarded carrier sees it once you confirm their bid.</p>
-                </div>
-                <label className="flex items-center gap-2 text-sm text-ink-secondary">
-                  <input type="checkbox" checked={form.scheduleForLater} onChange={(e) => setForm({ ...form, scheduleForLater: e.target.checked })} /> Post later (schedule publishing)
-                </label>
-                {form.scheduleForLater && (
-                  <div>
-                    <Label>Publish at</Label>
-                    <Input type="datetime-local" required value={form.scheduledPostAt} onChange={(e) => setForm({ ...form, scheduledPostAt: e.target.value })} />
-                    <p className="mt-1 text-xs text-ink-muted">Job stays a private draft until this time, then goes live to carriers automatically.</p>
+
+              {/* Step 3 — Locations & timing */}
+              {postStep === 2 && (
+                <>
+                  {form.shipmentType === 'LOCAL' ? (
+                    <>
+                      <div>
+                        <Label>Loading location <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.loadingLocation}
+                          onChange={(e) => setForm({ ...form, loadingLocation: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                          onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, loadingLocation: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
+                          placeholder="Warehouse, yard, site — e.g. Al Quoz Industrial 3"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Where the truck loads your cargo.</p>
+                      </div>
+                      <div>
+                        <Label>Delivery location <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.deliveryLocation}
+                          onChange={(e) => setForm({ ...form, deliveryLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
+                          onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, deliveryLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
+                          placeholder="Drop-off address or area"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Where the cargo is unloaded.</p>
+                      </div>
+                    </>
+                  ) : form.shipmentType === 'IMPORT' ? (
+                    <>
+                      <div>
+                        <Label>Container pickup at terminal <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.importPickupTerminal}
+                          onChange={(e) => setForm({ ...form, importPickupTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                          onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, importPickupTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
+                          placeholder="Search terminals…"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — where the laden container is picked up.</p>
+                      </div>
+                      <div>
+                        <Label>Unloading location (delivery) <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.importUnloadingLocation}
+                          onChange={(e) => setForm({ ...form, importUnloadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
+                          onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, importUnloadingLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
+                          placeholder="Search delivery address…"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — where cargo is unloaded.</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label>Empty container return location <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.importEmptyReturnLocation}
+                          onChange={(e) => setForm({ ...form, importEmptyReturnLocation: e.target.value })}
+                          onPlaceSelect={({ address }) => setForm((f) => ({ ...f, importEmptyReturnLocation: address }))}
+                          placeholder="Search depots…"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — depot where empty is returned (detention clock stops here).</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <Label>Empty pickup location <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.exportEmptyPickupLocation}
+                          onChange={(e) => setForm({ ...form, exportEmptyPickupLocation: e.target.value })}
+                          onPlaceSelect={({ address }) => setForm((f) => ({ ...f, exportEmptyPickupLocation: address }))}
+                          placeholder="Search depots…"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Leg 1/3 — depot where empty container is picked up.</p>
+                      </div>
+                      <div>
+                        <Label>Loading location <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.exportLoadingLocation}
+                          onChange={(e) => setForm({ ...form, exportLoadingLocation: e.target.value, deliveryArea: e.target.value, deliveryAddress: e.target.value, deliveryLat: undefined, deliveryLng: undefined })}
+                          onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, exportLoadingLocation: address, deliveryArea: address, deliveryAddress: address, deliveryLat: lat, deliveryLng: lng }))}
+                          placeholder="Search shipper site address…"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Leg 2/3 — shipper site where container is stuffed.</p>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label>Deposit location (port/terminal) <span className="text-status-danger">*</span></Label>
+                        <PlaceAutocomplete
+                          required
+                          value={form.exportDepositTerminal}
+                          onChange={(e) => setForm({ ...form, exportDepositTerminal: e.target.value, pickupTerminal: e.target.value, pickupLat: undefined, pickupLng: undefined })}
+                          onPlaceSelect={({ address, lat, lng }) => setForm((f) => ({ ...f, exportDepositTerminal: address, pickupTerminal: address, pickupLat: lat, pickupLng: lng }))}
+                          placeholder="Search terminals…"
+                        />
+                        <p className="mt-1 text-xs text-ink-muted">Leg 3/3 — terminal where laden container is deposited.</p>
+                      </div>
+                    </>
+                  )}
+                  <div className="sm:col-span-2">
+                    <Label>Delivery address detail</Label>
+                    <Input value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} placeholder="Street, warehouse, building, contact" />
+                    <p className="mt-1 text-xs text-ink-muted">Precise address for the unloading/loading location above.</p>
                   </div>
-                )}
-              </div>
-              <div className="sm:col-span-2">
-                <Label>{CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 'Notes (optional)' : 'Cargo description'}</Label>
-                <Textarea
-                  rows={2}
-                  required={!CONTAINER_EQUIPMENT.includes(form.equipmentType)}
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder={CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 'Gate pass instructions, contact on site, etc.' : 'What is being moved — e.g. "40 tonnes of aggregate, site access via gate 4."'}
-                />
-              </div>
-              {needsTermsCheckbox && (
-                <label className="sm:col-span-2 flex items-start gap-2 text-sm text-ink-secondary">
-                  <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5" />
-                  <span>I have read and agree to the current <a href="/terms" target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</a> (updated since your last acceptance)</span>
-                </label>
+                  <div>
+                    <Label>Cargo weight (tons)</Label>
+                    <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
+                    <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>{form.shipmentType === 'LOCAL' ? 'Loading date & time' : 'Ready at'}</Label>
+                    <Input type="datetime-local" required value={form.readyAt} onChange={(e) => setForm({ ...form, readyAt: e.target.value })} />
+                    <p className="mt-1 text-xs text-ink-muted">
+                      No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from your ready time.
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Target price (AED, per trip)</Label>
+                    <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
+                    <p className="mt-1 text-xs text-ink-muted">The price you're targeting for this trip — not a hard cap; higher bids still arrive, flagged.</p>
+                  </div>
+                  <div className="sm:col-span-2 grid gap-3 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
+                    <div>
+                      <Label>Packing list (PDF, optional)</Label>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => setForm({ ...form, packingList: e.target.files && e.target.files[0] ? e.target.files[0] : null })}
+                        className="mt-1 block w-full text-sm text-ink-secondary file:mr-3 file:rounded-md file:border-0 file:bg-[var(--brand-accent)] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
+                      />
+                      <p className="mt-1 text-xs text-ink-muted">Attached to this job; the awarded carrier sees it once you confirm their bid.</p>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-ink-secondary">
+                      <input type="checkbox" checked={form.scheduleForLater} onChange={(e) => setForm({ ...form, scheduleForLater: e.target.checked })} /> Post later (schedule publishing)
+                    </label>
+                    {form.scheduleForLater && (
+                      <div>
+                        <Label>Publish at</Label>
+                        <Input type="datetime-local" required value={form.scheduledPostAt} onChange={(e) => setForm({ ...form, scheduledPostAt: e.target.value })} />
+                        <p className="mt-1 text-xs text-ink-muted">Job stays a private draft until this time, then goes live to carriers automatically.</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>{CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 'Notes (optional)' : 'Cargo description'}</Label>
+                    <Textarea
+                      rows={2}
+                      required={!CONTAINER_EQUIPMENT.includes(form.equipmentType)}
+                      value={form.notes}
+                      onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                      placeholder={CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 'Gate pass instructions, contact on site, etc.' : 'What is being moved — e.g. "40 tonnes of aggregate, site access via gate 4."'}
+                    />
+                  </div>
+                  {needsTermsCheckbox && (
+                    <label className="sm:col-span-2 flex items-start gap-2 text-sm text-ink-secondary">
+                      <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5" />
+                      <span>I have read and agree to the current <a href="/terms" target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</a> (updated since your last acceptance)</span>
+                    </label>
+                  )}
+                </>
               )}
+
               {error && <p className="sm:col-span-2 rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>{error}</p>}
+              </div>
             </Card.Content>
             <Card.Footer>
-              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button type="submit" loading={submitting} disabled={needsTermsCheckbox && !agreedToTerms}>Post job</Button>
+              {postStep > 0 ? (
+                <Button type="button" variant="ghost" onClick={() => { setError(''); setPostStep(postStep - 1); }}>Back</Button>
+              ) : (
+                <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
+              )}
+              {postStep < POST_JOB_STEPS.length - 1 ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    // The one truly-required field that would otherwise sit
+                    // unmounted (and so unvalidated by the browser) once its
+                    // own step is left: a CUSTOM equipment job's requirement
+                    // text. Everything else required lives in the final
+                    // step, still mounted together with the submit button,
+                    // so native HTML5 validation already covers it.
+                    if (postStep === 1 && form.equipmentType === 'CUSTOM' && !form.customRequirement.trim()) {
+                      setError('Enter the truck/requirement for custom equipment before continuing.');
+                      return;
+                    }
+                    setError('');
+                    setPostStep(postStep + 1);
+                  }}
+                >
+                  Continue
+                </Button>
+              ) : (
+                <Button type="submit" loading={submitting} disabled={needsTermsCheckbox && !agreedToTerms}>Post job</Button>
+              )}
             </Card.Footer>
           </form>
         </Card>
