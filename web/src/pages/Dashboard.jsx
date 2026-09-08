@@ -9,7 +9,7 @@ import {
   equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
-import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconWallet, IconClose } from '../components/icons.jsx';
+import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconClose, IconArrowRight, IconTrendUp } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
@@ -46,6 +46,12 @@ export default function Dashboard() {
   const { t, isRtl } = useLocale();
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
+  // Independent of the filterable/paginated `jobs` list below — always
+  // the true most-recent jobs regardless of whatever status filter/search
+  // the shipper currently has applied to the full list, so "Recent
+  // activity" and the lane-rate card (which reads recentJobs[0]) never
+  // silently reflect a filtered view.
+  const [recentJobs, setRecentJobs] = useState(null);
   const [jobs, setJobs] = useState(null);
   const [jobsTotal, setJobsTotal] = useState(0);
   const [jobsError, setJobsError] = useState('');
@@ -108,6 +114,7 @@ export default function Dashboard() {
   function loadStats() {
     api.analytics().then((d) => setAnalytics(d.analytics)).catch(() => {});
     api.listTemplates().then((d) => setTemplates(d.templates.slice(0, 3))).catch(() => {});
+    api.listJobs({ sort: 'date_desc', limit: 3 }).then((d) => setRecentJobs(d.jobs)).catch(() => setRecentJobs([]));
   }
   function loadJobs() {
     const params = { sort, limit: PAGE_SIZE, offset };
@@ -225,16 +232,23 @@ export default function Dashboard() {
       {showImport && <CsvImportPanel onDone={() => { setShowImport(false); load(); }} onCancel={() => setShowImport(false)} />}
 
       {analytics && (
-        <section className="mt-4 grid grid-cols-2 gap-3">
-          {/* Semantic status colors per Change 1 mockup §2 — Active reads as
-              in-progress (info/blue), Completed as done (success/teal); Total
-              spent stays neutral (a raw figure, not a status) and Savings
-              keeps its existing accent tone (metric set unchanged, styling
-              only). */}
-          <BentoStat label={t('dashboard.stat.activeJobs', 'Active jobs')} value={analytics.activeJobs} tone="info" />
-          <BentoStat label={t('dashboard.stat.completed', 'Completed')} value={analytics.jobsCompleted} tone="success" />
-          <BentoStat label={t('dashboard.stat.totalSpent', 'Total spent')} value={formatAED(analytics.totalSpentAED)} icon={<IconWallet size={22} />} />
-          <BentoStat label={t('dashboard.stat.savings', 'Savings vs. market')} value={`${analytics.savingsPercent}%`} tone="accent" />
+        <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {/* accentBar (Change 1b) — the app-shell redesign's KPI-tile
+              treatment: a colored left border carries the semantic tone
+              instead of a tinted background, same motif as the sidebar's
+              active-nav accent bar. Metrics/tones unchanged from the
+              earlier Change 1 pass, just the visual shape. */}
+          <BentoStat label={t('dashboard.stat.activeJobs', 'Active jobs')} value={analytics.activeJobs} tone="info" accentBar />
+          <BentoStat label={t('dashboard.stat.completed', 'Completed')} value={analytics.jobsCompleted} tone="success" accentBar />
+          <BentoStat label={t('dashboard.stat.totalSpent', 'Total spent')} value={formatAED(analytics.totalSpentAED)} accentBar />
+          <BentoStat label={t('dashboard.stat.savings', 'Savings vs. market')} value={`${analytics.savingsPercent}%`} tone="accent" accentBar />
+        </section>
+      )}
+
+      {recentJobs && recentJobs.length > 0 && (
+        <section className="mt-3 grid gap-3 lg:grid-cols-[1.6fr_1fr]">
+          <RecentActivity jobs={recentJobs} onViewAll={() => document.getElementById('dashboard-job-list')?.scrollIntoView({ behavior: 'smooth' })} />
+          <LaneRateBenchmark job={recentJobs[0]} />
         </section>
       )}
 
@@ -557,7 +571,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="mt-8">
+      <div id="dashboard-job-list" className="mt-8 scroll-mt-20">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">Your jobs</h2>
         {jobs === null ? (
           <p className="mt-3 text-sm text-ink-muted">Loading…</p>
@@ -735,6 +749,86 @@ function CsvImportPanel({ onDone, onCancel }) {
           <Button onClick={submit} loading={busy}><IconUpload size={14} /> Import {rows.length} job(s)</Button>
         )}
       </Card.Footer>
+    </Card>
+  );
+}
+
+// Change 1b (app-shell redesign) — a 3-row preview of the shipper's most
+// recent jobs, always sorted newest-first and never affected by whatever
+// status filter/search is applied to the full list below (Dashboard's own
+// `recentJobs` state is an independent fetch — see `loadStats()`). "View
+// all jobs" scrolls to the existing full list rather than duplicating its
+// filter/sort/search/pagination here.
+function RecentActivity({ jobs, onViewAll }) {
+  const navigate = useNavigate();
+  return (
+    <Card>
+      <Card.Header>
+        <Card.Title>Recent activity</Card.Title>
+        <button type="button" onClick={onViewAll} className="flex items-center gap-1 text-xs font-semibold text-brand-secondary hover:underline">
+          View all jobs <IconArrowRight size={12} />
+        </button>
+      </Card.Header>
+      <Card.Content className="!p-0">
+        <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+          {jobs.map((j) => (
+            <button
+              key={j.id}
+              type="button"
+              onClick={() => navigate(`/jobs/${j.id}`)}
+              className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left hover:bg-surface-container"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-mono text-[13px] font-semibold text-ink">{j.job_code}</p>
+                <p className="truncate text-xs text-ink-muted">{formatLabel(j.pickup_terminal)} → {formatLabel(j.delivery_area)}</p>
+              </div>
+              <StatusBadge status={j.status} />
+            </button>
+          ))}
+        </div>
+      </Card.Content>
+    </Card>
+  );
+}
+
+// Real data, not a mockup placeholder: GET /api/lanes/quote (already used
+// by BidForm's target-price suggestion) against the shipper's own
+// most-recently-posted job's terminal/area pair. The seed lane data only
+// carries one reference price per lane (no historical range), so this
+// shows that reference price + on-time%/monthly-load-volume context
+// instead of inventing a min-max spread the backend can't actually back up.
+// Renders nothing (not an error state) when there's no lane reference or
+// no job yet — this is a nice-to-have insight, not a required panel.
+function LaneRateBenchmark({ job }) {
+  const [quote, setQuote] = useState(null);
+  useEffect(() => {
+    if (!job?.pickup_terminal || !job?.delivery_area) return;
+    api.getLaneQuote(job.pickup_terminal, job.delivery_area).then(setQuote).catch(() => setQuote(null));
+  }, [job?.pickup_terminal, job?.delivery_area]);
+
+  if (!job) return null;
+  if (quote && !quote.lane) return null; // no exact reference for this lane — nothing useful to show
+
+  return (
+    <Card>
+      <Card.Header>
+        <Card.Title>Lane rate benchmark</Card.Title>
+      </Card.Header>
+      <Card.Content>
+        <p className="text-xs text-ink-muted">{formatLabel(job.pickup_terminal)} → {formatLabel(job.delivery_area)}</p>
+        {quote?.guidance ? (
+          <>
+            <p className="mt-1 font-display text-2xl font-bold text-ink tabular">{formatAED(quote.guidance.suggestedTargetAed)}</p>
+            <div className="mt-3 flex items-center gap-4 text-xs text-ink-secondary">
+              <span className="flex items-center gap-1"><IconTrendUp size={13} style={{ color: 'var(--status-success)' }} /> {quote.guidance.onTimePct}% on-time</span>
+              <span>{quote.guidance.monthlyLoads} loads/mo on this lane</span>
+            </div>
+            <p className="mt-2 text-[11px] text-ink-muted">{quote.guidance.note}</p>
+          </>
+        ) : (
+          <p className="mt-2 h-16 animate-pulse rounded" style={{ background: 'var(--surface-container-low)' }} />
+        )}
+      </Card.Content>
     </Card>
   );
 }
