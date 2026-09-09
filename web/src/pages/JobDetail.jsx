@@ -242,6 +242,11 @@ export default function JobDetail() {
   }
 
   const allChargesAgreed = ancillaryCharges.every((c) => c.agreed_by_shipper && c.agreed_by_carrier);
+  // Matches award.service.js exactly: only charges BOTH sides have agreed
+  // become part of the final price — a proposed-but-unagreed charge
+  // doesn't count, even if it's still sitting in the list below.
+  const agreedChargesTotal = ancillaryCharges.filter((c) => c.agreed_by_shipper && c.agreed_by_carrier).reduce((sum, c) => sum + c.amount_aed, 0);
+  const finalAwardTotal = (awardConfirm?.amount_aed || 0) + agreedChargesTotal;
   const isLowCapacity = awardConfirm && awardConfirm.carrier_available_units != null && awardConfirm.carrier_available_units <= 0;
 
   function skipAndAward() {
@@ -284,7 +289,11 @@ export default function JobDetail() {
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
                   <li>Every other bid on this job will be rejected once assigned</li>
-                  <li>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</li>
+                  <li>
+                    {agreedChargesTotal > 0
+                      ? <>Final price locks at <strong className="text-ink">{formatAED(finalAwardTotal)}</strong> ({formatAED(awardConfirm.amount_aed)} bid + {formatAED(agreedChargesTotal)} agreed extras) — nothing can be changed after this</>
+                      : <>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</>}
+                  </li>
                   <li>Funds move into escrow and the job moves to "Awarded"</li>
                 </ul>
 

@@ -105,6 +105,30 @@ test('an ancillary charge must be agreed by both sides before confirm-terms succ
   assert.equal(award.status, 200, award.raw);
 });
 
+test('agreed ancillary charges become part of the final award price; unagreed ones do not', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+  const { jobId, bidId } = await postJobAndBid(shipper, carrier); // amountAed: 450
+
+  const agreedCharge = await carrier.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'SALIK', amountAed: 25 });
+  assert.equal(agreedCharge.status, 201, agreedCharge.raw);
+  const unagreedCharge = await carrier.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'DEMURRAGE', amountAed: 100 });
+  assert.equal(unagreedCharge.status, 201, unagreedCharge.raw);
+
+  const agree = await shipper.post(`/api/bids/${bidId}/ancillary-charges/${agreedCharge.body.charge.id}/agree`, {});
+  assert.equal(agree.status, 200, agree.raw);
+  // unagreedCharge is left unagreed by the shipper on purpose — a shipper
+  // who moves on via skipNegotiation without resolving every proposed
+  // charge (the real-world path this guards) must not have it silently
+  // counted anyway.
+
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
+  assert.equal(award.status, 200, award.raw);
+  assert.equal(award.body.job.agreed_price_aed, 475, 'final price must be the bid (450) plus only the AGREED charge (25), not the unagreed one (100)');
+});
+
 test('confirm-terms succeeds with zero ancillary charges (nothing to discuss on a simple job)', async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
