@@ -5,6 +5,7 @@ import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { IconTruck, IconPackage, IconArrowLeft, IconArrowRight, IconCheckCircle, IconCompass, IconLayers, IconTrailer } from '../components/icons.jsx';
+import TermsModal from '../components/TermsModal.jsx';
 
 const STEPS = ['Role', 'Business', 'Account'];
 
@@ -37,6 +38,7 @@ export default function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   function scrollTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -233,9 +235,10 @@ export default function Register() {
               />
               <span>
                 I have read and agree to the{' '}
-                <Link to="/terms" target="_blank" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</Link>
+                <button type="button" onClick={() => setShowTermsModal(true)} className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</button>
               </span>
             </label>
+            {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
             {error && (
               <p className="rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>
                 {error}
