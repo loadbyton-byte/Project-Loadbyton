@@ -142,6 +142,9 @@ export const api = {
 
   // driver seat's own view
   driverJob: () => get('/driver/job'),
+  driverWallet: () => get('/driver/wallet'),
+  driverTripOffer: () => get('/driver/trip-offer'),
+  respondToTripOffer: (id, accepted) => post(`/driver/trip-offer/${id}/respond`, { accepted }),
 
   // company (profile-level) documents
   getProfileDocumentUploadUrl: (docType, mimeType) => post('/profile/documents/upload-url', { docType, mimeType }),

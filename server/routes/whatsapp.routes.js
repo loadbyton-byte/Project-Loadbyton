@@ -236,3 +236,7 @@ router.post('/api/whatsapp/webhook', async (req, res) => {
 });
 
 module.exports = router;
+// Reused by routes/driver.routes.js's web accept/decline endpoints — same
+// compliance-check/bind logic either channel triggers it through, not a
+// second copy for the case where a driver has no WhatsApp configured.
+module.exports.handleTripOfferResponse = handleTripOfferResponse;

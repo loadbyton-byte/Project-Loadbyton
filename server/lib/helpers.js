@@ -396,6 +396,12 @@ async function isParticipantOrBidder(job, user) {
   }
   if (user.id === job.shipper_id) return true;
   if (user.id === job.carrier_id) return true;
+  // A broker who placed this job (jobs.broker_id, set at award/direct-assign
+  // time — see broker.routes.js) is a real party to it, same standing as
+  // the shipper/carrier, and needs to see it to track their own spread —
+  // previously missing here, leaving a broker unable to view the detail
+  // page of a job they personally brokered.
+  if (job.broker_id != null && user.id === job.broker_id) return true;
   if (user.role === 'CARRIER') {
     const hasBid = /** @type {any} */ (await db.prepare('SELECT 1 FROM bids WHERE job_id=? AND carrier_id=?').get(job.id, user.id));
     if (hasBid) return true;

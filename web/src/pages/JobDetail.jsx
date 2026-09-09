@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { STATUS_FLOW, formatAED, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTierLabel } from '../lib/constants.js';
+import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTierLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -284,15 +284,15 @@ export default function JobDetail() {
               </Card.Header>
               <Card.Content>
                 <p className="text-sm text-ink">
-                  <strong>{formatAED(awardConfirm.amount_aed)}</strong> from{' '}
+                  <strong>{formatMoney(awardConfirm.amount_aed, job.currency)}</strong> from{' '}
                   <strong>{awardConfirm.carrier_company || 'this carrier'}</strong>.
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
                   <li>Every other bid on this job will be rejected once assigned</li>
                   <li>
                     {agreedChargesTotal > 0
-                      ? <>Final price locks at <strong className="text-ink">{formatAED(finalAwardTotal)}</strong> ({formatAED(awardConfirm.amount_aed)} bid + {formatAED(agreedChargesTotal)} agreed extras) — nothing can be changed after this</>
-                      : <>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</>}
+                      ? <>Final price locks at <strong className="text-ink">{formatMoney(finalAwardTotal, job.currency)}</strong> ({formatMoney(awardConfirm.amount_aed, job.currency)} bid + {formatMoney(agreedChargesTotal, job.currency)} agreed extras) — nothing can be changed after this</>
+                      : <>The price is locked at {formatMoney(awardConfirm.amount_aed, job.currency)} — bids can't be changed after this</>}
                   </li>
                   <li>Funds move into escrow and the job moves to "Awarded"</li>
                 </ul>
@@ -320,7 +320,7 @@ export default function JobDetail() {
                   <ul className="mt-2 space-y-1.5">
                     {ancillaryCharges.map((c) => (
                       <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span>{c.charge_type} — {formatAED(c.amount_aed)}</span>
+                        <span>{c.charge_type} — {formatMoney(c.amount_aed, job.currency)}</span>
                         {c.agreed_by_shipper && c.agreed_by_carrier ? (
                           <Badge color="success">Agreed</Badge>
                         ) : !c.agreed_by_shipper ? (
@@ -394,7 +394,7 @@ export default function JobDetail() {
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={job.status} />
-            <EscrowBadge status={job.escrow_status} />
+            <EscrowBadge status={job.escrow_status} jobStatus={job.status} />
             <Badge color={job.payment_tier && job.payment_tier !== 'SPOT_ESCROW' ? 'accent' : 'neutral'}>{paymentTierLabel(job.payment_tier || 'SPOT_ESCROW')}</Badge>
             {job.payment_tier === 'CONTRACT_CREDIT' && job.credit_due_at && (() => {
               // Matches admin/CreditTab.jsx's overdue calculation exactly —
@@ -416,7 +416,7 @@ export default function JobDetail() {
         </div>
         <div className={isRtl ? 'text-left' : 'text-right'}>
           <p className="text-xs text-ink-muted">{job.status === 'OPEN' ? t('jobDetail.targetPrice', 'Target price (per trip)') : t('jobDetail.agreedPrice', 'Agreed price')}</p>
-          <p className="tabular font-display text-2xl font-semibold text-ink">{formatAED(job.agreed_price_aed || job.max_budget_aed)}</p>
+          <p className="tabular font-display text-2xl font-semibold text-ink">{formatMoney(job.agreed_price_aed || job.max_budget_aed, job.currency)}</p>
         </div>
       </div>
 
@@ -569,10 +569,10 @@ export default function JobDetail() {
                   <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3" style={{ borderColor: b.status === 'ACCEPTED' ? 'var(--status-success)' : 'var(--border-default)' }}>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-baseline gap-x-2">
-                        <p className="tabular font-display text-base font-semibold text-ink">{b.masked ? 'Hidden until award' : formatAED(b.amount_aed)}</p>
+                        <p className="tabular font-display text-base font-semibold text-ink">{b.masked ? 'Hidden until award' : formatMoney(b.amount_aed, job.currency)}</p>
                         {!b.masked && b.ancillary_charges?.length > 0 && (
                           <p className="tabular text-sm font-semibold" style={{ color: 'var(--status-warning)' }}>
-                            + {formatAED(b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0))} extras = {formatAED(b.amount_aed + b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0))} est. total
+                            + {formatMoney(b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0), job.currency)} extras = {formatMoney(b.amount_aed + b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0), job.currency)} est. total
                           </p>
                         )}
                       </div>
@@ -587,7 +587,7 @@ export default function JobDetail() {
                           className="mt-1 inline-flex w-fit items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium"
                           style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
                         >
-                          ⚠ Carrier expects extra charges: {b.ancillary_charges.map((c) => `${ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type} (${formatAED(c.amount_aed)})`).join(', ')}
+                          ⚠ Carrier expects extra charges: {b.ancillary_charges.map((c) => `${ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type} (${formatMoney(c.amount_aed, job.currency)})`).join(', ')}
                         </p>
                       )}
                       {!b.masked && b.carrier_available_units != null && (
@@ -660,7 +660,28 @@ export default function JobDetail() {
                     <span>Auto-releases {formatDateTime(track.autoReleaseAt)}</span>
                   </div>
                 )}
-                {payout && (
+                {job.status === 'CANCELLED' && job.agreed_price_aed ? (
+                  // A cancelled job's payouts row still exists (flipped to
+                  // status='CANCELLED', not deleted — job.service.js) so
+                  // `payout` below is still truthy here, but its gross/net/
+                  // fee figures are the now-moot CARRIER payout that never
+                  // happened — showing them to whoever cancelled (usually
+                  // the shipper) answered a question nobody asked instead
+                  // of the one that matters: what did cancelling actually
+                  // cost, and what comes back. Both are already computed
+                  // and stored (job.service.js's cancellation transaction),
+                  // just never surfaced here before.
+                  <div className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <p className="text-ink-muted">Cancelled</p>
+                    <p className="tabular font-display text-lg font-semibold text-ink">
+                      {formatMoney(job.agreed_price_aed - (job.cancellation_fee_aed || 0), job.currency)} refunded
+                    </p>
+                    <p className="text-xs text-ink-muted">
+                      Agreed price {formatMoney(job.agreed_price_aed, job.currency)}
+                      {job.cancellation_fee_aed > 0 ? ` − cancellation fee ${formatMoney(job.cancellation_fee_aed, job.currency)}` : ' — no cancellation fee applied'}
+                    </p>
+                  </div>
+                ) : payout && (
                   <div className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
                     <p className="text-ink-muted">Payout</p>
                     <p className="tabular font-display text-lg font-semibold text-ink">{formatAED(payout.net_aed)} net</p>

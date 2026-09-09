@@ -281,12 +281,23 @@ async function listJobs(query, user) {
   const { status, limit, offset, mine, sort, q, equipmentType, escrowStatus } = query;
   const lim = Math.max(1, Math.min(Number(limit) || 50, 200));
   const off = Math.max(0, Number(offset) || 0);
-  let where = '1=1';
+  // CRITICAL: default is fail-closed (0=1, matches nothing), not fail-open.
+  // This used to be '1=1' — every role this if/else chain didn't explicitly
+  // name (FORWARDER, and anything added later) fell through to it and got
+  // EVERY job in the database back from `mine=true`, including every other
+  // shipper's prices, routes, and deadlines. FORWARDER genuinely has no
+  // job-ownership column yet (forwarder_clients is a contact roster with no
+  // job FK) — "no jobs" is the truthful answer for that role today, not a
+  // bug to work around with a broad query.
+  let where = '0=1';
   const params = [];
   if (user.role === 'SHIPPER') {
     where = 'shipper_id = ?';
     params.push(user.id);
-  } else if (user.role === 'CARRIER') {
+  } else if (user.role === 'CARRIER' || user.role === 'OWNER_OPERATOR') {
+    // OWNER_OPERATOR satisfies CARRIER checks everywhere else (see
+    // middleware/auth.js's roleSatisfies) — a single-truck operator is
+    // still a carrier for job-visibility purposes.
     // Demo accounts only ever see demo jobs and real accounts only ever see
     // real jobs on the open-loads browse (not `mine`) — otherwise an
     // investor-demo job would show up as a real bidding opportunity for a
@@ -294,6 +305,9 @@ async function listJobs(query, user) {
     where = mine ? 'carrier_id = ?' : "(status = 'OPEN' OR carrier_id = ?) AND is_demo = ?";
     params.push(user.id);
     if (!mine) params.push(user.is_demo ? 1 : 0);
+  } else if (user.role === 'BROKER') {
+    where = 'broker_id = ?';
+    params.push(user.id);
   }
   if (status) {
     const statuses = String(status).split(',').map((s) => s.trim()).filter(Boolean);
