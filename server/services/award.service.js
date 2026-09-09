@@ -47,6 +47,21 @@ async function awardJob(req, res, jobId, bidId) {
     return;
   }
 
+  // Low-capacity gate — the carrier's declared available_units was
+  // already shown to the shipper as a "0 unit(s) available" warning
+  // (job-lifecycle.routes.js's lowCapacityWarning, surfaced on each bid
+  // as carrier_available_units in job.service.js's getJob), but nothing
+  // stopped the award itself from going through regardless. Same explicit-
+  // acknowledgment pattern as skipNegotiation above, not a hard block —
+  // an over-committed carrier can still genuinely have room for one more
+  // job; the shipper just has to say so on purpose.
+  const acknowledgeLowCapacity = !!(req.body && req.body.acknowledgeLowCapacity);
+  const carrierProfile = await db.prepare('SELECT available_units FROM profiles WHERE user_id=?').get(preBid.carrier_id);
+  if (carrierProfile && carrierProfile.available_units <= 0 && !acknowledgeLowCapacity) {
+    res.status(409).json({ error: 'This carrier has declared 0 available units — acknowledge to award anyway.', lowCapacity: true });
+    return;
+  }
+
   const { commission_rate_bps } = await getSettings();
   const commissionRate = commission_rate_bps / 10000;
   const agreedPrice = preBid.amount_aed;

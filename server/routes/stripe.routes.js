@@ -7,6 +7,7 @@ const { writeAudit, notify, notifyAdmins } = require('../lib/helpers');
 const { createPaymentIntent, createTransfer, constructWebhookEvent, createConnectAccount, createAccountLink, retrieveAccount } = require('../lib/stripe');
 const { ledgerHash, verifyMultiSig, getHsmKeys } = require('../lib/hsm');
 const { providerInfo } = require('../lib/payments');
+const { issueInvoice } = require('../lib/invoice');
 const router = express.Router();
 
 // Carrier Connect onboarding — provision an Express account + hosted
@@ -224,17 +225,31 @@ router.post('/api/jobs/:id/release-payout', auth(['SHIPPER','ADMIN']), writeLimi
     const tr = await createTransfer({ amountAed: netWithBuffer, destination: dest, jobCode: job.job_code });
     const prev = job.ledger_hash || 'GENESIS';
     const hash = ledgerHash(prev, job.id, 'RELEASED', netWithBuffer, new Date().toISOString());
-    // Real money already moved above — these three writes recording that
-    // must land together, not as separate statements a crash could split
-    // (e.g. jobs flips to RELEASED but payouts never follows, making the
-    // payout look unfulfilled and resubmittable for a second real transfer).
+    // Job could still be DELIVERED here (line 183 allows either) — a real
+    // transfer completing must also close out the job the same way the
+    // internal-bookkeeping "confirm delivery" path does, or the job stays
+    // stuck showing DELIVERED forever with no invoice ever issued despite
+    // the carrier having actually been paid.
+    const wasAlreadyCompleted = job.status === 'COMPLETED';
+    // Real money already moved above — these writes recording that must
+    // land together, not as separate statements a crash could split (e.g.
+    // jobs flips to RELEASED but payouts never follows, making the payout
+    // look unfulfilled and resubmittable for a second real transfer).
     await db.transaction(async (trx) => {
-      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), ledger_hash=?, prev_ledger_hash=?, buffer_released=1, updated_at=datetime('now') WHERE id=?`, [hash, prev, job.id]);
+      await trx.query(`UPDATE jobs SET status='COMPLETED', escrow_status='RELEASED', payout_released_at=datetime('now'), ledger_hash=?, prev_ledger_hash=?, buffer_released=1, updated_at=datetime('now') WHERE id=?`, [hash, prev, job.id]);
       await trx.query(`UPDATE payouts SET status='RELEASED', released_at=datetime('now'), processor_payout_status='SENT', processor_payout_ref=?, transfer_reference=? WHERE id=? AND status != 'RELEASED'`, [tr.id, tr.id, payout.id]);
       await trx.query(`UPDATE payout_attempts SET status='SETTLED', provider_response=? WHERE idempotency_key=?`, [tr.id, releaseKey]);
     });
     await writeAudit(req,{userId:req.actorId, action:'PAYOUT_RELEASED', details:`${job.job_code} ${netWithBuffer} AED → ${dest} via ${tr.id}`, entityType:'payout', entityId:payout.id});
     await notify(job.carrier_id, 'Payout sent', `Your payout for ${job.job_code} (${netWithBuffer} AED) is on the way.`, job.id, 'payout');
+    if (!wasAlreadyCompleted) {
+      try {
+        await issueInvoice(db, job.id);
+      } catch (e) {
+        console.error(`[invoice] issueInvoice failed for job ${job.id}:`, e);
+        try { await notifyAdmins('Invoice issuance failed', `Job ${job.job_code} (id ${job.id}) completed and released via Stripe, but its invoice failed to issue: ${e.message}`, job.id, 'system'); } catch {}
+      }
+    }
     res.json({ ok:true, transfer: tr, net: netWithBuffer, hash });
   } catch (e) {
     try { await db.prepare(`UPDATE payout_attempts SET status='FAILED', error=? WHERE idempotency_key=?`).run(e.message, releaseKey); } catch {}

@@ -107,3 +107,42 @@ test('a carrier can mark units externally engaged and release them; bidding at z
   assert.equal(release.body.available_units, startUnits);
   assert.equal(release.body.externally_engaged_units, 0);
 });
+
+test('awarding a bid from a zero-capacity carrier is blocked until the shipper explicitly acknowledges', async () => {
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('falcon@containerxpress.ae', 'demo1234');
+  const before = await carrier.get('/api/fleet/capacity');
+  const startUnits = before.body.available_units;
+  const engage = await carrier.post('/api/fleet/capacity/external-engage', { units: startUnits, note: 'Zero out for award-gate test' });
+  assert.equal(engage.body.available_units, 0);
+
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Test Warehouse — award capacity gate',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    maxBudgetAed: 500,
+  });
+  const jobId = created.body.job.id;
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+  });
+  assert.equal(bid.status, 201, bid.raw);
+
+  const blocked = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });
+  assert.equal(blocked.status, 409, blocked.raw);
+  assert.equal(blocked.body.lowCapacity, true, 'response must flag this as the low-capacity gate specifically, not a generic 409');
+
+  const awarded = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true, acknowledgeLowCapacity: true });
+  assert.equal(awarded.status, 200, awarded.raw);
+
+  // Cancel to restore available_units, then release the external
+  // engagement — leaves this carrier's capacity fixture exactly as this
+  // test found it, matching the cleanup pattern above.
+  const cancelled = await shipper.patch(`/api/jobs/${jobId}/status`, { status: 'CANCELLED' });
+  assert.equal(cancelled.status, 200, cancelled.raw);
+  const release = await carrier.post('/api/fleet/capacity/release', { units: startUnits });
+  assert.equal(release.status, 200, release.raw);
+  assert.equal(release.body.available_units, startUnits);
+});
