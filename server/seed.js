@@ -437,6 +437,19 @@ module.exports = async function seed() {
     await insertBid(j18id, falconId, 1450, 90, 'box-truck', 'Direct route', 'ACCEPTED');
   });
 
+  // Pending trip offer — the WhatsApp accept/decline flow
+  // (routes/whatsapp.routes.js) has no seeded row to demo live without
+  // first posting and awarding a job by hand. LB-1003 is already AWARDED
+  // to Emirates Overland Haulage; Rashid Al Marri (driver1Id) is their
+  // driver with a real DRIVER seat login and a phone number, so the offer
+  // can actually be exercised via the bot, not just displayed in the UI.
+  // Gated on the job — one open offer per job is the natural shape here.
+  const hasTripOffer = await db.prepare('SELECT 1 FROM trip_offers WHERE job_id=?').get(j3.id);
+  if (!hasTripOffer) {
+    await db.prepare(`INSERT INTO trip_offers (job_id, carrier_id, driver_id, status) VALUES (?,?,?, 'PENDING')`)
+      .run(j3.id, emiratesId, driver1Id);
+  }
+
   void j3; void j5; void j13; // ids read back for clarity above; not otherwise needed past this point
 
   // Contract lane — recurring weekly commitment. No natural unique key of

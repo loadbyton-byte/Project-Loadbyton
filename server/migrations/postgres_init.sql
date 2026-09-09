@@ -902,4 +902,9 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_approved_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_due_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_settled_at TEXT;
 
+-- Telr split-payment payout — see server/schema.js for the full reasoning;
+-- mirrored here for the opt-in Postgres path.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS telr_split_id TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS telr_split_applied INTEGER NOT NULL DEFAULT 0;
+
 COMMIT;

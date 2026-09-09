@@ -1131,6 +1131,29 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'credit_settled_at', 'credit_settled_at TEXT');
 
   // ---------------------------------------------------------------------------
+  // Telr split-payment payout — closes the "NOT IMPLEMENTED" gap in
+  // lib/payments.js's executePayout() for PAYMENTS_PROVIDER=telr. Unlike
+  // Stripe Connect (charge now, transfer later as a separate call), Telr's
+  // marketplace mechanism (docs.telr.com/reference/split-payment) applies
+  // the carrier's share AT CHARGE-CREATION TIME via a `splits` array on the
+  // order.json request — there is no later "send this carrier their money"
+  // API call to make. A carrier's Split ID comes from Telr's own KYC/
+  // approval process (their merchant dashboard, entirely outside this
+  // platform — no self-serve onboarding API exists, unlike Stripe Connect's
+  // hosted onboarding link), so it's carrier-entered here once Telr issues
+  // it, the same trust level as any other self-declared bank/processor
+  // detail on this table.
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'telr_split_id', 'telr_split_id TEXT');
+  // Durable record of whether THIS job's checkout actually included the
+  // split (not just whether the carrier has a Split ID on file NOW — that
+  // could be set after this job's checkout already happened without one).
+  // executePayout() reads this, not the in-memory mock ledger (a plain
+  // Map — doesn't survive a restart or exist on another instance), to
+  // decide whether the carrier still needs a manual transfer.
+  addColumn('jobs', 'telr_split_applied', 'telr_split_applied INTEGER NOT NULL DEFAULT 0');
+
+  // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.
   // ---------------------------------------------------------------------------
 

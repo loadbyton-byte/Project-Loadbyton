@@ -289,6 +289,11 @@ router.patch('/api/profile', auth(), requireSeatRole(['OPS']), requireReauthIfIb
     fleet_size: b.fleetSize,
     owned_chassis: b.ownedChassis,
     insurance_uploaded: b.insuranceUploaded === undefined ? undefined : b.insuranceUploaded ? 1 : 0,
+    // Telr Split Payment beneficiary id — issued to the carrier directly
+    // by Telr after their own KYC/approval (no onboarding API exists to
+    // automate this, unlike Stripe Connect), so it's carrier-entered here
+    // the same way as any other self-declared processor detail.
+    telr_split_id: b.telrSplitId,
   };
   const sets = [];
   const params = [];

@@ -21,12 +21,27 @@
 //
 //   telr — PAYMENTS_PROVIDER=telr + TELR_STORE_ID/TELR_AUTH_KEY. Real
 //     charges via Telr hosted checkout (card data never touches our
-//     servers) and real refunds via the gateway refund endpoint. Payouts
-//     to carriers remain a documented VERIFY point (Telr's Payouts API
-//     shape must be confirmed against live sandbox docs) — until then
-//     executePayout() returns not_implemented and the existing admin
+//     servers) and real refunds via the gateway refund endpoint. Telr has
+//     no Stripe-Connect-style "transfer to a third party after the fact"
+//     payouts API — instead it offers Split Payments
+//     (docs.telr.com/reference/split-payment): a `splits` array passed on
+//     the SAME order.json call that creates the charge, routing a fixed
+//     amount to a carrier's Telr "Split ID" automatically as part of
+//     Telr's normal settlement, with the platform's commission left as
+//     the `remaining` share. createCheckoutOrder() includes this whenever
+//     the carrier has a profiles.telr_split_id on file (self-entered —
+//     Telr's sub-merchant KYC/approval happens entirely on their own
+//     merchant dashboard, there is no onboarding API to automate). A
+//     carrier with no Split ID on file gets a checkout with no split at
+//     all (100% to the platform, exactly like before this existed), and
+//     executePayout() correctly reports why no further action is
+//     possible: either the carrier was already paid via the split at
+//     checkout, or (no Split ID on file) the existing admin
 //     "mark-transferred" flow (payouts-sla view) remains the operating
-//     procedure.
+//     procedure. The exact request encoding for `splits` (form-encoded
+//     bracket notation is used below, matching this endpoint's existing
+//     encoding) is a VERIFY point against live Telr sandbox docs before
+//     go-live, same as every other telr integration point in this file.
 //
 //   stripe — PAYMENTS_PROVIDER=stripe + STRIPE_SECRET_KEY (+ optional
 //     STRIPE_WEBHOOK_SECRET, recommended). Stripe Connect marketplace
@@ -50,7 +65,8 @@
  * @typedef {import('../types/domain').PaymentStatus} PaymentStatus
  * @typedef {import('../types/domain').PayoutStatus} PayoutStatus
  * @typedef {'internal'|'mock'|'telr'|'stripe'} PaymentsProvider
- * @typedef {{ jobCode: string, amountAed: number, currency?: Currency|string, description?: string, returnUrls?: {auth?: string, cancel?: string, decline?: string}, paymentRef: string }} CreateCheckoutOrderParams
+ * @typedef {{ splitId: string, netAed: number }} SplitBeneficiary
+ * @typedef {{ jobCode: string, amountAed: number, currency?: Currency|string, description?: string, returnUrls?: {auth?: string, cancel?: string, decline?: string}, paymentRef: string, splitBeneficiary?: SplitBeneficiary|null }} CreateCheckoutOrderParams
  * @typedef {{ ok: boolean, ref?: string, url?: string|null, error?: string, provider?: string, detail?: string, mock?: boolean }} CreateCheckoutOrderResult
  * @typedef {{ ok: boolean, event?: 'AUTHORISED'|'DECLINED'|'CANCELLED'|'REFUNDED', ref?: string, tranref?: string|null, amountAed?: number|null, error?: string, provider?: string, providerEventId?: string, rawEventType?: string, detail?: string }} ParseWebhookResult
  * @typedef {{ tranref: string, amountAed: number, paymentRef?: string }} RefundChargeParams
@@ -142,7 +158,7 @@ function mockEntry(ref) {
  * @param {CreateCheckoutOrderParams} params
  * @returns {Promise<CreateCheckoutOrderResult>}
  */
-async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', description, returnUrls, paymentRef }) {
+async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', description, returnUrls, paymentRef, splitBeneficiary = null }) {
   const p = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured', provider: p };
   if (!paymentRef || !jobCode || !Number.isFinite(amountAed) || amountAed <= 0) {
@@ -167,7 +183,7 @@ async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', descr
       // VERIFY against current Telr docs before go-live: endpoint + field
       // names for hosted checkout order creation. Order reference is ours
       // (order_ref echoes back through every callback/refund call).
-      const body = new URLSearchParams({
+      const fields = {
         ivp_method: 'create',
         ivp_store: process.env.TELR_STORE_ID,
         ivp_authkey: process.env.TELR_AUTH_KEY,
@@ -180,7 +196,25 @@ async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', descr
         return_auth_url: returnUrls?.auth || '',
         return_cancel_url: returnUrls?.cancel || '',
         return_decline_url: returnUrls?.decline || '',
-      });
+      };
+      // Split payment — carrier's net share settles directly to their
+      // Telr Split ID as part of this same charge; `id: 0` + `remaining`
+      // is Telr's documented way for the merchant (us) to keep whatever's
+      // left (the platform commission) without computing it ourselves.
+      // VERIFY: this codebase's Telr integration is form-urlencoded
+      // (ivp_* fields above) but Telr's split-payment docs only show a
+      // JSON body shape — bracket notation (splits[0][id]=...) is the
+      // standard way to express an array in a form-encoded body and is
+      // used here on that assumption; confirm against live sandbox before
+      // go-live, same as every other telr VERIFY point in this file.
+      if (splitBeneficiary?.splitId && Number.isFinite(splitBeneficiary.netAed) && splitBeneficiary.netAed > 0) {
+        fields['splits[0][id]'] = splitBeneficiary.splitId;
+        fields['splits[0][type]'] = 'flat';
+        fields['splits[0][value]'] = String(splitBeneficiary.netAed);
+        fields['splits[1][id]'] = '0';
+        fields['splits[1][type]'] = 'remaining';
+      }
+      const body = new URLSearchParams(fields);
       const res = await fetch(`${TELR_GATEWAY}/order.json`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -192,9 +226,12 @@ async function createCheckoutOrder({ jobCode, amountAed, currency = 'AED', descr
         return { ok: false, error: 'telr_create_failed', detail, provider: p };
       }
       // Telr's own transaction ref for the order (used for refunds); our
-      // paymentRef stays the lookup key on the job.
-      mockLedger.set(paymentRef, { type: 'CHARGE', status: 'CREATED', telrRef: data.order.ref, amountAed, jobCode, createdAt: Date.now() });
-      return { ok: true, ref: paymentRef, url: data.order.url || null, provider: p };
+      // paymentRef stays the lookup key on the job. splitApplied records
+      // what ACTUALLY happened on this charge (not the carrier's current
+      // profile, which could change later) — executePayout() reads this
+      // to know whether the carrier was already paid via the split.
+      mockLedger.set(paymentRef, { type: 'CHARGE', status: 'CREATED', telrRef: data.order.ref, amountAed, jobCode, createdAt: Date.now(), splitApplied: !!(splitBeneficiary?.splitId) });
+      return { ok: true, ref: paymentRef, url: data.order.url || null, provider: p, splitApplied: !!(splitBeneficiary?.splitId) };
     }
 
     if (p === 'stripe') {
@@ -404,18 +441,22 @@ async function refundCharge({ tranref, amountAed, paymentRef }) {
 //
 // mock:  ledger payout entry; the call site records transfer_executed_at +
 //        transfer_reference on the payout row, exactly like a real wire.
-// telr:  NOT IMPLEMENTED pending VERIFY of Telr's Payouts API against live
-//        sandbox docs. Returns not_implemented so the existing admin
-//        mark-transferred flow stays the operating procedure — released
-//        payouts keep appearing in /api/admin/payouts-sla until a human
-//        confirms the real-world transfer, exactly as before.
+// telr:  Telr has no after-the-fact transfer API — the carrier's share
+//        either already settled automatically via Split Payment at
+//        checkout (createCheckoutOrder, when the carrier had a Split ID
+//        on file — alreadySplitPaid reports this, sourced from the job's
+//        own telr_split_applied column, not re-derived here) or it
+//        didn't, in which case this genuinely can't be done via API and
+//        stays a documented not_implemented — the existing admin
+//        mark-transferred flow (payouts-sla view) remains the operating
+//        procedure for that carrier until they add a Split ID.
 // ---------------------------------------------------------------------------
 
 /**
- * @param {ExecutePayoutParams} params
+ * @param {ExecutePayoutParams & { alreadySplitPaid?: boolean }} params
  * @returns {Promise<{ok: boolean, payoutRef?: string, error?: string, detail?: string, provider?: string}>}
  */
-async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId, carrierIban, reference }) {
+async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId, carrierIban, reference, alreadySplitPaid = false }) {
   const p = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured' };
   if (!Number.isFinite(amountAed) || amountAed <= 0) return { ok: false, error: 'invalid_args' };
@@ -435,9 +476,19 @@ async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId,
     }
 
     if (p === 'telr') {
-      // VERIFY Telr Payouts / split-payment API against sandbox docs.
-      // Until confirmed, released payouts remain admin-confirmed manually.
-      return { ok: false, error: 'not_implemented', detail: 'TELR payout API shape pending verification — see docs/PAYMENTS.md', provider: p };
+      if (alreadySplitPaid) {
+        // Not a real transfer — the carrier was already paid as part of
+        // the original charge's Split Payment. Reported ok:true so the
+        // caller (payout.service.js) marks the payout transferred/settled
+        // instead of logging a spurious PAYOUT_FAILED for money that in
+        // fact already moved.
+        return { ok: true, payoutRef: `telr-split-${paymentRef}`, provider: p, detail: 'already settled via Telr split payment at checkout' };
+      }
+      // No split on this job (carrier had no Split ID on file at checkout
+      // time) — Telr has no separate after-the-fact transfer API to fall
+      // back to. Released payouts remain admin-confirmed manually via
+      // /api/admin/payouts-sla, same as before this feature existed.
+      return { ok: false, error: 'not_implemented', detail: 'Carrier has no Telr Split ID on file — add one to their profile so future checkouts route their share automatically, or transfer this payout manually (see docs/PAYMENTS.md)', provider: p };
     }
 
     if (p === 'stripe') {

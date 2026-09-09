@@ -167,6 +167,20 @@ router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), writeLimiter, r
 
   const payRef = /** @type {any} */ (job.processor_payment_ref) || `lb_${String(job.job_code).toLowerCase()}_${crypto.randomUUID().slice(0, 8)}`;
   const returnBase = `${FRONTEND_URL}/jobs/${job.id}`;
+  // Telr split payment — if this job's carrier has a Split ID on file,
+  // route their net share to them automatically as part of this same
+  // charge (see lib/payments.js's provider header comment). The payout
+  // row already has the exact net amount computed at award time; only
+  // relevant when the provider is actually telr — createCheckoutOrder
+  // ignores splitBeneficiary for every other provider.
+  let splitBeneficiary = null;
+  if (payments.provider() === 'telr' && job.carrier_id) {
+    const carrierProfile = await db.prepare('SELECT telr_split_id FROM profiles WHERE user_id=?').get(job.carrier_id);
+    if (carrierProfile?.telr_split_id) {
+      const payoutRow = await db.prepare('SELECT net_aed FROM payouts WHERE job_id=?').get(job.id);
+      if (payoutRow?.net_aed > 0) splitBeneficiary = { splitId: carrierProfile.telr_split_id, netAed: payoutRow.net_aed };
+    }
+  }
   try {
     const r = /** @type {any} */ (await payments.createCheckoutOrder({
       jobCode: job.job_code,
@@ -174,14 +188,15 @@ router.post('/api/jobs/:id/payment-checkout', auth(['SHIPPER']), writeLimiter, r
       description: `Loadbyton escrow for ${job.job_code}`,
       returnUrls: { auth: `${returnBase}?pay=ok`, cancel: `${returnBase}?pay=cancel`, decline: `${returnBase}?pay=declined` },
       paymentRef: payRef,
+      splitBeneficiary,
     }));
     if (!r.ok) {
       markJobPaymentFailed(job.id, `${r.error}${r.detail ? `: ${r.detail}` : ''}`);
       return apiResponse.error(req, res, 'INTERNAL', 'Payment provider unavailable — please try again', { status: 502 });
     }
     await db.prepare(
-      `UPDATE jobs SET processor_payment_ref=?, processor_payment_status='REQUIRES_PAYMENT', processor_amount_aed=?, processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`
-    ).run(payRef, job.agreed_price_aed, job.id);
+      `UPDATE jobs SET processor_payment_ref=?, processor_payment_status='REQUIRES_PAYMENT', processor_amount_aed=?, telr_split_applied=?, processor_last_error=NULL, updated_at=datetime('now') WHERE id=?`
+    ).run(payRef, job.agreed_price_aed, splitBeneficiary ? 1 : 0, job.id);
     await writeAudit(req, {
       userId: req.actorId,
       action: 'PAYMENT_CHECKOUT',
