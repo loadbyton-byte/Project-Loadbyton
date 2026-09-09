@@ -9,6 +9,7 @@
 const db = require('../db');
 /** @type {any} */
 const { getSettings, writeAudit, notify } = require('../lib/helpers');
+const { DEFERRED_PAYMENT_TERMS, PAYMENT_TERM_DUE_HOURS } = require('../lib/constants');
 
 /**
  * @param {Job} _job - strict type reference (Money, Job, Payout must be imported)
@@ -82,14 +83,17 @@ async function awardJob(req, res, jobId, bidId) {
   const netAed = agreedPrice - platformFee;
   const idempotencyKey = `award-${jobId}-${bidId}`;
 
-  // CONTRACT_CREDIT gate — fast pre-check outside the transaction (the
-  // transaction below re-checks under a row lock, since this alone can't
-  // stop two concurrent awards from a shipper both reading the same
-  // pre-award balance). Never eligible without an admin-approved limit
-  // (credit_approved_at) — a shipper picking this tier on the post-job
-  // form doesn't self-grant credit, someone has to actually extend it.
-  const isContractCredit = preJob.payment_tier === 'CONTRACT_CREDIT';
-  if (isContractCredit) {
+  // Deferred-payment-term gate (NET_24H/7/15/28) — fast pre-check outside
+  // the transaction (the transaction below re-checks under a row lock,
+  // since this alone can't stop two concurrent awards from a shipper both
+  // reading the same pre-award balance). Never eligible without an
+  // admin-approved limit (credit_approved_at) — a shipper picking one of
+  // these terms on the post-job form doesn't self-grant credit, someone
+  // has to actually extend it. Same gate every deferred term used to
+  // share as the single old CONTRACT_CREDIT tier — just generalized
+  // across four due-date options instead of one.
+  const isDeferred = DEFERRED_PAYMENT_TERMS.includes(preJob.payment_tier) || preJob.payment_tier === 'CONTRACT_CREDIT';
+  if (isDeferred) {
     const shipperProfile = await db.prepare('SELECT credit_limit_aed, credit_balance_aed, credit_approved_at FROM profiles WHERE user_id=?').get(preJob.shipper_id);
     if (!shipperProfile?.credit_approved_at) {
       res.status(402).json({ error: 'This account has no approved credit terms — contact Loadbyton to set up contract credit before posting jobs on this tier.' });
@@ -130,19 +134,16 @@ async function awardJob(req, res, jobId, bidId) {
         const err = /** @type {any} */ (new Error('Job already awarded')); err.status = 409; throw err;
       }
 
-      // payment_tier branching — SPOT_ESCROW (the default, and every job
-      // created before this column existed) keeps exactly today's
-      // behavior: escrow HELD immediately, checkout required before
-      // pickup. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM defer
-      // escrow entirely — for PAY_ON_DELIVERY, job.service.js's
-      // updateJobStatus creates the actual checkout/ledger entry at the
-      // DELIVERED transition instead; OFF_PLATFORM never touches per-job
-      // escrow at all (payment happens directly between the two parties).
-      // CONTRACT_CREDIT draws down the shipper's approved limit below
-      // instead of escrowing anything per job.
-      const isSpotEscrow = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
+      // payment_tier branching — INSTANT (the default, and every job
+      // created before payment terms existed, back when this column
+      // stored 'SPOT_ESCROW') keeps exactly today's behavior: escrow HELD
+      // immediately, checkout required before pickup. The four deferred
+      // NET_* terms skip escrow entirely and draw down the shipper's
+      // approved credit limit below instead — same mechanism the old
+      // single CONTRACT_CREDIT tier used.
+      const isInstant = job.payment_tier === 'INSTANT' || job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
       await trx.query(
-        isSpotEscrow
+        isInstant
           ? `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`
           : `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, updated_at=datetime('now') WHERE id=?`,
         [bid.carrier_id, agreedPrice, jobId]
@@ -150,10 +151,10 @@ async function awardJob(req, res, jobId, bidId) {
 
       // Re-check and draw down the credit limit under a row lock — the
       // pre-check above read a possibly-stale balance; this is the actual
-      // safety boundary against two concurrent CONTRACT_CREDIT awards from
+      // safety boundary against two concurrent deferred-term awards from
       // the same shipper both squeezing past the limit.
-      if (isContractCredit) {
-        const shipperRow = await trx.query('SELECT credit_limit_aed, credit_balance_aed, credit_terms_days, credit_approved_at FROM profiles WHERE user_id=? FOR UPDATE', [job.shipper_id]);
+      if (isDeferred) {
+        const shipperRow = await trx.query('SELECT credit_limit_aed, credit_balance_aed, credit_approved_at FROM profiles WHERE user_id=? FOR UPDATE', [job.shipper_id]);
         const shipperProfile = shipperRow.rows[0];
         if (!shipperProfile?.credit_approved_at) {
           const err = /** @type {any} */ (new Error('No approved credit terms')); err.status = 402; throw err;
@@ -166,9 +167,11 @@ async function awardJob(req, res, jobId, bidId) {
         // real invoice payment-terms period is usually framed ("net 30
         // from invoice/order date"), and means the due date is visible to
         // both sides from the moment the job is committed, not sprung on
-        // them later at completion.
-        const termsDays = Number(shipperProfile.credit_terms_days) || 30;
-        const creditDueAt = new Date(Date.now() + termsDays * 24 * 3600 * 1000).toISOString();
+        // them later at completion. Due-hours come from the SPECIFIC term
+        // chosen (24h/7/15/28 days), not a flat per-shipper terms_days —
+        // that column still exists but no longer drives this calculation.
+        const dueHours = PAYMENT_TERM_DUE_HOURS[job.payment_tier] || 24 * 28;
+        const creditDueAt = new Date(Date.now() + dueHours * 3600 * 1000).toISOString();
         await trx.query('UPDATE jobs SET credit_due_at=? WHERE id=?', [creditDueAt, jobId]);
       }
 
@@ -218,13 +221,12 @@ async function awardJob(req, res, jobId, bidId) {
       // (status, bid updates, payout row) while the caller believes it
       // succeeded. Letting it throw lets db.transaction's own catch
       // rollback and report a real error instead.
-      // For PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM, no funds are
-      // expected yet at award time — recording an escrow-liability entry
-      // here would be booking a receivable that doesn't exist until
-      // DELIVERED (PAY_ON_DELIVERY) or, for the other two tiers, ever
-      // on-platform in this pass. job.service.js's updateJobStatus creates
-      // the equivalent ledger entry for PAY_ON_DELIVERY at DELIVERED.
-      if (isSpotEscrow) {
+      // For the four deferred NET_* terms, no funds are expected yet at
+      // award time — recording an escrow-liability entry here would be
+      // booking a receivable that doesn't exist; the credit draw above is
+      // the real liability event for those, tracked on profiles.credit_balance_aed
+      // and jobs.credit_due_at instead of the ledger.
+      if (isInstant) {
         const ledger = require('../lib/ledger');
         await ledger.createTransaction(trx, {
           idempotencyKey,
@@ -269,17 +271,13 @@ async function awardJob(req, res, jobId, bidId) {
   // Notifications after commit — never inside the financial transaction
   // (outbox worker will also deliver). "Escrow HELD" was previously
   // unconditional here regardless of payment_tier — actively wrong for
-  // PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM, none of which hold any
-  // escrow at all (see the isSpotEscrow branch inside the transaction
-  // above), and especially misleading for a shipper who just picked
-  // CONTRACT_CREDIT specifically because they didn't want funds held.
-  const shipperAwardMessage = preJob.payment_tier === 'CONTRACT_CREDIT'
-    ? `${preJob.job_code} was awarded to a carrier. AED ${agreedPrice} drawn against your contract credit — due per your net terms.`
-    : preJob.payment_tier === 'PAY_ON_DELIVERY'
-      ? `${preJob.job_code} was awarded to a carrier. AED ${agreedPrice} will be charged once delivery is confirmed.`
-      : preJob.payment_tier === 'OFF_PLATFORM'
-        ? `${preJob.job_code} was awarded to a carrier. AED ${agreedPrice} agreed — settle payment directly with the carrier.`
-        : `${preJob.job_code} was awarded to a carrier. Escrow HELD: AED ${agreedPrice}.`;
+  // every deferred term, none of which hold any escrow at all (see the
+  // isInstant branch inside the transaction above), and especially
+  // misleading for a shipper who specifically picked a deferred term
+  // because they didn't want funds held immediately.
+  const shipperAwardMessage = isDeferred
+    ? `${preJob.job_code} was awarded to a carrier. AED ${agreedPrice} drawn against your credit line — due within ${(PAYMENT_TERM_DUE_HOURS[preJob.payment_tier] || 0) / 24} day(s) of invoice.`
+    : `${preJob.job_code} was awarded to a carrier. Escrow HELD: AED ${agreedPrice}.`;
   try {
     await (/** @type {any} */ (notify))(preBid.carrier_id, 'Bid awarded', `Your bid on ${preJob.job_code} was awarded. Agreed price: AED ${agreedPrice}.`, jobId, 'award');
     await (/** @type {any} */ (notify))(preJob.shipper_id, 'Job awarded', shipperAwardMessage, jobId, 'award');

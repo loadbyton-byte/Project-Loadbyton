@@ -11,7 +11,7 @@ const db = require('../db');
 const jobRepository = require('../repositories/job.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const bidRepository = require('../repositories/bid.repository');
-const { TRANSITIONS } = require('../lib/constants');
+const { TRANSITIONS, DEFERRED_PAYMENT_TERMS } = require('../lib/constants');
 const { getSettings, writeAudit, notify, notifyAdmins } = require('../lib/helpers');
 const { issueInvoice } = require('../lib/invoice');
 const { executePayoutAsync, refundJobAsync } = require('./payout.service');
@@ -88,12 +88,13 @@ async function updateJobStatus(jobId, nextStatus, req) {
   // mode, an admin explicitly calling POST /api/admin/confirm-receipt
   // (server/routes/admin.routes.js). The gate below requires FUNDED
   // specifically — requiring only HELD would be a no-op, since every
-  // AWARDED SPOT_ESCROW job already has escrow_status='HELD' by
-  // definition. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM are defined
-  // by NOT requiring escrow before pickup — that's the whole point of
-  // those tiers — so they must never be blocked by this check.
-  const isSpotEscrowTier = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
-  if (nextStatus === 'PICKED_UP' && isSpotEscrowTier && job.escrow_status !== 'FUNDED') {
+  // AWARDED INSTANT job already has escrow_status='HELD' by definition.
+  // The deferred NET_* terms (plus the legacy PAY_ON_DELIVERY/CONTRACT_CREDIT/
+  // OFF_PLATFORM values a job posted before this migration might still
+  // carry) are defined by NOT requiring escrow before pickup — that's the
+  // whole point — so they must never be blocked by this check.
+  const isInstantTier = job.payment_tier === 'INSTANT' || job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
+  if (nextStatus === 'PICKED_UP' && isInstantTier && job.escrow_status !== 'FUNDED') {
     const e = new Error('Payment not yet confirmed — pickup unlocks once payment receipt is confirmed.');
     e.status = 400;
     throw e;
@@ -164,19 +165,21 @@ async function updateJobStatus(jobId, nextStatus, req) {
     }
   }
 
-  // CONTRACT_CREDIT restoration — separate from the block above, which is
-  // gated on escrow_status IN ('HELD','FUNDED'); a CONTRACT_CREDIT job
-  // never sets either (award.service.js only sets HELD for SPOT_ESCROW),
-  // so it would never reach that gate at all. carrier_id being set is
-  // this tier's own proxy for "this job was actually awarded" (and so
-  // actually drew the credit limit down) rather than cancelled pre-award.
-  // Row-locked + idempotency-guarded the same way the SPOT_ESCROW block
-  // above is — two concurrent cancel requests for the same job must not
-  // both restore the balance. credit_due_at is only ever set once, at
-  // award (award.service.js), so clearing it here doubles as the claim:
-  // a second concurrent attempt reads it already NULL and matches zero
-  // rows in the UPDATE below.
-  if (nextStatus === 'CANCELLED' && job.payment_tier === 'CONTRACT_CREDIT' && job.carrier_id && job.agreed_price_aed) {
+  // Deferred-term (NET_24H/7/15/28, plus legacy CONTRACT_CREDIT) credit
+  // restoration — separate from the block above, which is gated on
+  // escrow_status IN ('HELD','FUNDED'); a deferred-term job never sets
+  // either (award.service.js only sets HELD for INSTANT), so it would
+  // never reach that gate at all. carrier_id being set is this tier's own
+  // proxy for "this job was actually awarded" (and so actually drew the
+  // credit limit down) rather than cancelled pre-award. Row-locked +
+  // idempotency-guarded the same way the INSTANT block above is — two
+  // concurrent cancel requests for the same job must not both restore the
+  // balance. credit_due_at is only ever set once, at award
+  // (award.service.js), so clearing it here doubles as the claim: a
+  // second concurrent attempt reads it already NULL and matches zero rows
+  // in the UPDATE below.
+  const isDeferredTier = DEFERRED_PAYMENT_TERMS.includes(job.payment_tier) || job.payment_tier === 'CONTRACT_CREDIT';
+  if (nextStatus === 'CANCELLED' && isDeferredTier && job.carrier_id && job.agreed_price_aed) {
     await db.transaction(async (trx) => {
       const claim = await trx.query(`UPDATE jobs SET credit_due_at=NULL WHERE id=? AND credit_due_at IS NOT NULL`, [id]);
       if (!claim.rowCount) return;

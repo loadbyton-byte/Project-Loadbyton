@@ -1,5 +1,7 @@
-// Regression coverage for CONTRACT_CREDIT (server/services/award.service.js's
-// credit gate + server/routes/admin.routes.js's approve/settle endpoints):
+// Regression coverage for deferred payment terms (NET_24H/7/15/28 — see
+// server/services/award.service.js's credit gate + server/routes/admin.routes.js's
+// approve/settle endpoints, the same mechanism the old single
+// CONTRACT_CREDIT tier used, generalized across four due-date options):
 // a shipper can't self-grant credit, an award is blocked until an admin
 // approves a limit, blocked again if it would exceed that limit, drawn down
 // on a successful award with a real due date, restored on cancellation, and
@@ -56,14 +58,14 @@ async function postJobAndBid(shipper, carrier, paymentTier, amountAed = 400) {
   return { jobId, bidId: bid.body.bid.id };
 }
 
-test('CONTRACT_CREDIT award is blocked without admin-approved credit, then succeeds once approved, drawing down the limit with a real due date', async () => {
+test('NET_15 award is blocked without admin-approved credit, then succeeds once approved, drawing down the limit with a real due date', async () => {
   const admin = makeClient(server.baseUrl);
   await admin.login('admin@loadbyton.ae', 'demo1234');
   const shipper = await freshShipper(server.baseUrl, admin);
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
 
-  const { jobId, bidId } = await postJobAndBid(shipper, carrier, 'CONTRACT_CREDIT', 400);
+  const { jobId, bidId } = await postJobAndBid(shipper, carrier, 'NET_15', 400);
 
   const blocked = await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
   assert.equal(blocked.status, 402, blocked.raw);
@@ -82,7 +84,7 @@ test('CONTRACT_CREDIT award is blocked without admin-approved credit, then succe
   const awarded = await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
   assert.equal(awarded.status, 200, awarded.raw);
   assert.equal(awarded.body.job.agreed_price_aed, 400);
-  assert.ok(awarded.body.job.credit_due_at, 'credit_due_at must be set on a successful CONTRACT_CREDIT award');
+  assert.ok(awarded.body.job.credit_due_at, 'credit_due_at must be set on a successful NET_15 award');
   const dueMs = new Date(awarded.body.job.credit_due_at).getTime() - Date.now();
   assert.ok(dueMs > 14 * 86400000 && dueMs < 16 * 86400000, `due date should be ~15 days out, got ${dueMs / 86400000} days`);
 
@@ -93,7 +95,7 @@ test('CONTRACT_CREDIT award is blocked without admin-approved credit, then succe
 
   // A second job that would push the balance (400) + this bid (400) past
   // the 500 limit must be rejected — the limit, not just "has any credit".
-  const { jobId: job2Id, bidId: bid2Id } = await postJobAndBid(shipper, carrier, 'CONTRACT_CREDIT', 400);
+  const { jobId: job2Id, bidId: bid2Id } = await postJobAndBid(shipper, carrier, 'NET_15', 400);
   const overLimit = await shipper.post(`/api/jobs/${job2Id}/award`, { bidId: bid2Id, skipNegotiation: true });
   assert.equal(overLimit.status, 402, overLimit.raw);
 
@@ -102,7 +104,7 @@ test('CONTRACT_CREDIT award is blocked without admin-approved credit, then succe
   assert.equal(cancelled.status, 200, cancelled.raw);
   const creditAfterCancel = await admin.get('/api/admin/credit');
   const shipperRowAfterCancel = creditAfterCancel.body.shippers.find((s) => s.id === shipperId);
-  assert.equal(shipperRowAfterCancel.credit_balance_aed, 0, 'cancelling an awarded CONTRACT_CREDIT job must restore the balance');
+  assert.equal(shipperRowAfterCancel.credit_balance_aed, 0, 'cancelling an awarded NET_15 job must restore the balance');
 
   // The over-limit job now fits — award it, then settle it via the admin action.
   const nowFits = await shipper.post(`/api/jobs/${job2Id}/award`, { bidId: bid2Id, skipNegotiation: true });

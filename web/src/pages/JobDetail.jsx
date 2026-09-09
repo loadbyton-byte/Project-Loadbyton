@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTierLabel } from '../lib/constants.js';
+import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -294,7 +294,7 @@ export default function JobDetail() {
                       ? <>Final price locks at <strong className="text-ink">{formatMoney(finalAwardTotal, job.currency)}</strong> ({formatMoney(awardConfirm.amount_aed, job.currency)} bid + {formatMoney(agreedChargesTotal, job.currency)} agreed extras) — nothing can be changed after this</>
                       : <>The price is locked at {formatMoney(awardConfirm.amount_aed, job.currency)} — bids can't be changed after this</>}
                   </li>
-                  <li>Funds move into escrow and the job moves to "Awarded"</li>
+                  <li>{(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Funds move into escrow and the job moves to "Awarded"' : `The job moves to "Awarded" — ${paymentTermLabel(job.payment_tier)}`}</li>
                 </ul>
 
                 {isLowCapacity && (
@@ -394,9 +394,15 @@ export default function JobDetail() {
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={job.status} />
-            <EscrowBadge status={job.escrow_status} jobStatus={job.status} />
-            <Badge color={job.payment_tier && job.payment_tier !== 'SPOT_ESCROW' ? 'accent' : 'neutral'}>{paymentTierLabel(job.payment_tier || 'SPOT_ESCROW')}</Badge>
-            {job.payment_tier === 'CONTRACT_CREDIT' && job.credit_due_at && (() => {
+            {/* Escrow is real, accurate machinery for INSTANT jobs — but
+                nothing is ever actually escrowed for a deferred (NET_*)
+                job, so showing it there would be the same misleading
+                "Escrow: PENDING forever" the badge used to render for
+                every tier. The credit-due/overdue/settled badge just below
+                is the accurate status for those instead. */}
+            {(!job.payment_tier || job.payment_tier === 'INSTANT') && <EscrowBadge status={job.escrow_status} jobStatus={job.status} />}
+            <Badge color={job.payment_tier && job.payment_tier !== 'INSTANT' ? 'accent' : 'neutral'}>{paymentTermLabel(job.payment_tier || 'INSTANT')}</Badge>
+            {DEFERRED_PAYMENT_TERMS.includes(job.payment_tier) && job.credit_due_at && (() => {
               // Matches admin/CreditTab.jsx's overdue calculation exactly —
               // a shipper should see the same "this is late" signal an
               // admin does, not a flat neutral badge regardless of how
@@ -618,7 +624,7 @@ export default function JobDetail() {
             )}
 
             {isCarrier && job.status === 'OPEN' && !myBid && (
-              <BidForm jobId={job.id} verified={user.is_verified} defaultEquipment={job.equipment_type} onDone={load} />
+              <BidForm jobId={job.id} verified={user.is_verified} defaultEquipment={job.equipment_type} paymentTier={job.payment_tier} onDone={load} />
             )}
           </Section>
 
@@ -657,7 +663,7 @@ export default function JobDetail() {
         <div>
           {track && (
             <Card className="mb-6">
-              <Card.Header><Card.Title>Track & escrow</Card.Title></Card.Header>
+              <Card.Header><Card.Title>Track & payment</Card.Title></Card.Header>
               <Card.Content className="space-y-4 text-sm">
                 <div className="flex items-center gap-2 text-ink-secondary">
                   <IconMapPin size={15} className="text-ink-muted" />
@@ -780,7 +786,9 @@ export default function JobDetail() {
                 <PodForm jobId={job.id} onDone={load} busy={busy} setBusy={setBusy} setError={setError} />
               )}
               {isShipper && job.status === 'DELIVERED' && (
-                <Button className="w-full" variant="accent" onClick={() => act(() => api.setStatus(job.id, 'COMPLETED'))} loading={busy}>Confirm delivery & release escrow</Button>
+                <Button className="w-full" variant="accent" onClick={() => act(() => api.setStatus(job.id, 'COMPLETED'))} loading={busy}>
+                  {(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Confirm delivery & release escrow' : 'Confirm delivery'}
+                </Button>
               )}
               {isShipper && ['OPEN', 'AWARDED', 'DRAFT'].includes(job.status) && (
                 <Button className="w-full" variant="danger" onClick={() => act(() => api.setStatus(job.id, 'CANCELLED'))} loading={busy}>Cancel job</Button>

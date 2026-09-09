@@ -1,6 +1,6 @@
 const db = require('../db');
 const { randomToken, jobCode } = require('../lib/http');
-const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT, TERMS_VERSION } = require('../lib/constants');
+const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT, TERMS_VERSION, PAYMENT_TERMS } = require('../lib/constants');
 const { isValidUaeLatLng } = require('../lib/helpers');
 
 async function createJobFromBody(body, req) {
@@ -130,17 +130,19 @@ async function createJobFromBody(body, req) {
 
   const jobId = Number(result.lastInsertRowid);
 
-  // payment_tier: not yet exposed in the job-posting UI or gated by any
-  // eligibility check (that's separate, not-yet-built work) — accepted
-  // here mainly so the tier logic in award.service.js/job.service.js is
-  // exercisable and testable. jobs.payment_tier already defaults to
-  // SPOT_ESCROW at the schema level, so an omitted/invalid value here is
-  // simply left at that default rather than validated as an error.
+  // payment_tier: when a shipper is due to pay (see server/lib/constants.js's
+  // PAYMENT_TERMS — escrow is an implementation detail, not a tier the
+  // shipper picks by that name anymore). Not gated by credit eligibility
+  // here — that check happens at award time (award.service.js), since
+  // eligibility can change between posting and award. jobs.payment_tier's
+  // column-level default is still the legacy 'SPOT_ESCROW' string (kept
+  // to avoid an unnecessary migration; every service treats it as an
+  // alias for INSTANT) — explicitly writing 'INSTANT' here instead keeps
+  // every newly-created job's stored value and displayed label
+  // consistent, rather than silently falling back to the old name.
   const { paymentTier } = body;
-  const VALID_PAYMENT_TIERS = ['SPOT_ESCROW', 'PAY_ON_DELIVERY', 'CONTRACT_CREDIT', 'OFF_PLATFORM'];
-  if (paymentTier && VALID_PAYMENT_TIERS.includes(paymentTier) && paymentTier !== 'SPOT_ESCROW') {
-    await db.prepare('UPDATE jobs SET payment_tier=? WHERE id=?').run(paymentTier, jobId);
-  }
+  const resolvedPaymentTier = PAYMENT_TERMS.includes(paymentTier) ? paymentTier : 'INSTANT';
+  await db.prepare('UPDATE jobs SET payment_tier=? WHERE id=?').run(resolvedPaymentTier, jobId);
   if (!alreadyAgreedToCurrentVersion) {
     const { byIp } = require('../lib/rateLimit');
     await db.prepare(

@@ -7,7 +7,7 @@ import { useLocale } from '../lib/i18n.jsx';
 import {
   CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
   equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
-  PAYMENT_TIERS, PAYMENT_TIER_DESCRIPTIONS, paymentTierLabel,
+  PAYMENT_TERMS, PAYMENT_TERM_DESCRIPTIONS, paymentTermLabel, DEFERRED_PAYMENT_TERMS,
   VEHICLE_CLASSES, vehicleClassOf, equipmentTypesForClass,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
@@ -37,7 +37,7 @@ const POST_JOB_STEPS = ['Shipment', 'Equipment', 'Locations'];
 
 const emptyJob = {
   shipmentType: 'IMPORT',
-  paymentTier: 'SPOT_ESCROW',
+  paymentTier: 'INSTANT',
   loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
   pickupLat: undefined, pickupLng: undefined, deliveryLat: undefined, deliveryLng: undefined,
   equipmentType: 'TRAILER_20FT', cargoType: 'GENERAL_GOODS',
@@ -373,13 +373,13 @@ export default function Dashboard() {
                   </p>
 
                   <div className="mt-4">
-                    <Label>How will you pay?</Label>
+                    <Label>When will you pay?</Label>
                     <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                      {PAYMENT_TIERS.map((pt) => {
-                        const isCredit = pt === 'CONTRACT_CREDIT';
+                      {PAYMENT_TERMS.map((pt) => {
+                        const isDeferred = DEFERRED_PAYMENT_TERMS.includes(pt);
                         const creditEligible = !!user?.profile?.credit_approved_at;
                         const creditAvailable = (user?.profile?.credit_limit_aed || 0) - (user?.profile?.credit_balance_aed || 0);
-                        const disabled = isCredit && !creditEligible;
+                        const disabled = isDeferred && !creditEligible;
                         return (
                           <button
                             key={pt}
@@ -392,9 +392,9 @@ export default function Dashboard() {
                               background: form.paymentTier === pt ? 'var(--brand-accent-bg)' : 'var(--bg-surface)',
                             }}
                           >
-                            <p className="text-sm font-semibold text-ink">{paymentTierLabel(pt)}</p>
-                            <p className="mt-0.5 text-xs text-ink-muted">{PAYMENT_TIER_DESCRIPTIONS[pt]}</p>
-                            {isCredit && (
+                            <p className="text-sm font-semibold text-ink">{paymentTermLabel(pt)}</p>
+                            <p className="mt-0.5 text-xs text-ink-muted">{PAYMENT_TERM_DESCRIPTIONS[pt]}</p>
+                            {isDeferred && (
                               <p className="mt-1 text-xs font-medium" style={{ color: creditEligible ? 'var(--status-success)' : 'var(--status-warning)' }}>
                                 {creditEligible ? `AED ${creditAvailable.toLocaleString()} available of AED ${(user.profile.credit_limit_aed || 0).toLocaleString()}` : 'Not yet approved for your account — contact Loadbyton.'}
                               </p>
