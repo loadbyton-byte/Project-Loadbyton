@@ -665,10 +665,17 @@ export default function JobDetail() {
             <Card className="mb-6">
               <Card.Header><Card.Title>Track & payment</Card.Title></Card.Header>
               <Card.Content className="space-y-4 text-sm">
-                <div className="flex items-center gap-2 text-ink-secondary">
-                  <IconMapPin size={15} className="text-ink-muted" />
-                  <span>{track.geofence.atPickup ? 'At/past pickup' : 'Awaiting pickup'} · {track.geofence.atDelivery ? 'At delivery' : 'En route'}</span>
-                </div>
+                {job.carrier_id && (
+                  // Pickup/delivery tracking only means something once a
+                  // carrier is actually assigned (AWARDED+) — an OPEN job
+                  // with zero bids has nothing to track yet, so showing
+                  // "Awaiting pickup · En route" here reads as if transit
+                  // were already underway.
+                  <div className="flex items-center gap-2 text-ink-secondary">
+                    <IconMapPin size={15} className="text-ink-muted" />
+                    <span>{track.geofence.atPickup ? 'At/past pickup' : 'Awaiting pickup'} · {track.geofence.atDelivery ? 'At delivery' : 'En route'}</span>
+                  </div>
+                )}
                 {track.autoReleaseAt && (
                   <div className="flex items-center gap-2 text-ink-secondary">
                     <IconClock size={15} className="text-ink-muted" />

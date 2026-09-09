@@ -407,15 +407,21 @@ export default function Profile() {
 
       {isOrgRoot && user.role !== 'ADMIN' && <TeamSection />}
 
-      <Card className="mt-6">
-        <Card.Header><Card.Title>Walkthrough</Card.Title></Card.Header>
-        <Card.Content>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-ink-secondary">Replay the 3-step welcome walkthrough.</p>
-            <Button variant="secondary" onClick={restartWalkthrough} className="self-start shrink-0">Start over</Button>
-          </div>
-        </Card.Content>
-      </Card>
+      {/* The walkthrough's copy (Shell.jsx's WALKTHROUGH_STEPS) is written
+          for the shipper posting flow — for any other role "Start over"
+          would silently do nothing, since Shell.jsx now only renders that
+          modal for SHIPPER. */}
+      {user.role === 'SHIPPER' && (
+        <Card className="mt-6">
+          <Card.Header><Card.Title>Walkthrough</Card.Title></Card.Header>
+          <Card.Content>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-ink-secondary">Replay the 3-step welcome walkthrough.</p>
+              <Button variant="secondary" onClick={restartWalkthrough} className="self-start shrink-0">Start over</Button>
+            </div>
+          </Card.Content>
+        </Card>
+      )}
     </div>
   );
 }
