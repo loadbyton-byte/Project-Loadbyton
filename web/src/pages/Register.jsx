@@ -4,7 +4,7 @@ import { useAuth, roleHome } from '../lib/auth.jsx';
 import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { IconTruck, IconPackage, IconArrowLeft, IconArrowRight, IconCheckCircle } from '../components/icons.jsx';
+import { IconTruck, IconPackage, IconArrowLeft, IconArrowRight, IconCheckCircle, IconCompass, IconLayers, IconTrailer } from '../components/icons.jsx';
 
 const STEPS = ['Role', 'Business', 'Account'];
 
