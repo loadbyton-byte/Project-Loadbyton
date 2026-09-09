@@ -36,16 +36,28 @@ const MIN_PASSWORD_LENGTH = 8;
 // container-carrying types are the only ones where container_size/
 // container_type mean anything — every other type is general UAE road
 // freight (construction plant, palletised/boxed cargo, small-load pickups).
-// REEFER_TRUCK was replaced product-wide by TRAILER_WITH_GENSET (a chassis
-// with an attached genset powers a reefer container on a standard trailer);
-// CUSTOM is the catch-all for anything the fixed list doesn't cover — it
-// requires a written requirement (cargoDescription/notes).
+// CONTAINER_CHASSIS, PICKUP_3T/5T/7T/10T and TRIPPER are retired from the
+// picker (see web/src/lib/constants.js's TRAILER_EQUIPMENT/TRUCK_EQUIPMENT)
+// but stay here for backward compatibility with jobs already stored with
+// those values. TRAILER_20FT/TRAILER_40FT are the container-chassis split
+// by the length it's built for — real distinct physical equipment, not a
+// cosmetic rename. REEFER_TRUCK is a standalone refrigerated truck body for
+// non-containerized local reefer delivery (produce, dairy, pharma between
+// warehouses) — genuinely distinct from TRAILER_WITH_GENSET, which powers a
+// refrigerated shipping CONTAINER on a chassis (port drayage/cross-border).
+// It replaces an OLD, unrelated "REEFER_TRUCK" that used to mean the same
+// thing TRAILER_WITH_GENSET means now — that one really was retired
+// product-wide (see product-gates.test.js's history) — this is a fresh,
+// non-conflicting reuse of the name for the truck-class case. CUSTOM is the
+// catch-all for anything the fixed list doesn't cover — it requires a
+// written requirement (cargoDescription/notes).
 const EQUIPMENT_TYPES = [
-  'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'BOX_TRUCK',
-  'CURTAIN_TRUCK', 'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T',
-  'SIDE_LOADER_TRAILER', 'TRIPPER', 'CUSTOM',
+  'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER',
+  'TRAILER_20FT', 'TRAILER_40FT', 'SIDE_LOADER_TRAILER',
+  'BOX_TRUCK', 'CURTAIN_TRUCK', 'FLATBED_TRUCK', 'REEFER_TRUCK',
+  'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T', 'TRIPPER', 'CUSTOM',
 ];
-const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET'];
+const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'TRAILER_20FT', 'TRAILER_40FT'];
 
 // What's inside the load, independent of the equipment moving it — lets a
 // carrier see e.g. HAZMAT or COLD_CHAIN cargo before bidding, regardless of

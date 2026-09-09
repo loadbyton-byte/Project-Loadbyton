@@ -53,32 +53,45 @@ export const TERMINAL_INFO = {
   FUJAIRAH_PORT: { emirate: 'Fujairah', operator: 'Fujairah Port Authority' },
 };
 
-// Equipment/vehicle types a job can require and a carrier can bid with. The
-// two container-carrying types are the only ones where container size/type
-// apply — everything else is general UAE road freight. Cold chain is expressed
-// via container size/type (REEFER) and TRAILER_WITH_GENSET equipment, NOT flags;
-// TRAILER_WITH_GENSET is a reefer-capable container trailer, and CUSTOM is
-// a written truck/requirement in the notes field.
+// Equipment/vehicle types a job can require and a carrier can bid with.
+// CONTAINER_CHASSIS, the PICKUP_*T sizes and TRIPPER are retired from the
+// picker (superseded by TRAILER_20FT/TRAILER_40FT and the curated lists
+// below) but stay in the canonical list for backward compatibility with
+// jobs already stored with those values — equipmentLabel() below still
+// resolves them correctly wherever an old job is displayed.
 export const EQUIPMENT_TYPES = [
-  'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'BOX_TRUCK',
-  'CURTAIN_TRUCK', 'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T',
-  'SIDE_LOADER_TRAILER', 'TRIPPER', 'CUSTOM',
+  'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER',
+  'TRAILER_20FT', 'TRAILER_40FT', 'SIDE_LOADER_TRAILER',
+  'BOX_TRUCK', 'CURTAIN_TRUCK', 'FLATBED_TRUCK', 'REEFER_TRUCK',
+  'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T', 'TRIPPER', 'CUSTOM',
 ];
-export const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET'];
+// TRAILER_20FT/TRAILER_40FT are container-carrying (the chassis split by the
+// length it's built for). TRAILER_WITH_GENSET carries a refrigerated
+// shipping CONTAINER on a chassis — cold chain expressed via container
+// size/type (REEFER) + this equipment, not a flag. REEFER_TRUCK is a
+// standalone refrigerated truck body for non-containerized local delivery
+// (produce, dairy, pharma between warehouses) — a genuinely different
+// vehicle from TRAILER_WITH_GENSET, not container-carrying. CUSTOM is a
+// written truck/requirement in the notes field.
+export const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'TRAILER_20FT', 'TRAILER_40FT'];
 export const EQUIPMENT_TYPE_LABELS = {
   CONTAINER_CHASSIS: 'Container chassis',
   TRAILER_WITH_GENSET: 'Trailer with genset',
   LOWBED_TRAILER: 'Lowbed trailer',
-  FLATBED_TRAILER: 'Highbed trailer',
+  FLATBED_TRAILER: 'Flatbed trailer',
+  TRAILER_20FT: 'Trailer for 20FT container',
+  TRAILER_40FT: 'Trailer for 40FT container',
+  SIDE_LOADER_TRAILER: 'Side loader trailer',
   BOX_TRUCK: 'Box truck',
-  CURTAIN_TRUCK: 'Curtain-side truck',
+  CURTAIN_TRUCK: 'Curtain side',
+  FLATBED_TRUCK: 'Flatbed truck',
+  REEFER_TRUCK: 'Reefer truck',
   PICKUP_3T: 'Pickup — 3 tonne',
   PICKUP_5T: 'Pickup — 5 tonne',
   PICKUP_7T: 'Pickup — 7 tonne',
   PICKUP_10T: 'Pickup — 10 tonne',
-  SIDE_LOADER_TRAILER: 'Side loader trailer',
   TRIPPER: 'Tripper',
-  CUSTOM: 'Custom truck / requirement',
+  CUSTOM: 'Custom',
 };
 export function equipmentLabel(value) {
   return EQUIPMENT_TYPE_LABELS[value] || formatLabel(value);
@@ -86,15 +99,12 @@ export function equipmentLabel(value) {
 
 // Vehicle class — a shipper picks this FIRST on the post-job form (trailer
 // or truck), which narrows the equipment-type dropdown to just the
-// relevant 4 (trailer) or remaining 9 (truck) options, instead of one
-// flat 13-item list. Purely a UI grouping over the same EQUIPMENT_TYPES —
-// CONTAINER_EQUIPMENT above stays the one source of truth for "does this
-// actually carry a shipping container" (a lowbed/highbed trailer is a
-// trailer but carries neither a container nor a container size/type, same
-// as any truck — see Dashboard.jsx's useSimpleLocations).
+// relevant curated options for that class, instead of one flat list. Each
+// list ends with CUSTOM (free-typed via form.customRequirement — see
+// Dashboard.jsx) so neither class is ever a dead end.
 export const VEHICLE_CLASSES = ['TRAILER', 'TRUCK'];
-export const TRAILER_EQUIPMENT = ['CONTAINER_CHASSIS', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'TRAILER_WITH_GENSET'];
-export const TRUCK_EQUIPMENT = EQUIPMENT_TYPES.filter((t) => !TRAILER_EQUIPMENT.includes(t));
+export const TRAILER_EQUIPMENT = ['LOWBED_TRAILER', 'FLATBED_TRAILER', 'TRAILER_WITH_GENSET', 'TRAILER_20FT', 'TRAILER_40FT', 'SIDE_LOADER_TRAILER', 'CUSTOM'];
+export const TRUCK_EQUIPMENT = ['FLATBED_TRUCK', 'BOX_TRUCK', 'REEFER_TRUCK', 'CURTAIN_TRUCK', 'CUSTOM'];
 export function vehicleClassOf(equipmentType) {
   return TRAILER_EQUIPMENT.includes(equipmentType) ? 'TRAILER' : 'TRUCK';
 }

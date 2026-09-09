@@ -97,7 +97,7 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   assert.equal(bidAfter.status, 201, bidAfter.raw);
 });
 
-test('equipment: TRAILER_WITH_GENSET is container-carrying; REEFER_TRUCK is gone; CUSTOM needs a requirement', async () => {
+test('equipment: TRAILER_WITH_GENSET is container-carrying; an unrecognized type falls back to the default; CUSTOM needs a requirement', async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const base = {
@@ -113,11 +113,22 @@ test('equipment: TRAILER_WITH_GENSET is container-carrying; REEFER_TRUCK is gone
   const badWeight = await shipper.post('/api/jobs', { ...base, equipmentType: 'CUSTOM', customRequirement: 'x', cargoWeightTons: -3 });
   assert.equal(badWeight.status, 400, 'a non-positive cargo weight must be rejected');
 
+  // REEFER_TRUCK is now a real, valid equipment type (a standalone
+  // refrigerated truck body for non-containerized local delivery, distinct
+  // from TRAILER_WITH_GENSET's container reefer) — so it can no longer
+  // stand in for "an unrecognized type" here. A string that will never be a
+  // real equipment type still needs to fall back safely, not 500.
   const oldType = await shipper.post('/api/jobs', {
-    ...base, equipmentType: 'REEFER_TRUCK', containerSize: '40FT', containerType: 'DRY', notes: 'x',
+    ...base, equipmentType: 'NOT_A_REAL_EQUIPMENT_TYPE', containerSize: '40FT', containerType: 'DRY', notes: 'x',
   });
   assert.equal(oldType.status, 201, 'unknown equipment types must fall back to the default, not 500');
-  assert.equal(oldType.body.job.equipment_type, 'CONTAINER_CHASSIS', 'REEFER_TRUCK no longer exists — must not be stored');
+  assert.equal(oldType.body.job.equipment_type, 'CONTAINER_CHASSIS', 'an unrecognized equipment type must fall back to the default, not be stored verbatim');
+
+  const reeferTruck = await shipper.post('/api/jobs', {
+    ...base, equipmentType: 'REEFER_TRUCK', truckCount: 1, notes: 'Local reefer delivery, no container',
+  });
+  assert.equal(reeferTruck.status, 201, reeferTruck.raw);
+  assert.equal(reeferTruck.body.job.equipment_type, 'REEFER_TRUCK', 'REEFER_TRUCK is a real, storable equipment type');
 
   const customNoRequirement = await shipper.post('/api/jobs', { ...base, equipmentType: 'CUSTOM' });
   assert.equal(customNoRequirement.status, 400, 'CUSTOM without a written requirement must be rejected');
