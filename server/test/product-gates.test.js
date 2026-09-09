@@ -139,6 +139,37 @@ test('equipment: TRAILER_WITH_GENSET is container-carrying; an unrecognized type
   assert.match(custom.body.job.notes, /Double-deck trailer/, 'customRequirement must flow into notes');
 });
 
+test('LOCAL truck specs: truckLengthM stores for vehicle-body types, equipmentBodyType for Pickup sizes, and bad values are rejected before the job is created', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const base = {
+    shipmentType: 'LOCAL', loadingLocation: 'AL_QUOZ', deliveryLocation: 'DIP', deliveryAddress: 'X',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+  };
+
+  const flatbed = await shipper.post('/api/jobs', { ...base, equipmentType: 'FLATBED_TRUCK', truckLengthM: 14, cargoWeightTons: 9.5 });
+  assert.equal(flatbed.status, 201, flatbed.raw);
+  assert.equal(flatbed.body.job.truck_length_m, 14);
+  assert.equal(flatbed.body.job.cargo_weight_tons, 9.5);
+
+  const pickup = await shipper.post('/api/jobs', { ...base, equipmentType: 'PICKUP_3T', equipmentBodyType: 'COVERED' });
+  assert.equal(pickup.status, 201, pickup.raw);
+  assert.equal(pickup.body.job.equipment_body_type, 'COVERED');
+  assert.equal(pickup.body.job.equipment_type, 'PICKUP_3T');
+
+  const badLength = await shipper.post('/api/jobs', { ...base, equipmentType: 'FLATBED_TRUCK', truckLengthM: -5 });
+  assert.equal(badLength.status, 400, 'a non-positive truckLengthM must be rejected');
+
+  const badBodyType = await shipper.post('/api/jobs', { ...base, equipmentType: 'PICKUP_3T', equipmentBodyType: 'GARBAGE' });
+  assert.equal(badBodyType.status, 400, 'an unrecognized equipmentBodyType must be rejected');
+
+  // Both LOWBED_TRUCK/SIDE_LOADER_TRUCK are genuinely new codes, distinct
+  // from their trailer counterparts — confirm they round-trip as-is.
+  const lowbedTruck = await shipper.post('/api/jobs', { ...base, equipmentType: 'LOWBED_TRUCK', truckLengthM: 16, cargoWeightTons: 12 });
+  assert.equal(lowbedTruck.status, 201, lowbedTruck.raw);
+  assert.equal(lowbedTruck.body.job.equipment_type, 'LOWBED_TRUCK');
+});
+
 test('documents are private until the bid is confirmed; uploads are for parties only', async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');

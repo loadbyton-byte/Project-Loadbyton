@@ -62,7 +62,7 @@ export const TERMINAL_INFO = {
 export const EQUIPMENT_TYPES = [
   'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER',
   'TRAILER_20FT', 'TRAILER_40FT', 'SIDE_LOADER_TRAILER',
-  'BOX_TRUCK', 'CURTAIN_TRUCK', 'FLATBED_TRUCK', 'REEFER_TRUCK',
+  'BOX_TRUCK', 'CURTAIN_TRUCK', 'FLATBED_TRUCK', 'REEFER_TRUCK', 'LOWBED_TRUCK', 'SIDE_LOADER_TRUCK',
   'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T', 'TRIPPER', 'CUSTOM',
 ];
 // TRAILER_20FT/TRAILER_40FT are container-carrying (the chassis split by the
@@ -86,10 +86,15 @@ export const EQUIPMENT_TYPE_LABELS = {
   CURTAIN_TRUCK: 'Curtain side',
   FLATBED_TRUCK: 'Flatbed truck',
   REEFER_TRUCK: 'Reefer truck',
-  PICKUP_3T: 'Pickup — 3 tonne',
+  // Truck-body versions of the lowbed/side-loader trailer — a real,
+  // physically different vehicle (own chassis, not towed), not a rename.
+  // Same reasoning as REEFER_TRUCK vs TRAILER_WITH_GENSET above.
+  LOWBED_TRUCK: 'Lowbed truck',
+  SIDE_LOADER_TRUCK: 'Side loader truck',
+  PICKUP_3T: 'Pickup 3 ton',
   PICKUP_5T: 'Pickup — 5 tonne',
-  PICKUP_7T: 'Pickup — 7 tonne',
-  PICKUP_10T: 'Pickup — 10 tonne',
+  PICKUP_7T: 'Pickup 7 ton',
+  PICKUP_10T: 'Pickup 10 ton',
   TRIPPER: 'Tripper',
   CUSTOM: 'Custom',
 };
@@ -111,6 +116,25 @@ export function vehicleClassOf(equipmentType) {
 export function equipmentTypesForClass(vehicleClass) {
   return vehicleClass === 'TRAILER' ? TRAILER_EQUIPMENT : TRUCK_EQUIPMENT;
 }
+
+// LOCAL shipments never involve a shipping container, so they skip the
+// Trailer/Truck class toggle above entirely and go straight to this one
+// flat list — a local move is always some kind of truck. Distinct from
+// TRUCK_EQUIPMENT (the IMPORT/EXPORT truck-class list): local jobs cover
+// a wider set of body styles (lowbed/side-loader/tripper, pickup sizes)
+// that don't apply to port drayage.
+export const LOCAL_EQUIPMENT = [
+  'FLATBED_TRUCK', 'LOWBED_TRUCK', 'BOX_TRUCK', 'CURTAIN_TRUCK', 'REEFER_TRUCK',
+  'SIDE_LOADER_TRUCK', 'TRIPPER', 'PICKUP_3T', 'PICKUP_7T', 'PICKUP_10T', 'CUSTOM',
+];
+// The 7 "vehicle body" LOCAL types take a bed length + the existing
+// cargo-weight field; the 3 Pickup sizes take an open-vs-covered body
+// type instead (their capacity is already implied by the ton rating).
+export const LOCAL_LENGTH_TYPES = ['FLATBED_TRUCK', 'LOWBED_TRUCK', 'BOX_TRUCK', 'CURTAIN_TRUCK', 'REEFER_TRUCK', 'SIDE_LOADER_TRUCK', 'TRIPPER'];
+export const LOCAL_BODY_TYPE_TYPES = ['PICKUP_3T', 'PICKUP_7T', 'PICKUP_10T'];
+export const TRUCK_LENGTH_OPTIONS_M = [12.5, 13, 14, 15, 16];
+export const EQUIPMENT_BODY_TYPES = ['OPEN', 'COVERED'];
+export function equipmentBodyTypeLabel(v) { return v === 'OPEN' ? 'Open' : v === 'COVERED' ? 'Covered' : v; }
 
 // What's inside the load, independent of the equipment moving it — shown
 // next to equipment type on the job-post form and on job listings/details

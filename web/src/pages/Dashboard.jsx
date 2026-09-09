@@ -9,6 +9,7 @@ import {
   equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
   PAYMENT_TIERS, PAYMENT_TIER_DESCRIPTIONS, paymentTierLabel,
   VEHICLE_CLASSES, vehicleClassOf, equipmentTypesForClass,
+  LOCAL_EQUIPMENT, LOCAL_LENGTH_TYPES, LOCAL_BODY_TYPE_TYPES, TRUCK_LENGTH_OPTIONS_M, EQUIPMENT_BODY_TYPES, equipmentBodyTypeLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconClose, IconArrowRight, IconTrendUp } from '../components/icons.jsx';
@@ -42,7 +43,7 @@ const emptyJob = {
   equipmentType: 'TRAILER_20FT', cargoType: 'GENERAL_GOODS',
   containerSize: '20FT', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
   deliveryAddress: '', readyAt: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
-  containerCount: 1, truckCount: 1,
+  containerCount: 1, truckCount: 1, truckLengthM: '', equipmentBodyType: '',
   importPickupTerminal: TERMINALS[0], importUnloadingLocation: AREAS[0], importEmptyReturnLocation: DEPOTS[0],
   exportEmptyPickupLocation: DEPOTS[0], exportLoadingLocation: AREAS[0], exportDepositTerminal: TERMINALS[0],
 };
@@ -354,7 +355,20 @@ export default function Dashboard() {
                       <button
                         key={st}
                         type="button"
-                        onClick={() => setForm({ ...form, shipmentType: st })}
+                        onClick={() => {
+                          // LOCAL never carries a container — skip the
+                          // Trailer/Truck picker entirely and default into
+                          // the LOCAL-only truck list; switching away from
+                          // LOCAL resets back to a sensible trailer default.
+                          const enteringLocal = st === 'LOCAL' && form.shipmentType !== 'LOCAL';
+                          const leavingLocal = st !== 'LOCAL' && form.shipmentType === 'LOCAL';
+                          setForm({
+                            ...form,
+                            shipmentType: st,
+                            ...(enteringLocal ? { equipmentType: LOCAL_EQUIPMENT[0], truckLengthM: '', equipmentBodyType: '' } : {}),
+                            ...(leavingLocal ? { equipmentType: 'TRAILER_20FT', truckLengthM: '', equipmentBodyType: '' } : {}),
+                          });
+                        }}
                         className={`rounded-md px-3 py-2 text-left text-sm font-semibold transition sm:text-center ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
                         style={form.shipmentType === st ? { background: 'var(--bg-raised)', borderColor: 'var(--border-default)' } : {}}
                       >
@@ -408,6 +422,19 @@ export default function Dashboard() {
               {/* Step 2 — Equipment & volume */}
               {postStep === 1 && (
                 <>
+                  {form.shipmentType === 'LOCAL' ? (
+                    <div className="sm:col-span-2">
+                      <Label>Truck type</Label>
+                      <Select
+                        value={form.equipmentType}
+                        onChange={(e) => setForm({ ...form, equipmentType: e.target.value, truckLengthM: '', equipmentBodyType: '' })}
+                      >
+                        {LOCAL_EQUIPMENT.map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
+                      </Select>
+                      <p className="mt-1 text-xs text-ink-muted">A local move never needs a shipping container — pick the truck body that fits the load.</p>
+                    </div>
+                  ) : (
+                    <>
                   <div className="sm:col-span-2">
                     <Label>Trailer or truck?</Label>
                     <div className="mt-1.5 grid grid-cols-2 gap-2">
@@ -453,6 +480,8 @@ export default function Dashboard() {
                         : 'General freight — describe the cargo in the notes field below instead of a container size.'}
                     </p>
                   </div>
+                    </>
+                  )}
                   {CONTAINER_EQUIPMENT.includes(form.equipmentType) ? (
                     <div>
                       <Label>No. of containers</Label>
@@ -550,6 +579,28 @@ export default function Dashboard() {
                         placeholder='e.g. "Double-deck trailer with 20 ft deck, load securement harness included"'
                       />
                       <p className="mt-1 text-xs text-ink-muted">Carriers see this as the job's requirement and bid with their own matching equipment.</p>
+                    </div>
+                  ) : LOCAL_LENGTH_TYPES.includes(form.equipmentType) ? (
+                    <>
+                      <div>
+                        <Label>Truck length</Label>
+                        <Select value={form.truckLengthM} onChange={(e) => setForm({ ...form, truckLengthM: e.target.value })}>
+                          <option value="" disabled>Select length</option>
+                          {TRUCK_LENGTH_OPTIONS_M.map((m) => <option key={m} value={m}>{m}m</option>)}
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Cargo weight (tons)</Label>
+                        <Input type="number" min="0.1" step="0.1" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 8.5" />
+                      </div>
+                    </>
+                  ) : LOCAL_BODY_TYPE_TYPES.includes(form.equipmentType) ? (
+                    <div>
+                      <Label>Body type</Label>
+                      <Select value={form.equipmentBodyType} onChange={(e) => setForm({ ...form, equipmentBodyType: e.target.value })}>
+                        <option value="" disabled>Select body type</option>
+                        {EQUIPMENT_BODY_TYPES.map((b) => <option key={b} value={b}>{equipmentBodyTypeLabel(b)}</option>)}
+                      </Select>
                     </div>
                   ) : null}
                 </>
@@ -748,6 +799,14 @@ export default function Dashboard() {
                     // so native HTML5 validation already covers it.
                     if (postStep === 1 && form.equipmentType === 'CUSTOM' && !form.customRequirement.trim()) {
                       setError('Enter the truck/requirement for custom equipment before continuing.');
+                      return;
+                    }
+                    if (postStep === 1 && LOCAL_LENGTH_TYPES.includes(form.equipmentType) && (!form.truckLengthM || !form.cargoWeightTons)) {
+                      setError('Select a truck length and enter the cargo weight before continuing.');
+                      return;
+                    }
+                    if (postStep === 1 && LOCAL_BODY_TYPE_TYPES.includes(form.equipmentType) && !form.equipmentBodyType) {
+                      setError('Select a body type (open or covered) before continuing.');
                       return;
                     }
                     setError('');
