@@ -68,7 +68,7 @@ export function equipmentLabel(value) {
 // next to equipment type on the job-post form and on job listings/details
 // so a carrier can see e.g. hazmat or cold-chain cargo before bidding.
 export const CARGO_TYPES = [
-  'GENERAL_GOODS', 'ELECTRONICS', 'FOODSTUFF_PERISHABLES', 'MACHINERY_EQUIPMENT',
+  'GENERAL_GOODS', 'ELECTRONICS', 'FOODSTUFF_PERISHABLES', 'PHARMACEUTICALS', 'MACHINERY_EQUIPMENT',
   'CHEMICALS_HAZMAT', 'TEXTILES_GARMENTS', 'AUTOMOTIVE_PARTS', 'CONSTRUCTION_MATERIALS',
   'FURNITURE_FIXTURES', 'OTHER',
 ];
@@ -76,6 +76,7 @@ export const CARGO_TYPE_LABELS = {
   GENERAL_GOODS: 'General goods',
   ELECTRONICS: 'Electronics',
   FOODSTUFF_PERISHABLES: 'Foodstuff / perishables',
+  PHARMACEUTICALS: 'Pharmaceuticals',
   MACHINERY_EQUIPMENT: 'Machinery & equipment',
   CHEMICALS_HAZMAT: 'Chemicals / hazmat',
   TEXTILES_GARMENTS: 'Textiles & garments',

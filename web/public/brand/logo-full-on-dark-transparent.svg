@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" role="img" aria-label="Loadbyton">
+  <!-- Same lockup as logo-full-on-dark.svg, but with no rect fill — for
+       placing on a dark surface that ISN'T exactly --lb-ink-900 (e.g. the
+       sidebar, which uses --sidebar-bg and shifts to --lb-ink-800 in dark
+       theme). The baked-in-navy variant leaves a visible mismatched box
+       there; this one lets the real surface show through. -->
+  <text x="20" y="80" font-family="sans-serif" font-weight="900" font-size="60" letter-spacing="4" fill="#FFFFFF">LOAD</text>
+  <line x1="210" y1="30" x2="210" y2="90" stroke="#E53935" stroke-width="4" />
+  <text x="232.5" y="55" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="22" fill="#FFFFFF">B</text>
+  <text x="232.5" y="85" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="22" fill="#FFFFFF">Y</text>
+  <line x1="255" y1="30" x2="255" y2="90" stroke="#E53935" stroke-width="4" />
+  <text x="270" y="80" font-family="sans-serif" font-weight="900" font-size="60" letter-spacing="4" fill="#FFFFFF">TON</text>
+</svg>

@@ -520,7 +520,14 @@ export default function JobDetail() {
                 {bids.map((b) => (
                   <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3" style={{ borderColor: b.status === 'ACCEPTED' ? 'var(--status-success)' : 'var(--border-default)' }}>
                     <div className="min-w-0">
-                      <p className="tabular font-display text-base font-semibold text-ink">{b.masked ? 'Hidden until award' : formatAED(b.amount_aed)}</p>
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <p className="tabular font-display text-base font-semibold text-ink">{b.masked ? 'Hidden until award' : formatAED(b.amount_aed)}</p>
+                        {!b.masked && b.ancillary_charges?.length > 0 && (
+                          <p className="tabular text-sm font-semibold" style={{ color: 'var(--status-warning)' }}>
+                            + {formatAED(b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0))} extras = {formatAED(b.amount_aed + b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0))} est. total
+                          </p>
+                        )}
+                      </div>
                       <p className="text-xs text-ink-muted">{b.masked ? 'Competing bid' : `Delivery by ${formatDateTime(b.eta_at)} · ${b.truck_type ? equipmentLabel(b.truck_type) : 'equipment n/a'}`}</p>
                       {!b.masked && b.carrier_company && (
                         <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-secondary">
@@ -528,9 +535,11 @@ export default function JobDetail() {
                         </p>
                       )}
                       {!b.masked && b.ancillary_charges?.length > 0 && (
-                        <p className="mt-1 text-xs text-ink-secondary">
-                          +{b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0)} AED anticipated extras
-                          {' '}({b.ancillary_charges.map((c) => ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type).join(', ')})
+                        <p
+                          className="mt-1 inline-flex w-fit items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium"
+                          style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
+                        >
+                          ⚠ Carrier expects extra charges: {b.ancillary_charges.map((c) => `${ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type} (${formatAED(c.amount_aed)})`).join(', ')}
                         </p>
                       )}
                       {!b.masked && b.carrier_available_units != null && (

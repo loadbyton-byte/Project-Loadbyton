@@ -347,11 +347,16 @@ function ShellInner({ children }) {
             className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
             style={{ background: 'var(--sidebar-bg)' }}
           >
-            <div className="flex h-14 items-center gap-2.5 px-5">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm font-extrabold text-white" style={{ background: 'var(--brand-accent)' }}>
-                {(user?.profile?.company_name?.[0] || 'L').toUpperCase()}
-              </span>
-              <span className="truncate font-display text-base font-bold text-white">Loadbyton</span>
+            <div className="flex h-14 items-center px-5">
+              {/* Sidebar chrome is always dark (--sidebar-bg) but shifts
+                  shade between light/dark app theme (--lb-ink-900 vs
+                  --lb-ink-800) — the transparent-background wordmark lets
+                  whichever shade show through, unlike Logo's own on-dark
+                  asset which bakes in a fixed navy rect and would leave a
+                  visible mismatched box in dark theme. */}
+              <Link to={homePath(user, actingAs)} aria-label="Loadbyton home">
+                <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
+              </Link>
             </div>
 
             <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
