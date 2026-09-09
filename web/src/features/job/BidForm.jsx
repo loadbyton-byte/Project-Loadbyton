@@ -4,6 +4,7 @@ import { EQUIPMENT_TYPES, formatAED, ANCILLARY_CHARGE_LABELS } from '../../lib/c
 import { Button, Input, Label, Select, Textarea, Badge } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { IconClose } from '../../components/icons.jsx';
+import TimeSlotPicker from '../../components/TimeSlotPicker.jsx';
 
 export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
   const { addToast } = useToasts();
@@ -68,7 +69,7 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
         notes: form.notes,
         ancillaryCharges: cleanCharges.map((c) => ({ chargeType: c.chargeType, amountAed: Number(c.amountAed) })),
       });
-      addToast({ type: 'bid', title: 'Bid placed', body: `Your bid of ${formatAED(form.amount)} AED was submitted.` });
+      addToast({ type: 'bid', title: 'Bid placed', body: `Your bid of ${formatAED(form.amount)} was submitted.` });
       onDone();
     } catch (err) {
       setError(err.message);
@@ -101,8 +102,7 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
           </Select>
         </div>
         <div className="sm:col-span-2">
-          <Label>ETA date/time</Label>
-          <input type="datetime-local" className="input" required value={form.etaAt} onChange={(e) => setForm({ ...form, etaAt: e.target.value })} />
+          <TimeSlotPicker label="ETA" required value={form.etaAt} onChange={(v) => setForm({ ...form, etaAt: v })} />
         </div>
         <div className="sm:col-span-2">
           <Label>Notes</Label>
