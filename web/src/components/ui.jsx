@@ -410,11 +410,19 @@ export function StatusTracker({ steps, currentIndex, terminal, className }) {
 // Shared by every message-thread screen (job messages, disputes, support).
 // `messages`: [{ id, body, senderLabel, mine, at, variant }] — variant lets
 // a dispute thread color an "ADMIN" bubble distinctly from the two parties.
-export function ChatBubble({ body, senderLabel, mine, at, variant, channel }) {
-  const bg = mine ? 'var(--brand-primary)' : variant === 'admin' ? 'var(--surface-container-high)' : 'var(--surface-container-low)';
-  const color = mine ? 'var(--text-inverse)' : 'var(--text-primary)';
+// `index` drives a capped stagger delay on mount (see .animate-message-in
+// in index.css) — omit it for a single one-off bubble that shouldn't wait.
+export function ChatBubble({ body, senderLabel, mine, at, variant, channel, index = 0 }) {
+  // Brand accent for "mine" (not the navy ink primary) — this is the one
+  // color a User actually authored themselves in the whole thread, so it
+  // gets the same accent used for primary actions elsewhere (Post a job,
+  // Submit bid), not a neutral. Kept off variant="admin" bubbles either
+  // side — a dispute's admin voice should read as neutral-authoritative,
+  // not "mine-colored", even when the admin is the one currently viewing.
+  const bg = variant === 'admin' && !mine ? 'var(--surface-container-high)' : mine ? 'var(--brand-accent)' : 'var(--surface-container-low)';
+  const color = mine && variant !== 'admin' ? 'var(--text-on-accent)' : 'var(--text-primary)';
   return (
-    <div className={cx('flex flex-col gap-1', mine ? 'items-end' : 'items-start')}>
+    <div className={cx('flex flex-col gap-1 animate-message-in', mine ? 'items-end' : 'items-start')} style={{ '--msg-delay': `${Math.min(index * 25, 300)}ms` }}>
       {senderLabel && !mine && <span className="px-1 text-[11px] font-semibold text-ink-muted">{senderLabel}</span>}
       <div className="max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm" style={{ background: bg, color, border: variant === 'admin' && !mine ? '1px solid var(--border-strong)' : 'none' }}>
         {body}

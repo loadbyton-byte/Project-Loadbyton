@@ -5,9 +5,22 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
 import { Button, Input, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
-import { IconMessage, IconArrowLeft } from '../components/icons.jsx';
+import { IconMessage, IconArrowLeft, IconSearch } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { ROLE_LABELS, ThreadMessageList } from '../features/job/ThreadPane.jsx';
+
+// One color per counterparty role — reuses the existing semantic status
+// tokens as identity colors (not literal statuses) so a thread's avatar
+// chip is scannable at a glance without inventing a new palette.
+const ROLE_COLORS = {
+  SHIPPER: 'var(--status-info)',
+  CARRIER: 'var(--status-success)',
+  ADMIN: 'var(--brand-accent)',
+  DRIVER: 'var(--status-warning)',
+};
+function roleInitial(role) {
+  return (ROLE_LABELS[role] || role || '?').charAt(0).toUpperCase();
+}
 
 // The dedicated messages history page — an inbox over the exact same
 // threads/sockets ChatPopup uses (server/lib/messaging.js), just viewed
@@ -22,6 +35,7 @@ export default function Messages() {
 
   const [inbox, setInbox] = useState(null); // [{id, jobId, jobCode, jobStatus, otherRole, lastMessage, unreadCount}]
   const [inboxError, setInboxError] = useState('');
+  const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // inbox row
   const [threadMessages, setThreadMessages] = useState([]);
   const [threadLoaded, setThreadLoaded] = useState(false);
@@ -94,13 +108,32 @@ export default function Messages() {
     }
   }
 
+  const q = search.trim().toLowerCase();
+  const filteredInbox = !inbox ? inbox : !q ? inbox : inbox.filter((row) => (
+    row.jobCode?.toLowerCase().includes(q)
+    || (ROLE_LABELS[row.otherRole] || row.otherRole || '').toLowerCase().includes(q)
+    || (row.lastMessage?.content || '').toLowerCase().includes(q)
+  ));
+
   return (
     <div className="container-page py-6" dir="ltr">
       <h1 className="font-display text-xl font-bold text-ink">Messages</h1>
 
       <div className="mt-5 grid gap-4 md:grid-cols-[320px_1fr]" style={{ minHeight: '60vh' }}>
         {/* Thread list */}
-        <div className={`overflow-hidden rounded-2xl border ${selected ? 'hidden md:block' : 'block'}`} style={{ borderColor: 'var(--border-default)' }}>
+        <div className={`flex flex-col overflow-hidden rounded-2xl border ${selected ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border-default)' }}>
+          {inbox && inbox.length > 0 && (
+            <div className="relative shrink-0 border-b p-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
+              <IconSearch size={15} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-ink-muted" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by job code, contact, or message…"
+                className="pl-9"
+                aria-label="Search conversations"
+              />
+            </div>
+          )}
           {inbox === null ? (
             <p className="p-4 text-sm text-ink-muted">Loading…</p>
           ) : inboxError ? (
@@ -109,16 +142,35 @@ export default function Messages() {
             <div className="p-4">
               <EmptyState icon={<IconMessage size={26} />} title="No conversations yet" description="Messages on your jobs will show up here." />
             </div>
+          ) : filteredInbox.length === 0 ? (
+            <div className="p-4">
+              <EmptyState icon={<IconSearch size={26} />} title="No matches" description={`Nothing found for "${search}".`} />
+            </div>
           ) : (
-            <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-              {inbox.map((row) => (
+            <div className="divide-y overflow-y-auto" style={{ borderColor: 'var(--border-subtle)' }}>
+              {filteredInbox.map((row, i) => {
+                const active = selected?.id === row.id;
+                const roleColor = ROLE_COLORS[row.otherRole] || 'var(--text-muted)';
+                return (
                 <button
                   key={row.id}
                   type="button"
                   onClick={() => openThread(row)}
-                  className="flex w-full items-start justify-between gap-2 p-3.5 text-left transition hover:bg-surface-container"
-                  style={selected?.id === row.id ? { background: 'var(--surface-container-high)' } : undefined}
+                  className="animate-thread-row-in flex w-full items-start gap-2.5 border-l-[3px] p-3.5 text-left transition-colors hover:bg-surface-container"
+                  style={{
+                    '--msg-delay': `${Math.min(i * 30, 240)}ms`,
+                    borderLeftColor: active ? 'var(--brand-accent)' : 'transparent',
+                    background: active ? 'var(--surface-container-high)' : undefined,
+                  }}
                 >
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                    style={{ background: `color-mix(in srgb, ${roleColor} 18%, transparent)`, color: roleColor }}
+                    aria-hidden="true"
+                  >
+                    {roleInitial(row.otherRole)}
+                  </span>
+                  <div className="min-w-0 flex-1 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-mono text-xs font-semibold text-ink-muted">{row.jobCode}</p>
                     <p className="text-sm font-medium text-ink">{ROLE_LABELS[row.otherRole] || row.otherRole}</p>
@@ -128,8 +180,10 @@ export default function Messages() {
                     {row.lastMessage && <span className="font-mono text-[11px] text-ink-muted">{formatDateTime(row.lastMessage.created_at)}</span>}
                     {row.unreadCount > 0 && <Badge color="danger" dot={false}>{row.unreadCount}</Badge>}
                   </div>
+                  </div>
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
