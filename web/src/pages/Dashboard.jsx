@@ -713,11 +713,17 @@ export default function Dashboard() {
                     <Input value={form.deliveryAddress} onChange={(e) => setForm({ ...form, deliveryAddress: e.target.value })} placeholder="Street, warehouse, building, contact" />
                     <p className="mt-1 text-xs text-ink-muted">Precise address for the unloading/loading location above.</p>
                   </div>
+                  {/* Already captured on step 2 for LOCAL's "vehicle body"
+                      equipment types (right next to truck length, where it's
+                      required before advancing) — asking again here would be
+                      the same question twice on two different steps. */}
+                  {!(form.shipmentType === 'LOCAL' && LOCAL_LENGTH_TYPES.includes(form.equipmentType)) && (
                   <div>
                     <Label>Cargo weight (tons)</Label>
                     <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
                     <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
                   </div>
+                  )}
                   <div className="sm:col-span-2">
                     <TimeSlotPicker
                       label={useSimpleLocations ? 'Loading date & time slot' : 'Ready at (time slot)'}
