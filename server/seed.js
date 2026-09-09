@@ -374,6 +374,16 @@ module.exports = async function seed() {
     await db.prepare(`UPDATE profiles SET credit_limit_aed=5000, credit_terms_days=30, credit_approved_at=datetime('now','-45 days') WHERE user_id=?`).run(shipperId);
   }
 
+  // Telr Split Payment beneficiary id (lib/payments.js) — a demo value so
+  // the Profile page's field and the payout-routing logic have something
+  // real to show, even though PAYMENTS_PROVIDER isn't 'telr' in this demo
+  // environment (a real Split ID only ever comes from Telr's own KYC
+  // approval — this is illustrative, not a functioning one).
+  const emiratesTelrProfile = await db.prepare('SELECT telr_split_id FROM profiles WHERE user_id=?').get(emiratesId);
+  if (!emiratesTelrProfile?.telr_split_id) {
+    await db.prepare(`UPDATE profiles SET telr_split_id=? WHERE user_id=?`).run('demo-split-emirates-overland', emiratesId);
+  }
+
   // Job 14 — PAY_ON_DELIVERY: awarded, no escrow held (contrast with every
   // SPOT_ESCROW job above, which shows escrow_status='ESCROWED'/'HELD').
   await ensureJob('LB-1014', async () => {
