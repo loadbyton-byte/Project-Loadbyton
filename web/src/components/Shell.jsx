@@ -466,7 +466,11 @@ function ShellInner({ children }) {
         </div>
       )}
 
-      {user && !walkthroughFinished && (
+      {/* WALKTHROUGH_STEPS' copy ("Post your first requirement", "Review
+          carrier bids") is written specifically for the shipper posting
+          flow — showing it to a carrier, admin, or any other role describes
+          a workflow that isn't theirs. */}
+      {user && user.role === 'SHIPPER' && !walkthroughFinished && (
         <WalkthroughModal step={walkthroughStep} onStep={setWalkthroughStep} onFinish={completeWalkthrough} />
       )}
 
