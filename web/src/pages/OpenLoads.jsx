@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel, paymentTierLabel } from '../lib/constants.js';
+import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel, paymentTermLabel } from '../lib/constants.js';
 import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button, Badge } from '../components/ui.jsx';
 import { IconAlert, IconPackage, IconSearch, IconMapPin } from '../components/icons.jsx';
 
@@ -176,7 +176,7 @@ export default function OpenLoads() {
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">{jobEquipmentLabel(j)}</td>
                       <td className="whitespace-nowrap px-4 py-3">
-                        <Badge color={j.payment_tier && j.payment_tier !== 'SPOT_ESCROW' ? 'accent' : 'neutral'}>{paymentTierLabel(j.payment_tier || 'SPOT_ESCROW')}</Badge>
+                        <Badge color={j.payment_tier && j.payment_tier !== 'INSTANT' ? 'accent' : 'neutral'}>{paymentTermLabel(j.payment_tier || 'INSTANT')}</Badge>
                       </td>
                       <td className="tabular whitespace-nowrap px-4 py-3 font-semibold text-ink">{formatAED(j.max_budget_aed)}</td>
                       <td className="tabular whitespace-nowrap px-4 py-3 text-ink-secondary">{timeLeft(j.deadline)}</td>
@@ -222,8 +222,8 @@ export default function OpenLoads() {
                     <span>{jobEquipmentLabel(j)}</span>
                     <span className="tabular">{timeLeft(j.deadline)}</span>
                   </div>
-                  {j.payment_tier && j.payment_tier !== 'SPOT_ESCROW' && (
-                    <Badge color="accent">{paymentTierLabel(j.payment_tier)}</Badge>
+                  {j.payment_tier && j.payment_tier !== 'INSTANT' && (
+                    <Badge color="accent">{paymentTermLabel(j.payment_tier)}</Badge>
                   )}
                 </button>
               ))}

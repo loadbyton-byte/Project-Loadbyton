@@ -4,25 +4,33 @@ export const TERMINALS = ['JEBEL_ALI_T1', 'JEBEL_ALI_T2', 'JEBEL_ALI_T4', 'KHALI
 export const AREAS = ['AL_QUOZ', 'JAFZA_SOUTH', 'DUBAI_SOUTH', 'DIP', 'AL_QUSAIS', 'MUSAFFAH', 'SHARJAH_INDUSTRIAL', 'FUJAIRAH_FREEZONE'];
 export const SHIPMENT_TYPES = ['IMPORT', 'EXPORT', 'LOCAL'];
 
-// How a job gets paid — set once at posting, visible to every carrier
-// before they bid. SPOT_ESCROW is the default and the only tier that
-// requires funds in escrow before pickup (see server/services/job.service.js's
-// PICKED_UP gate); the other three exist for shippers who have a standing
-// arrangement instead of per-job card payment.
-export const PAYMENT_TIERS = ['SPOT_ESCROW', 'PAY_ON_DELIVERY', 'CONTRACT_CREDIT', 'OFF_PLATFORM'];
-export const PAYMENT_TIER_LABELS = {
-  SPOT_ESCROW: 'Escrow (pay now)',
-  PAY_ON_DELIVERY: 'Pay on delivery',
-  CONTRACT_CREDIT: 'Contract credit',
-  OFF_PLATFORM: 'Off-platform',
+// When a shipper's payment is due — set once at posting, visible to every
+// carrier before they bid. Escrow is an implementation detail now, not a
+// shipper-facing choice: every term settles the same way underneath
+// (platform takes its commission, carrier gets the net — card or bank
+// transfer, doesn't matter), so none of these labels mention it. INSTANT
+// is the only term open to every shipper without approval — it's the one
+// that requires funds held before pickup (see server/services/job.service.js's
+// PICKED_UP gate). The four NET_* terms need an approved credit line
+// first (server-enforced at award; see Dashboard.jsx's disabled-state
+// check for the client-side mirror of that gate).
+export const PAYMENT_TERMS = ['INSTANT', 'NET_24H', 'NET_7', 'NET_15', 'NET_28'];
+export const DEFERRED_PAYMENT_TERMS = ['NET_24H', 'NET_7', 'NET_15', 'NET_28'];
+export const PAYMENT_TERM_LABELS = {
+  INSTANT: 'Payment Instant',
+  NET_24H: 'Payment within 24 hrs of invoice',
+  NET_7: 'Payment in 7 days',
+  NET_15: 'Payment in 15 days',
+  NET_28: 'Payment in 28 days',
 };
-export const PAYMENT_TIER_DESCRIPTIONS = {
-  SPOT_ESCROW: 'Full price is held in escrow the moment you award a bid, released to the carrier once delivery is confirmed. Fastest to set up — needs no prior arrangement.',
-  PAY_ON_DELIVERY: 'Nothing is charged at award. Payment is collected only once the job reaches Delivered.',
-  CONTRACT_CREDIT: 'Draws against an approved credit limit — no payment at award or delivery. Requires Loadbyton to have approved credit terms for your account first.',
-  OFF_PLATFORM: 'You and the carrier settle payment directly, outside Loadbyton. The job is still tracked and disputed here, just not the money.',
+export const PAYMENT_TERM_DESCRIPTIONS = {
+  INSTANT: 'You pay in full the moment you award a bid. Fastest to set up — needs no prior arrangement.',
+  NET_24H: 'Draws against an approved credit line — nothing charged at award or delivery. Your invoice is due within 24 hours of issue. Requires Loadbyton to have approved credit terms for your account first.',
+  NET_7: 'Draws against an approved credit line — nothing charged at award or delivery. Your invoice is due within 7 days of issue. Requires Loadbyton to have approved credit terms for your account first.',
+  NET_15: 'Draws against an approved credit line — nothing charged at award or delivery. Your invoice is due within 15 days of issue. Requires Loadbyton to have approved credit terms for your account first.',
+  NET_28: 'Draws against an approved credit line — nothing charged at award or delivery. Your invoice is due within 28 days of issue. Requires Loadbyton to have approved credit terms for your account first.',
 };
-export function paymentTierLabel(v) { return PAYMENT_TIER_LABELS[v] || formatLabel(v); }
+export function paymentTermLabel(v) { return PAYMENT_TERM_LABELS[v] || formatLabel(v); }
 
 export function shipmentTypeLabel(st) {
   return { IMPORT: 'Import — Terminal → Customer → Depot', EXPORT: 'Export — Depot → Shipper → Terminal', LOCAL: 'Local — Loading → Delivery' }[st] || st;

@@ -16,6 +16,27 @@ const TERMS_VERSION = '2026-09-01';
 const ANCILLARY_CHARGE_TYPES = ['SALIK', 'ETOKEN', 'DEMURRAGE', 'INSPECTION_WAITING', 'OTHER'];
 const STATUS_ORDER = ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
 
+// When a shipper's payment is due — replaces the old SPOT_ESCROW/
+// PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM tier concept. Escrow is an
+// implementation detail now, not a shipper-facing choice: every term
+// settles through the same platform-mediated mechanism (commission taken,
+// carrier paid the net), whether the shipper pays by card or bank
+// transfer — there is no more "off platform" tier that bypasses it.
+// INSTANT keeps the old SPOT_ESCROW mechanics exactly (funds held at
+// award, checkout required before pickup). The four NET_* terms keep the
+// old CONTRACT_CREDIT mechanics exactly, generalized across more timing
+// options — same credit-approval gate, same draw against
+// credit_limit_aed/credit_balance_aed, same "payout at completion,
+// shipper's own clock runs separately" behavior; only the due-date math
+// changes, from a flat credit_terms_days to PAYMENT_TERM_DUE_HOURS below.
+// jobs.payment_tier is the storage column — kept as-is (not renamed) to
+// avoid an unnecessary migration; it now stores one of these five values.
+const PAYMENT_TERMS = ['INSTANT', 'NET_24H', 'NET_7', 'NET_15', 'NET_28'];
+const PAYMENT_TERM_DUE_HOURS = { INSTANT: 0, NET_24H: 24, NET_7: 24 * 7, NET_15: 24 * 15, NET_28: 24 * 28 };
+// Which terms need the same admin-approved-credit gate CONTRACT_CREDIT
+// used to have. INSTANT stays open to every shipper.
+const DEFERRED_PAYMENT_TERMS = ['NET_24H', 'NET_7', 'NET_15', 'NET_28'];
+
 // Real UAE geography, not a heuristic — every value in TERMINALS/AREAS sits
 // unambiguously in one emirate, mirroring web/src/lib/constants.js's
 // TERMINAL_INFO (which only covers terminals; this adds the delivery-area
@@ -146,4 +167,5 @@ module.exports = {
   TRANSITIONS, DISPUTABLE_STATUSES,
   BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM,
   TERMS_VERSION, ANCILLARY_CHARGE_TYPES,
+  PAYMENT_TERMS, PAYMENT_TERM_DUE_HOURS, DEFERRED_PAYMENT_TERMS,
 };

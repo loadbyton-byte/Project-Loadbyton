@@ -361,17 +361,24 @@ module.exports = async function seed() {
     await db.prepare(`INSERT INTO ratings (job_id, rater_id, ratee_id, score, comment, driver_id) VALUES (?,?,?,?,?,?)`)
       .run(j13id, shipperId, gulfheavyId, 4, 'Smooth delivery — driver Faisal was professional and on time.', associateDriverId);
   });
-  // --- Payment-tier scenarios (Change: payment method visibility) --------
-  // Every prior job above defaults to SPOT_ESCROW — none of the other 3
-  // tiers the platform actually supports had a single demo example. This
-  // approves the primary demo shipper for contract credit (an admin
-  // action in real use — see server/routes/admin.routes.js's
+  // --- Payment-term scenarios (Change: payment terms redesign) -----------
+  // Every prior job above defaults to INSTANT — none of the four deferred
+  // terms (NET_24H/7/15/28) had a single demo example. This approves the
+  // primary demo shipper for deferred payment (an admin action in real
+  // use — see server/routes/admin.routes.js's
   // /api/admin/credit/:userId/approve — done directly here since seeding
   // is itself a trusted, admin-equivalent operation) and adds one job per
-  // tier so an investor walkthrough can see all four.
+  // term so an investor walkthrough can see all of them, at different
+  // points in their due-date lifecycle (upcoming, settled, not-yet-due,
+  // overdue).
   const shipperProfile = await db.prepare('SELECT credit_approved_at FROM profiles WHERE user_id=?').get(shipperId);
   if (!shipperProfile.credit_approved_at) {
-    await db.prepare(`UPDATE profiles SET credit_limit_aed=5000, credit_terms_days=30, credit_approved_at=datetime('now','-45 days') WHERE user_id=?`).run(shipperId);
+    // Limit must comfortably exceed the seeded outstanding draws below
+    // (LB-1014 + LB-1016 + LB-1017 = 1600 + 1900 + 2800 = 6300) with
+    // headroom left over for a live demo award on top — a limit lower
+    // than the seeded balance would show a nonsensical negative
+    // "available" figure on the post-job payment-term picker.
+    await db.prepare(`UPDATE profiles SET credit_limit_aed=10000, credit_terms_days=30, credit_approved_at=datetime('now','-45 days') WHERE user_id=?`).run(shipperId);
   }
 
   // Telr Split Payment beneficiary id (lib/payments.js) — a demo value so
@@ -384,65 +391,67 @@ module.exports = async function seed() {
     await db.prepare(`UPDATE profiles SET telr_split_id=? WHERE user_id=?`).run('demo-split-emirates-overland', emiratesId);
   }
 
-  // Job 14 — PAY_ON_DELIVERY: awarded, no escrow held (contrast with every
-  // SPOT_ESCROW job above, which shows escrow_status='ESCROWED'/'HELD').
-  await ensureJob('LB-1014', async () => {
+  // Job 14 — NET_24H: awarded, no escrow held (contrast with every INSTANT
+  // job above, which shows escrow_status='ESCROWED'/'HELD') — the
+  // shortest deferred term, due within a day of invoice.
+  const job14 = await ensureJob('LB-1014', async () => {
     const j14id = await insertJob(
-      ['job_code', 'shipper_id', 'carrier_id', 'container_size', 'container_type', 'pickup_terminal', 'delivery_area', 'delivery_address', 'ready_at', 'deadline', 'agreed_price_aed', 'status', 'escrow_status', 'notes', 'payment_tier'],
-      ['LB-1014', shipperId, falconId, '20ft', 'DRY', 'Jebel Ali', 'Al Quoz', 'Al Quoz Industrial Area 2', yesterday, in24h, 1600, 'AWARDED', 'PENDING', 'Pay on delivery — no funds held until POD confirmed', 'PAY_ON_DELIVERY']
+      ['job_code', 'shipper_id', 'carrier_id', 'container_size', 'container_type', 'pickup_terminal', 'delivery_area', 'delivery_address', 'ready_at', 'deadline', 'agreed_price_aed', 'status', 'escrow_status', 'notes', 'payment_tier', 'credit_due_at'],
+      ['LB-1014', shipperId, falconId, '20ft', 'DRY', 'Jebel Ali', 'Al Quoz', 'Al Quoz Industrial Area 2', yesterday, in24h, 1600, 'AWARDED', 'PENDING', 'Payment within 24 hrs of invoice — no funds held until then', 'NET_24H', sqliteTime(18 * HOUR)]
     );
     await insertBid(j14id, falconId, 1600, 100, 'box-truck', 'Standard delivery', 'ACCEPTED');
   });
 
-  // Job 15 — CONTRACT_CREDIT, already settled: the full happy-path
-  // lifecycle (awarded → delivered → completed → admin marks settled),
+  // Job 15 — NET_7, already settled: the full happy-path lifecycle
+  // (awarded → delivered → completed → admin marks settled),
   // credit_balance_aed already restored by that settlement.
   await ensureJob('LB-1015', async () => {
     const j15id = await insertJob(
       ['job_code', 'shipper_id', 'carrier_id', 'container_size', 'container_type', 'pickup_terminal', 'delivery_area', 'delivery_address', 'ready_at', 'deadline', 'agreed_price_aed', 'status', 'escrow_status', 'notes', 'payment_tier', 'credit_due_at', 'credit_settled_at'],
-      ['LB-1015', shipperId, gulfheavyId, '40ft', 'DRY', 'Khalifa Port', 'Musaffah', 'Musaffah Industrial Zone 2', threeDaysAgo, twoDaysAgo, 2400, 'COMPLETED', 'PENDING', 'Contract credit — settled on last month\'s statement', 'CONTRACT_CREDIT', sqliteTime(-15 * DAY), sqliteTime(-10 * DAY)]
+      ['LB-1015', shipperId, gulfheavyId, '40ft', 'DRY', 'Khalifa Port', 'Musaffah', 'Musaffah Industrial Zone 2', threeDaysAgo, twoDaysAgo, 2400, 'COMPLETED', 'PENDING', 'Payment in 7 days — settled on last week\'s statement', 'NET_7', sqliteTime(-3 * DAY), sqliteTime(-1 * DAY)]
     );
     await insertBid(j15id, gulfheavyId, 2400, 200, '10-wheeler', 'Standard drayage', 'ACCEPTED');
   });
 
-  // Job 16 — CONTRACT_CREDIT, outstanding but not yet due (delivered,
-  // shipper hasn't confirmed COMPLETED yet either — a realistic in-flight
-  // state, not just award/settle bookends).
+  // Job 16 — NET_15, outstanding but not yet due (delivered, shipper
+  // hasn't confirmed COMPLETED yet either — a realistic in-flight state,
+  // not just award/settle bookends).
   const job16 = await ensureJob('LB-1016', async () => {
     const j16id = await insertJob(
       ['job_code', 'shipper_id', 'carrier_id', 'container_size', 'container_type', 'pickup_terminal', 'delivery_area', 'delivery_address', 'ready_at', 'deadline', 'agreed_price_aed', 'status', 'escrow_status', 'notes', 'payment_tier', 'credit_due_at'],
-      ['LB-1016', shipperId, emiratesId, '20ft', 'DRY', 'Jebel Ali', 'Sharjah', 'Sharjah Industrial Area 3', twoDaysAgo, yesterday, 1900, 'DELIVERED', 'PENDING', 'Contract credit — within terms, not yet due', 'CONTRACT_CREDIT', sqliteTime(20 * DAY)]
+      ['LB-1016', shipperId, emiratesId, '20ft', 'DRY', 'Jebel Ali', 'Sharjah', 'Sharjah Industrial Area 3', twoDaysAgo, yesterday, 1900, 'DELIVERED', 'PENDING', 'Payment in 15 days — within terms, not yet due', 'NET_15', sqliteTime(10 * DAY)]
     );
     await insertBid(j16id, emiratesId, 1900, 150, '10-wheeler', 'Contract lane rate', 'ACCEPTED');
   });
 
-  // Job 17 — CONTRACT_CREDIT, past due — the aging scenario an admin's
-  // Credit tab needs to actually demonstrate collections risk, not just
-  // the happy path.
+  // Job 17 — NET_28, past due — the aging scenario an admin's Credit tab
+  // needs to actually demonstrate collections risk, not just the happy
+  // path.
   const job17 = await ensureJob('LB-1017', async () => {
     const j17id = await insertJob(
       ['job_code', 'shipper_id', 'carrier_id', 'container_size', 'container_type', 'pickup_terminal', 'delivery_area', 'delivery_address', 'ready_at', 'deadline', 'agreed_price_aed', 'status', 'escrow_status', 'notes', 'payment_tier', 'credit_due_at'],
-      ['LB-1017', shipperId, gulfheavyId, '40ft', 'OPEN_TOP', 'Jebel Ali', 'DIP', 'Dubai Investment Park Warehouse 3', threeDaysAgo, twoDaysAgo, 2800, 'COMPLETED', 'PENDING', 'Contract credit — overdue, follow up needed', 'CONTRACT_CREDIT', sqliteTime(-5 * DAY)]
+      ['LB-1017', shipperId, gulfheavyId, '40ft', 'OPEN_TOP', 'Jebel Ali', 'DIP', 'Dubai Investment Park Warehouse 3', threeDaysAgo, twoDaysAgo, 2800, 'COMPLETED', 'PENDING', 'Payment in 28 days — overdue, follow up needed', 'NET_28', sqliteTime(-5 * DAY)]
     );
     await insertBid(j17id, gulfheavyId, 2800, 210, 'lowboy', 'Heavy cargo rotation', 'ACCEPTED');
   });
-  // credit_balance_aed reflects LB-1016 + LB-1017 only (LB-1015 already
-  // settled above and correctly isn't counted as outstanding) — bumped
-  // exactly once, the same run each job was actually created on, not
-  // re-applied on every later boot the way a bare "if balance is 0" guard
-  // would (a real settle-to-zero later would look identical to "never
-  // seeded" and get incorrectly topped back up).
-  const creditBump = (job16.isNew ? 1900 : 0) + (job17.isNew ? 2800 : 0);
+  // credit_balance_aed reflects LB-1014 + LB-1016 + LB-1017 only (LB-1015
+  // already settled above and correctly isn't counted as outstanding) —
+  // bumped exactly once, the same run each job was actually created on,
+  // not re-applied on every later boot the way a bare "if balance is 0"
+  // guard would (a real settle-to-zero later would look identical to
+  // "never seeded" and get incorrectly topped back up).
+  const creditBump = (job14.isNew ? 1600 : 0) + (job16.isNew ? 1900 : 0) + (job17.isNew ? 2800 : 0);
   if (creditBump > 0) {
     await db.prepare(`UPDATE profiles SET credit_balance_aed = credit_balance_aed + ? WHERE user_id=?`).run(creditBump, shipperId);
   }
 
-  // Job 18 — OFF_PLATFORM: tracked and disputable here, payment settled
-  // directly between shipper and carrier outside Loadbyton.
+  // Job 18 — INSTANT, delivered with escrow already FUNDED (paid at
+  // award, awaiting the shipper's completion confirmation): rounds out
+  // the payment-terms demo set alongside the four deferred jobs above.
   await ensureJob('LB-1018', async () => {
     const j18id = await insertJob(
       ['job_code', 'shipper_id', 'carrier_id', 'container_size', 'container_type', 'pickup_terminal', 'delivery_area', 'delivery_address', 'ready_at', 'deadline', 'agreed_price_aed', 'status', 'escrow_status', 'notes', 'payment_tier'],
-      ['LB-1018', shipperId, falconId, '20ft', 'DRY', 'Khalifa Port', 'Al Quoz', 'Al Quoz Industrial Area 5', threeDaysAgo, twoDaysAgo, 1450, 'DELIVERED', 'PENDING', 'Off-platform settlement — existing account relationship with carrier', 'OFF_PLATFORM']
+      ['LB-1018', shipperId, falconId, '20ft', 'DRY', 'Khalifa Port', 'Al Quoz', 'Al Quoz Industrial Area 5', threeDaysAgo, twoDaysAgo, 1450, 'DELIVERED', 'FUNDED', 'Instant payment — paid in full at award', 'INSTANT']
     );
     await insertBid(j18id, falconId, 1450, 90, 'box-truck', 'Direct route', 'ACCEPTED');
   });

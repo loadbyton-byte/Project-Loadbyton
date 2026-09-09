@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
-import { EQUIPMENT_TYPES, formatAED, ANCILLARY_CHARGE_LABELS } from '../../lib/constants.js';
+import { EQUIPMENT_TYPES, formatAED, ANCILLARY_CHARGE_LABELS, paymentTermLabel } from '../../lib/constants.js';
 import { Button, Input, Label, Select, Textarea, Badge } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
-import { IconClose } from '../../components/icons.jsx';
+import { IconClose, IconWallet } from '../../components/icons.jsx';
 import TimeSlotPicker from '../../components/TimeSlotPicker.jsx';
 
-export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
+export default function BidForm({ jobId, verified, defaultEquipment, paymentTier, onDone }) {
   const { addToast } = useToasts();
   const [form, setForm] = useState({
     amount: '',
@@ -84,6 +84,17 @@ export default function BidForm({ jobId, verified, defaultEquipment, onDone }) {
         <h3 className="font-semibold text-ink">Place your bid</h3>
         <Badge color="accent">{formatAED(form.amount || 0)}</Badge>
       </div>
+      {/* Payment terms are fixed by the shipper at posting, not negotiable
+          per-bid — shown here, the last thing a carrier sees before
+          submitting, so both sides are knowingly on the same terms before
+          any agreement forms (not editable; informational only). */}
+      {paymentTier && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
+          <IconWallet size={16} style={{ color: 'var(--brand-accent)' }} />
+          <span className="text-ink-secondary">Payment terms:</span>
+          <span className="font-semibold text-ink">{paymentTermLabel(paymentTier)}</span>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label>Bid amount (AED)</Label>

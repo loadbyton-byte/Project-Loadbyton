@@ -6,6 +6,11 @@ const apiResponse = require('../lib/apiResponse');
 const { encryptField, decryptField } = require('../lib/crypto');
 const { writeAudit, toPublicUser, getSettings, notify, notifyAdmins, parseDbDate, createSession } = require('../lib/helpers');
 const { refundJobAsync, executePayoutAsync } = require('../services/payout.service');
+const { DEFERRED_PAYMENT_TERMS } = require('../lib/constants');
+// Every deferred-payment job (NET_24H/7/15/28), plus the legacy
+// CONTRACT_CREDIT value a job posted before this migration might still
+// carry — one shared IN-clause list for both credit-admin queries below.
+const CREDIT_DRAW_TIERS = [...DEFERRED_PAYMENT_TERMS, 'CONTRACT_CREDIT'];
 const { approveAccount, verifyCarrier } = require('../services/verification.service');
 const { auth } = require('../middleware/auth');
 
@@ -217,10 +222,10 @@ router.get('/api/admin/credit', auth(['ADMIN']), async (req, res) => {
      ORDER BY p.credit_approved_at IS NULL, p.company_name`
   ).all();
   const outstandingJobs = await db.prepare(
-    `SELECT id, job_code, shipper_id, agreed_price_aed, status, credit_due_at
-     FROM jobs WHERE payment_tier='CONTRACT_CREDIT' AND carrier_id IS NOT NULL AND credit_settled_at IS NULL
+    `SELECT id, job_code, shipper_id, agreed_price_aed, status, payment_tier, credit_due_at
+     FROM jobs WHERE payment_tier IN (${CREDIT_DRAW_TIERS.map(() => '?').join(',')}) AND carrier_id IS NOT NULL AND credit_settled_at IS NULL
      ORDER BY credit_due_at ASC`
-  ).all();
+  ).all(...CREDIT_DRAW_TIERS);
   res.json({ shippers, outstandingJobs });
 });
 
@@ -240,8 +245,8 @@ router.post('/api/admin/credit/:userId/approve', auth(['ADMIN']), async (req, re
 });
 
 router.post('/api/admin/credit/jobs/:jobId/settle', auth(['ADMIN']), async (req, res) => {
-  const job = await db.prepare(`SELECT * FROM jobs WHERE id=? AND payment_tier='CONTRACT_CREDIT'`).get(req.params.jobId);
-  if (!job) return sendError(res, 404, 'Contract-credit job not found');
+  const job = await db.prepare(`SELECT * FROM jobs WHERE id=? AND payment_tier IN (${CREDIT_DRAW_TIERS.map(() => '?').join(',')})`).get(req.params.jobId, ...CREDIT_DRAW_TIERS);
+  if (!job) return sendError(res, 404, 'Deferred-payment job not found');
   if (job.credit_settled_at) return sendError(res, 400, 'Already settled');
   if (!job.carrier_id || !job.agreed_price_aed) return sendError(res, 400, 'Job was never awarded — nothing was drawn against credit');
   // Row-locked + idempotency-guarded, same pattern as the cancellation

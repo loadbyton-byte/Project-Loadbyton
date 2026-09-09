@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { useToasts } from '../../components/Toast.jsx';
-import { formatAED, formatDate } from '../../lib/constants.js';
+import { formatAED, formatDate, paymentTermLabel } from '../../lib/constants.js';
 import { Button, Card, Stat, Input, Label, Badge, EmptyState, ErrorState } from '../../components/ui.jsx';
 import { IconWallet, IconCheck } from '../../components/icons.jsx';
 
@@ -74,9 +74,9 @@ function CreditTab() {
   return (
     <div>
       <p className="mb-4 text-sm text-ink-muted">
-        A shipper only sees CONTRACT_CREDIT as an option on the post-job form once approved here — award.service.js
-        refuses the award otherwise. Approving doesn't move any money; it just raises the ceiling a job's award is
-        allowed to draw against.
+        A shipper can only pick a deferred payment term (24h/7/15/28-day) on the post-job form once approved here —
+        award.service.js refuses the award otherwise. Approving doesn't move any money; it just raises the ceiling
+        a job's award is allowed to draw against.
       </p>
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Stat label="Approved shippers" value={data.shippers.filter((s) => s.credit_approved_at).length} />
@@ -118,7 +118,7 @@ function CreditTab() {
 
       <h3 className="mb-2 font-display text-sm font-semibold text-ink">Outstanding credit draws</h3>
       {data.outstandingJobs.length === 0 ? (
-        <EmptyState icon={<IconCheck size={26} />} title="Nothing outstanding" description="Every contract-credit job has been settled." />
+        <EmptyState icon={<IconCheck size={26} />} title="Nothing outstanding" description="Every deferred-payment job has been settled." />
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto scroll-fade-x">
@@ -126,6 +126,7 @@ function CreditTab() {
               <thead>
                 <tr className="border-b text-xs uppercase tracking-wide text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
                   <th className="px-5 py-3 font-medium">Job</th>
+                  <th className="px-5 py-3 font-medium">Term</th>
                   <th className="px-5 py-3 font-medium">Amount</th>
                   <th className="px-5 py-3 font-medium">Due</th>
                   <th className="px-5 py-3 font-medium"></th>
@@ -137,6 +138,7 @@ function CreditTab() {
                   return (
                     <tr key={j.id} className="border-b last:border-0" style={{ borderColor: 'var(--border-subtle)' }}>
                       <td className="px-5 py-3 font-mono text-xs">{j.job_code}</td>
+                      <td className="px-5 py-3 text-ink-secondary">{paymentTermLabel(j.payment_tier)}</td>
                       <td className="tabular px-5 py-3 font-semibold text-ink">{formatAED(j.agreed_price_aed)}</td>
                       <td className="px-5 py-3"><Badge color={overdue ? 'danger' : 'neutral'}>{overdue ? 'Overdue — ' : ''}{formatDate(j.credit_due_at)}</Badge></td>
                       <td className="px-5 py-3 text-right">
