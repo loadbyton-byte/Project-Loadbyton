@@ -274,6 +274,12 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'equipment_type', "equipment_type TEXT NOT NULL DEFAULT 'CONTAINER_CHASSIS'");
   addColumn('jobs', 'cargo_type', "cargo_type TEXT NOT NULL DEFAULT 'GENERAL_GOODS'");
   addColumn('jobs', 'cargo_weight_tons', 'cargo_weight_tons REAL');
+  // LOCAL-shipment truck specs (see web/src/lib/constants.js's
+  // LOCAL_LENGTH_TYPES/LOCAL_BODY_TYPE_TYPES) — truck_length_m for the 7
+  // "vehicle body" LOCAL equipment types, equipment_body_type (OPEN/COVERED)
+  // for the 3 Pickup sizes. Both nullable — meaningless outside LOCAL jobs.
+  addColumn('jobs', 'truck_length_m', 'truck_length_m REAL');
+  addColumn('jobs', 'equipment_body_type', 'equipment_body_type TEXT');
 
   addColumn('sessions', 'impersonating_admin_id', 'impersonating_admin_id INTEGER');
   addColumn('sessions', 'acting_seat_id', 'acting_seat_id INTEGER REFERENCES users(id)');
