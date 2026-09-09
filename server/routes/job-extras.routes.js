@@ -11,7 +11,7 @@ const apiResponse = require('../lib/apiResponse');
 const { BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM, TERMINAL_EMIRATE, AREA_EMIRATE, DOC_TYPES } = require('../lib/constants');
 const { resolveUploadedFile, getPresignedUploadUrl, UPLOADS_DIR, haversineKm, writeAudit, canSeeDocument, isParticipantOrBidder, isPartyOnJob, notify, notifyAdmins, effectiveRole } = require('../lib/helpers');
 const { isThreadParticipant, availableRecipientRoles, resolveOrCreateThread } = require('../lib/messaging');
-const { auth } = require('../middleware/auth');
+const { auth, requireSeatRole } = require('../middleware/auth');
 
 const router = require('express').Router();
 
@@ -289,7 +289,9 @@ router.post('/api/jobs/:id/messages', auth(), async (req, res) => {
 // where the actual mechanism differs (see server/schema.js's comment).
 // Carrier sets their own haulier code; shipper creates the token against
 // it. Only meaningful post-assignment (carrier_id must already be set).
-router.post('/api/jobs/:id/haulier-code', auth(['CARRIER']), async (req, res) => {
+// Haulier code/token gate physical container release at the port — same
+// OPS-only bar as any other operational job mutation, not a VIEWER action.
+router.post('/api/jobs/:id/haulier-code', auth(['CARRIER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   if (job.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');
@@ -302,7 +304,7 @@ router.post('/api/jobs/:id/haulier-code', auth(['CARRIER']), async (req, res) =>
   res.json({ job: updated });
 });
 
-router.post('/api/jobs/:id/haulier-token', auth(['SHIPPER']), async (req, res) => {
+router.post('/api/jobs/:id/haulier-token', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
   if (job.shipper_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');

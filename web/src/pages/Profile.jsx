@@ -135,6 +135,17 @@ export default function Profile() {
   const [saveError, setSaveError] = useState('');
   const [mfa, setMfa] = useState(null);
   const [mfaBusy, setMfaBusy] = useState(false);
+  // Enabling or disabling MFA is itself a requireReauth()-gated action
+  // (server/routes/auth.routes.js) — same reason the IBAN field below is:
+  // a stolen session cookie alone must not be enough to silently strip a
+  // victim's second factor, or enroll an attacker-controlled one.
+  // mfaReauthAction tracks which of the two triggered the prompt so the
+  // same small form can drive either.
+  const [mfaReauthAction, setMfaReauthAction] = useState(null); // null | 'setup' | 'disable'
+  const [mfaReauthStep, setMfaReauthStep] = useState('password'); // 'password' | 'mfa'
+  const [mfaReauthPassword, setMfaReauthPassword] = useState('');
+  const [mfaReauthTotp, setMfaReauthTotp] = useState('');
+  const [mfaReauthError, setMfaReauthError] = useState('');
   // Changing the payout IBAN re-authenticates — see server/middleware/auth.js's
   // requireReauth, wired up specifically (and only) for that field. reauthNeeded
   // tracks which step the confirm-password prompt is on: null (not asked),
@@ -180,26 +191,52 @@ export default function Profile() {
     }
   }
 
-  async function setupMfa() {
+  function clearMfaReauth() {
+    setMfaReauthAction(null);
+    setMfaReauthStep('password');
+    setMfaReauthPassword('');
+    setMfaReauthTotp('');
+    setMfaReauthError('');
+  }
+
+  async function runMfaAction(action, credentials) {
     setMfaBusy(true);
+    setMfaReauthError('');
     try {
-      const d = await api.mfaSetup();
-      setMfa(d);
+      if (action === 'setup') {
+        const d = await api.mfaSetup(credentials);
+        setMfa(d);
+      } else {
+        await api.mfaDisable(credentials);
+        setMfa(null);
+      }
       await refresh();
+      clearMfaReauth();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'REAUTH_REQUIRED') {
+        setMfaReauthAction(action);
+        setMfaReauthStep('password');
+        setMfaReauthError('Confirm your password to continue.');
+      } else if (err instanceof ApiError && err.code === 'MFA_REQUIRED') {
+        setMfaReauthAction(action);
+        setMfaReauthStep('mfa');
+        setMfaReauthError('Enter your current authenticator code to continue.');
+      } else if (err instanceof ApiError && (err.code === 'REAUTH_FAILED' || err.code === 'MFA_FAILED')) {
+        setMfaReauthError(err.message);
+      } else {
+        setMfaReauthError(err.message);
+        clearMfaReauth();
+      }
     } finally {
       setMfaBusy(false);
     }
   }
 
-  async function disableMfa() {
-    setMfaBusy(true);
-    try {
-      await api.mfaDisable();
-      setMfa(null);
-      await refresh();
-    } finally {
-      setMfaBusy(false);
-    }
+  function setupMfa() { runMfaAction('setup'); }
+  function disableMfa() { runMfaAction('disable'); }
+  function submitMfaReauth(e) {
+    e.preventDefault();
+    runMfaAction(mfaReauthAction, { password: mfaReauthPassword, totpCode: mfaReauthTotp || undefined });
   }
 
   return (
@@ -337,6 +374,33 @@ export default function Profile() {
               <p className="text-sm text-ink-secondary">Add an authenticator app as a second factor on login.</p>
               <Button variant="secondary" onClick={setupMfa} loading={mfaBusy} className="self-start shrink-0">Enable MFA</Button>
             </div>
+          )}
+          {mfaReauthAction && (
+            <form onSubmit={submitMfaReauth} className="mt-4 space-y-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+              <p className="text-sm text-ink-secondary">
+                {mfaReauthAction === 'disable' ? 'Confirm your identity to disable MFA.' : 'Confirm your identity to enable MFA.'}
+              </p>
+              <Input
+                type="password"
+                placeholder="Current password"
+                value={mfaReauthPassword}
+                onChange={(e) => setMfaReauthPassword(e.target.value)}
+                autoFocus
+              />
+              {mfaReauthStep === 'mfa' && (
+                <Input
+                  inputMode="numeric"
+                  placeholder="6-digit authenticator code"
+                  value={mfaReauthTotp}
+                  onChange={(e) => setMfaReauthTotp(e.target.value)}
+                />
+              )}
+              {mfaReauthError && <p className="text-sm text-status-danger">{mfaReauthError}</p>}
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" loading={mfaBusy} disabled={!mfaReauthPassword}>Confirm</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={clearMfaReauth}>Cancel</Button>
+              </div>
+            </form>
           )}
         </Card.Content>
       </Card>

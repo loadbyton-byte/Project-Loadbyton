@@ -8,7 +8,7 @@
 // services/job.service.js patch in this same change).
 const db = require('../db');
 const { sendError } = require('../lib/http');
-const { auth } = require('../middleware/auth');
+const { auth, requireSeatRole } = require('../middleware/auth');
 const { unifiedLanes } = require('../lib/lanes');
 
 const router = require('express').Router();
@@ -33,7 +33,7 @@ router.get('/api/jobs/:id/stops', auth(), async (req, res) => {
   res.json({ stops });
 });
 
-router.post('/api/jobs/:id/stops', auth(['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER']), async (req, res) => {
+router.post('/api/jobs/:id/stops', auth(['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (!(await canEditJob(job, req.user))) return sendError(res, 403, 'Not permitted');
@@ -48,7 +48,7 @@ router.post('/api/jobs/:id/stops', auth(['SHIPPER', 'CARRIER', 'FORWARDER', 'BRO
   res.status(201).json({ stop: await db.prepare(`SELECT * FROM job_stops WHERE id=?`).get(Number(r.lastInsertRowid)) });
 });
 
-router.post('/api/jobs/:id/stops/:stopId/complete', auth(['CARRIER']), async (req, res) => {
+router.post('/api/jobs/:id/stops/:stopId/complete', auth(['CARRIER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.carrier_id !== req.user.id && req.user.role !== 'ADMIN') return sendError(res, 403, 'Only the awarded carrier completes stops');
@@ -59,7 +59,7 @@ router.post('/api/jobs/:id/stops/:stopId/complete', auth(['CARRIER']), async (re
   res.json({ stop: await db.prepare(`SELECT * FROM job_stops WHERE id=?`).get(stop.id) });
 });
 
-router.delete('/api/jobs/:id/stops/:stopId', auth(['SHIPPER', 'FORWARDER', 'BROKER']), async (req, res) => {
+router.delete('/api/jobs/:id/stops/:stopId', auth(['SHIPPER', 'FORWARDER', 'BROKER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (!(await canEditJob(job, req.user))) return sendError(res, 403, 'Not permitted');

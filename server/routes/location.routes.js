@@ -1,10 +1,12 @@
 const db = require('../db');
 const { sendError } = require('../lib/http');
-const { auth } = require('../middleware/auth');
+const { auth, requireSeatRole } = require('../middleware/auth');
 const router = require('express').Router();
 
-// Driver posts live location every 3 min when IN_TRANSIT (browser Geolocation API)
-router.post('/api/jobs/:id/location', auth(['CARRIER']), async (req,res)=>{
+// Driver posts live location every 3 min when IN_TRANSIT (browser Geolocation API).
+// Gated to OPS + the actual driving seats — a VIEWER seat under a CARRIER
+// org shouldn't be able to post GPS pings on a job they're not driving.
+router.post('/api/jobs/:id/location', auth(['CARRIER']), requireSeatRole(['OPS', 'DRIVER', 'DRIVER_ASSOCIATE']), async (req,res)=>{
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return sendError(res,404,'Job not found');
   if(job.carrier_id!==req.user.id) return sendError(res,403,'Not your job');

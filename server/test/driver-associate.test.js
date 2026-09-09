@@ -215,3 +215,48 @@ test('inbound WhatsApp live location lands in location_logs with source=WHATSAPP
   assert.equal(locations[0].source, 'WHATSAPP');
   assert.equal(locations[0].lat, 25.0657);
 });
+
+test('DRIVER seats can post/read live location on their assigned job (DriverLocationTracking.jsx); a VIEWER seat on the same job cannot', async () => {
+  // One shipper/carrier login shared by both assertions below — this test
+  // file is already login-heavy and sits close to authIpLimiter's 20/min
+  // cap, so two separate tests each re-logging in as the same seeded
+  // accounts was enough to trip it.
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+  const jobId = await postAwardedJob(shipper, carrier);
+
+  const driverCreated = await carrier.post('/api/fleet/drivers', { name: 'GPS Driver', phone: '0501230007' });
+  const driverId = driverCreated.body.driver.id;
+  const seatRes = await carrier.post(`/api/fleet/drivers/${driverId}/seat`, { password: 'demo1234' });
+  assert.equal(seatRes.status, 201, seatRes.raw);
+  const driverEmail = seatRes.body.email;
+
+  await carrier.patch(`/api/jobs/${jobId}/driver`, { driverId });
+  const adminL = makeClient(server.baseUrl);
+  await adminL.login('admin@loadbyton.ae', 'demo1234');
+  await adminL.post('/api/admin/confirm-receipt', { jobId });
+  await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'PICKED_UP' });
+  await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });
+
+  const driverClient = makeClient(server.baseUrl);
+  const driverLogin = await driverClient.login(driverEmail, 'demo1234');
+  assert.equal(driverLogin.body.actingAs.seatRole, 'DRIVER');
+
+  const posted = await driverClient.post(`/api/jobs/${jobId}/location`, { lat: 25.05, lng: 55.17 });
+  assert.equal(posted.status, 200, posted.raw);
+
+  const read = await driverClient.get(`/api/jobs/${jobId}/locations`);
+  assert.equal(read.status, 200, read.raw);
+  assert.ok(read.body.locations.some((l) => l.lat === 25.05));
+
+  const viewerEmail = `carrier-viewer-loc-${Date.now()}@example.ae`;
+  const viewerAdd = await carrier.post('/api/org/members', { email: viewerEmail, password: 'demo1234', seatRole: 'VIEWER', displayName: 'Viewer' });
+  assert.equal(viewerAdd.status, 201, viewerAdd.raw);
+  const viewerClient = makeClient(server.baseUrl);
+  await viewerClient.login(viewerEmail, 'demo1234');
+
+  const blocked = await viewerClient.post(`/api/jobs/${jobId}/location`, { lat: 25.05, lng: 55.17 });
+  assert.equal(blocked.status, 403, 'a VIEWER seat must not be able to post GPS pings');
+});

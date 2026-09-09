@@ -3,7 +3,7 @@
 // INSURANCE_BROKER_URL + INSURANCE_BROKER_API_KEY are set.
 const db = require('../db');
 const { sendError } = require('../lib/http');
-const { auth, requireApproved } = require('../middleware/auth');
+const { auth, requireApproved, requireSeatRole } = require('../middleware/auth');
 const insurance = require('../lib/insurance');
 const { chargeFee } = require('../lib/ledger');
 
@@ -15,7 +15,7 @@ router.post('/api/insurance/quote', auth(), async (req, res) => {
   res.json({ quote: q });
 });
 
-router.post('/api/jobs/:id/insurance/bind', auth(['SHIPPER']), requireApproved(), async (req, res) => {
+router.post('/api/jobs/:id/insurance/bind', auth(['SHIPPER']), requireApproved(), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');
@@ -81,7 +81,7 @@ router.get('/api/jobs/:id/insurance', auth(), async (req, res) => {
   res.json({ policy: policy || null, provider: insurance.provider(), configured: insurance.isConfigured() });
 });
 
-router.post('/api/jobs/:id/insurance/cancel', auth(['SHIPPER']), async (req, res) => {
+router.post('/api/jobs/:id/insurance/cancel', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req, res) => {
   const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if (!job) return sendError(res, 404, 'Job not found');
   if (job.shipper_id !== req.user.id) return sendError(res, 403, 'Not your job');

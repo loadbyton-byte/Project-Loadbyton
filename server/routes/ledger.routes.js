@@ -8,7 +8,7 @@ const crypto = require('node:crypto');
 const db = require('../db');
 const { sendError } = require('../lib/http');
 const { apiResponse } = require('../lib/apiResponse');
-const { auth } = require('../middleware/auth');
+const { auth, requireSeatRole } = require('../middleware/auth');
 const router = require('express').Router();
 
 async function riskScore({ carrierId, laneKey, countryCode }){
@@ -26,7 +26,9 @@ function rateForRisk(score){
   // dynamic interest: 8% base + 0-12% risk premium
   return 800 + Math.round(score*1200); // bps
 }
-router.post('/api/jobs/:id/tokenize', auth(['SHIPPER','ADMIN']), async (req,res)=>{
+// Money-moving (invoice tokenization/financing) — same OPS-only gate as
+// every other bid/payout-adjacent action, so a VIEWER seat can't pull this.
+router.post('/api/jobs/:id/tokenize', auth(['SHIPPER','ADMIN']), requireSeatRole(['OPS']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return sendError(res,404,'Job not found');
   if(req.user.role!=='ADMIN' && job.shipper_id!==req.user.id) return sendError(res,403,'Not your job');

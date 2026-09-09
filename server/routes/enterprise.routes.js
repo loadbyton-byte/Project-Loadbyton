@@ -11,7 +11,7 @@ const { writeAudit, notify, timingSafeEqualStr } = require('../lib/helpers');
 const router = require('express').Router();
 
 // DP World E-Token — carrier pastes/syncs token, shipper auto-notified
-router.post('/api/jobs/:id/etoken', auth(['CARRIER']), async (req,res)=>{
+router.post('/api/jobs/:id/etoken', auth(['CARRIER']), requireSeatRole(['OPS']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
   if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
@@ -31,7 +31,7 @@ router.post('/api/jobs/:id/etoken', auth(['CARRIER']), async (req,res)=>{
 // Captured at BOTH pickup and delivery (?stage=pickup|delivery) — this used
 // to be pickup-only, leaving no evidence at all for the delivery end of a
 // damage/shortage dispute.
-router.post('/api/jobs/:id/eir', auth(['CARRIER']), async (req,res)=>{
+router.post('/api/jobs/:id/eir', auth(['CARRIER']), requireSeatRole(['OPS']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
   if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
@@ -107,7 +107,7 @@ router.post('/api/system/detention-alarms', async (req,res)=>{
 });
 
 // Fuel/Salik advance — 20% of agreed freight instantly as voucher/wallet
-router.post('/api/jobs/:id/fuel-advance', auth(['CARRIER']), async (req,res)=>{
+router.post('/api/jobs/:id/fuel-advance', auth(['CARRIER']), requireSeatRole(['OPS']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
   if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');

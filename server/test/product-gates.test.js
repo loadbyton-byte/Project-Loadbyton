@@ -97,6 +97,51 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   assert.equal(bidAfter.status, 201, bidAfter.raw);
 });
 
+// Regression for a real bug: POST /api/templates/:id/rerun performs the
+// exact same "create a real, live, OPEN job" write POST /api/jobs does,
+// but was missing the requireApproved() gate that route has — a brand-new
+// PENDING (not-yet-vetted) account could save a template (itself harmless,
+// no marketplace visibility) then immediately rerun it to post a real job
+// with zero admin vetting. The front door was gated, this side door wasn't.
+test('a PENDING (not-yet-approved) account cannot rerun a template into a live job — same gate POST /api/jobs has', async () => {
+  const email = uniqueEmail('pending-template');
+  const client = makeClient(server.baseUrl);
+  const registered = await client.post('/api/auth/register', {
+    email, password: 'demo1234', role: 'SHIPPER', companyName: 'Pending Template Co',
+    phone: VALID.phone, trnNumber: VALID.trn, tradeLicenseNumber: VALID.licence, agreedToTerms: true,
+  });
+  assert.equal(registered.status, 201, registered.raw);
+  assert.equal(registered.body.user.account_approval_status, 'PENDING');
+
+  // Saving a template itself is harmless (no marketplace visibility) —
+  // must still work for a pending account, same as browsing does.
+  const tpl = await client.post('/api/templates', {
+    name: 'Regular lane', pickupTerminal: 'JEBEL_ALI_T2', deliveryArea: 'JAFZA_SOUTH',
+    deliveryAddress: 'X', containerSize: '40FT', containerType: 'DRY',
+  });
+  assert.equal(tpl.status, 201, tpl.raw);
+
+  // Rerunning it into a real job must be blocked — the same 403 posting a
+  // job directly gets.
+  const rerun = await client.post(`/api/templates/${tpl.body.template.id}/rerun`);
+  assert.equal(rerun.status, 403, 'a pending account must not be able to post a live job via template rerun');
+
+  // Same gate on the contract-lane route, for the same reason (consistency
+  // with every other shipper write, even though a contract lane itself
+  // isn't marketplace-visible).
+  const contract = await client.post('/api/contracts', {
+    pickupTerminal: 'JEBEL_ALI_T2', deliveryArea: 'JAFZA_SOUTH', deliveryAddress: 'X', monthlyLoads: 4,
+  });
+  assert.equal(contract.status, 403, 'a pending account must not be able to create a contract lane');
+
+  // Approve, then confirm the rerun now actually works.
+  const approved = await admin.post(`/api/admin/approve/${registered.body.user.id}`, { action: 'approve' });
+  assert.equal(approved.status, 200, approved.raw);
+  const rerunAfter = await client.post(`/api/templates/${tpl.body.template.id}/rerun`);
+  assert.equal(rerunAfter.status, 201, rerunAfter.raw);
+  assert.equal(rerunAfter.body.job.status, 'OPEN');
+});
+
 test('equipment: TRAILER_WITH_GENSET is container-carrying; an unrecognized type falls back to the default; CUSTOM needs a requirement', async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');

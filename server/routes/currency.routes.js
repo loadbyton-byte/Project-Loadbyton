@@ -1,6 +1,6 @@
 const db = require('../db');
 const { sendError } = require('../lib/http');
-const { auth } = require('../middleware/auth');
+const { auth, requireSeatRole } = require('../middleware/auth');
 const { taxForJob } = require('../lib/tax');
 const router = require('express').Router();
 
@@ -9,7 +9,9 @@ router.get('/api/currency/rates', (req,res)=>{
   const { TAX_TABLE } = require('../lib/tax');
   res.json({ table: TAX_TABLE });
 });
-router.post('/api/jobs/:id/currency', auth(['SHIPPER']), async (req,res)=>{
+// Changes tax/currency on the job, which feeds the commission/payout math —
+// OPS-only, same as any other job-economics mutation.
+router.post('/api/jobs/:id/currency', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req,res)=>{
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return sendError(res,404,'Job not found');
   if(job.shipper_id!==req.user.id) return sendError(res,403,'Not your job');
