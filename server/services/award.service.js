@@ -47,9 +47,37 @@ async function awardJob(req, res, jobId, bidId) {
     return;
   }
 
+  // Low-capacity gate — the carrier's declared available_units was
+  // already shown to the shipper as a "0 unit(s) available" warning
+  // (job-lifecycle.routes.js's lowCapacityWarning, surfaced on each bid
+  // as carrier_available_units in job.service.js's getJob), but nothing
+  // stopped the award itself from going through regardless. Same explicit-
+  // acknowledgment pattern as skipNegotiation above, not a hard block —
+  // an over-committed carrier can still genuinely have room for one more
+  // job; the shipper just has to say so on purpose.
+  const acknowledgeLowCapacity = !!(req.body && req.body.acknowledgeLowCapacity);
+  const carrierProfile = await db.prepare('SELECT available_units FROM profiles WHERE user_id=?').get(preBid.carrier_id);
+  if (carrierProfile && carrierProfile.available_units <= 0 && !acknowledgeLowCapacity) {
+    res.status(409).json({ error: 'This carrier has declared 0 available units — acknowledge to award anyway.', lowCapacity: true });
+    return;
+  }
+
+  // Final price = bid amount + any ancillary charges (Salik etc.) that
+  // were actually AGREED BY BOTH SIDES — a charge proposed but never
+  // mutually agreed (possible when the shipper used skipNegotiation)
+  // doesn't count. Product decision: "if ancillary is added and agreed
+  // that will be final, if not vice versa" — this is the one place that
+  // decision applies, since every downstream money figure (escrow
+  // liability, payout gross/net, invoice, cancellation fee base) is
+  // derived from job.agreed_price_aed, which this value gets written
+  // into below.
+  const agreedCharges = await db.prepare(
+    `SELECT COALESCE(SUM(amount_aed), 0) as total FROM bid_ancillary_charges WHERE bid_id=? AND agreed_by_shipper=1 AND agreed_by_carrier=1`
+  ).get(bidId);
+  const ancillaryTotal = Number(agreedCharges?.total) || 0;
   const { commission_rate_bps } = await getSettings();
   const commissionRate = commission_rate_bps / 10000;
-  const agreedPrice = preBid.amount_aed;
+  const agreedPrice = preBid.amount_aed + ancillaryTotal;
   const platformFee = Math.round(agreedPrice * commissionRate);
   const netAed = agreedPrice - platformFee;
   const idempotencyKey = `award-${jobId}-${bidId}`;
@@ -156,7 +184,9 @@ async function awardJob(req, res, jobId, bidId) {
         await ledger.createTransaction(trx, {
           idempotencyKey,
           jobId,
-          description: `Award ${preJob.job_code} AED ${agreedPrice}`,
+          description: ancillaryTotal > 0
+            ? `Award ${preJob.job_code} AED ${agreedPrice} (bid AED ${preBid.amount_aed} + AED ${ancillaryTotal} agreed extras)`
+            : `Award ${preJob.job_code} AED ${agreedPrice}`,
           entries: [
             { account: 'processor_clearing', side: 'DEBIT', amountMinor: ledger.toMinor(agreedPrice) },
             { account: 'escrow_liability', side: 'CREDIT', amountMinor: ledger.toMinor(agreedPrice) },
@@ -167,7 +197,7 @@ async function awardJob(req, res, jobId, bidId) {
       // Audit atomically with the financial writes
       await trx.query(
         `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id) VALUES (?,?,?,?,?,?,?,?)`,
-        [req.actorId, 'AWARD', `${preJob.job_code}: awarded to bid #${bidId} (AED ${agreedPrice})`, 'job', jobId, 'OPEN', 'AWARDED', req.requestId || null]
+        [req.actorId, 'AWARD', `${preJob.job_code}: awarded to bid #${bidId} (AED ${agreedPrice}${ancillaryTotal > 0 ? `, incl. AED ${ancillaryTotal} agreed extras` : ''})`, 'job', jobId, 'OPEN', 'AWARDED', req.requestId || null]
       );
 
       // Also not swallowed — same reasoning as the ledger insert above,

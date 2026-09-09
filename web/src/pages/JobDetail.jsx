@@ -87,6 +87,7 @@ export default function JobDetail() {
   const [newMessage, setNewMessage] = useState('');
   const [newChargeType, setNewChargeType] = useState('SALIK');
   const [newChargeAmount, setNewChargeAmount] = useState('');
+  const [lowCapacityAcked, setLowCapacityAcked] = useState(false);
   const [negotiationBusy, setNegotiationBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -187,6 +188,7 @@ export default function JobDetail() {
     setAwardConfirm(b);
     setNegotiationMessages([]);
     setAncillaryCharges([]);
+    setLowCapacityAcked(false);
     try {
       const [neg, charges] = await Promise.all([api.getBidNegotiation(b.id), api.getAncillaryCharges(b.id)]);
       setNegotiationMessages(neg.messages || []);
@@ -240,11 +242,17 @@ export default function JobDetail() {
   }
 
   const allChargesAgreed = ancillaryCharges.every((c) => c.agreed_by_shipper && c.agreed_by_carrier);
+  // Matches award.service.js exactly: only charges BOTH sides have agreed
+  // become part of the final price — a proposed-but-unagreed charge
+  // doesn't count, even if it's still sitting in the list below.
+  const agreedChargesTotal = ancillaryCharges.filter((c) => c.agreed_by_shipper && c.agreed_by_carrier).reduce((sum, c) => sum + c.amount_aed, 0);
+  const finalAwardTotal = (awardConfirm?.amount_aed || 0) + agreedChargesTotal;
+  const isLowCapacity = awardConfirm && awardConfirm.carrier_available_units != null && awardConfirm.carrier_available_units <= 0;
 
   function skipAndAward() {
     const bid = awardConfirm;
     setAwardConfirm(null);
-    act(() => api.awardJob(job.id, bid.id, { skipNegotiation: true }));
+    act(() => api.awardJob(job.id, bid.id, { skipNegotiation: true, acknowledgeLowCapacity: lowCapacityAcked }));
   }
 
   function confirmAward() {
@@ -252,7 +260,7 @@ export default function JobDetail() {
     setAwardConfirm(null);
     act(async () => {
       await api.confirmBidTerms(bid.id);
-      await api.awardJob(job.id, bid.id);
+      await api.awardJob(job.id, bid.id, { acknowledgeLowCapacity: lowCapacityAcked });
     });
   }
 
@@ -281,9 +289,27 @@ export default function JobDetail() {
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
                   <li>Every other bid on this job will be rejected once assigned</li>
-                  <li>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</li>
+                  <li>
+                    {agreedChargesTotal > 0
+                      ? <>Final price locks at <strong className="text-ink">{formatAED(finalAwardTotal)}</strong> ({formatAED(awardConfirm.amount_aed)} bid + {formatAED(agreedChargesTotal)} agreed extras) — nothing can be changed after this</>
+                      : <>The price is locked at {formatAED(awardConfirm.amount_aed)} — bids can't be changed after this</>}
+                  </li>
                   <li>Funds move into escrow and the job moves to "Awarded"</li>
                 </ul>
+
+                {isLowCapacity && (
+                  <div
+                    className="mt-3 rounded-md px-3 py-2 text-sm"
+                    style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
+                  >
+                    <p className="font-semibold">⚠ This carrier has declared 0 available units.</p>
+                    <p className="mt-0.5 text-xs">They may already be fully committed to other jobs. You can still award — just confirm you understand the risk.</p>
+                    <label className="mt-2 flex items-center gap-2 text-xs font-medium">
+                      <input type="checkbox" checked={lowCapacityAcked} onChange={(e) => setLowCapacityAcked(e.target.checked)} />
+                      Award anyway
+                    </label>
+                  </div>
+                )}
 
                 {/* Ancillary charges — Salik, e-token, demurrage, inspection
                     waiting — each needs BOTH sides to agree before terms
@@ -339,9 +365,9 @@ export default function JobDetail() {
               <div className="flex flex-wrap justify-end gap-2 px-6 pb-6">
                 <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
                 {ancillaryCharges.length === 0 && (
-                  <Button variant="ghost" onClick={skipAndAward} loading={busy}>No charges — award now</Button>
+                  <Button variant="ghost" onClick={skipAndAward} loading={busy} disabled={isLowCapacity && !lowCapacityAcked}>No charges — award now</Button>
                 )}
-                <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed}>
+                <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed || (isLowCapacity && !lowCapacityAcked)}>
                   Confirm terms &amp; assign
                 </Button>
               </div>

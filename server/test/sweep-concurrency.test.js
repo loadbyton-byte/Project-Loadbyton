@@ -43,8 +43,14 @@ test('runAutoReleaseSweep run twice concurrently releases a due job exactly once
   const [a, b] = await Promise.all([runAutoReleaseSweep(null), runAutoReleaseSweep(null)]);
   assert.equal(a + b, 1, 'the same due job must be claimed by exactly one of the two concurrent sweep calls, not both');
 
-  const job = await db.prepare('SELECT escrow_status FROM jobs WHERE id=?').get(jobId);
+  const job = await db.prepare('SELECT status, escrow_status FROM jobs WHERE id=?').get(jobId);
   assert.equal(job.escrow_status, 'RELEASED');
+  // Previously only escrow_status flipped here — job.status stayed
+  // DELIVERED forever (the shipper had no reason to manually confirm
+  // once payout was already guaranteed) and no invoice was ever issued.
+  assert.equal(job.status, 'COMPLETED', 'auto-release must also complete the job, not just release escrow');
+  const invoice = await db.prepare('SELECT * FROM invoices WHERE job_id=?').get(jobId);
+  assert.ok(invoice, 'auto-release must issue an invoice, same as the manual confirm-delivery path');
 });
 
 test('publishScheduledJobs run twice concurrently publishes a due job exactly once', async () => {
