@@ -7,6 +7,7 @@ import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
   IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt, IconShield,
+  IconCompass,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 
@@ -53,6 +54,7 @@ function navByRole(t) {
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
       { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
+      { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     CARRIER: [
       { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} />, group: 'Workspace' },
@@ -65,6 +67,7 @@ function navByRole(t) {
       { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} />, group: 'Finance' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
       { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
+      { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     FORWARDER: [
       { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} />, group: 'Workspace' },
@@ -74,6 +77,7 @@ function navByRole(t) {
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
       { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
+      { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     BROKER: [
       { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} />, group: 'Workspace' },
@@ -83,6 +87,7 @@ function navByRole(t) {
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
       { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
+      { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     OWNER_OPERATOR: [
       { to: '/open-loads', label: t('nav.openLoads', 'Open loads'), icon: <IconHome size={20} />, group: 'Workspace' },
@@ -95,11 +100,13 @@ function navByRole(t) {
       { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} />, group: 'Finance' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
       { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
+      { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     ADMIN: [
       { to: '/admin', label: t('nav.admin', 'Admin console'), icon: <IconSettings size={20} />, group: 'Workspace' },
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
       { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
+      { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
   };
 }
