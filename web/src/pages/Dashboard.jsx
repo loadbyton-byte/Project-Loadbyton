@@ -32,15 +32,15 @@ const SORT_OPTIONS = [
 ];
 
 // Change 1b Phase E — post-a-job as a 3-step wizard, matching the mockup.
-const POST_JOB_STEPS = ['Shipment type', 'Equipment & volume', 'Locations & timing'];
+const POST_JOB_STEPS = ['Shipment', 'Equipment', 'Locations'];
 
 const emptyJob = {
   shipmentType: 'IMPORT',
   paymentTier: 'SPOT_ESCROW',
   loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
   pickupLat: undefined, pickupLng: undefined, deliveryLat: undefined, deliveryLng: undefined,
-  equipmentType: 'CONTAINER_CHASSIS', cargoType: 'GENERAL_GOODS',
-  containerSize: '40HC', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
+  equipmentType: 'TRAILER_20FT', cargoType: 'GENERAL_GOODS',
+  containerSize: '20FT', containerType: 'DRY', containerNumber: '', pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0],
   deliveryAddress: '', readyAt: '', targetPriceAed: '', cargoWeightTons: '', customRequirement: '', notes: '',
   containerCount: 1, truckCount: 1,
   importPickupTerminal: TERMINALS[0], importUnloadingLocation: AREAS[0], importEmptyReturnLocation: DEPOTS[0],
@@ -301,7 +301,7 @@ export default function Dashboard() {
                   upcoming. Clicking a done step's box jumps back to it
                   (matches "Back" behavior) without needing to re-click
                   Back repeatedly. */}
-              <div className="mb-5 flex gap-2">
+              <div className="mb-1.5 flex gap-2">
                 {POST_JOB_STEPS.map((label, i) => {
                   const done = i < postStep;
                   const active = i === postStep;
@@ -311,7 +311,8 @@ export default function Dashboard() {
                       key={label}
                       onClick={() => done && setPostStep(i)}
                       disabled={!done}
-                      className="flex flex-1 items-center gap-2 rounded-md border px-3 py-2.5 text-left transition-colors"
+                      title={label}
+                      className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-md border px-2 py-2.5 text-left transition-colors sm:justify-start sm:px-3"
                       style={{
                         borderColor: active ? 'var(--brand-accent)' : done ? 'var(--status-success)' : 'var(--border-default)',
                         background: active ? 'var(--brand-accent-bg)' : 'var(--bg-surface)',
@@ -327,11 +328,16 @@ export default function Dashboard() {
                       >
                         {done ? <IconCheck size={11} /> : i + 1}
                       </span>
-                      <span className="truncate text-xs font-semibold text-ink">{label}</span>
+                      {/* Full label only where there's room to show it without
+                          truncating into illegible "Shi…"/"Eq…" fragments
+                          (see the mobile-fit audit) — the caption below
+                          covers narrower screens instead. */}
+                      <span className="hidden truncate text-xs font-semibold text-ink sm:inline">{label}</span>
                     </button>
                   );
                 })}
               </div>
+              <p className="mb-5 text-xs font-semibold text-ink-muted sm:hidden">Step {postStep + 1} of {POST_JOB_STEPS.length}: {POST_JOB_STEPS[postStep]}</p>
 
               <div className="grid gap-4 sm:grid-cols-2">
               {/* Step 1 — Shipment type. Everything below (equipment, cargo,
@@ -343,13 +349,13 @@ export default function Dashboard() {
               {postStep === 0 && (
                 <div className="sm:col-span-2">
                   <Label>Shipment direction</Label>
-                  <div className="mt-1 flex rounded-lg border p-1" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
+                  <div className="mt-1 grid grid-cols-1 gap-1.5 rounded-lg border p-1 sm:grid-cols-3 sm:gap-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
                     {SHIPMENT_TYPES.map((st) => (
                       <button
                         key={st}
                         type="button"
                         onClick={() => setForm({ ...form, shipmentType: st })}
-                        className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold transition ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
+                        className={`rounded-md px-3 py-2 text-left text-sm font-semibold transition sm:text-center ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
                         style={form.shipmentType === st ? { background: 'var(--bg-raised)', borderColor: 'var(--border-default)' } : {}}
                       >
                         {shipmentTypeLabel(st)}
@@ -428,7 +434,17 @@ export default function Dashboard() {
                   </div>
                   <div className="sm:col-span-2">
                     <Label>{vehicleClassOf(form.equipmentType) === 'TRAILER' ? 'Trailer type' : 'Truck type'}</Label>
-                    <Select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })}>
+                    <Select
+                      value={form.equipmentType}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        // TRAILER_20FT/40FT name the container size they're
+                        // built for — the size field below locks to match
+                        // instead of letting the two contradict each other.
+                        const impliedSize = next === 'TRAILER_20FT' ? '20FT' : next === 'TRAILER_40FT' ? '40FT' : null;
+                        setForm({ ...form, equipmentType: next, ...(impliedSize ? { containerSize: impliedSize } : {}) });
+                      }}
+                    >
                       {equipmentTypesForClass(vehicleClassOf(form.equipmentType)).map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
                     </Select>
                     <p className="mt-1 text-xs text-ink-muted">
@@ -461,9 +477,18 @@ export default function Dashboard() {
                     <>
                       <div>
                         <Label>Container size</Label>
-                        <Select value={form.containerSize} onChange={(e) => setForm({ ...form, containerSize: e.target.value })}>
-                          {CONTAINER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </Select>
+                        {form.equipmentType === 'TRAILER_20FT' || form.equipmentType === 'TRAILER_40FT' ? (
+                          <>
+                            <Select value={form.containerSize} disabled>
+                              <option value={form.containerSize}>{form.containerSize}</option>
+                            </Select>
+                            <p className="mt-1 text-xs text-ink-muted">Locked to match the trailer type chosen above.</p>
+                          </>
+                        ) : (
+                          <Select value={form.containerSize} onChange={(e) => setForm({ ...form, containerSize: e.target.value })}>
+                            {CONTAINER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </Select>
+                        )}
                       </div>
                       <div>
                         <Label>Container type</Label>

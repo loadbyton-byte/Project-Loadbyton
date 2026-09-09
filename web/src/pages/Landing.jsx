@@ -10,7 +10,9 @@ import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage
 
 const EQUIPMENT_ICONS = {
   CONTAINER_CHASSIS: IconPackage, TRAILER_WITH_GENSET: IconPackage, LOWBED_TRAILER: IconTrailer, FLATBED_TRAILER: IconTrailer,
-  BOX_TRUCK: IconTruck, CURTAIN_TRUCK: IconTruck, PICKUP_3T: IconTruck, PICKUP_5T: IconTruck, PICKUP_7T: IconTruck,
+  TRAILER_20FT: IconPackage, TRAILER_40FT: IconPackage,
+  BOX_TRUCK: IconTruck, CURTAIN_TRUCK: IconTruck, FLATBED_TRUCK: IconTruck, REEFER_TRUCK: IconTruck,
+  PICKUP_3T: IconTruck, PICKUP_5T: IconTruck, PICKUP_7T: IconTruck,
   PICKUP_10T: IconTruck, SIDE_LOADER_TRAILER: IconLayers, TRIPPER: IconLayers, CUSTOM: IconTruck,
 };
 
