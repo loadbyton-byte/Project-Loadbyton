@@ -7,7 +7,7 @@ import { useLocale } from '../lib/i18n.jsx';
 import {
   CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
   equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
-  PAYMENT_TERMS, PAYMENT_TERM_DESCRIPTIONS, paymentTermLabel, DEFERRED_PAYMENT_TERMS,
+  PAYMENT_TERMS, paymentTermLabel, DEFERRED_PAYMENT_TERMS,
   VEHICLE_CLASSES, vehicleClassOf, equipmentTypesForClass,
   LOCAL_EQUIPMENT, LOCAL_LENGTH_TYPES, LOCAL_BODY_TYPE_TYPES, TRUCK_LENGTH_OPTIONS_M, EQUIPMENT_BODY_TYPES, equipmentBodyTypeLabel,
 } from '../lib/constants.js';
@@ -407,7 +407,6 @@ export default function Dashboard() {
                             }}
                           >
                             <p className="text-sm font-semibold text-ink">{paymentTermLabel(pt)}</p>
-                            <p className="mt-0.5 text-xs text-ink-muted">{PAYMENT_TERM_DESCRIPTIONS[pt]}</p>
                             {isDeferred && (
                               <p className="mt-1 text-xs font-medium" style={{ color: creditEligible ? 'var(--status-success)' : 'var(--status-warning)' }}>
                                 {creditEligible ? `AED ${creditAvailable.toLocaleString()} available of AED ${(user.profile.credit_limit_aed || 0).toLocaleString()}` : 'Not yet approved for your account — contact Loadbyton.'}
