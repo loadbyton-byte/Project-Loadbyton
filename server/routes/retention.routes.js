@@ -4,7 +4,11 @@ const { issueInvoice, renderInvoiceHtml } = require('../lib/invoice');
 const { sendError, jobCode } = require('../lib/http');
 const { NOTIFICATION_TYPES } = require('../lib/constants');
 const { writeAudit, parseDbDate } = require('../lib/helpers');
-const { auth } = require('../middleware/auth');
+const authMod = require('../middleware/auth');
+const { auth } = authMod;
+const requireApproved = /** @type {any} */ (authMod).requireApproved;
+const requireSeatRole = /** @type {any} */ (authMod).requireSeatRole;
+const writeLimiter = /** @type {any} */ (authMod).writeLimiter;
 
 const router = require('express').Router();
 
@@ -29,7 +33,14 @@ router.post('/api/templates', auth(['SHIPPER']), async (req, res) => {
   res.status(201).json({ template });
 });
 
-router.post('/api/templates/:id/rerun', auth(['SHIPPER']), async (req, res) => {
+// This creates a real, live, marketplace-visible OPEN job — the exact
+// same write POST /api/jobs performs — so it needs the exact same gates
+// that route has (jobs.routes.js:62). Missing them was a real bug: a
+// brand-new PENDING (not-yet-admin-approved) account could save a
+// template via POST /api/templates (itself harmless, no marketplace
+// visibility) then immediately rerun it here to post a real job with
+// zero vetting — the front door was gated, this side door wasn't.
+router.post('/api/templates/:id/rerun', auth(['SHIPPER']), writeLimiter, requireApproved(), requireSeatRole(['OPS']), async (req, res) => {
   const tpl = await db.prepare('SELECT * FROM templates WHERE id=? AND shipper_id=?').get(req.params.id, req.user.id);
   if (!tpl) return sendError(res, 404, 'Template not found');
   let code = jobCode();
@@ -54,7 +65,7 @@ router.get('/api/contracts', auth(['SHIPPER']), async (req, res) => {
   res.json({ contracts });
 });
 
-router.post('/api/contracts', auth(['SHIPPER']), async (req, res) => {
+router.post('/api/contracts', auth(['SHIPPER']), requireApproved(), requireSeatRole(['OPS']), async (req, res) => {
   const b = req.body || {};
   if (!b.pickupTerminal || !b.deliveryArea || !b.deliveryAddress || !b.monthlyLoads) {
     return sendError(res, 400, 'pickupTerminal, deliveryArea, deliveryAddress and monthlyLoads are required');

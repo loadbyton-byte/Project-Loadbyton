@@ -43,6 +43,13 @@ const DRIVER_SEAT_ALLOWED_ROUTES = [  { method: 'GET', pattern: /^\/api\/auth\/m
   { method: 'POST', pattern: /^\/api\/jobs\/\d+\/messages$/ },
   { method: 'GET', pattern: /^\/api\/notifications$/ },
   { method: 'POST', pattern: /^\/api\/notifications\/read$/ },
+  // DriverLocationTracking.jsx (web/src/pages) is built specifically for
+  // this seat role — it calls api.driverJob() (already allowed above) then
+  // posts/reads location off the assigned job. Without these two, a
+  // DRIVER/DRIVER_ASSOCIATE seat gets 403'd out of the one page meant for
+  // them, and live tracking never works for an actual driver.
+  { method: 'POST', pattern: /^\/api\/jobs\/\d+\/location$/ },
+  { method: 'GET', pattern: /^\/api\/jobs\/\d+\/locations$/ },
 ];
 
 const writeLimiter = rateLimiter({

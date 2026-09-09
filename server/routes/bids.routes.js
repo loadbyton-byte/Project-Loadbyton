@@ -8,7 +8,7 @@ const db = require('../db');
 const apiResponse = require('../lib/apiResponse');
 const { BID_SORT_COLUMNS, ANCILLARY_CHARGE_TYPES } = require('../lib/constants');
 const { writeAudit, notify } = require('../lib/helpers');
-const { auth } = require('../middleware/auth');
+const { auth, requireSeatRole } = require('../middleware/auth');
 
 // Access for the pre-award negotiation/ancillary-charges surface: only the
 // job's shipper, or the specific bid's own carrier — nobody else, not even
@@ -57,7 +57,7 @@ router.get('/api/bids/mine', auth(['CARRIER']), async (req, res) => {
   res.json({ bids, total, limit: lim, offset: off });
 });
 
-router.post('/api/bids/:id/withdraw', auth(['CARRIER']), async (req, res) => {
+router.post('/api/bids/:id/withdraw', auth(['CARRIER']), requireSeatRole(['OPS']), async (req, res) => {
   const bid = await db.prepare('SELECT * FROM bids WHERE id=?').get(req.params.id);
   if (!bid) return apiResponse.error(req, res, 'BID_NOT_FOUND', 'Bid not found');
   if (bid.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your bid');
@@ -80,7 +80,7 @@ router.get('/api/bids/:id/negotiation', auth(), async (req, res) => {
   res.json({ messages });
 });
 
-router.post('/api/bids/:id/negotiation', auth(), async (req, res) => {
+router.post('/api/bids/:id/negotiation', auth(), requireSeatRole(['OPS']), async (req, res) => {
   const ctx = await loadBidWithJobForNegotiation(req, res, req.params.id);
   if (!ctx) return;
   const { message } = req.body || {};
@@ -105,7 +105,7 @@ router.get('/api/bids/:id/ancillary-charges', auth(), async (req, res) => {
   res.json({ charges });
 });
 
-router.post('/api/bids/:id/ancillary-charges', auth(), async (req, res) => {
+router.post('/api/bids/:id/ancillary-charges', auth(), requireSeatRole(['OPS']), async (req, res) => {
   const ctx = await loadBidWithJobForNegotiation(req, res, req.params.id);
   if (!ctx) return;
   const { chargeType, amountAed, notes } = req.body || {};
@@ -126,7 +126,7 @@ router.post('/api/bids/:id/ancillary-charges', auth(), async (req, res) => {
 // The other party confirms a proposed charge — the one who proposed it
 // already has their own agreed_by_* flag set from the INSERT above, so
 // this just needs to flip the other side's flag.
-router.post('/api/bids/:id/ancillary-charges/:chargeId/agree', auth(), async (req, res) => {
+router.post('/api/bids/:id/ancillary-charges/:chargeId/agree', auth(), requireSeatRole(['OPS']), async (req, res) => {
   const ctx = await loadBidWithJobForNegotiation(req, res, req.params.id);
   if (!ctx) return;
   const charge = await db.prepare('SELECT * FROM bid_ancillary_charges WHERE id=? AND bid_id=?').get(req.params.chargeId, ctx.bid.id);
@@ -137,7 +137,7 @@ router.post('/api/bids/:id/ancillary-charges/:chargeId/agree', auth(), async (re
   res.json({ charge: updated });
 });
 
-router.delete('/api/bids/:id/ancillary-charges/:chargeId', auth(), async (req, res) => {
+router.delete('/api/bids/:id/ancillary-charges/:chargeId', auth(), requireSeatRole(['OPS']), async (req, res) => {
   const ctx = await loadBidWithJobForNegotiation(req, res, req.params.id);
   if (!ctx) return;
   const charge = await db.prepare('SELECT * FROM bid_ancillary_charges WHERE id=? AND bid_id=?').get(req.params.chargeId, ctx.bid.id);
@@ -151,7 +151,7 @@ router.delete('/api/bids/:id/ancillary-charges/:chargeId', auth(), async (req, r
 // letting a shipper commit to this bid. Shipper-only: the carrier agrees
 // to individual charge lines above, but the shipper is the one deciding
 // to actually proceed to award.
-router.post('/api/bids/:id/confirm-terms', auth(['SHIPPER']), async (req, res) => {
+router.post('/api/bids/:id/confirm-terms', auth(['SHIPPER']), requireSeatRole(['OPS']), async (req, res) => {
   const ctx = await loadBidWithJobForNegotiation(req, res, req.params.id);
   if (!ctx) return;
   if (ctx.job.shipper_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your job');

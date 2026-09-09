@@ -253,14 +253,24 @@ router.post('/api/auth/logout', auth(), async (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/api/auth/mfa/setup', auth(), async (req, res) => {
+// Both gated by requireReauth() (a stolen session cookie alone must not be
+// enough) — disable is the higher-risk direction (silently strips a
+// victim's second factor) but setup matters too: an attacker enrolling
+// their OWN TOTP secret while mfa_enabled flips to 1 would lock the real
+// owner out of every OTHER requireReauth()-gated action (this one
+// included) the next time MFA is demanded, since only the attacker holds
+// the new secret. requireReauth()'s own requireMfa check is naturally
+// correct for both directions without any extra flag here: mfa_enabled
+// is still 0 going into setup, so only a password is demanded; it's
+// already 1 going into disable, so the existing TOTP code is demanded too.
+router.post('/api/auth/mfa/setup', auth(), requireReauth(), async (req, res) => {
   const secret = totp.randomBase32Secret();
   await db.prepare('UPDATE users SET mfa_secret=?, mfa_enabled=1 WHERE id=?').run(secret, req.actorId);
   await writeAudit(req, { userId: req.actorId, action: 'MFA_ENABLE', entityType: 'user', entityId: req.actorId });
   res.json({ ok: true, secret, otpauthUrl: totp.provisioningUrl(secret, req.actorLabel) });
 });
 
-router.post('/api/auth/mfa/disable', auth(), async (req, res) => {
+router.post('/api/auth/mfa/disable', auth(), requireReauth(), async (req, res) => {
   await db.prepare('UPDATE users SET mfa_secret=NULL, mfa_enabled=0 WHERE id=?').run(req.actorId);
   await writeAudit(req, { userId: req.actorId, action: 'MFA_DISABLE', entityType: 'user', entityId: req.actorId });
   res.json({ ok: true });
