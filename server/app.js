@@ -13,7 +13,25 @@ app.set('trust proxy', 1);
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-request-id,x-internal-key,x-setup-key');
+  // Idempotency-Key (job posting's retry-safe submit) and x-hsm-sigs
+  // (release-payout) are both sent by web/src/lib/api.js but were missing
+  // here — on any cross-origin deployment (frontend and API on different
+  // domains, the common production shape), a custom header not in this
+  // list fails the browser's CORS preflight and the real request never
+  // reaches the server at all: the client just sees "Failed to fetch",
+  // with nothing in the server's request log. Same-origin dev setups never
+  // preflight a same-origin request, so this only broke cross-origin
+  // deployments — exactly the "works on some setups, not others" pattern.
+  // Idempotency-Key (job posting's retry-safe submit) and x-hsm-sigs
+  // (release-payout) are both sent by web/src/lib/api.js but were missing
+  // here — on any cross-origin deployment (frontend and API on different
+  // domains, the common production shape), a custom header not in this
+  // list fails the browser's CORS preflight and the real request never
+  // reaches the server at all: the client just sees "Failed to fetch",
+  // with nothing in the server's request log. Same-origin dev setups never
+  // preflight a same-origin request, so this only broke cross-origin
+  // deployments — exactly the "works on some setups, not others" pattern.
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-request-id,x-internal-key,x-setup-key,Idempotency-Key,x-hsm-sigs');
   const origin = req.headers.origin;
   // Use centralized origin check from config to avoid duplication drift
   const { isAllowedOrigin: isAllowed } = require('./lib/config');
