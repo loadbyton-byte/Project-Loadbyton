@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth, homePath } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
+import { formatDateTime } from '../lib/constants.js';
 import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
-  IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt, IconShield,
-  IconCompass,
+  IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt,
+  IconCompass, IconShield,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 
@@ -33,6 +34,138 @@ export function Logo({ dark = false, className = '', to = '/' }) {
   );
 }
 
+// The bell used to just be a <Link to="/notifications"> — no in-place
+// preview, so seeing what happened meant leaving whatever page you were on.
+// This gives it an actual popup: latest few notifications, mark-all-read,
+// and a link through to the full page. Shared by both the mobile TopAppBar
+// and the desktop header (one definition, no duplicated dropdown logic).
+function NotificationBell() {
+  const { user, refresh } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState(null);
+  const [itemsError, setItemsError] = useState('');
+  const [marking, setMarking] = useState(false);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onOutside(e) {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    }
+    function onEscape(e) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', onOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('mousedown', onOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [open]);
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      setItemsError('');
+      api.notifications().then((d) => setItems(d.notifications.slice(0, 6))).catch((err) => { setItems([]); setItemsError(err.message); });
+    }
+  }
+
+  async function markRead() {
+    setMarking(true);
+    try {
+      await api.markNotificationsRead();
+      setItems((prev) => (prev || []).map((n) => ({ ...n, is_read: 1 })));
+      refresh().catch(() => {});
+    } finally {
+      setMarking(false);
+    }
+  }
+
+  if (!user) return null;
+  const hasUnread = user.unreadNotifications > 0;
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={toggle}
+        className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+        aria-label="Notifications"
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        <IconBell size={20} />
+        {hasUnread && (
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)' }} />
+        )}
+      </button>
+      {open && (
+        <div
+          className="card absolute right-0 top-12 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+          role="dialog"
+          aria-label="Notifications"
+        >
+          <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--border-subtle)' }}>
+            <p className="text-sm font-semibold text-ink">Notifications</p>
+            {items && items.some((n) => !n.is_read) && (
+              <button type="button" onClick={markRead} disabled={marking} className="text-xs font-semibold" style={{ color: 'var(--brand-accent)' }}>
+                Mark all read
+              </button>
+            )}
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {items === null ? (
+              <p className="px-4 py-6 text-center text-sm text-ink-muted">Loading…</p>
+            ) : itemsError ? (
+              <p className="px-4 py-6 text-center text-sm text-ink-muted">Couldn't load notifications.</p>
+            ) : items.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-ink-muted">No notifications yet.</p>
+            ) : (
+              items.map((n) => {
+                const row = (
+                  <div className="border-b px-4 py-3 transition-colors hover:bg-surface-container" style={{ borderColor: 'var(--border-subtle)', background: n.is_read ? undefined : 'var(--surface-container-low)' }}>
+                    <p className="text-sm font-medium text-ink">{n.title}</p>
+                    {n.body && <p className="mt-0.5 text-xs text-ink-muted">{n.body}</p>}
+                    <p className="mt-1 font-mono text-[11px] text-ink-muted">{formatDateTime(n.created_at)}</p>
+                  </div>
+                );
+                return n.job_id ? (
+                  <Link key={n.id} to={`/jobs/${n.job_id}`} className="block" onClick={() => setOpen(false)}>{row}</Link>
+                ) : (
+                  <div key={n.id}>{row}</div>
+                );
+              })
+            )}
+          </div>
+          <Link to="/notifications" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-center text-sm font-semibold" style={{ color: 'var(--brand-accent)' }}>
+            View all notifications
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// TRN Verification used to be a per-role sidebar entry — moved here (a
+// small always-present icon button next to the bell, for every logged-in
+// role) since it's a standalone counterparty-lookup tool nobody uses
+// often enough to earn permanent nav real estate, but it still needs to
+// be reachable from somewhere other than typing the URL directly.
+function TrnQuickLink() {
+  return (
+    <Link
+      to="/verify/trn"
+      className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+      aria-label="TRN Verification"
+      title="TRN Verification"
+    >
+      <IconShield size={20} />
+    </Link>
+  );
+}
+
 // Role-based nav — drives both the desktop sidebar and the mobile drawer,
 // so there is exactly one source of truth for "what links does this role
 // see" (see CLAUDE.md's navigation note for why that matters).
@@ -53,7 +186,6 @@ function navByRole(t) {
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
       { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     CARRIER: [
@@ -66,7 +198,6 @@ function navByRole(t) {
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} />, group: 'Finance' },
       { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} />, group: 'Finance' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
       { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     FORWARDER: [
@@ -76,7 +207,6 @@ function navByRole(t) {
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
       { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     BROKER: [
@@ -86,7 +216,6 @@ function navByRole(t) {
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
       { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     OWNER_OPERATOR: [
@@ -99,13 +228,11 @@ function navByRole(t) {
       { to: '/earnings', label: t('nav.earnings', 'Earnings'), icon: <IconWallet size={20} />, group: 'Finance' },
       { to: '/invoices', label: t('nav.invoices', 'Invoices'), icon: <IconReceipt size={20} />, group: 'Finance' },
       { to: '/analytics', label: t('nav.analytics', 'Analytics'), icon: <IconTrendUp size={20} />, group: 'Insights' },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
       { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
     ADMIN: [
       { to: '/admin', label: t('nav.admin', 'Admin console'), icon: <IconSettings size={20} />, group: 'Workspace' },
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
-      { to: '/verify/trn', label: t('nav.verifyTrn', 'TRN Verification'), icon: <IconShield size={20} />, group: 'Insights' },
       { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
   };
@@ -238,12 +365,10 @@ function ShellInner({ children }) {
           <Logo to={user ? homePath(user, actingAs) : '/'} />
 
           {user ? (
-            <Link to="/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label="Notifications">
-              <IconBell size={20} />
-              {user.unreadNotifications > 0 && (
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)' }} />
-              )}
-            </Link>
+            <div className="flex items-center">
+              <TrnQuickLink />
+              <NotificationBell />
+            </div>
           ) : (
             <Link to="/login" className="rounded-full px-3.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
               {t('nav.login', 'Log in')}
@@ -462,12 +587,10 @@ function ShellInner({ children }) {
             )}
 
             {user ? (
-              <Link to="/notifications" className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label="Notifications">
-                <IconBell size={20} />
-                {user.unreadNotifications > 0 && (
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)' }} />
-                )}
-              </Link>
+              <div className="flex items-center">
+                <TrnQuickLink />
+                <NotificationBell />
+              </div>
             ) : (
               <div className="flex items-center gap-2">
                 <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>

@@ -462,6 +462,42 @@ module.exports = async function seed() {
 
   void j3; void j5; void j13; // ids read back for clarity above; not otherwise needed past this point
 
+  // Notification bell / dropdown / page all read from this table, but
+  // nothing above populates it — every other job/bid/dispute row here was
+  // inserted directly with SQL, bypassing the notify() calls that real
+  // traffic goes through (job.service.js, escrow.service.js, etc.). Without
+  // this, the bell is permanently empty for every demo account. Gated on
+  // "this user already has any notification" — a real duplicate isn't
+  // harmful, but no reason to grow one per boot forever.
+  const jobIdByCode = async (code) => (await db.prepare('SELECT id FROM jobs WHERE job_code=?').get(code))?.id ?? null;
+  async function seedNotifications(userId, rows) {
+    const has = await db.prepare('SELECT 1 FROM notifications WHERE user_id=? LIMIT 1').get(userId);
+    if (has) return;
+    for (const [title, body, jobCode, type, hoursAgo, isRead] of rows) {
+      // The offset must be a literal baked into the SQL text, not a bound
+      // param — db.js's SQLite→Postgres translator only recognizes
+      // datetime('now','-N unit') as a literal quoted string (see its
+      // comment); a bound placeholder here would pass through untranslated
+      // and fail on Postgres with "function datetime(unknown) does not exist".
+      await db.prepare(
+        `INSERT INTO notifications (user_id, title, body, job_id, type, is_read, created_at) VALUES (?,?,?,?,?,?, datetime('now','-${hoursAgo} hours'))`
+      ).run(userId, title, body, jobCode ? await jobIdByCode(jobCode) : null, type, isRead ? 1 : 0);
+    }
+  }
+  await seedNotifications(shipperId, [
+    ['Delivered — LB-1004', 'Falcon Container Express marked this job delivered. Confirm receipt to release escrow.', 'LB-1004', 'status', 2, false],
+    ['Dispute resolved — LB-1010', "Admin determination: cost split 70/30 carrier/shipper. Escrow released per the split.", 'LB-1010', 'dispute', 6, false],
+    ['Dispute opened — LB-1009', 'Cargo shortage reported on delivery. 48-hour SLA to respond with evidence.', 'LB-1009', 'dispute', 26, false],
+    ['Carrier awarded — LB-1003', 'Emirates Overland Haulage accepted for AED 2,200. Escrow funded.', 'LB-1003', 'award', 48, true],
+    ['Job completed — LB-1005', 'Gulf Heavy Fleet completed delivery. You rated them 5 stars.', 'LB-1005', 'status', 72, true],
+    ['Welcome to Loadbyton', 'Your shipper account is verified and ready to post loads.', null, 'system', 240, true],
+  ]);
+  await seedNotifications(emiratesId, [
+    ['You won LB-1003', 'Bid of AED 2,200 accepted by Al Majid Shipping LLC. Escrow funded — proceed to pickup.', 'LB-1003', 'award', 48, false],
+    ['Carrier verification approved', 'Your TRN and trade license passed review. Full bidding access enabled.', null, 'verification', 200, true],
+    ['Welcome to Loadbyton', 'Your carrier account is verified and ready to bid on open loads.', null, 'system', 260, true],
+  ]);
+
   // Contract lane — recurring weekly commitment. No natural unique key of
   // its own (unlike a job_code), so gated on "this shipper already has any
   // contract lane" — good enough for a single demo row; a real duplicate
