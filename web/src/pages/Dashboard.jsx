@@ -16,6 +16,7 @@ import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
 import TimeSlotPicker from '../components/TimeSlotPicker.jsx';
+import TermsModal from '../components/TermsModal.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -86,6 +87,7 @@ export default function Dashboard() {
   // of showing on every single post and causing checkbox fatigue.
   const [needsTermsCheckbox, setNeedsTermsCheckbox] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [filter, setFilter] = useState('all');
   const [sort, setSort] = useState('date_desc');
   const [search, setSearch] = useState('');
@@ -696,7 +698,7 @@ export default function Dashboard() {
                   {needsTermsCheckbox && (
                     <label className="sm:col-span-2 flex items-start gap-2 text-sm text-ink-secondary">
                       <input type="checkbox" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} className="mt-0.5" />
-                      <span>I have read and agree to the current <a href="/terms" target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</a> (updated since your last acceptance)</span>
+                      <span>I have read and agree to the current <button type="button" onClick={() => setShowTermsModal(true)} className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</button> (updated since your last acceptance)</span>
                     </label>
                   )}
                 </>
@@ -740,6 +742,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
 
       {templates.length > 0 && (
         <div className="mt-6">
