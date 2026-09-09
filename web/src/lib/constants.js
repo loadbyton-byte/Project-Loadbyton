@@ -69,7 +69,7 @@ export const EQUIPMENT_TYPE_LABELS = {
   CONTAINER_CHASSIS: 'Container chassis',
   TRAILER_WITH_GENSET: 'Trailer with genset',
   LOWBED_TRAILER: 'Lowbed trailer',
-  FLATBED_TRAILER: 'Flatbed trailer',
+  FLATBED_TRAILER: 'Highbed trailer',
   BOX_TRUCK: 'Box truck',
   CURTAIN_TRUCK: 'Curtain-side truck',
   PICKUP_3T: 'Pickup — 3 tonne',
@@ -82,6 +82,24 @@ export const EQUIPMENT_TYPE_LABELS = {
 };
 export function equipmentLabel(value) {
   return EQUIPMENT_TYPE_LABELS[value] || formatLabel(value);
+}
+
+// Vehicle class — a shipper picks this FIRST on the post-job form (trailer
+// or truck), which narrows the equipment-type dropdown to just the
+// relevant 4 (trailer) or remaining 9 (truck) options, instead of one
+// flat 13-item list. Purely a UI grouping over the same EQUIPMENT_TYPES —
+// CONTAINER_EQUIPMENT above stays the one source of truth for "does this
+// actually carry a shipping container" (a lowbed/highbed trailer is a
+// trailer but carries neither a container nor a container size/type, same
+// as any truck — see Dashboard.jsx's useSimpleLocations).
+export const VEHICLE_CLASSES = ['TRAILER', 'TRUCK'];
+export const TRAILER_EQUIPMENT = ['CONTAINER_CHASSIS', 'LOWBED_TRAILER', 'FLATBED_TRAILER', 'TRAILER_WITH_GENSET'];
+export const TRUCK_EQUIPMENT = EQUIPMENT_TYPES.filter((t) => !TRAILER_EQUIPMENT.includes(t));
+export function vehicleClassOf(equipmentType) {
+  return TRAILER_EQUIPMENT.includes(equipmentType) ? 'TRAILER' : 'TRUCK';
+}
+export function equipmentTypesForClass(vehicleClass) {
+  return vehicleClass === 'TRAILER' ? TRAILER_EQUIPMENT : TRUCK_EQUIPMENT;
 }
 
 // What's inside the load, independent of the equipment moving it — shown

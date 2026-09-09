@@ -5,9 +5,10 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import {
-  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
+  CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
   equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
   PAYMENT_TIERS, PAYMENT_TIER_DESCRIPTIONS, paymentTierLabel,
+  VEHICLE_CLASSES, vehicleClassOf, equipmentTypesForClass,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconClose, IconArrowRight, IconTrendUp } from '../components/icons.jsx';
@@ -218,6 +219,17 @@ export default function Dashboard() {
     load();
   }
 
+  // The 3-leg terminal/depot flow (Step 3) only makes sense when a real
+  // shipping container is actually moving through a port terminal and
+  // empty-return depot — that's what IMPORT/EXPORT's own labels describe
+  // ("Terminal → Customer → Depot"). A shipper who picked IMPORT/EXPORT
+  // but a non-container-carrying vehicle (any truck, or a trailer that
+  // isn't a container chassis/genset trailer — a lowbed hauling
+  // machinery, say) has no container and no depot leg to speak of, so
+  // this collapses to the same simple pickup+delivery pair LOCAL already
+  // uses, regardless of the shipmentType label chosen in Step 1.
+  const useSimpleLocations = form.shipmentType === 'LOCAL' || !CONTAINER_EQUIPMENT.includes(form.equipmentType);
+
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Profile banner — the Stitch shipper-dashboard header pattern.
@@ -385,9 +397,33 @@ export default function Dashboard() {
               {postStep === 1 && (
                 <>
                   <div className="sm:col-span-2">
-                    <Label>Equipment type</Label>
+                    <Label>Trailer or truck?</Label>
+                    <div className="mt-1.5 grid grid-cols-2 gap-2">
+                      {VEHICLE_CLASSES.map((vc) => {
+                        const active = vehicleClassOf(form.equipmentType) === vc;
+                        return (
+                          <button
+                            key={vc}
+                            type="button"
+                            onClick={() => { if (!active) setForm({ ...form, equipmentType: equipmentTypesForClass(vc)[0] }); }}
+                            className="rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors"
+                            style={{
+                              borderColor: active ? 'var(--brand-accent)' : 'var(--border-default)',
+                              background: active ? 'var(--brand-accent-bg)' : 'var(--bg-surface)',
+                              color: active ? 'var(--brand-accent)' : 'var(--ink)',
+                            }}
+                          >
+                            {vc === 'TRAILER' ? 'Trailer' : 'Truck'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-xs text-ink-muted">A trailer is towed by a separate tractor unit; a truck's bed is fixed to its own chassis.</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>{vehicleClassOf(form.equipmentType) === 'TRAILER' ? 'Trailer type' : 'Truck type'}</Label>
                     <Select value={form.equipmentType} onChange={(e) => setForm({ ...form, equipmentType: e.target.value })}>
-                      {EQUIPMENT_TYPES.map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
+                      {equipmentTypesForClass(vehicleClassOf(form.equipmentType)).map((t) => <option key={t} value={t}>{equipmentLabel(t)}</option>)}
                     </Select>
                     <p className="mt-1 text-xs text-ink-muted">
                       {CONTAINER_EQUIPMENT.includes(form.equipmentType)
@@ -491,7 +527,7 @@ export default function Dashboard() {
               {/* Step 3 — Locations & timing */}
               {postStep === 2 && (
                 <>
-                  {form.shipmentType === 'LOCAL' ? (
+                  {useSimpleLocations ? (
                     <>
                       <div>
                         <Label>Loading location <span className="text-status-danger">*</span></Label>
@@ -601,7 +637,7 @@ export default function Dashboard() {
                   </div>
                   <div className="sm:col-span-2">
                     <TimeSlotPicker
-                      label={form.shipmentType === 'LOCAL' ? 'Loading date & time slot' : 'Ready at (time slot)'}
+                      label={useSimpleLocations ? 'Loading date & time slot' : 'Ready at (time slot)'}
                       required
                       value={form.readyAt}
                       onChange={(v) => setForm({ ...form, readyAt: v })}

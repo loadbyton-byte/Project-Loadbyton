@@ -34,6 +34,13 @@ export default function JobEditForm({ job, onDone, onCancel }) {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Equipment type isn't editable here (fixed at posting) — same rule as
+  // Dashboard.jsx's post-job form: the 3-leg terminal/depot flow only
+  // applies when there's an actual container to move through one, so a
+  // job originally posted as IMPORT/EXPORT with truck equipment (no
+  // container) still edits with the simple pickup+delivery pair, not a
+  // 3-leg flow it never had.
+  const useSimpleLocations = form.shipmentType === 'LOCAL' || !CONTAINER_EQUIPMENT.includes(job.equipment_type);
 
   function toDatetimeLocal(raw) {
     if (!raw) return '';
@@ -67,7 +74,7 @@ export default function JobEditForm({ job, onDone, onCancel }) {
           <button type="button" onClick={() => setForm({ ...form, shipmentType: 'EXPORT' })} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold ${form.shipmentType === 'EXPORT' ? 'bg-white shadow text-ink' : 'text-ink-muted'}`}>Export</button>
         </div>
       </div>
-      {form.shipmentType === 'LOCAL' ? (
+      {useSimpleLocations ? (
         <>
           <div>
             <Label>Loading location</Label>

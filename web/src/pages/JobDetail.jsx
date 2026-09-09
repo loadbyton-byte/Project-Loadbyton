@@ -487,7 +487,14 @@ export default function JobDetail() {
           </Section>
 
           <Section title="Shipment legs">
-            {job.shipment_type === 'LOCAL' ? (
+            {/* Matches Dashboard.jsx's useSimpleLocations exactly: the 3-leg
+                terminal/depot breakdown only makes sense when a real
+                container actually moved through one — an IMPORT/EXPORT job
+                posted with truck (non-container) equipment never collected
+                terminal/depot fields to show here, so it renders the same
+                simple 2-leg view LOCAL always has instead of 3 legs with
+                blank terminals. */}
+            {job.shipment_type === 'LOCAL' || !CONTAINER_EQUIPMENT.includes(job.equipment_type) ? (
               <div className="grid gap-3">
                 <div className="flex gap-3">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: 'var(--brand-primary)' }}>1</span>
@@ -557,7 +564,9 @@ export default function JobDetail() {
                 </div>
               </div>
             )}
-            <p className="mt-4 text-xs text-ink-muted">Turn-key price covers all 3 legs.</p>
+            {job.shipment_type !== 'LOCAL' && CONTAINER_EQUIPMENT.includes(job.equipment_type) && (
+              <p className="mt-4 text-xs text-ink-muted">Turn-key price covers all 3 legs.</p>
+            )}
           </Section>
 
           <Section title={`Bids (${bids.length})`}>
