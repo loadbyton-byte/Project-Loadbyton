@@ -245,6 +245,7 @@ async function toPublicUser(row) {
           credit_balance_aed: profile.credit_balance_aed || 0,
           credit_terms_days: profile.credit_terms_days || 30,
           credit_approved_at: profile.credit_approved_at || null,
+          telr_split_id: profile.telr_split_id || null,
         }
       : null,
   };

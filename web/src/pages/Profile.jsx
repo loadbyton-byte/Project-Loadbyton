@@ -128,6 +128,7 @@ export default function Profile() {
     ownedChassis: user.profile?.owned_chassis ?? '',
     iban: user.profile?.iban || '',
     insuranceUploaded: !!user.profile?.insurance_uploaded,
+    telrSplitId: user.profile?.telr_split_id || '',
   });
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -270,6 +271,19 @@ export default function Profile() {
                     placeholder="AE070331234567890123456"
                   />
                   <p className="mt-1 text-xs text-ink-muted">Required before an admin can approve verification. Stored encrypted.</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Telr Split ID (optional)</Label>
+                  <Input
+                    value={form.telrSplitId}
+                    onChange={(e) => setForm({ ...form, telrSplitId: e.target.value })}
+                    placeholder="Issued by Telr after their sub-merchant approval"
+                  />
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Only relevant if Loadbyton processes payments via Telr. Apply as a sub-merchant through Telr directly — once
+                    approved, they'll give you a Split ID; enter it here and your share of future job payments settles to you
+                    automatically instead of waiting on a manual transfer.
+                  </p>
                 </div>
                 {form.iban.trim() !== originalIban.trim() && (
                   <div className="sm:col-span-2 rounded-lg border p-3" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>

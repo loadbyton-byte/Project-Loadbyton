@@ -110,6 +110,10 @@ async function executePayoutAsync(job, payout, req) {
       paymentRef: `payout-${payout.id}`,
       reference: `payout-${payout.id}`,
       carrierAccountId,
+      // Telr-specific: this job's checkout already routed the carrier's
+      // share via Split Payment (job.telr_split_applied, set at checkout
+      // time in job-lifecycle.routes.js) — nothing further to transfer.
+      alreadySplitPaid: !!/** @type {any} */ (job).telr_split_applied,
     });
 
     const attemptStatus = r.ok ? 'SUBMITTED' : 'FAILED';
