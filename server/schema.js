@@ -1109,6 +1109,28 @@ module.exports = function initSchema(db) {
   addColumn('profiles', 'haulage_insurance_expiry', 'haulage_insurance_expiry TEXT');
 
   // ---------------------------------------------------------------------------
+  // CONTRACT_CREDIT — the running credit-limit ledger flagged as "not yet
+  // built" when payment_tier was added above. An admin approves a shipper
+  // for a limit + net terms (credit_approved_at null = not eligible);
+  // award.service.js draws profiles.credit_balance_aed down at award time
+  // and refuses an award that would exceed credit_limit_aed. The existing
+  // `invoices` table is deliberately NOT used for this — per its own file
+  // header (server/lib/invoice.js) it's a carrier-facing tax invoice for
+  // Loadbyton's platform commission only, not what a shipper owes for the
+  // freight itself. Instead, credit_due_at/credit_settled_at live directly
+  // on the job — the natural per-debt unit here, one job = one draw
+  // against the limit. Settling (admin marks credit_settled_at) restores
+  // the balance by that job's agreed_price_aed; cancellation does the same
+  // (job.service.js).
+  // ---------------------------------------------------------------------------
+  addColumn('profiles', 'credit_limit_aed', 'credit_limit_aed REAL NOT NULL DEFAULT 0');
+  addColumn('profiles', 'credit_balance_aed', 'credit_balance_aed REAL NOT NULL DEFAULT 0');
+  addColumn('profiles', 'credit_terms_days', 'credit_terms_days INTEGER NOT NULL DEFAULT 30');
+  addColumn('profiles', 'credit_approved_at', 'credit_approved_at TEXT');
+  addColumn('jobs', 'credit_due_at', 'credit_due_at TEXT');
+  addColumn('jobs', 'credit_settled_at', 'credit_settled_at TEXT');
+
+  // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.
   // ---------------------------------------------------------------------------
 

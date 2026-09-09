@@ -7,6 +7,7 @@ import { useLocale } from '../lib/i18n.jsx';
 import {
   CONTAINER_SIZES, CONTAINER_TYPES, TERMINALS, AREAS, DEPOTS, SHIPMENT_TYPES, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, STATUS_FLOW, shipmentTypeLabel,
   equipmentLabel, cargoTypeLabel, formatAED, formatDate, formatLabel,
+  PAYMENT_TIERS, PAYMENT_TIER_DESCRIPTIONS, paymentTierLabel,
 } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconClose, IconArrowRight, IconTrendUp } from '../components/icons.jsx';
@@ -33,6 +34,7 @@ const POST_JOB_STEPS = ['Shipment type', 'Equipment & volume', 'Locations & timi
 
 const emptyJob = {
   shipmentType: 'IMPORT',
+  paymentTier: 'SPOT_ESCROW',
   loadingLocation: '', deliveryLocation: '', scheduleForLater: false, scheduledPostAt: '', packingList: null,
   pickupLat: undefined, pickupLng: undefined, deliveryLat: undefined, deliveryLng: undefined,
   equipmentType: 'CONTAINER_CHASSIS', cargoType: 'GENERAL_GOODS',
@@ -342,6 +344,39 @@ export default function Dashboard() {
                         ? 'Empty is picked at depot, loaded at your site, then deposited at the port.'
                         : 'Inland move with any road equipment — box truck, pickup, flatbed or custom. No container needed.'}
                   </p>
+
+                  <div className="mt-4">
+                    <Label>How will you pay?</Label>
+                    <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                      {PAYMENT_TIERS.map((pt) => {
+                        const isCredit = pt === 'CONTRACT_CREDIT';
+                        const creditEligible = !!user?.profile?.credit_approved_at;
+                        const creditAvailable = (user?.profile?.credit_limit_aed || 0) - (user?.profile?.credit_balance_aed || 0);
+                        const disabled = isCredit && !creditEligible;
+                        return (
+                          <button
+                            key={pt}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => setForm({ ...form, paymentTier: pt })}
+                            className="rounded-lg border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50"
+                            style={{
+                              borderColor: form.paymentTier === pt ? 'var(--brand-accent)' : 'var(--border-default)',
+                              background: form.paymentTier === pt ? 'var(--brand-accent-bg)' : 'var(--bg-surface)',
+                            }}
+                          >
+                            <p className="text-sm font-semibold text-ink">{paymentTierLabel(pt)}</p>
+                            <p className="mt-0.5 text-xs text-ink-muted">{PAYMENT_TIER_DESCRIPTIONS[pt]}</p>
+                            {isCredit && (
+                              <p className="mt-1 text-xs font-medium" style={{ color: creditEligible ? 'var(--status-success)' : 'var(--status-warning)' }}>
+                                {creditEligible ? `AED ${creditAvailable.toLocaleString()} available of AED ${(user.profile.credit_limit_aed || 0).toLocaleString()}` : 'Not yet approved for your account — contact Loadbyton.'}
+                              </p>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
 

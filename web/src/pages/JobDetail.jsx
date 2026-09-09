@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { STATUS_FLOW, formatAED, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES } from '../lib/constants.js';
+import { STATUS_FLOW, formatAED, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTierLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -369,6 +369,19 @@ export default function JobDetail() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={job.status} />
             <EscrowBadge status={job.escrow_status} />
+            <Badge color={job.payment_tier && job.payment_tier !== 'SPOT_ESCROW' ? 'accent' : 'neutral'}>{paymentTierLabel(job.payment_tier || 'SPOT_ESCROW')}</Badge>
+            {job.payment_tier === 'CONTRACT_CREDIT' && job.credit_due_at && (() => {
+              // Matches admin/CreditTab.jsx's overdue calculation exactly —
+              // a shipper should see the same "this is late" signal an
+              // admin does, not a flat neutral badge regardless of how
+              // overdue it is.
+              const overdue = !job.credit_settled_at && new Date(job.credit_due_at).getTime() < Date.now();
+              return (
+                <Badge color={job.credit_settled_at ? 'success' : overdue ? 'danger' : 'neutral'}>
+                  {job.credit_settled_at ? 'Credit settled' : `${overdue ? 'Credit overdue — ' : 'Credit due '}${formatDate(job.credit_due_at)}`}
+                </Badge>
+              );
+            })()}
             <Badge color="neutral">{equipmentLabel(job.equipment_type)}</Badge>
             {job.container_count > 1 && <Badge color="accent">×{job.container_count} containers</Badge>}
             {job.truck_count > 1 && <Badge color="accent">×{job.truck_count} trucks</Badge>}
@@ -404,7 +417,16 @@ export default function JobDetail() {
         <div>
           <Section
             title={t('jobDetail.shipmentDetails', 'Shipment details')}
-            action={canEditJob && !editingJob && <Button variant="ghost" size="sm" onClick={() => setEditingJob(true)}>{t('jobDetail.edit', 'Edit')}</Button>}
+            action={
+              <div className="flex items-center gap-2">
+                {isShipper && (
+                  <Link to={`/jobs/${job.id}/insurance`} className="text-sm font-medium" style={{ color: 'var(--brand-accent)' }}>
+                    {job.insurance_opt_in ? 'View insurance policy' : 'Insure this cargo'}
+                  </Link>
+                )}
+                {canEditJob && !editingJob && <Button variant="ghost" size="sm" onClick={() => setEditingJob(true)}>{t('jobDetail.edit', 'Edit')}</Button>}
+              </div>
+            }
           >
             {editingJob ? (
               <JobEditForm job={job} onDone={() => { setEditingJob(false); load(); }} onCancel={() => setEditingJob(false)} />

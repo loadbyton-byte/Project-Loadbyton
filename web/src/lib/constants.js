@@ -4,6 +4,26 @@ export const TERMINALS = ['JEBEL_ALI_T1', 'JEBEL_ALI_T2', 'JEBEL_ALI_T4', 'KHALI
 export const AREAS = ['AL_QUOZ', 'JAFZA_SOUTH', 'DUBAI_SOUTH', 'DIP', 'AL_QUSAIS', 'MUSAFFAH', 'SHARJAH_INDUSTRIAL', 'FUJAIRAH_FREEZONE'];
 export const SHIPMENT_TYPES = ['IMPORT', 'EXPORT', 'LOCAL'];
 
+// How a job gets paid — set once at posting, visible to every carrier
+// before they bid. SPOT_ESCROW is the default and the only tier that
+// requires funds in escrow before pickup (see server/services/job.service.js's
+// PICKED_UP gate); the other three exist for shippers who have a standing
+// arrangement instead of per-job card payment.
+export const PAYMENT_TIERS = ['SPOT_ESCROW', 'PAY_ON_DELIVERY', 'CONTRACT_CREDIT', 'OFF_PLATFORM'];
+export const PAYMENT_TIER_LABELS = {
+  SPOT_ESCROW: 'Escrow (pay now)',
+  PAY_ON_DELIVERY: 'Pay on delivery',
+  CONTRACT_CREDIT: 'Contract credit',
+  OFF_PLATFORM: 'Off-platform',
+};
+export const PAYMENT_TIER_DESCRIPTIONS = {
+  SPOT_ESCROW: 'Full price is held in escrow the moment you award a bid, released to the carrier once delivery is confirmed. Fastest to set up — needs no prior arrangement.',
+  PAY_ON_DELIVERY: 'Nothing is charged at award. Payment is collected only once the job reaches Delivered.',
+  CONTRACT_CREDIT: 'Draws against an approved credit limit — no payment at award or delivery. Requires Loadbyton to have approved credit terms for your account first.',
+  OFF_PLATFORM: 'You and the carrier settle payment directly, outside Loadbyton. The job is still tracked and disputed here, just not the money.',
+};
+export function paymentTierLabel(v) { return PAYMENT_TIER_LABELS[v] || formatLabel(v); }
+
 export function shipmentTypeLabel(st) {
   return { IMPORT: 'Import — Terminal → Customer → Depot', EXPORT: 'Export — Depot → Shipper → Terminal', LOCAL: 'Local — Loading → Delivery' }[st] || st;
 }

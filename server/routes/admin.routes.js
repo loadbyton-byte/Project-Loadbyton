@@ -203,6 +203,64 @@ router.post('/api/admin/verify-bulk', auth(['ADMIN']), async (req, res) => {
   res.json({ results, succeeded: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length });
 });
 
+// --- CONTRACT_CREDIT administration ---------------------------------------
+// A shipper self-selecting CONTRACT_CREDIT on the post-job form doesn't
+// self-grant credit (see award.service.js's gate) — an admin has to
+// actually extend it first. This lists every shipper with their current
+// standing plus any outstanding (unsettled) credit jobs, and the two
+// actions: approve/update a limit, and mark a job's draw settled.
+router.get('/api/admin/credit', auth(['ADMIN']), async (req, res) => {
+  const shippers = await db.prepare(
+    `SELECT u.id, u.email, p.company_name, p.credit_limit_aed, p.credit_balance_aed, p.credit_terms_days, p.credit_approved_at
+     FROM users u JOIN profiles p ON p.user_id = u.id
+     WHERE u.role IN ('SHIPPER','FORWARDER') AND (p.credit_approved_at IS NOT NULL OR p.credit_balance_aed > 0)
+     ORDER BY p.credit_approved_at IS NULL, p.company_name`
+  ).all();
+  const outstandingJobs = await db.prepare(
+    `SELECT id, job_code, shipper_id, agreed_price_aed, status, credit_due_at
+     FROM jobs WHERE payment_tier='CONTRACT_CREDIT' AND carrier_id IS NOT NULL AND credit_settled_at IS NULL
+     ORDER BY credit_due_at ASC`
+  ).all();
+  res.json({ shippers, outstandingJobs });
+});
+
+router.post('/api/admin/credit/:userId/approve', auth(['ADMIN']), async (req, res) => {
+  const { limitAed, termsDays } = req.body || {};
+  const limit = Number(limitAed);
+  if (!Number.isFinite(limit) || limit < 0) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'limitAed must be a non-negative number');
+  const terms = termsDays !== undefined ? Number(termsDays) : 30;
+  if (!Number.isFinite(terms) || terms < 1) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'termsDays must be a positive number');
+  const shipper = await db.prepare(`SELECT id FROM users WHERE id=? AND role IN ('SHIPPER','FORWARDER')`).get(req.params.userId);
+  if (!shipper) return sendError(res, 404, 'Shipper not found');
+  await db.prepare(`UPDATE profiles SET credit_limit_aed=?, credit_terms_days=?, credit_approved_at=datetime('now') WHERE user_id=?`).run(limit, terms, shipper.id);
+  await writeAudit(req, { userId: req.actorId, action: 'CREDIT_APPROVED', details: `Approved AED ${limit} credit limit, net ${terms} days`, entityType: 'user', entityId: shipper.id });
+  await notify(shipper.id, 'Credit terms approved', `You've been approved for AED ${limit} contract credit, net ${terms} days.`, null, 'system');
+  const updated = await db.prepare('SELECT credit_limit_aed, credit_balance_aed, credit_terms_days, credit_approved_at FROM profiles WHERE user_id=?').get(shipper.id);
+  res.json({ ok: true, credit: updated });
+});
+
+router.post('/api/admin/credit/jobs/:jobId/settle', auth(['ADMIN']), async (req, res) => {
+  const job = await db.prepare(`SELECT * FROM jobs WHERE id=? AND payment_tier='CONTRACT_CREDIT'`).get(req.params.jobId);
+  if (!job) return sendError(res, 404, 'Contract-credit job not found');
+  if (job.credit_settled_at) return sendError(res, 400, 'Already settled');
+  if (!job.carrier_id || !job.agreed_price_aed) return sendError(res, 400, 'Job was never awarded — nothing was drawn against credit');
+  // Row-locked + idempotency-guarded, same pattern as the cancellation
+  // restoration in job.service.js — two concurrent settle requests for
+  // the same job (an admin double-click) must not both decrement the
+  // balance. The UPDATE's own WHERE repeats the credit_settled_at IS NULL
+  // check the SELECT above already used, so a second attempt matches zero
+  // rows and skips the balance write.
+  const settled = await db.transaction(async (trx) => {
+    const claim = await trx.query(`UPDATE jobs SET credit_settled_at=datetime('now') WHERE id=? AND credit_settled_at IS NULL`, [job.id]);
+    if (!claim.rowCount) return false;
+    await trx.query(`UPDATE profiles SET credit_balance_aed = MAX(0, credit_balance_aed - ?) WHERE user_id=?`, [job.agreed_price_aed, job.shipper_id]);
+    return true;
+  });
+  if (!settled) return sendError(res, 400, 'Already settled');
+  await writeAudit(req, { userId: req.actorId, action: 'CREDIT_SETTLED', details: `${job.job_code}: AED ${job.agreed_price_aed} settled`, entityType: 'job', entityId: job.id });
+  res.json({ ok: true });
+});
+
 router.get('/api/admin/users', auth(['ADMIN']), async (req, res) => {
   const rows = await db
     .prepare(
