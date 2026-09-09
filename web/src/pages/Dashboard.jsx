@@ -13,6 +13,7 @@ import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck,
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
 import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
+import TimeSlotPicker from '../components/TimeSlotPicker.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -156,8 +157,8 @@ export default function Dashboard() {
         deadline,
         targetPriceAed: form.targetPriceAed ? Number(form.targetPriceAed) : undefined,
         cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
-        containerCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.containerCount) || 1,
-        truckCount: form.shipmentType === 'LOCAL' ? 1 : Number(form.truckCount) || 1,
+        containerCount: CONTAINER_EQUIPMENT.includes(form.equipmentType) ? Number(form.containerCount) || 1 : 1,
+        truckCount: CONTAINER_EQUIPMENT.includes(form.equipmentType) ? 1 : Number(form.truckCount) || 1,
         scheduledPostAt: form.scheduleForLater && form.scheduledPostAt ? new Date(form.scheduledPostAt).toISOString() : undefined,
         agreedToTerms,
         // Only sent when the shipper actually used the "add another
@@ -359,16 +360,16 @@ export default function Dashboard() {
                         : 'General freight — describe the cargo in the notes field below instead of a container size.'}
                     </p>
                   </div>
-                  {form.shipmentType === 'LOCAL' ? (
+                  {CONTAINER_EQUIPMENT.includes(form.equipmentType) ? (
                     <div>
-                      <Label>No. of vehicles required</Label>
-                      <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
+                      <Label>No. of containers</Label>
+                      <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
                       <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
                     </div>
                   ) : (
                     <div>
-                      <Label>No. of containers</Label>
-                      <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
+                      <Label>No. of trucks required</Label>
+                      <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
                       <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
                     </div>
                   )}
@@ -564,10 +565,14 @@ export default function Dashboard() {
                     <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
                   </div>
                   <div className="sm:col-span-2">
-                    <Label>{form.shipmentType === 'LOCAL' ? 'Loading date & time' : 'Ready at'}</Label>
-                    <Input type="datetime-local" required value={form.readyAt} onChange={(e) => setForm({ ...form, readyAt: e.target.value })} />
+                    <TimeSlotPicker
+                      label={form.shipmentType === 'LOCAL' ? 'Loading date & time slot' : 'Ready at (time slot)'}
+                      required
+                      value={form.readyAt}
+                      onChange={(v) => setForm({ ...form, readyAt: v })}
+                    />
                     <p className="mt-1 text-xs text-ink-muted">
-                      No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from your ready time.
+                      No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from the start of your slot.
                     </p>
                   </div>
                   <div>
@@ -591,8 +596,12 @@ export default function Dashboard() {
                     </label>
                     {form.scheduleForLater && (
                       <div>
-                        <Label>Publish at</Label>
-                        <Input type="datetime-local" required value={form.scheduledPostAt} onChange={(e) => setForm({ ...form, scheduledPostAt: e.target.value })} />
+                        <TimeSlotPicker
+                          label="Publish at (time slot)"
+                          required
+                          value={form.scheduledPostAt}
+                          onChange={(v) => setForm({ ...form, scheduledPostAt: v })}
+                        />
                         <p className="mt-1 text-xs text-ink-muted">Job stays a private draft until this time, then goes live to carriers automatically.</p>
                       </div>
                     )}
