@@ -272,6 +272,40 @@ test('two rapid POST /api/jobs with the same Idempotency-Key create only one job
   assert.equal(matching.length, 1, 'only one job with this delivery address should exist, not two');
 });
 
+// Regression for a real bug: the job-post form reuses one Idempotency-Key
+// across retries of the SAME submit attempt (so a network blip doesn't
+// double-post), including the T&C-checkbox retry flow, where the first
+// attempt fails validation, the user corrects something, and resubmits
+// under that same key. The middleware used to cache EVERY response,
+// including 4xx ones — so that first validation failure got replayed
+// verbatim forever, no matter what the client sent afterward under the
+// same key. This made the T&C checkbox (and any other validation-error
+// retry) permanently stuck: "must agree to terms" (or whatever the first
+// error was) kept coming back even after the user fixed their request.
+test('a job-post retried under the same Idempotency-Key after a validation error actually succeeds once corrected', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const key = `test-idem-retry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const headers = { 'Idempotency-Key': key };
+  const basePayload = {
+    containerSize: '20FT',
+    containerType: 'DRY',
+    deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Test Warehouse — idempotency error-retry regression',
+    readyAt: new Date(Date.now() + 86400000).toISOString(),
+    deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    maxBudgetAed: 500,
+  };
+
+  const first = await shipper.post('/api/jobs', basePayload, headers); // no pickupTerminal — fails validation
+  assert.equal(first.status, 400, first.raw);
+  assert.match(first.body.error.message, /pickupTerminal is required/);
+
+  const second = await shipper.post('/api/jobs', { ...basePayload, pickupTerminal: 'JEBEL_ALI_T1' }, headers);
+  assert.equal(second.status, 201, second.raw, 'the corrected retry under the same key must actually be processed, not replay the cached validation failure');
+  assert.equal(second.body.job.delivery_address, basePayload.deliveryAddress);
+});
+
 // Deliberately placed after every test above that needs to log in — this
 // test intentionally exhausts the per-IP auth rate limit, and its cooldown
 // window would otherwise cause spurious 429s on any later test's login().
