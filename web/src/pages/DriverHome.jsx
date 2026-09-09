@@ -3,11 +3,95 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { formatDateTime } from '../lib/constants.js';
-import { Card, StatusBadge, EmptyState, ErrorState, Button } from '../components/ui.jsx';
-import { IconTruck, IconMapPin } from '../components/icons.jsx';
+import { formatDateTime, formatMoney, formatLabel, equipmentLabel } from '../lib/constants.js';
+import { Card, StatusBadge, EmptyState, ErrorState, Button, Badge } from '../components/ui.jsx';
+import { IconTruck, IconMapPin, IconWallet } from '../components/icons.jsx';
 import ChatPopup from '../features/job/ChatPopup.jsx';
 import { directionsUrl } from '../lib/googleMaps.js';
+import { useToasts } from '../components/Toast.jsx';
+
+// Pending trip offer — the accept/decline step between a carrier assigning
+// a job to this driver and it actually becoming "my job" below. Previously
+// only reachable by replying to a WhatsApp message (whatsapp.routes.js),
+// which needs WHATSAPP_ACCESS_TOKEN configured (dark by default) and the
+// driver to actually have WhatsApp set up — a driver with neither had no
+// way to see or act on a real pending offer at all.
+function TripOfferCard({ onResolved }) {
+  const { addToast } = useToasts();
+  const [offer, setOffer] = useState(undefined); // undefined = loading, null = none pending
+  const [busy, setBusy] = useState(false);
+
+  function load() {
+    api.driverTripOffer().then((d) => setOffer(d.tripOffer)).catch(() => setOffer(null));
+  }
+  useEffect(load, []);
+
+  async function respond(accepted) {
+    setBusy(true);
+    try {
+      await api.respondToTripOffer(offer.id, accepted);
+      addToast({ type: accepted ? 'status_change' : 'system_message', title: accepted ? 'Trip accepted' : 'Trip declined' });
+      setOffer(null);
+      onResolved();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not respond', body: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!offer) return null;
+  const job = offer.job;
+  return (
+    <Card className="mb-4" style={{ borderColor: 'var(--brand-accent)' }}>
+      <Card.Content>
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">{job?.job_code}</p>
+          <Badge color="accent">New offer</Badge>
+        </div>
+        <p className="mt-1 text-sm font-medium text-ink">
+          {formatLabel(job?.pickup_terminal)} → {formatLabel(job?.delivery_area)}
+        </p>
+        <p className="mt-0.5 text-xs text-ink-muted">
+          {equipmentLabel(job?.equipment_type)} · Ready {formatDateTime(job?.ready_at)}
+          {job?.agreed_price_aed ? ` · ${formatMoney(job.agreed_price_aed, job.currency)}` : ''}
+        </p>
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" loading={busy} onClick={() => respond(true)}>Accept</Button>
+          <Button size="sm" variant="ghost" loading={busy} onClick={() => respond(false)}>Decline</Button>
+        </div>
+      </Card.Content>
+    </Card>
+  );
+}
+
+// DRIVER_ASSOCIATE only — a plain DRIVER has no revenue-split wallet, see
+// server/routes/driver.routes.js's GET /api/driver/wallet.
+function WalletCard() {
+  const [entries, setEntries] = useState(undefined);
+  useEffect(() => { api.driverWallet().then((d) => setEntries(d.entries)).catch(() => setEntries([])); }, []);
+  if (!entries || entries.length === 0) return null;
+  const total = entries.reduce((sum, e) => sum + (e.status === 'PAID' ? 0 : e.driver_share_aed), 0);
+  return (
+    <Card className="mb-4">
+      <Card.Content>
+        <div className="flex items-center gap-2">
+          <IconWallet size={16} className="text-ink-muted" />
+          <p className="text-sm font-semibold text-ink">Your earnings</p>
+        </div>
+        <p className="mt-1 tabular font-display text-xl font-semibold text-ink">{formatMoney(total)} outstanding</p>
+        <div className="mt-2 space-y-1.5">
+          {entries.slice(0, 5).map((e) => (
+            <div key={e.id} className="flex items-center justify-between text-xs">
+              <span className="text-ink-secondary">{e.job_code}</span>
+              <span className="tabular text-ink">{formatMoney(e.driver_share_aed)} <span className="text-ink-muted">· {e.status}</span></span>
+            </div>
+          ))}
+        </div>
+      </Card.Content>
+    </Card>
+  );
+}
 
 // The entire driver-seat experience — see server/middleware/auth.js's
 // DRIVER_SEAT_ALLOWED_ROUTES for the matching backend boundary. Deliberately
@@ -16,7 +100,7 @@ import { directionsUrl } from '../lib/googleMaps.js';
 // actions a driver seat has no access to and no need for.
 export default function DriverHome() {
   usePageTitle('My job');
-  const { logout } = useAuth();
+  const { logout, actingAs } = useAuth();
   const { t, isRtl } = useLocale();
   const [job, setJob] = useState(undefined); // undefined = loading, null = none assigned
   const [error, setError] = useState('');
@@ -35,6 +119,8 @@ export default function DriverHome() {
       </div>
 
       <div className="mt-5">
+        <TripOfferCard onResolved={load} />
+        {actingAs?.seatRole === 'DRIVER_ASSOCIATE' && <WalletCard />}
         {job === undefined ? (
           <p className="text-sm text-ink-muted">{t('driver.loading', 'Loading…')}</p>
         ) : error ? (

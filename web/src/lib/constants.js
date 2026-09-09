@@ -136,6 +136,22 @@ export function formatAED(amount) {
   return `AED ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 }
 
+// A job's price columns are still literally named _aed (server never
+// converts them — jobs.currency only drives which VAT rate applies,
+// server/routes/currency.routes.js) but the shipper picks that currency
+// specifically so "bids and payments will use this currency" (the
+// selector's own copy) — carriers bid understanding the number is in
+// that currency, not AED. Hardcoding "AED" on a job whose currency was
+// set to something else was a real bug (found live on the one seeded
+// cross-border job, priced in SAR but displayed as AED). This shows the
+// job's actual currency code, defaulting to AED when unset — no value
+// conversion, since none ever happened to the stored number either.
+export function formatMoney(amount, currencyCode) {
+  if (amount === null || amount === undefined) return '—';
+  const code = (currencyCode || 'AED').toUpperCase();
+  return `${code} ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+}
+
 export function formatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso.includes('T') || iso.includes('Z') ? iso : iso.replace(' ', 'T') + 'Z');

@@ -104,7 +104,17 @@ export function StatusBadge({ status }) {
 }
 
 const ESCROW_COLOR = { PENDING: 'neutral', HELD: 'warning', FUNDED: 'info', RELEASED: 'success', DISPUTED: 'danger' };
-export function EscrowBadge({ status }) {
+// A cancelled job's escrow_status is set to 'RELEASED' (job.service.js's
+// cancellation transaction reuses that value rather than a dedicated
+// CANCELLED/REFUNDED one), which without `jobStatus` renders as a green
+// "Escrow: RELEASED" badge — reading as a successful payout when what
+// actually happened was a refund to the shipper. jobStatus is optional so
+// every existing call site keeps working unchanged; pass it to get the
+// accurate label on a job that's actually been cancelled.
+export function EscrowBadge({ status, jobStatus }) {
+  if (jobStatus === 'CANCELLED' && status === 'RELEASED') {
+    return <Badge color="neutral">Escrow: Refunded</Badge>;
+  }
   return <Badge color={ESCROW_COLOR[status] || 'neutral'}>Escrow: {status}</Badge>;
 }
 
