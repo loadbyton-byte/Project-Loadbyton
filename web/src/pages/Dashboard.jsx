@@ -129,7 +129,13 @@ export default function Dashboard() {
 
   function loadStats() {
     api.analytics().then((d) => setAnalytics(d.analytics)).catch(() => {});
-    api.listTemplates().then((d) => setTemplates(d.templates.slice(0, 3))).catch(() => {});
+    // Templates (save-and-reuse job postings) is a SHIPPER-only backend
+    // endpoint (server/routes/retention.routes.js) — FORWARDER/BROKER/
+    // OWNER_OPERATOR also land on this dashboard but calling it for them
+    // just 403s on every page load, so only fetch it for the role that owns it.
+    if (user?.role === 'SHIPPER') {
+      api.listTemplates().then((d) => setTemplates(d.templates.slice(0, 3))).catch(() => {});
+    }
     api.listJobs({ sort: 'date_desc', limit: 3 }).then((d) => setRecentJobs(d.jobs)).catch(() => setRecentJobs([]));
   }
   function loadJobs() {
