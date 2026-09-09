@@ -547,6 +547,34 @@ module.exports = async function seed() {
       .run('CXML-DEMO-002', 'CARGO_XML', 'MARITIME', 'CREATED', 'JEBEL_ALI_T2', 'DAMMAM', JSON.stringify({ awb: 'CXML-DEMO-002', mode: 'MARITIME' }), null);
   }
 
+  // Payout backfill — every job above that reached AWARDED-or-beyond
+  // (carrier_id + agreed_price_aed set) was inserted directly with SQL,
+  // bypassing award.service.js's real award flow, which is what actually
+  // creates the matching `payouts` row in production. Without this, GET
+  // /api/jobs/:id/documents/settlement 404s ("No payout on file for this
+  // job yet") for every seeded awarded/completed job — the Job History
+  // page's "Settlement" link is a plain <a href> straight to that API
+  // route, so the 404's raw JSON body renders directly in the browser
+  // instead of a handled error. Gated per-job on "no payout row yet" (not
+  // wrapped in ensureJob, since it needs to also backfill jobs seeded by
+  // an earlier boot of this file, before this fix existed) so it's safe
+  // to run on every boot against any existing database.
+  const missingPayoutJobs = await db.prepare(
+    `SELECT j.id, j.carrier_id, j.agreed_price_aed, j.escrow_status FROM jobs j
+     LEFT JOIN payouts p ON p.job_id = j.id
+     WHERE j.carrier_id IS NOT NULL AND j.agreed_price_aed IS NOT NULL
+       AND j.status NOT IN ('OPEN','CANCELLED') AND p.id IS NULL`
+  ).all();
+  for (const mj of missingPayoutJobs) {
+    const gross = mj.agreed_price_aed;
+    const fee = Math.round(gross * 0.06); // matches award.service.js's default commission_rate_bps (600 = 6%)
+    const net = gross - fee;
+    const released = mj.escrow_status === 'RELEASED';
+    await db.prepare(
+      `INSERT INTO payouts (job_id, carrier_id, gross_aed, platform_fee_aed, net_aed, status, released_at) VALUES (?,?,?,?,?,?,?)`
+    ).run(mj.id, mj.carrier_id, gross, fee, net, released ? 'RELEASED' : 'PENDING', released ? sqliteTime(0) : null);
+  }
+
   if (created.accounts.length || created.jobs.length) {
     console.log(`[seed] top-up complete — created ${created.accounts.length} account(s)${created.accounts.length ? ` (${created.accounts.join(', ')})` : ''}, ${created.jobs.length} job(s)${created.jobs.length ? ` (${created.jobs.join(', ')})` : ''}`);
   } else {

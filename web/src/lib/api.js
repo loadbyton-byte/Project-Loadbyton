@@ -16,6 +16,28 @@ export class ApiError extends Error {
   }
 }
 
+// Branded documents (settlement statement, load confirmation, POD
+// certificate, dispute notice) are server-rendered HTML, not JSON — callers
+// used to link straight to the API URL with a plain <a href>, so any
+// non-2xx response (e.g. "No payout on file for this job yet") rendered as
+// raw JSON in the browser instead of a handled error. This mirrors
+// request()'s error-message extraction (same two envelope shapes) but opens
+// the HTML in a new tab on success instead of parsing JSON.
+export async function openDocument(path) {
+  const res = await fetch(`${API_BASE_URL}/api${path}`, { credentials: 'include' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const message =
+      typeof data?.error === 'string' ? data.error
+      : data?.message || data?.error?.message || data?._legacy?.error
+      || `Request failed (${res.status})`;
+    throw new ApiError(message, res.status, data?.code || (typeof data?.error === 'object' ? data.error.code : undefined));
+  }
+  const html = await res.text();
+  const blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  window.open(blobUrl, '_blank', 'noopener');
+}
+
 async function request(method, path, body, extraHeaders) {
   const res = await fetch(`${API_BASE_URL}/api${path}`, {
     method,

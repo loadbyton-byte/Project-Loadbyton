@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api.js';
+import { api, openDocument } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate, formatLabel } from '../lib/constants.js';
 import { Card, Input, EmptyState, ErrorState, StatusBadge } from '../components/ui.jsx';
 import { IconHistory } from '../components/icons.jsx';
+import { useToasts } from '../components/Toast.jsx';
 
 // Shipper-facing equivalent of the carrier's Invoices/Earnings pages — a
 // per-job breakdown (price, dates, duration) plus links to whichever
@@ -20,6 +21,7 @@ function durationDays(job) {
 }
 
 function DocLinks({ job }) {
+  const { addToast } = useToasts();
   const links = [];
   if (job.agreed_price_aed) links.push(['Load confirmation', 'load-confirmation']);
   if (job.delivered_at) links.push(['POD certificate', 'pod-certificate']);
@@ -32,12 +34,21 @@ function DocLinks({ job }) {
   // detail page correctly knows its real dispute status and links there
   // properly — this quick-links row isn't the place to guess.
   if (!links.length) return <span className="text-xs text-ink-muted">—</span>;
+  // openDocument (not a plain <a href>) — a straight link to the API route
+  // meant a failure (e.g. a data gap the button shouldn't even be shown
+  // for, or a real backend error) rendered raw JSON in the browser instead
+  // of a handled toast.
+  function open(slug, label) {
+    openDocument(`/jobs/${job.id}/documents/${slug}`).catch((err) => {
+      addToast({ type: 'system_message', title: `Couldn't open ${label}`, body: err.message });
+    });
+  }
   return (
     <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
       {links.map(([label, slug]) => (
-        <a key={slug} href={`/api/jobs/${job.id}/documents/${slug}`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-secondary hover:underline">
+        <button key={slug} type="button" onClick={() => open(slug, label)} className="text-xs font-semibold text-brand-secondary hover:underline">
           {label}
-        </a>
+        </button>
       ))}
     </div>
   );

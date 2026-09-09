@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../lib/api.js';
+import { api, openDocument } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
@@ -147,14 +147,15 @@ export default function JobDispute() {
                       <p className="mt-0.5 text-ink-secondary">{dispute.determination}</p>
                     </div>
                   )}
-                  <a
-                    href={`/api/jobs/${id}/documents/dispute-notice`}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openDocument(`/jobs/${id}/documents/dispute-notice`).catch((err) => {
+                      addToast({ type: 'system_message', title: "Couldn't open dispute notice", body: err.message });
+                    })}
                     className="inline-block text-sm font-semibold text-brand-secondary hover:underline"
                   >
                     Download dispute resolution notice
-                  </a>
+                  </button>
                 </>
               )}
             </Card.Content>
