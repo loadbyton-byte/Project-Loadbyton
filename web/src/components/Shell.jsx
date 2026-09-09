@@ -8,7 +8,7 @@ import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
   IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt,
-  IconCompass,
+  IconCompass, IconShield,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 
@@ -145,6 +145,24 @@ function NotificationBell() {
         </div>
       )}
     </div>
+  );
+}
+
+// TRN Verification used to be a per-role sidebar entry — moved here (a
+// small always-present icon button next to the bell, for every logged-in
+// role) since it's a standalone counterparty-lookup tool nobody uses
+// often enough to earn permanent nav real estate, but it still needs to
+// be reachable from somewhere other than typing the URL directly.
+function TrnQuickLink() {
+  return (
+    <Link
+      to="/verify/trn"
+      className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+      aria-label="TRN Verification"
+      title="TRN Verification"
+    >
+      <IconShield size={20} />
+    </Link>
   );
 }
 
@@ -347,7 +365,10 @@ function ShellInner({ children }) {
           <Logo to={user ? homePath(user, actingAs) : '/'} />
 
           {user ? (
-            <NotificationBell />
+            <div className="flex items-center">
+              <TrnQuickLink />
+              <NotificationBell />
+            </div>
           ) : (
             <Link to="/login" className="rounded-full px-3.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
               {t('nav.login', 'Log in')}
@@ -566,7 +587,10 @@ function ShellInner({ children }) {
             )}
 
             {user ? (
-              <NotificationBell />
+              <div className="flex items-center">
+                <TrnQuickLink />
+                <NotificationBell />
+              </div>
             ) : (
               <div className="flex items-center gap-2">
                 <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
