@@ -36,6 +36,25 @@ const SORT_OPTIONS = [
 // Change 1b Phase E — post-a-job as a 3-step wizard, matching the mockup.
 const POST_JOB_STEPS = ['Shipment', 'Equipment', 'Locations'];
 
+// crypto.randomUUID() only exists in a secure context (HTTPS or localhost)
+// and only on newer browser engines — calling it directly threw
+// "crypto.randomUUID is not a function" on plain-HTTP origins and on
+// older/WebView browsers, crashing the entire Dashboard (the nearest error
+// boundary is at the app root) the instant the post-job form opened. This
+// doesn't need CSPRNG strength — it's only a client-side idempotency-dedup
+// token — so a Math.random()-based fallback is fine when the real API is
+// unavailable.
+function safeRandomUUID() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  } catch { /* fall through to the fallback below */ }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const emptyJob = {
   shipmentType: 'IMPORT',
   paymentTier: 'INSTANT',
@@ -127,7 +146,7 @@ export default function Dashboard() {
   // replay the first response instead of creating a duplicate job.
   const postJobIdempotencyKeyRef = React.useRef(null);
   useEffect(() => {
-    if (showForm) postJobIdempotencyKeyRef.current = crypto.randomUUID();
+    if (showForm) postJobIdempotencyKeyRef.current = safeRandomUUID();
   }, [showForm]);
 
   function loadStats() {
@@ -157,6 +176,19 @@ export default function Dashboard() {
 
   async function onCreate(e) {
     e.preventDefault();
+    // TimeSlotPicker's native `required` only guards its own <input
+    // type="date"> sub-field — picking a date without also tapping a
+    // 2-hour slot button leaves form.readyAt as '' (see its commit()),
+    // which the browser's own validation has no way to catch (the slot
+    // buttons aren't form-participating elements). Without this check,
+    // `new Date('').getTime()` below is NaN and .toISOString() throws a
+    // raw RangeError before the request is even sent — surfacing as a
+    // generic, confusing "Error" toast instead of telling the shipper
+    // what to actually fix.
+    if (!form.readyAt || Number.isNaN(new Date(form.readyAt).getTime())) {
+      addToast({ type: 'system_message', title: 'Pick a ready time', body: 'Choose a ready date and a 2-hour time slot before posting.' });
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
