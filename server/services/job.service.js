@@ -174,14 +174,25 @@ async function updateJobStatus(jobId, nextStatus, req) {
   // credit limit down) rather than cancelled pre-award. Row-locked +
   // idempotency-guarded the same way the INSTANT block above is — two
   // concurrent cancel requests for the same job must not both restore the
-  // balance. credit_due_at is only ever set once, at award
-  // (award.service.js), so clearing it here doubles as the claim: a
-  // second concurrent attempt reads it already NULL and matches zero rows
-  // in the UPDATE below.
+  // balance.
+  //
+  // Also guards against the OTHER way this job's draw can be resolved:
+  // an admin manually marking it settled (POST /api/admin/credit/jobs/:jobId/settle).
+  // A real bug this fixes — the two paths used to be entirely uncoordinated:
+  // cancellation only checked/cleared credit_due_at, settle only checked/set
+  // credit_settled_at, so EITHER order (cancel-then-settle, or settle-then-
+  // cancel) let the second path's claim still succeed and decrement the
+  // balance a second time for a draw that was already resolved — a real
+  // double-restore that could wipe out an unrelated job's genuine
+  // outstanding balance. The claim now checks BOTH fields and sets BOTH,
+  // so whichever path runs first "uses up" the claim for both.
   const isDeferredTier = DEFERRED_PAYMENT_TERMS.includes(job.payment_tier) || job.payment_tier === 'CONTRACT_CREDIT';
   if (nextStatus === 'CANCELLED' && isDeferredTier && job.carrier_id && job.agreed_price_aed) {
     await db.transaction(async (trx) => {
-      const claim = await trx.query(`UPDATE jobs SET credit_due_at=NULL WHERE id=? AND credit_due_at IS NOT NULL`, [id]);
+      const claim = await trx.query(
+        `UPDATE jobs SET credit_due_at=NULL, credit_settled_at=datetime('now') WHERE id=? AND credit_due_at IS NOT NULL AND credit_settled_at IS NULL`,
+        [id]
+      );
       if (!claim.rowCount) return;
       await trx.query(`UPDATE profiles SET credit_balance_aed = MAX(0, credit_balance_aed - ?) WHERE user_id=?`, [job.agreed_price_aed, job.shipper_id]);
     });
