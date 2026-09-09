@@ -121,3 +121,60 @@ test('NET_15 award is blocked without admin-approved credit, then succeeds once 
   const settleAgain = await admin.post(`/api/admin/credit/jobs/${job2Id}/settle`);
   assert.equal(settleAgain.status, 400, settleAgain.raw);
 });
+
+// Regression for a real bug: cancellation-restore (job.service.js) and
+// admin-settle (admin.routes.js) used to be two entirely uncoordinated
+// claims — cancellation only checked/cleared credit_due_at, settle only
+// checked/set credit_settled_at. Either order (cancel-then-settle, or
+// settle-then-cancel) let the SECOND path's claim still succeed and
+// decrement profiles.credit_balance_aed a second time for a draw that
+// was already resolved — capable of wiping out an unrelated job's real
+// outstanding balance. Fixed by having each path check AND set BOTH
+// fields, so whichever runs first "uses up" the claim for both.
+test('a deferred-term job\'s credit draw cannot be restored twice, in either order (cancel-then-settle, settle-then-cancel)', async () => {
+  const admin = makeClient(server.baseUrl);
+  await admin.login('admin@loadbyton.ae', 'demo1234');
+  const shipper = await freshShipper(server.baseUrl, admin);
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+
+  const balanceOf = async (shipperId) => (await admin.get('/api/admin/credit')).body.shippers.find((s) => s.id === shipperId).credit_balance_aed;
+
+  const { jobId: jobA, bidId: bidIdA } = await postJobAndBid(shipper, carrier, 'NET_7', 300);
+  const jobRow = await admin.get(`/api/jobs/${jobA}`);
+  const shipperId = jobRow.body.job.shipper_id;
+  const approve = await admin.post(`/api/admin/credit/${shipperId}/approve`, { limitAed: 2000, termsDays: 7 });
+  assert.equal(approve.status, 200, approve.raw);
+
+  // --- Direction A: cancel, then attempt settle ---
+  const awardedA = await shipper.post(`/api/jobs/${jobA}/award`, { bidId: bidIdA, skipNegotiation: true });
+  assert.equal(awardedA.status, 200, awardedA.raw);
+
+  const balanceAfterAwardA = await balanceOf(shipperId);
+  const cancelA = await shipper.patch(`/api/jobs/${jobA}/status`, { status: 'CANCELLED' });
+  assert.equal(cancelA.status, 200, cancelA.raw);
+  const balanceAfterCancelA = await balanceOf(shipperId);
+  assert.equal(balanceAfterCancelA, balanceAfterAwardA - 300, 'cancellation must restore exactly the drawn amount');
+
+  const settleAfterCancelA = await admin.post(`/api/admin/credit/jobs/${jobA}/settle`);
+  assert.equal(settleAfterCancelA.status, 400, 'settling an already-cancelled (already-restored) job must be refused, not double-decrement');
+  const balanceAfterSettleAttemptA = await balanceOf(shipperId);
+  assert.equal(balanceAfterSettleAttemptA, balanceAfterCancelA, 'balance must be unchanged by the refused settle attempt');
+
+  // --- Direction B: settle early (before cancel), then attempt cancel ---
+  const { jobId: jobB, bidId: bidIdB } = await postJobAndBid(shipper, carrier, 'NET_7', 250);
+  const awardedB = await shipper.post(`/api/jobs/${jobB}/award`, { bidId: bidIdB, skipNegotiation: true });
+  assert.equal(awardedB.status, 200, awardedB.raw);
+
+  const balanceAfterAwardB = await balanceOf(shipperId);
+  const settleB = await admin.post(`/api/admin/credit/jobs/${jobB}/settle`);
+  assert.equal(settleB.status, 200, settleB.raw);
+  const balanceAfterSettleB = await balanceOf(shipperId);
+  assert.equal(balanceAfterSettleB, balanceAfterAwardB - 250, 'settling must restore exactly the drawn amount');
+
+  // The status transition itself may still succeed (settle doesn't touch
+  // job status) — what matters is the balance must NOT move again.
+  await shipper.patch(`/api/jobs/${jobB}/status`, { status: 'CANCELLED' });
+  const balanceAfterCancelAttemptB = await balanceOf(shipperId);
+  assert.equal(balanceAfterCancelAttemptB, balanceAfterSettleB, 'balance must be unchanged by cancelling an already-settled job — no double-restore');
+});

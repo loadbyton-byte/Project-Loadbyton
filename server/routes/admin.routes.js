@@ -247,7 +247,12 @@ router.post('/api/admin/credit/:userId/approve', auth(['ADMIN']), async (req, re
 router.post('/api/admin/credit/jobs/:jobId/settle', auth(['ADMIN']), async (req, res) => {
   const job = await db.prepare(`SELECT * FROM jobs WHERE id=? AND payment_tier IN (${CREDIT_DRAW_TIERS.map(() => '?').join(',')})`).get(req.params.jobId, ...CREDIT_DRAW_TIERS);
   if (!job) return sendError(res, 404, 'Deferred-payment job not found');
-  if (job.credit_settled_at) return sendError(res, 400, 'Already settled');
+  // job.service.js's cancellation-restore path also sets credit_settled_at
+  // (not just credit_due_at=NULL) specifically so this check catches an
+  // already-cancelled job too — without that, a cancel-then-settle
+  // sequence would decrement the shipper's credit balance a second time
+  // for a draw that was already restored.
+  if (job.credit_settled_at) return sendError(res, 400, job.status === 'CANCELLED' ? 'This job was cancelled — its credit draw was already restored, not settled' : 'Already settled');
   if (!job.carrier_id || !job.agreed_price_aed) return sendError(res, 400, 'Job was never awarded — nothing was drawn against credit');
   // Row-locked + idempotency-guarded, same pattern as the cancellation
   // restoration in job.service.js — two concurrent settle requests for
