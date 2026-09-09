@@ -57,25 +57,27 @@ const MIN_PASSWORD_LENGTH = 8;
 // container-carrying types are the only ones where container_size/
 // container_type mean anything — every other type is general UAE road
 // freight (construction plant, palletised/boxed cargo, small-load pickups).
-// CONTAINER_CHASSIS, PICKUP_3T/5T/7T/10T and TRIPPER are retired from the
-// picker (see web/src/lib/constants.js's TRAILER_EQUIPMENT/TRUCK_EQUIPMENT)
-// but stay here for backward compatibility with jobs already stored with
-// those values. TRAILER_20FT/TRAILER_40FT are the container-chassis split
-// by the length it's built for — real distinct physical equipment, not a
-// cosmetic rename. REEFER_TRUCK is a standalone refrigerated truck body for
-// non-containerized local reefer delivery (produce, dairy, pharma between
-// warehouses) — genuinely distinct from TRAILER_WITH_GENSET, which powers a
-// refrigerated shipping CONTAINER on a chassis (port drayage/cross-border).
-// It replaces an OLD, unrelated "REEFER_TRUCK" that used to mean the same
-// thing TRAILER_WITH_GENSET means now — that one really was retired
-// product-wide (see product-gates.test.js's history) — this is a fresh,
-// non-conflicting reuse of the name for the truck-class case. CUSTOM is the
-// catch-all for anything the fixed list doesn't cover — it requires a
-// written requirement (cargoDescription/notes).
+// CONTAINER_CHASSIS and PICKUP_5T are retired from every picker (see
+// web/src/lib/constants.js's TRAILER_EQUIPMENT/TRUCK_EQUIPMENT/
+// LOCAL_EQUIPMENT) but stay here for backward compatibility with jobs
+// already stored with those values. PICKUP_3T/7T/10T and TRIPPER are back
+// in active use — LOCAL-shipment-only, not the IMPORT/EXPORT pickers.
+// TRAILER_20FT/TRAILER_40FT are the container-chassis split by the length
+// it's built for — real distinct physical equipment, not a cosmetic
+// rename. REEFER_TRUCK/LOWBED_TRUCK/SIDE_LOADER_TRUCK are standalone truck
+// bodies for non-containerized local delivery — genuinely distinct
+// vehicles from their TRAILER_WITH_GENSET/LOWBED_TRAILER/
+// SIDE_LOADER_TRAILER counterparts (own chassis, not towed), not cosmetic
+// renames. REEFER_TRUCK also replaces an OLD, unrelated "REEFER_TRUCK"
+// that used to mean the same thing TRAILER_WITH_GENSET means now — that
+// one really was retired product-wide (see product-gates.test.js's
+// history) — this is a fresh, non-conflicting reuse of the name. CUSTOM
+// is the catch-all for anything the fixed list doesn't cover — it
+// requires a written requirement (cargoDescription/notes).
 const EQUIPMENT_TYPES = [
   'CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'LOWBED_TRAILER', 'FLATBED_TRAILER',
   'TRAILER_20FT', 'TRAILER_40FT', 'SIDE_LOADER_TRAILER',
-  'BOX_TRUCK', 'CURTAIN_TRUCK', 'FLATBED_TRUCK', 'REEFER_TRUCK',
+  'BOX_TRUCK', 'CURTAIN_TRUCK', 'FLATBED_TRUCK', 'REEFER_TRUCK', 'LOWBED_TRUCK', 'SIDE_LOADER_TRUCK',
   'PICKUP_3T', 'PICKUP_5T', 'PICKUP_7T', 'PICKUP_10T', 'TRIPPER', 'CUSTOM',
 ];
 const CONTAINER_EQUIPMENT = ['CONTAINER_CHASSIS', 'TRAILER_WITH_GENSET', 'TRAILER_20FT', 'TRAILER_40FT'];

@@ -65,6 +65,18 @@ async function createJobFromBody(body, req) {
 
   if (cargoWeightTons !== undefined && cargoWeightTons !== null && Number(cargoWeightTons) <= 0) throw { status: 400, message: 'cargoWeightTons must be positive' };
 
+  // LOCAL-shipment truck specs — validated here (before the INSERT below,
+  // which isn't wrapped in a transaction) so a bad value never leaves an
+  // orphaned job row behind; both optional and meaningless outside LOCAL
+  // jobs, so no requirement beyond "if present, must be valid".
+  const { truckLengthM, equipmentBodyType } = body;
+  if (truckLengthM !== undefined && truckLengthM !== null && truckLengthM !== '' && !(Number.isFinite(Number(truckLengthM)) && Number(truckLengthM) > 0)) {
+    throw { status: 400, message: 'truckLengthM must be a positive number' };
+  }
+  if (equipmentBodyType && !['OPEN', 'COVERED'].includes(equipmentBodyType)) {
+    throw { status: 400, message: 'equipmentBodyType must be OPEN or COVERED' };
+  }
+
   if (eqType === 'CUSTOM' && !notes && !body.customRequirement) throw { status: 400, message: 'CUSTOM equipment requires a written requirement (notes or customRequirement)' };
 
   const effectiveNotes = body.customRequirement ? (notes ? `${notes}\n\nCustom requirement: ${body.customRequirement}` : body.customRequirement) : notes;
@@ -148,6 +160,15 @@ async function createJobFromBody(body, req) {
     await db.prepare(
       `INSERT INTO terms_acceptances (user_id, terms_version, context, job_id, ip_address) VALUES (?,?,'JOB',?,?)`
     ).run(req.user.id, TERMS_VERSION, jobId, byIp(req) || null);
+  }
+
+  // Already validated above (before the INSERT) — this is now just the
+  // write, matching payment_tier's post-insert-UPDATE pattern below.
+  if (truckLengthM !== undefined && truckLengthM !== null && truckLengthM !== '') {
+    await db.prepare('UPDATE jobs SET truck_length_m=? WHERE id=?').run(Number(truckLengthM), jobId);
+  }
+  if (equipmentBodyType) {
+    await db.prepare('UPDATE jobs SET equipment_body_type=? WHERE id=?').run(equipmentBodyType, jobId);
   }
 
   // requires_seal: no existing field reliably implies sealed-vs-empty (see

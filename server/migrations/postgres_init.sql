@@ -97,6 +97,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   equipment_type TEXT NOT NULL DEFAULT 'CONTAINER_CHASSIS',
   cargo_type TEXT NOT NULL DEFAULT 'GENERAL_GOODS',
   cargo_weight_tons REAL,
+  truck_length_m REAL,
+  equipment_body_type TEXT,
   assigned_driver_name TEXT,
   assigned_driver_phone TEXT,
   pickup_lat REAL,
