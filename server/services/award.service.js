@@ -82,6 +82,26 @@ async function awardJob(req, res, jobId, bidId) {
   const netAed = agreedPrice - platformFee;
   const idempotencyKey = `award-${jobId}-${bidId}`;
 
+  // CONTRACT_CREDIT gate — fast pre-check outside the transaction (the
+  // transaction below re-checks under a row lock, since this alone can't
+  // stop two concurrent awards from a shipper both reading the same
+  // pre-award balance). Never eligible without an admin-approved limit
+  // (credit_approved_at) — a shipper picking this tier on the post-job
+  // form doesn't self-grant credit, someone has to actually extend it.
+  const isContractCredit = preJob.payment_tier === 'CONTRACT_CREDIT';
+  if (isContractCredit) {
+    const shipperProfile = await db.prepare('SELECT credit_limit_aed, credit_balance_aed, credit_approved_at FROM profiles WHERE user_id=?').get(preJob.shipper_id);
+    if (!shipperProfile?.credit_approved_at) {
+      res.status(402).json({ error: 'This account has no approved credit terms — contact Loadbyton to set up contract credit before posting jobs on this tier.' });
+      return;
+    }
+    if ((shipperProfile.credit_balance_aed || 0) + agreedPrice > shipperProfile.credit_limit_aed) {
+      const available = Math.max(0, shipperProfile.credit_limit_aed - (shipperProfile.credit_balance_aed || 0));
+      res.status(402).json({ error: `This award (AED ${agreedPrice}) would exceed the approved credit limit — AED ${available} available.` });
+      return;
+    }
+  }
+
   try {
     await db.transaction(async (/** @type {any} */ trx) => {
       // Row-level locks — prevents concurrent awards. FOR UPDATE is stripped on SQLite.
@@ -116,9 +136,10 @@ async function awardJob(req, res, jobId, bidId) {
       // pickup. PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM defer
       // escrow entirely — for PAY_ON_DELIVERY, job.service.js's
       // updateJobStatus creates the actual checkout/ledger entry at the
-      // DELIVERED transition instead; CONTRACT_CREDIT and OFF_PLATFORM
-      // don't touch per-job escrow at all in this pass (CONTRACT_CREDIT's
-      // running credit-limit ledger is a separate, not-yet-built piece).
+      // DELIVERED transition instead; OFF_PLATFORM never touches per-job
+      // escrow at all (payment happens directly between the two parties).
+      // CONTRACT_CREDIT draws down the shipper's approved limit below
+      // instead of escrowing anything per job.
       const isSpotEscrow = job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
       await trx.query(
         isSpotEscrow
@@ -126,6 +147,30 @@ async function awardJob(req, res, jobId, bidId) {
           : `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, updated_at=datetime('now') WHERE id=?`,
         [bid.carrier_id, agreedPrice, jobId]
       );
+
+      // Re-check and draw down the credit limit under a row lock — the
+      // pre-check above read a possibly-stale balance; this is the actual
+      // safety boundary against two concurrent CONTRACT_CREDIT awards from
+      // the same shipper both squeezing past the limit.
+      if (isContractCredit) {
+        const shipperRow = await trx.query('SELECT credit_limit_aed, credit_balance_aed, credit_terms_days, credit_approved_at FROM profiles WHERE user_id=? FOR UPDATE', [job.shipper_id]);
+        const shipperProfile = shipperRow.rows[0];
+        if (!shipperProfile?.credit_approved_at) {
+          const err = /** @type {any} */ (new Error('No approved credit terms')); err.status = 402; throw err;
+        }
+        if ((shipperProfile.credit_balance_aed || 0) + agreedPrice > shipperProfile.credit_limit_aed) {
+          const err = /** @type {any} */ (new Error('Award would exceed the approved credit limit')); err.status = 402; throw err;
+        }
+        await trx.query('UPDATE profiles SET credit_balance_aed = credit_balance_aed + ? WHERE user_id=?', [agreedPrice, job.shipper_id]);
+        // Net terms clock starts at award, not delivery — matches how a
+        // real invoice payment-terms period is usually framed ("net 30
+        // from invoice/order date"), and means the due date is visible to
+        // both sides from the moment the job is committed, not sprung on
+        // them later at completion.
+        const termsDays = Number(shipperProfile.credit_terms_days) || 30;
+        const creditDueAt = new Date(Date.now() + termsDays * 24 * 3600 * 1000).toISOString();
+        await trx.query('UPDATE jobs SET credit_due_at=? WHERE id=?', [creditDueAt, jobId]);
+      }
 
       await trx.query(`UPDATE bids SET status='AWARDED' WHERE id=?`, [bidId]);
       await trx.query(`UPDATE bids SET status='REJECTED' WHERE job_id=? AND id != ?`, [jobId, bidId]);
@@ -211,7 +256,7 @@ async function awardJob(req, res, jobId, bidId) {
     });
   } catch (/** @type {any} */ e) {
     const _e = /** @type {any} */ (e);
-    if (_e.status === 404 || _e.status === 403 || _e.status === 409) {
+    if (_e.status === 404 || _e.status === 403 || _e.status === 409 || _e.status === 402) {
       return res.status(_e.status).json({ error: _e.message });
     }
     // UNIQUE violation on payouts.job_id -> concurrent award
@@ -221,10 +266,23 @@ async function awardJob(req, res, jobId, bidId) {
     throw _e;
   }
 
-  // Notifications after commit — never inside the financial transaction (outbox worker will also deliver)
+  // Notifications after commit — never inside the financial transaction
+  // (outbox worker will also deliver). "Escrow HELD" was previously
+  // unconditional here regardless of payment_tier — actively wrong for
+  // PAY_ON_DELIVERY/CONTRACT_CREDIT/OFF_PLATFORM, none of which hold any
+  // escrow at all (see the isSpotEscrow branch inside the transaction
+  // above), and especially misleading for a shipper who just picked
+  // CONTRACT_CREDIT specifically because they didn't want funds held.
+  const shipperAwardMessage = preJob.payment_tier === 'CONTRACT_CREDIT'
+    ? `${preJob.job_code} was awarded to a carrier. AED ${agreedPrice} drawn against your contract credit — due per your net terms.`
+    : preJob.payment_tier === 'PAY_ON_DELIVERY'
+      ? `${preJob.job_code} was awarded to a carrier. AED ${agreedPrice} will be charged once delivery is confirmed.`
+      : preJob.payment_tier === 'OFF_PLATFORM'
+        ? `${preJob.job_code} was awarded to a carrier. AED ${agreedPrice} agreed — settle payment directly with the carrier.`
+        : `${preJob.job_code} was awarded to a carrier. Escrow HELD: AED ${agreedPrice}.`;
   try {
     await (/** @type {any} */ (notify))(preBid.carrier_id, 'Bid awarded', `Your bid on ${preJob.job_code} was awarded. Agreed price: AED ${agreedPrice}.`, jobId, 'award');
-    await (/** @type {any} */ (notify))(preJob.shipper_id, 'Job awarded', `${preJob.job_code} was awarded to a carrier. Escrow HELD: AED ${agreedPrice}.`, jobId, 'award');
+    await (/** @type {any} */ (notify))(preJob.shipper_id, 'Job awarded', shipperAwardMessage, jobId, 'award');
   } catch {}
 
   const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);

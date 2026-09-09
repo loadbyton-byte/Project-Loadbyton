@@ -164,6 +164,26 @@ async function updateJobStatus(jobId, nextStatus, req) {
     }
   }
 
+  // CONTRACT_CREDIT restoration — separate from the block above, which is
+  // gated on escrow_status IN ('HELD','FUNDED'); a CONTRACT_CREDIT job
+  // never sets either (award.service.js only sets HELD for SPOT_ESCROW),
+  // so it would never reach that gate at all. carrier_id being set is
+  // this tier's own proxy for "this job was actually awarded" (and so
+  // actually drew the credit limit down) rather than cancelled pre-award.
+  // Row-locked + idempotency-guarded the same way the SPOT_ESCROW block
+  // above is — two concurrent cancel requests for the same job must not
+  // both restore the balance. credit_due_at is only ever set once, at
+  // award (award.service.js), so clearing it here doubles as the claim:
+  // a second concurrent attempt reads it already NULL and matches zero
+  // rows in the UPDATE below.
+  if (nextStatus === 'CANCELLED' && job.payment_tier === 'CONTRACT_CREDIT' && job.carrier_id && job.agreed_price_aed) {
+    await db.transaction(async (trx) => {
+      const claim = await trx.query(`UPDATE jobs SET credit_due_at=NULL WHERE id=? AND credit_due_at IS NOT NULL`, [id]);
+      if (!claim.rowCount) return;
+      await trx.query(`UPDATE profiles SET credit_balance_aed = MAX(0, credit_balance_aed - ?) WHERE user_id=?`, [job.agreed_price_aed, job.shipper_id]);
+    });
+  }
+
   if (nextStatus === 'COMPLETED' && job.escrow_status !== 'RELEASED') {
     // Row-locked + idempotency-guarded — two concurrent completion
     // requests (e.g. a client retry) must not both mark the payout

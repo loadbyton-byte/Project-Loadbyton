@@ -194,6 +194,9 @@ export const api = {
   adminImpersonate: (userId) => post(`/admin/impersonate/${userId}`),
   endImpersonation: () => post('/admin/impersonate/end'),
   runAutoRelease: () => post('/system/auto-release'),
+  adminCredit: () => get('/admin/credit'),
+  adminApproveCredit: (userId, limitAed, termsDays) => post(`/admin/credit/${userId}/approve`, { limitAed, termsDays }),
+  adminSettleCredit: (jobId) => post(`/admin/credit/jobs/${jobId}/settle`),
 };
 // ——— enterprise additions (Phase 2-5) ———
 Object.assign(api, {

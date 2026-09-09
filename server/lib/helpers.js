@@ -241,6 +241,10 @@ async function toPublicUser(row) {
           rating_avg: profile.rating_avg,
           completed_jobs: profile.completed_jobs,
           verified_at: profile.verified_at,
+          credit_limit_aed: profile.credit_limit_aed || 0,
+          credit_balance_aed: profile.credit_balance_aed || 0,
+          credit_terms_days: profile.credit_terms_days || 30,
+          credit_approved_at: profile.credit_approved_at || null,
         }
       : null,
   };

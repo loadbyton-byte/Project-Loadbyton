@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel } from '../lib/constants.js';
-import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button } from '../components/ui.jsx';
+import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel, paymentTierLabel } from '../lib/constants.js';
+import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button, Badge } from '../components/ui.jsx';
 import { IconAlert, IconPackage, IconSearch, IconMapPin } from '../components/icons.jsx';
 
 const PAGE_SIZE = 20;
@@ -151,7 +151,7 @@ export default function OpenLoads() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-                    {['Job', 'Route', 'Equipment', 'Target price', 'Deadline', ''].map((h) => (
+                    {['Job', 'Route', 'Equipment', 'Payment', 'Target price', 'Deadline', ''].map((h) => (
                       <th key={h} className="whitespace-nowrap px-4 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{h}</th>
                     ))}
                   </tr>
@@ -175,6 +175,9 @@ export default function OpenLoads() {
                         {j.cargo_weight_tons != null && <p className="mt-0.5 text-xs text-ink-muted">{j.cargo_type ? `${cargoTypeLabel(j.cargo_type)} · ` : ''}{j.cargo_weight_tons} t</p>}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-ink-secondary">{jobEquipmentLabel(j)}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <Badge color={j.payment_tier && j.payment_tier !== 'SPOT_ESCROW' ? 'accent' : 'neutral'}>{paymentTierLabel(j.payment_tier || 'SPOT_ESCROW')}</Badge>
+                      </td>
                       <td className="tabular whitespace-nowrap px-4 py-3 font-semibold text-ink">{formatAED(j.max_budget_aed)}</td>
                       <td className="tabular whitespace-nowrap px-4 py-3 text-ink-secondary">{timeLeft(j.deadline)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right">
@@ -219,6 +222,9 @@ export default function OpenLoads() {
                     <span>{jobEquipmentLabel(j)}</span>
                     <span className="tabular">{timeLeft(j.deadline)}</span>
                   </div>
+                  {j.payment_tier && j.payment_tier !== 'SPOT_ESCROW' && (
+                    <Badge color="accent">{paymentTierLabel(j.payment_tier)}</Badge>
+                  )}
                 </button>
               ))}
             </div>

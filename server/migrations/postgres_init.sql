@@ -892,4 +892,14 @@ CREATE TABLE IF NOT EXISTS job_stops (
 );
 CREATE INDEX IF NOT EXISTS idx_job_stops_job ON job_stops(job_id, seq);
 
+-- CONTRACT_CREDIT — the running credit-limit ledger flagged as "not yet
+-- built" when payment_tier was added above. See server/schema.js for the
+-- full reasoning; mirrored here for the opt-in Postgres path.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_limit_aed REAL NOT NULL DEFAULT 0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_balance_aed REAL NOT NULL DEFAULT 0;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_terms_days INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_approved_at TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_due_at TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_settled_at TEXT;
+
 COMMIT;
