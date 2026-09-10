@@ -717,6 +717,9 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('auto_release_hours', '24')
 ON CONFLICT (key) DO NOTHING;
 
+INSERT INTO settings (key, value) VALUES ('two_person_approval_required', '0')
+ON CONFLICT (key) DO NOTHING;
+
 -- Terms & Conditions acceptance, pre-award negotiation/ancillary charges,
 -- haulier code/token, and EIR seal-number/two-stage photos — see
 -- server/schema.js (the actual auto-migrating SQLite path this app runs
@@ -866,9 +869,19 @@ CREATE TABLE IF NOT EXISTS platform_fees (
 );
 CREATE INDEX IF NOT EXISTS idx_platform_fees_job ON platform_fees(job_id);
 CREATE INDEX IF NOT EXISTS idx_platform_fees_code ON platform_fees(fee_code);
+-- action_type covers DISPUTE_RESOLVE/MARK_TRANSFERRED as of
+-- REVIEW-2026-09-08.md §6 follow-up #2, alongside the original two escrow
+-- actions. This CREATE TABLE IF NOT EXISTS only benefits a *brand-new*
+-- Postgres bootstrap — a database that already ran this script with the
+-- old, narrower CHECK needs a manual, one-time:
+--   ALTER TABLE admin_approvals DROP CONSTRAINT admin_approvals_action_type_check;
+--   ALTER TABLE admin_approvals ADD CONSTRAINT admin_approvals_action_type_check
+--     CHECK (action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND','DISPUTE_RESOLVE','MARK_TRANSFERRED'));
+-- (the auto-migrating SQLite path in server/schema.js does the equivalent
+-- rebuild automatically — this file has no such runner.)
 CREATE TABLE IF NOT EXISTS admin_approvals (
   id SERIAL PRIMARY KEY,
-  action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND')),
+  action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND','DISPUTE_RESOLVE','MARK_TRANSFERRED')),
   job_id INTEGER NOT NULL REFERENCES jobs(id),
   payload TEXT,
   requested_by INTEGER NOT NULL REFERENCES users(id),

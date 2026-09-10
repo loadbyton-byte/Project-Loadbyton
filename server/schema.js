@@ -903,7 +903,7 @@ module.exports = function initSchema(db) {
   db.exec(`
   CREATE TABLE IF NOT EXISTS admin_approvals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND')),
+    action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND','DISPUTE_RESOLVE','MARK_TRANSFERRED')),
     job_id INTEGER NOT NULL REFERENCES jobs(id),
     payload TEXT,
     requested_by INTEGER NOT NULL REFERENCES users(id),
@@ -914,6 +914,35 @@ module.exports = function initSchema(db) {
   );
   CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approvals(status);
   `);
+  // action_type's CHECK constraint above only covers a brand-new database —
+  // an EXISTING one already has the table with the old, narrower CHECK
+  // (MANUAL_ESCROW_RELEASE/MANUAL_REFUND only), and SQLite has no
+  // ALTER...DROP/ADD CONSTRAINT to widen it in place. This is the standard
+  // rebuild: new table with the wider constraint, copy rows, swap in.
+  // Gated on the constraint not already being wide (checked via
+  // sqlite_master's stored CREATE TABLE text), so this runs at most once
+  // per database, ever — safe to leave here permanently alongside the
+  // other one-time migration steps in this file.
+  const approvalsTableSql = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='admin_approvals'`).get();
+  if (approvalsTableSql && !approvalsTableSql.sql.includes('DISPUTE_RESOLVE')) {
+    db.exec(`
+      ALTER TABLE admin_approvals RENAME TO admin_approvals_pre_dispute_gate;
+      CREATE TABLE admin_approvals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_type TEXT NOT NULL CHECK(action_type IN ('MANUAL_ESCROW_RELEASE','MANUAL_REFUND','DISPUTE_RESOLVE','MARK_TRANSFERRED')),
+        job_id INTEGER NOT NULL REFERENCES jobs(id),
+        payload TEXT,
+        requested_by INTEGER NOT NULL REFERENCES users(id),
+        confirmed_by INTEGER REFERENCES users(id),
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','CONFIRMED','REJECTED','EXECUTED')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        decided_at TEXT
+      );
+      INSERT INTO admin_approvals SELECT * FROM admin_approvals_pre_dispute_gate;
+      DROP TABLE admin_approvals_pre_dispute_gate;
+      CREATE INDEX IF NOT EXISTS idx_admin_approvals_status ON admin_approvals(status);
+    `);
+  }
 
   // Phase 8 (Change 28 remainder) — multi-stop itinerary. The job's own
   // pickup_terminal/delivery_area stay the canonical first/last legs (every
@@ -945,6 +974,7 @@ module.exports = function initSchema(db) {
   seedSetting.run('auto_release_hours', '24');
   seedSetting.run('cancellation_fee_bps_after_award', '1000');
   seedSetting.run('priority_placement_fee_aed', '50');
+  seedSetting.run('two_person_approval_required', '0');
 
   // ---------------------------------------------------------------------------
   // Equipment capacity tracking — profiles.fleet_size was a static,
