@@ -151,6 +151,11 @@ function requireApproved() {
   };
 }
 
+// @deprecated No route in this repo applies this middleware — every route
+// still gates on auth([...roles]) directly. The permission model it reads
+// from (lib/permissions.js) is otherwise unused too. Left in place rather
+// than deleted since it's a working, tested auth gate a future
+// fine-grained-permissions rollout could wire in without rewriting it.
 function requirePermission(permission) {
   return async (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
@@ -190,7 +195,12 @@ function requireReauth({ requireMfa = true } = {}) {
 }
 
 // Session revocation — invalidate all sessions for a user (e.g., after
-// password change, or admin deactivation). Used by auth routes.
+// password change, or admin deactivation).
+// @deprecated The "Used by auth routes" claim this comment used to make no
+// longer holds — grepping the repo turns up zero callers; password-change
+// and deactivation flows don't currently revoke other sessions. Left in
+// place (it's a correct, tested one-liner) rather than deleted, since
+// wiring it back in looks like the right fix, not removing it.
 async function revokeAllSessions(userId) {
   await db.prepare('DELETE FROM sessions WHERE user_id=?').run(userId);
 }

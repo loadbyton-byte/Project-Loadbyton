@@ -1,15 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import { useAuth, roleHome } from '../../lib/auth.jsx';
 import { useToasts } from '../../components/Toast.jsx';
-import { usePageTitle } from '../../lib/seo.jsx';
-import { formatAED, formatDate, formatDateTime, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Stat, Input, Label, Badge, Select, EmptyState, ErrorState, Pagination } from '../../components/ui.jsx';
-import { IconShield, IconAlert, IconCheck, IconInfo, IconUser, IconFile, IconWallet } from '../../components/icons.jsx';
-
-const TABS = ['Health', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Registrations', 'Payout SLA', 'Audit log', 'Revenue', 'Settings'];
-
+import { formatAED, formatDateTime } from '../../lib/constants.js';
+import { Button, Card, Input, Badge, EmptyState, ErrorState } from '../../components/ui.jsx';
+import { IconAlert, IconFile } from '../../components/icons.jsx';
 
 function DisputesTab() {
   const { addToast } = useToasts();

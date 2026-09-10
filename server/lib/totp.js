@@ -44,11 +44,6 @@ function hotp(secretBuf, counter) {
   return String(code % 1_000_000).padStart(6, '0');
 }
 
-function currentCode(base32Secret, step = 30, at = Date.now()) {
-  const counter = Math.floor(at / 1000 / step);
-  return hotp(base32Decode(base32Secret), counter);
-}
-
 // Accepts the current window and one step of drift on either side.
 function verifyCode(base32Secret, code, step = 30, at = Date.now()) {
   if (!code || !/^\d{6}$/.test(String(code))) return false;
@@ -72,4 +67,4 @@ function provisioningUrl(base32Secret, email, issuer = 'Loadbyton') {
   return `otpauth://totp/${label}?${params.toString()}`;
 }
 
-module.exports = { randomBase32Secret, currentCode, verifyCode, provisioningUrl };
+module.exports = { randomBase32Secret, verifyCode, provisioningUrl };

@@ -24,7 +24,6 @@ import DocumentList from '../features/job/DocumentList.jsx';
 import HaulierCodeToken from '../features/job/HaulierCodeToken.jsx';
 import BackloadMatches from '../features/job/BackloadMatches.jsx';
 import PodForm from '../features/job/PodForm.jsx';
-import JobStatusTracker from '../features/job/JobStatusTracker.jsx';
 import DisputePanel from '../features/job/DisputePanel.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
