@@ -21,6 +21,12 @@ tags:
     description: Verification, approvals, disputes, revenue, SLA
   - name: payments
     description: Stripe Connect, payouts, webhooks
+  - name: broker
+    description: Phase 7 — forwarder client roster, broker carrier roster, direct-assign
+  - name: monetization
+    description: Phase 7 — platform fee visibility (Change 30)
+  - name: gcc
+    description: Phase 8 — GCC country/corridor reference data (Change 31)
 paths:
   /api/health:
     get:
@@ -425,6 +431,262 @@ paths:
       responses:
         '200': { description: ok }
         '403': { description: not available outside test/mock payment mode }
+  /api/forwarder/clients:
+    get:
+      tags: [broker]
+      summary: Forwarder's client roster (own clients; ADMIN sees all)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+    post:
+      tags: [broker]
+      summary: Add a client to the forwarder's roster
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientName]
+              properties:
+                clientName: { type: string }
+                contactPhone: { type: string }
+                contactEmail: { type: string }
+      responses:
+        '201': { description: created }
+        '400': { description: clientName required }
+  /api/broker/carriers:
+    get:
+      tags: [broker]
+      summary: Broker's carrier roster (own roster; ADMIN sees all)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+    post:
+      tags: [broker]
+      summary: Add a CARRIER/OWNER_OPERATOR to the broker's roster (one-hop rule)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [carrierId]
+              properties:
+                carrierId: { type: integer }
+      responses:
+        '201': { description: created }
+        '400': { description: target must be CARRIER or OWNER_OPERATOR }
+        '404': { description: carrier not found }
+        '409': { description: already in roster }
+  /api/jobs/{id}/direct-assign:
+    post:
+      tags: [broker]
+      summary: Broker/forwarder assigns an OPEN job directly to a carrier (reuses the award transaction; one-hop enforced)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [carrierId, amountAed]
+              properties:
+                carrierId: { type: integer }
+                amountAed: { type: number }
+                etaAt: { type: string, format: date-time }
+                brokerSpreadBps: { type: integer, minimum: 0, maximum: 2000, description: 'BROKER only — 0-2000 bps (0-20%)' }
+                forwarderClientId: { type: integer, description: 'FORWARDER only — must be one of the forwarder''s own roster clients' }
+      responses:
+        '200': { description: awarded (direct-assign reuses awardJob) }
+        '403': { description: not owner, not OPEN, one-hop violation, carrier not in roster, or carrier unverified }
+        '404': { description: job or carrier not found }
+        '409': { description: carrier already has a pending bid on this job }
+  /api/admin/platform-fees:
+    get:
+      tags: [monetization]
+      summary: All platform fee ledger rows plus total revenue (admin)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: feeCode, in: query, schema: { type: string } }
+      responses:
+        '200': { description: ok }
+  /api/billing/fees:
+    get:
+      tags: [monetization]
+      summary: Current user's own platform fee rows
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/admin/action-approvals/request:
+    post:
+      tags: [admin]
+      summary: Request a two-person-approval admin action (Change 21)
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actionType, jobId]
+              properties:
+                actionType: { type: string, enum: [MANUAL_ESCROW_RELEASE, MANUAL_REFUND] }
+                jobId: { type: integer }
+                reason: { type: string }
+      responses:
+        '201': { description: created }
+        '404': { description: job not found }
+        '409': { description: a pending request for this action already exists }
+  /api/admin/action-approvals:
+    get:
+      tags: [admin]
+      summary: List two-person-approval requests
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [PENDING, CONFIRMED, REJECTED, EXECUTED] } }
+      responses:
+        '200': { description: ok }
+  /api/admin/action-approvals/{id}/confirm:
+    post:
+      tags: [admin]
+      summary: Confirm and execute a pending approval request (a different admin than the requester)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: executed }
+        '403': { description: requesting admin cannot confirm their own request }
+        '404': { description: not found }
+        '409': { description: already decided }
+  /api/admin/action-approvals/{id}/reject:
+    post:
+      tags: [admin]
+      summary: Reject a pending approval request (a different admin than the requester)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: rejected }
+        '403': { description: requesting admin cannot reject their own request }
+        '404': { description: not found }
+        '409': { description: already decided }
+  /api/admin/ledger/verify-chain:
+    get:
+      tags: [admin]
+      summary: Verify the ledger_transactions hash chain (tamper-evidence, Change 21)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/audit/chain/verify:
+    get:
+      tags: [admin]
+      summary: Verify the audit_log hash chain (tamper-evidence)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/audit/chain:
+    get:
+      tags: [admin]
+      summary: Recent hash-chained audit log entries (last 100)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: ok }
+  /api/gcc/countries:
+    get:
+      tags: [gcc]
+      summary: Supported GCC countries (currency, tax, payment provider readiness)
+      responses:
+        '200': { description: ok }
+  /api/gcc/corridors:
+    get:
+      tags: [gcc]
+      summary: Curated UAE-to-SA/OM cross-border lanes with indicative pricing
+      parameters:
+        - { name: to, in: query, schema: { type: string }, description: 'destination country code filter, e.g. SA or OM' }
+      responses:
+        '200': { description: ok }
+  /api/jobs/{id}/stops:
+    get:
+      tags: [jobs]
+      summary: List a job's intermediate stops (Change 28)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+        '403': { description: not permitted }
+        '404': { description: job not found }
+    post:
+      tags: [jobs]
+      summary: Add an intermediate stop while the job is editable
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stopType, location]
+              properties:
+                stopType: { type: string, enum: [PICKUP, DROP, WAYPOINT] }
+                location: { type: string }
+                addressDetail: { type: string }
+                lat: { type: number }
+                lng: { type: number }
+      responses:
+        '201': { description: created }
+        '400': { description: validation }
+        '403': { description: not permitted or job not in an editable status }
+        '404': { description: job not found }
+  /api/jobs/{id}/stops/{stopId}/complete:
+    post:
+      tags: [jobs]
+      summary: Carrier marks a stop complete
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: stopId, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+        '403': { description: not the awarded carrier }
+        '404': { description: job or stop not found }
+        '409': { description: stop already completed }
+  /api/jobs/{id}/stops/{stopId}:
+    delete:
+      tags: [jobs]
+      summary: Remove an incomplete stop while the job is editable
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: stopId, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200': { description: ok }
+        '403': { description: not permitted, job not editable, or stop already completed }
+        '404': { description: job or stop not found }
+  /api/lanes/quote:
+    get:
+      tags: [jobs]
+      summary: Shipper-facing lane-rate pricing intelligence, pre-post (Change 28)
+      parameters:
+        - { name: terminal, in: query, required: true, schema: { type: string } }
+        - { name: area, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: ok (real lane match, or platform-average fallback) }
+        '400': { description: terminal and area are required }
 components:
   schemas:
     Register:
