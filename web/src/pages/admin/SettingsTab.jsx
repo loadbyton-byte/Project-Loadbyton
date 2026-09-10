@@ -72,6 +72,18 @@ function SettingsTab() {
               <Label>Auto-release window (hours)</Label>
               <Input type="number" min="1" max="168" value={settings.auto_release_hours} onChange={(e) => setSettings({ ...settings, auto_release_hours: Number(e.target.value) })} />
             </div>
+            <label className="flex items-start gap-2 text-sm text-ink-secondary">
+              <input
+                type="checkbox"
+                checked={!!settings.two_person_approval_required}
+                onChange={(e) => setSettings({ ...settings, two_person_approval_required: e.target.checked })}
+                className="mt-0.5"
+              />
+              <span>
+                Require a second admin to confirm dispute resolutions and payout transfer confirmations
+                <span className="block text-xs text-ink-muted">When on, resolving a dispute or confirming a transfer creates a pending request in the Approvals tab instead of executing immediately — a different admin must confirm it.</span>
+              </span>
+            </label>
           </Card.Content>
           <Card.Footer>
             {saved && <span className="mr-auto text-sm text-status-success">Saved — takes effect on the next award.</span>}

@@ -27,8 +27,16 @@ function PayoutsSlaTab() {
   async function markTransferred(payoutId) {
     setBusyId(payoutId);
     try {
-      await api.adminMarkTransferred(payoutId);
-      addToast({ type: 'payout_released', title: 'Transfer confirmed' });
+      const result = await api.adminMarkTransferred(payoutId);
+      // Server-side setting two_person_approval_required (Settings tab) can
+      // turn this into a pending request instead of an immediate
+      // confirmation — without this branch the row just silently stayed in
+      // the list with no explanation.
+      if (result?.pendingApproval) {
+        addToast({ type: 'status_change', title: 'Sent for approval', body: 'A second admin must confirm this in the Approvals tab before the transfer is actually confirmed.' });
+      } else {
+        addToast({ type: 'payout_released', title: 'Transfer confirmed' });
+      }
       load();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Failed to confirm', body: err.message });

@@ -210,6 +210,11 @@ export const api = {
   adminRevenue: () => get('/admin/revenue'),
   adminPayoutsSla: () => get('/admin/payouts-sla'),
   adminMarkTransferred: (payoutId, reference) => post(`/admin/payouts/${payoutId}/mark-transferred`, { reference }),
+  // Two-person approval inbox (admin-approvals.routes.js) — was API-only
+  // with no frontend caller at all until the Approvals tab.
+  adminActionApprovals: (status) => get(`/admin/action-approvals${status ? `?status=${status}` : ''}`),
+  adminConfirmApproval: (id) => post(`/admin/action-approvals/${id}/confirm`, {}),
+  adminRejectApproval: (id, reason) => post(`/admin/action-approvals/${id}/reject`, { reason }),
   adminApprovals: () => get('/admin/approvals'),
   adminApprove: (id, action) => post(`/admin/approve/${id}`, { action }),
   adminGetSettings: () => get('/admin/settings'),
