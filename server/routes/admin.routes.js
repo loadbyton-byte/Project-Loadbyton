@@ -216,7 +216,7 @@ router.post('/api/admin/verify-bulk', auth(['ADMIN']), async (req, res) => {
 // actions: approve/update a limit, and mark a job's draw settled.
 router.get('/api/admin/credit', auth(['ADMIN']), async (req, res) => {
   const shippers = await db.prepare(
-    `SELECT u.id, u.email, p.company_name, p.credit_limit_aed, p.credit_balance_aed, p.credit_terms_days, p.credit_approved_at
+    `SELECT u.id, u.email, p.company_name, p.credit_limit_aed, p.credit_balance_aed, p.credit_terms_days, p.credit_approved_at, p.payment_reliability_score
      FROM users u JOIN profiles p ON p.user_id = u.id
      WHERE u.role IN ('SHIPPER','FORWARDER') AND (p.credit_approved_at IS NOT NULL OR p.credit_balance_aed > 0)
      ORDER BY p.credit_approved_at IS NULL, p.company_name`
@@ -240,7 +240,7 @@ router.post('/api/admin/credit/:userId/approve', auth(['ADMIN']), async (req, re
   await db.prepare(`UPDATE profiles SET credit_limit_aed=?, credit_terms_days=?, credit_approved_at=datetime('now') WHERE user_id=?`).run(limit, terms, shipper.id);
   await writeAudit(req, { userId: req.actorId, action: 'CREDIT_APPROVED', details: `Approved AED ${limit} credit limit, net ${terms} days`, entityType: 'user', entityId: shipper.id });
   await notify(shipper.id, 'Credit terms approved', `You've been approved for AED ${limit} contract credit, net ${terms} days.`, null, 'system');
-  const updated = await db.prepare('SELECT credit_limit_aed, credit_balance_aed, credit_terms_days, credit_approved_at FROM profiles WHERE user_id=?').get(shipper.id);
+  const updated = await db.prepare('SELECT credit_limit_aed, credit_balance_aed, credit_terms_days, credit_approved_at, payment_reliability_score FROM profiles WHERE user_id=?').get(shipper.id);
   res.json({ ok: true, credit: updated });
 });
 
@@ -260,10 +260,27 @@ router.post('/api/admin/credit/jobs/:jobId/settle', auth(['ADMIN']), async (req,
   // balance. The UPDATE's own WHERE repeats the credit_settled_at IS NULL
   // check the SELECT above already used, so a second attempt matches zero
   // rows and skips the balance write.
+  // payment_reliability_score (REVIEW-2026-09-08.md §6 follow-up #4): the
+  // column existed with no writer or reader anywhere — a "shipped" trust
+  // feature that was actually just a frozen default. This is the one real
+  // signal of on-time-vs-late deferred payment the app has (credit_due_at
+  // vs when the draw actually got settled), so it's the natural place to
+  // make the score real. Nudges are asymmetric on purpose — being late
+  // should cost more than being on-time earns back, standard
+  // credit-scoring intuition — clamped to the same 0-5 range the column's
+  // DEFAULT 5.0 already implies as "perfect." Surfaced (not auto-enforced)
+  // on GET /api/admin/credit below, so the human making the next credit
+  // decision can actually read it, rather than the code silently blocking
+  // real transactions on a brand-new, first-iteration formula.
   const settled = await db.transaction(async (trx) => {
     const claim = await trx.query(`UPDATE jobs SET credit_settled_at=datetime('now') WHERE id=? AND credit_settled_at IS NULL`, [job.id]);
     if (!claim.rowCount) return false;
     await trx.query(`UPDATE profiles SET credit_balance_aed = MAX(0, credit_balance_aed - ?) WHERE user_id=?`, [job.agreed_price_aed, job.shipper_id]);
+    const onTime = !job.credit_due_at || new Date() <= new Date(job.credit_due_at);
+    await trx.query(
+      `UPDATE profiles SET payment_reliability_score = MAX(0, MIN(5, payment_reliability_score + ?)) WHERE user_id=?`,
+      [onTime ? 0.1 : -0.5, job.shipper_id]
+    );
     return true;
   });
   if (!settled) return sendError(res, 400, 'Already settled');

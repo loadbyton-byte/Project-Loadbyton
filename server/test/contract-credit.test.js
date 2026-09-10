@@ -178,3 +178,52 @@ test('a deferred-term job\'s credit draw cannot be restored twice, in either ord
   const balanceAfterCancelAttemptB = await balanceOf(shipperId);
   assert.equal(balanceAfterCancelAttemptB, balanceAfterSettleB, 'balance must be unchanged by cancelling an already-settled job — no double-restore');
 });
+
+// REVIEW-2026-09-08.md §6 follow-up #4: payment_reliability_score existed
+// with no writer or reader anywhere. Settling late should nudge it down;
+// settling on-time should nudge it back up by a smaller step; it must never
+// leave the 0-5 range the column's DEFAULT 5.0 implies. The late case runs
+// first here deliberately — starting from the 5.0 ceiling, an on-time nudge
+// alone would clamp right back to 5.0 and the test would prove nothing
+// about the "up" direction actually firing.
+test('settling a credit draw updates payment_reliability_score: down more when overdue, up a little when on-time', async () => {
+  const admin = makeClient(server.baseUrl);
+  await admin.login('admin@loadbyton.ae', 'demo1234');
+  const shipper = await freshShipper(server.baseUrl, admin);
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+
+  const jobRowLate = await postJobAndBid(shipper, carrier, 'NET_24H', 100);
+  const blocked = await shipper.post(`/api/jobs/${jobRowLate.jobId}/award`, { bidId: jobRowLate.bidId, skipNegotiation: true });
+  assert.equal(blocked.status, 402, blocked.raw);
+  const jobDetail = await admin.get(`/api/jobs/${jobRowLate.jobId}`);
+  const shipperId = jobDetail.body.job.shipper_id;
+  const approve = await admin.post(`/api/admin/credit/${shipperId}/approve`, { limitAed: 2000, termsDays: 1 });
+  assert.equal(approve.status, 200, approve.raw);
+  assert.equal(approve.body.credit.payment_reliability_score, 5, 'a fresh profile starts at the column default of 5.0');
+
+  // Late: award now, force the due date into the past (simulating 24h
+  // passing without settlement — impractical to actually wait for in a
+  // test), then settle.
+  const awardedLate = await shipper.post(`/api/jobs/${jobRowLate.jobId}/award`, { bidId: jobRowLate.bidId, skipNegotiation: true });
+  assert.equal(awardedLate.status, 200, awardedLate.raw);
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(server.dbPath);
+  db.prepare(`UPDATE jobs SET credit_due_at=datetime('now','-1 hour') WHERE id=?`).run(jobRowLate.jobId);
+  db.close();
+  const settleLate = await admin.post(`/api/admin/credit/jobs/${jobRowLate.jobId}/settle`);
+  assert.equal(settleLate.status, 200, settleLate.raw);
+  const afterLate = await admin.get('/api/admin/credit');
+  const rowAfterLate = afterLate.body.shippers.find((s) => s.id === shipperId);
+  assert.ok(Math.abs(rowAfterLate.payment_reliability_score - 4.5) < 1e-9, `late settlement should drop the score from 5.0 to 4.5 — got ${rowAfterLate.payment_reliability_score}`);
+
+  // On-time: a second job, settled well before its NET_24H due date.
+  const jobRowOnTime = await postJobAndBid(shipper, carrier, 'NET_24H', 100);
+  const awardedOnTime = await shipper.post(`/api/jobs/${jobRowOnTime.jobId}/award`, { bidId: jobRowOnTime.bidId, skipNegotiation: true });
+  assert.equal(awardedOnTime.status, 200, awardedOnTime.raw);
+  const settleOnTime = await admin.post(`/api/admin/credit/jobs/${jobRowOnTime.jobId}/settle`);
+  assert.equal(settleOnTime.status, 200, settleOnTime.raw);
+  const afterOnTime = await admin.get('/api/admin/credit');
+  const rowAfterOnTime = afterOnTime.body.shippers.find((s) => s.id === shipperId);
+  assert.ok(Math.abs(rowAfterOnTime.payment_reliability_score - 4.6) < 1e-9, `on-time settlement should raise the score from 4.5 to 4.6, a smaller step than the late drop — got ${rowAfterOnTime.payment_reliability_score}`);
+});
