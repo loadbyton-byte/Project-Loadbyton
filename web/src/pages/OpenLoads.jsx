@@ -6,6 +6,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel, paymentTermLabel } from '../lib/constants.js';
 import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button, Badge } from '../components/ui.jsx';
 import { IconAlert, IconPackage, IconSearch, IconMapPin } from '../components/icons.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const PAGE_SIZE = 20;
 const SORT_OPTIONS = [
@@ -53,6 +54,7 @@ function jobEquipmentLabel(j) {
 
 export default function OpenLoads() {
   usePageTitle('Open loads');
+  const { isRtl } = useLocale();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
@@ -89,7 +91,7 @@ export default function OpenLoads() {
   useEffect(loadOpenJobs, [equipmentFilter, shipmentFilter, sort, debouncedSearch, offset]);
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Open loads</h1>
       <p className="mt-1 text-sm text-ink-muted">Verified carriers can bid price + ETA. Competitor amounts stay hidden until award.</p>
 
@@ -110,8 +112,8 @@ export default function OpenLoads() {
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <div className="relative w-full sm:w-64">
-          <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job code, address, notes…" className="pl-9" />
+          <IconSearch size={15} className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted ${isRtl ? 'right-3' : 'left-3'}`} />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job code, address, notes…" className={isRtl ? 'pr-9' : 'pl-9'} />
         </div>
         <Select value={equipmentFilter} onChange={(e) => setEquipmentFilter(e.target.value)} className="w-auto">
           <option value="all">Equipment: All</option>
@@ -148,7 +150,7 @@ export default function OpenLoads() {
                 back to a stacked card layout (a 7-column table doesn't
                 survive a 375px screen no matter how it's styled). */}
             <Card className="hidden overflow-x-auto sm:block">
-              <table className="w-full text-left text-sm">
+              <table className={`w-full text-sm ${isRtl ? 'text-right' : 'text-left'}`}>
                 <thead>
                   <tr className="border-b" style={{ borderColor: 'var(--border-default)' }}>
                     {['Job', 'Route', 'Equipment', 'Payment', 'Target price', 'Deadline', ''].map((h) => (
@@ -206,7 +208,7 @@ export default function OpenLoads() {
                   key={j.id}
                   type="button"
                   onClick={() => navigate(`/jobs/${j.id}`)}
-                  className="card flex flex-col gap-2 p-4 text-left"
+                  className={`card flex flex-col gap-2 p-4 ${isRtl ? 'text-right' : 'text-left'}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-mono text-xs font-semibold text-ink-muted">{j.job_code}</span>

@@ -5,6 +5,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate } from '../lib/constants.js';
 import { Card, Badge, EmptyState, ErrorState, Select, BentoStat } from '../components/ui.jsx';
 import { IconPackage, IconDownload, IconWallet } from '../components/icons.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const RELEASE_LABEL = { MANUAL: 'Manual', AUTO_24H: 'Auto-released', DISPUTE_RESOLUTION: 'Dispute resolution' };
 const STATUS_COLOR = { RELEASED: 'success', PENDING: 'warning', HELD: 'info', CANCELLED: 'danger' };
@@ -45,6 +46,7 @@ function downloadCsv(rows) {
 
 export default function Earnings() {
   usePageTitle('Earnings');
+  const { isRtl } = useLocale();
   const [payouts, setPayouts] = useState([]);
   const [totals, setTotals] = useState({ paid: 0, pending: 0 });
   const [releaseFilter, setReleaseFilter] = useState('all');
@@ -92,7 +94,7 @@ export default function Earnings() {
   ];
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">Earnings &amp; Wallet</h1>

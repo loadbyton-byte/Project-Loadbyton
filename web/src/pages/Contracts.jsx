@@ -4,11 +4,13 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { TERMINALS, AREAS, formatAED, formatLabel } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, EmptyState, ErrorState, Badge } from '../components/ui.jsx';
 import { IconPlus, IconShield } from '../components/icons.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const empty = { pickupTerminal: TERMINALS[0], deliveryArea: AREAS[0], deliveryAddress: '', monthlyLoads: '', targetPriceAed: '' };
 
 export default function Contracts() {
   usePageTitle('Contract lanes');
+  const { isRtl } = useLocale();
   const [contracts, setContracts] = useState([]);
   const [contractsError, setContractsError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -35,7 +37,7 @@ export default function Contracts() {
   }
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">Contract lanes</h1>

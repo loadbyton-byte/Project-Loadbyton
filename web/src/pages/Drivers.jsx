@@ -5,11 +5,13 @@ import { uploadFile, UPLOAD_ACCEPT, driverDocumentUrl } from '../lib/upload.js';
 import { Button, Card, Input, Label, EmptyState, ErrorState, Badge, Select } from '../components/ui.jsx';
 import { IconPlus, IconTruck, IconFile, IconCheckCircle, IconWallet, IconChevronDown, IconChevronRight } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const empty = { name: '', phone: '', licenseNumber: '', licenseExpiry: '' };
 
 export default function Drivers() {
   usePageTitle('My Drivers');
+  const { isRtl } = useLocale();
   const { addToast } = useToasts();
   const [drivers, setDrivers] = useState(null);
   const [driversError, setDriversError] = useState('');
@@ -142,7 +144,7 @@ export default function Drivers() {
   }
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">My Drivers</h1>
@@ -178,8 +180,8 @@ export default function Drivers() {
           <form onSubmit={engageExternalUnits} className="mt-4 flex flex-col sm:flex-row gap-2">
             <Input type="number" min="1" placeholder="Units to engage" value={engageUnits} onChange={(e) => setEngageUnits(e.target.value)} className="w-full sm:w-32" />
             <Input type="text" placeholder="Note (optional)" value={engageNote} onChange={(e) => setEngageNote(e.target.value)} className="w-full sm:w-48" />
-            <Button type="submit" loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronRight size={16} className="mr-2" /> Engage Units</Button>
-            <Button type="button" variant="secondary" onClick={releaseUnits} loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronDown size={16} className="mr-2" /> Release Units</Button>
+            <Button type="submit" loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronRight size={16} className={isRtl ? 'ml-2' : 'mr-2'} /> Engage Units</Button>
+            <Button type="button" variant="secondary" onClick={releaseUnits} loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronDown size={16} className={isRtl ? 'ml-2' : 'mr-2'} /> Release Units</Button>
           </form>
         </Card.Content>
       </Card>

@@ -5,6 +5,7 @@ import { formatAED, formatDate, formatLabel } from '../lib/constants.js';
 import { Card, Input, EmptyState, ErrorState, StatusBadge } from '../components/ui.jsx';
 import { IconHistory } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 // Shipper-facing equivalent of the carrier's Invoices/Earnings pages — a
 // per-job breakdown (price, dates, duration) plus links to whichever
@@ -56,6 +57,7 @@ function DocLinks({ job }) {
 
 export default function JobHistory() {
   usePageTitle('Job History');
+  const { isRtl } = useLocale();
   const [jobs, setJobs] = useState(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -70,7 +72,7 @@ export default function JobHistory() {
   const totalSpent = filtered?.filter((j) => j.status === 'COMPLETED').reduce((s, j) => s + (j.agreed_price_aed || 0), 0) || 0;
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Job History</h1>
       <p className="mt-1 text-sm text-ink-muted">Every job you've posted — price, timing, and the documents tied to each one.</p>
 
@@ -87,7 +89,7 @@ export default function JobHistory() {
       ) : (
         <>
           <div className="mt-6 overflow-x-auto scroll-fade-x">
-            <table className="w-full text-left text-sm">
+            <table className={`w-full text-sm ${isRtl ? 'text-right' : 'text-left'}`}>
               <thead>
                 <tr className="border-b text-xs uppercase tracking-wide text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
                   <th className="px-5 py-3 font-medium">Job</th>
