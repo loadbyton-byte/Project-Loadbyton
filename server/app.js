@@ -22,16 +22,9 @@ app.use((req, res, next) => {
   // with nothing in the server's request log. Same-origin dev setups never
   // preflight a same-origin request, so this only broke cross-origin
   // deployments — exactly the "works on some setups, not others" pattern.
-  // Idempotency-Key (job posting's retry-safe submit) and x-hsm-sigs
-  // (release-payout) are both sent by web/src/lib/api.js but were missing
-  // here — on any cross-origin deployment (frontend and API on different
-  // domains, the common production shape), a custom header not in this
-  // list fails the browser's CORS preflight and the real request never
-  // reaches the server at all: the client just sees "Failed to fetch",
-  // with nothing in the server's request log. Same-origin dev setups never
-  // preflight a same-origin request, so this only broke cross-origin
-  // deployments — exactly the "works on some setups, not others" pattern.
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-request-id,x-internal-key,x-setup-key,Idempotency-Key,x-hsm-sigs');
+  // x-loadbyton-client is the CSRF defense below — every legitimate
+  // frontend request sends it, so it needs to survive preflight too.
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-request-id,x-internal-key,x-setup-key,Idempotency-Key,x-hsm-sigs,x-loadbyton-client');
   const origin = req.headers.origin;
   // Use centralized origin check from config to avoid duplication drift
   const { isAllowedOrigin: isAllowed } = require('./lib/config');
@@ -50,6 +43,45 @@ app.use(express.json({
 
 app.use(cookieParser);
 app.use(requestId);
+
+// CSRF protection (security-audit finding): nothing defended against a
+// cross-site request riding the browser's own session cookie. SameSite
+// alone doesn't help once frontend and API are on different domains in
+// production — the cookie has to be SameSite=None cross-origin for the
+// session to work there at all (server/lib/helpers.js's
+// sessionCookieAttributes), and SameSite=None is sent by the browser on a
+// request from ANY site, not just this app's own frontend. A plain HTML
+// <form> POST (no preflight, since it can't set a custom header or a
+// non-form Content-Type) was enough to withdraw a carrier's bid or, worse,
+// confirm a pending two-person admin approval — silently satisfying that
+// control's whole reason for existing.
+//
+// Fix: require a custom header on every mutating request that carries our
+// session cookie. Neither a <form> POST nor a "simple" cross-origin
+// fetch/XHR can attach a custom header without triggering a CORS
+// preflight, which the origin allowlist above already blocks for any
+// non-allowed origin. Gated on "does this request carry our session
+// cookie" rather than a route-by-route allowlist — a request with no
+// session cookie has nothing for CSRF to ride in the first place
+// (webhooks, and the internal-key/setup-key-gated /api/system endpoints,
+// never carry it), so nothing needs to be enumerated or kept in sync as
+// routes are added.
+const CSRF_HEADER = 'x-loadbyton-client';
+app.use((req, res, next) => {
+  const isMutating = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (isMutating && req.cookies?.lb_session && !req.headers[CSRF_HEADER]) {
+    return res.status(403).json({
+      success: false,
+      error: { code: 'CSRF_HEADER_MISSING', message: `Missing required ${CSRF_HEADER} header` },
+      _legacy: { error: `Missing required ${CSRF_HEADER} header` },
+      message: `Missing required ${CSRF_HEADER} header`,
+      code: 'CSRF_HEADER_MISSING',
+      requestId: req.requestId || null,
+    });
+  }
+  next();
+});
+
 app.use(securityHeaders);
 app.use(sentry.requestHandler());
 app.use(requestLogger);
