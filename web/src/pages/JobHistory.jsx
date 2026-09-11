@@ -2,9 +2,19 @@ import { useEffect, useState } from 'react';
 import { api, openDocument } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate, formatLabel } from '../lib/constants.js';
-import { Card, Input, EmptyState, ErrorState, StatusBadge } from '../components/ui.jsx';
+import { Card, Input, EmptyState, ErrorState, StatusBadge, Badge } from '../components/ui.jsx';
 import { IconHistory } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+
+// Fee codes charged directly to a shipper's account outside the per-job
+// invoice (cancellation fees, opt-in priority placement — see
+// server/routes/monetization.routes.js). GET /api/billing/fees existed with
+// zero UI caller anywhere; a shipper had no way to see their own charges.
+const FEE_LABELS = {
+  CANCELLATION_FEE: 'Cancellation fee',
+  PRIORITY_PLACEMENT: 'Priority placement',
+};
+const FEE_STATUS_COLOR = { ACCRUED: 'warning', COLLECTED: 'success', WAIVED: 'neutral' };
 
 // Shipper-facing equivalent of the carrier's Invoices/Earnings pages — a
 // per-job breakdown (price, dates, duration) plus links to whichever
@@ -59,10 +69,12 @@ export default function JobHistory() {
   const [jobs, setJobs] = useState(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [fees, setFees] = useState(null);
 
   function load() {
     setError('');
     api.listJobs({ limit: 200, sort: 'date_desc' }).then((d) => setJobs(d.jobs)).catch((err) => { setJobs([]); setError(err.message); });
+    api.getBillingFees().then((d) => setFees(d.fees)).catch(() => setFees([]));
   }
   useEffect(load, []);
 
@@ -121,6 +133,37 @@ export default function JobHistory() {
           </div>
           <p className="mt-3 text-right text-sm text-ink-muted">{filtered.length} job{filtered.length === 1 ? '' : 's'} · {formatAED(totalSpent)} spent on completed jobs</p>
         </>
+      )}
+
+      {fees && fees.length > 0 && (
+        <div className="mt-8">
+          <h2 className="font-display text-lg font-bold text-ink">Fees &amp; charges</h2>
+          <p className="mt-1 text-sm text-ink-muted">Platform fees charged directly to your account, separate from per-job invoices.</p>
+          <div className="mt-4 overflow-x-auto scroll-fade-x">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b text-xs uppercase tracking-wide text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
+                  <th className="px-5 py-3 font-medium">Fee</th>
+                  <th className="px-5 py-3 font-medium">Job</th>
+                  <th className="px-5 py-3 font-medium">Date</th>
+                  <th className="px-5 py-3 font-medium">Amount</th>
+                  <th className="px-5 py-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fees.map((f) => (
+                  <tr key={f.id} className="border-b last:border-0 hover:bg-raised" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <td className="px-5 py-3">{FEE_LABELS[f.fee_code] || f.fee_code}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-ink-muted">{f.job_code || '—'}</td>
+                    <td className="px-5 py-3 text-ink-secondary">{formatDate(f.created_at)}</td>
+                    <td className="px-5 py-3 font-mono">{formatAED(f.amount_aed)}</td>
+                    <td className="px-5 py-3"><Badge color={FEE_STATUS_COLOR[f.status] || 'neutral'}>{f.status}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
