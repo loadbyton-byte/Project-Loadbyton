@@ -111,6 +111,11 @@ router.post('/api/jobs/:id/fuel-advance', auth(['CARRIER']), requireSeatRole(['O
   const job=await db.prepare('SELECT * FROM jobs WHERE id=?').get(req.params.id);
   if(!job) return apiResponse.error(req,res,'JOB_NOT_FOUND','Job not found');
   if(job.carrier_id!==req.user.id) return apiResponse.error(req,res,'FORBIDDEN','Not your job');
+  // Escrow already RELEASED means the payout is finalized (job completed,
+  // or cancelled after award) — an advance requested at that point would
+  // never be netted against anything, since job.service.js only deducts
+  // outstanding advances from net_aed at the moment of release.
+  if(job.escrow_status==='RELEASED') return apiResponse.error(req,res,'VALIDATION_FAILED','This job is already settled — no advance available');
   const exists=await db.prepare('SELECT 1 FROM fuel_advances WHERE job_id=? AND carrier_id=?').get(job.id, req.user.id);
   if(exists) return apiResponse.error(req,res,'VALIDATION_FAILED','Advance already taken for this job');
   const amount = Math.round((job.agreed_price_aed||job.max_budget_aed||0)*0.20);
@@ -118,7 +123,12 @@ router.post('/api/jobs/:id/fuel-advance', auth(['CARRIER']), requireSeatRole(['O
   const { type } = req.body||{};
   const t = String(type||'FUEL').toUpperCase();
   if(!['FUEL','SALIK'].includes(t)) return apiResponse.error(req,res,'VALIDATION_FAILED','type must be FUEL or SALIK');
-  await db.prepare(`INSERT INTO fuel_advances (job_id,carrier_id,amount_aed,type) VALUES (?,?,?,?)`).run(job.id, req.user.id, amount, t);
+  try {
+    await db.prepare(`INSERT INTO fuel_advances (job_id,carrier_id,amount_aed,type) VALUES (?,?,?,?)`).run(job.id, req.user.id, amount, t);
+  } catch (e) {
+    if (e.message && /UNIQUE|duplicate key/i.test(e.message)) return apiResponse.error(req,res,'VALIDATION_FAILED','Advance already taken for this job');
+    throw e;
+  }
   await writeAudit(req,{userId:req.actorId, action:'FUEL_ADVANCE', details:`${job.job_code} ${t} ${amount} AED`, entityType:'job', entityId:job.id});
   res.json({ ok:true, amount, type: t });
 });
