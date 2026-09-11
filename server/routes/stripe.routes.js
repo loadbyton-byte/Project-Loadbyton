@@ -97,8 +97,18 @@ router.post('/api/webhooks/stripe', express.raw({type:'*/*'}), async (req,res) =
       `INSERT INTO payment_webhook_events (provider, provider_event_id, event_type, payload_hash, raw_payload, status) VALUES ('stripe',?,?,?,?, 'PENDING')`
     ).run(providerEventId, event.type || 'unknown', payloadHash, String(req.rawBody || '').slice(0, 8000));
   } catch (e) {
-    if (e.message && /UNIQUE|duplicate key/i.test(e.message)) return res.json({ received:true, idempotent:true, duplicate_event:true });
-    if (!/no such table/i.test(e.message || '')) throw e;
+    if (e.message && /UNIQUE|duplicate key/i.test(e.message)) {
+      // A row already exists for this event id. If it was actually
+      // PROCESSED, this is a genuine Stripe retry — ack and skip. But if
+      // it's still PENDING (or FAILED), a prior delivery crashed or errored
+      // between the INSERT and the final PROCESSED update — that event was
+      // never actually applied, so silently swallowing it here would drop
+      // the payment/escrow update forever. Fall through and reprocess.
+      const existing = await db.prepare(`SELECT status FROM payment_webhook_events WHERE provider='stripe' AND provider_event_id=?`).get(providerEventId);
+      if (existing?.status === 'PROCESSED') return res.json({ received:true, idempotent:true, duplicate_event:true });
+    } else if (!/no such table/i.test(e.message || '')) {
+      throw e;
+    }
     // Table missing (DB without the payments-hardening migration) — fall through.
   }
 

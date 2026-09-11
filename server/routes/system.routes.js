@@ -244,9 +244,17 @@ router.post(
     } catch (/** @type {any} */ e) {
       const _e = /** @type {any} */ (e);
       if (_e.message && /UNIQUE|duplicate key/i.test(_e.message)) {
-        return res.json({ ok: true, idempotent: true, duplicate_event: true });
+        // Only a truly PROCESSED prior delivery is a real duplicate to skip.
+        // A row stuck at PENDING/FAILED means an earlier delivery crashed or
+        // errored before finishing — swallowing it here would silently drop
+        // that payment/escrow update forever, so fall through and reprocess.
+        const existing = await db.prepare(`SELECT status FROM payment_webhook_events WHERE provider=? AND provider_event_id=?`).get(parsed.provider, providerEventId);
+        if (existing?.status === 'PROCESSED') {
+          return res.json({ ok: true, idempotent: true, duplicate_event: true });
+        }
+      } else if (_e.message && !/no such table/i.test(_e.message)) {
+        throw _e;
       }
-      if (_e.message && !/no such table/i.test(_e.message)) throw _e;
       // Table missing (DB without 002) — fall through to legacy idempotency via escrow status check
     }
 
