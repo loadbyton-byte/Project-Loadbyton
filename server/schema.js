@@ -1026,6 +1026,20 @@ module.exports = function initSchema(db) {
   // networks/VPNs need human review design first, not an automatic flag.
   addColumn('audit_log', 'ip_address', 'ip_address TEXT');
   addColumn('audit_log', 'user_agent', 'user_agent TEXT');
+  // Security-audit finding: every audit_log row's user_id is the ACTING
+  // identity (session.acting_seat_id || user.id, see middleware/auth.js's
+  // auth()) — during an admin impersonation session that's the
+  // IMPERSONATED user's own id, not the admin's. Only the bookend
+  // IMPERSONATE_START/IMPERSONATE_END events named the admin explicitly;
+  // every action taken in between was logged as if the victim did it
+  // themselves, with no way to prove or disprove admin involvement short
+  // of manually cross-referencing session timestamps. writeAudit now
+  // populates this from req.session.impersonating_admin_id whenever set.
+  // Deliberately NOT folded into the hash-chain formula below (prev_hash
+  // covers action/entity_type/entity_id/created_at only) — same scoping
+  // as request_id/ip_address/user_agent, already real audit content that
+  // isn't part of the tamper-evidence formula either.
+  addColumn('audit_log', 'acting_admin_id', 'acting_admin_id INTEGER');
   addColumn('sessions', 'ip_address', 'ip_address TEXT');
   // Cancellation-fee schedule — see server/lib/constants.js's
   // CANCELLATION_FEE_BPS_AFTER_AWARD for the actual policy value.
