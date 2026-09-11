@@ -25,7 +25,9 @@ router.get('/api/admin/platform-fees', auth(['ADMIN']), async (req, res) => {
 });
 
 router.get('/api/billing/fees', auth(), async (req, res) => {
-  const rows = await db.prepare(`SELECT * FROM platform_fees WHERE user_id=? ORDER BY created_at DESC LIMIT 100`).all(req.user.id);
+  const rows = await db.prepare(
+    `SELECT pf.*, j.job_code FROM platform_fees pf LEFT JOIN jobs j ON j.id = pf.job_id WHERE pf.user_id=? ORDER BY pf.created_at DESC LIMIT 100`
+  ).all(req.user.id);
   res.json({ fees: rows });
 });
 
