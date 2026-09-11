@@ -17,7 +17,7 @@ Base URL: **`http://localhost:4000/api`** (dev: proxied at `/api` on `:5173`).
   }
   ```
   A client should check `success`/`code` (stable, machine-readable) rather than treating `error` as the only field — `error` is kept as a plain string for backwards compat (older clients read it directly), and `_legacy`/`errorDetails` are transitional duplicates from the envelope migration. See `server/lib/http.js` (`sendError`) and `server/lib/apiResponse.js` (`apiResponse.error`).
-- Roles referenced below: `SHIPPER`, `CARRIER`, `ADMIN`.
+- Roles referenced below: `SHIPPER`, `CARRIER`, `ADMIN`, `FORWARDER`, `BROKER`, `OWNER_OPERATOR`.
 - The public endpoints (`/api/health`, `/api/public/*`) need no auth.
 
 ---
@@ -568,10 +568,11 @@ Five printable, job-scoped documents beyond the tax invoice (`GET /api/invoices/
 - **Body:** `{ token }` (min 6 chars)
 - **200** `{ ok: true }` — records the DP World E-Token gate slot and notifies the shipper.
 
-### `POST /api/jobs/:id/eir`
+### `POST /api/jobs/:id/eir?stage=pickup|delivery`
 - **Auth:** `CARRIER`, own job
-- **Body:** `{ photos: [ {title?, fileBase64|storageKey, mimeType}, ... ] }` — exactly 3, in order Seal / Right Side / Left Side.
-- **200** `{ ok: true, photos: [storagePath, storagePath, storagePath] }` — stores each as an `EIR`-type `job_documents` row and on `jobs.eir_photos`.
+- **Body:** `{ photos: [ {title?, fileBase64|storageKey, mimeType}, ... ], sealNumber? }` — the required photo count is **not** a fixed 3 anymore; it branches on `jobs.requires_seal`: a **sealed** (goods-carrying) job requires exactly **1** photo (`Seal`) plus a `sealNumber` text field (required for sealed jobs — the photo alone doesn't record *which* seal was used); an **unsealed/empty** job requires exactly **2** photos (`Right Side`, `Left Side`), no seal number. **400** `VALIDATION_FAILED` if the photo array length doesn't match the expected count for that job, or if `sealNumber` is missing/blank on a sealed job.
+- Captured at **both** pickup and delivery via the `?stage=pickup|delivery` query param (default `pickup`) — stored separately (`eir_photos_pickup`/`seal_number` vs. `eir_photos_delivery`/`seal_number_delivery`), so a damage/shortage dispute has evidence from both ends of the trip, not pickup only.
+- **200** `{ ok: true, stage, photos: [storagePath, ...] }` (array length is 1 or 2, matching the job's `requires_seal` rule above) — stores each as an `EIR`-type `job_documents` row.
 
 ### `GET /api/jobs/:id/detention`
 - **Auth:** session, job participant or admin
@@ -796,7 +797,133 @@ Beyond the processor-agnostic `POST /api/jobs/:id/payment-checkout` and `POST /a
 
 ---
 
-## 27. Status codes cheat sheet
+## 27. Broker & Forwarder account operations (Phase 7, Change 27)
+
+FORWARDER and BROKER are first-class register roles (`roleSatisfies`: forwarder passes SHIPPER guards, broker passes both). This section is only the new surface those roles need — client/carrier rosters and the direct-assign-vs-open-post choice. WhatsApp-in-dashboard + bulk CSV import are an explicit Phase 2 follow-up, not covered here.
+
+### `GET /api/forwarder/clients`
+- **Auth:** `FORWARDER` (own clients only) or `ADMIN` (all, capped at 200)
+- **200** `{ clients: [...] }`
+
+### `POST /api/forwarder/clients`
+- **Auth:** `FORWARDER`, approved account
+- **Body:** `{ clientName, contactPhone?, contactEmail? }`
+- **201** `{ client }`. **400** if `clientName` is missing/blank.
+
+### `GET /api/broker/carriers`
+- **Auth:** `BROKER` (own roster only) or `ADMIN` (all, capped at 200)
+- **200** `{ carriers: [...] }` — joined to `users`/`profiles` for email and company name.
+
+### `POST /api/broker/carriers`
+- **Auth:** `BROKER`, approved account
+- **Body:** `{ carrierId }`
+- **201** `{ roster }`. **404** if the carrier doesn't exist. **400** if the target isn't `CARRIER`/`OWNER_OPERATOR` (brokers cannot re-broker to another broker/forwarder — the one-hop rule). **409** if the carrier is already in the roster.
+
+### `POST /api/jobs/:id/direct-assign`
+- **Auth:** `BROKER` or `FORWARDER`, approved account, job owner (shipper_id match, or the posting broker/forwarder)
+- **Body:** `{ carrierId, amountAed, etaAt?, brokerSpreadBps?, forwarderClientId? }` — `brokerSpreadBps` (0–2000, i.e. 0–20%) is BROKER-only; `forwarderClientId` (must be one of the caller's own roster clients) is FORWARDER-only.
+- Reuses the exact `awardJob` transaction that `POST /api/jobs/:id/award` uses — one escrow/ledger/capacity implementation, not a second copy — by first creating a `PENDING` bid for the target carrier, then awarding it with `skipNegotiation: true`.
+- **200** — same response as `POST /api/jobs/:id/award` (job awarded). **403** if the caller doesn't own the job, the job isn't `OPEN`, the job is already brokered by someone else (one-hop rule), a BROKER's target carrier isn't in their roster, or the carrier isn't verified. **404** if the job or carrier doesn't exist. **409** if the target carrier already has a pending bid on this job (double-submit race — same friendly-409 pattern as the marketplace bid route).
+
+---
+
+## 28. Monetization: platform fee visibility (Phase 7, Change 30)
+
+`chargeFee()` (`lib/ledger.js`) is the single helper every revenue line uses; this section is only the read surface. Live today: `CANCELLATION_FEE` (auto-charged, `job.service.js`) and `PRIORITY_PLACEMENT` (opt-in at posting). Other lines (contract-lane billing, EDI paid tier, white-label document fees, demurrage recovery, lane-data product, fleet-SaaS gating, partner-blocked rails) are scaffolded honestly — rows appear only when the underlying feature is actually used, no fake volume.
+
+### `GET /api/admin/platform-fees`
+- **Auth:** `ADMIN`
+- **Query:** `feeCode?` — filter to one fee code.
+- **200** `{ fees: [...], revenueAed }` — `revenueAed` sums every non-`WAIVED` fee row.
+
+### `GET /api/billing/fees`
+- **Auth:** any authenticated user
+- **200** `{ fees: [...] }` — the caller's own fee rows only.
+
+---
+
+## 29. Financial integrity: two-person approvals & hash-chain verification (Phase 7, Change 21)
+
+Sensitive manual admin money-movement actions now require a second admin's confirmation, and both the ledger and the audit log are tamper-evident hash chains you can independently verify.
+
+### `POST /api/admin/action-approvals/request`
+- **Auth:** `ADMIN`
+- **Body:** `{ actionType: "MANUAL_ESCROW_RELEASE" | "MANUAL_REFUND", jobId, reason? }`
+- **201** `{ approval }`. **404** if the job doesn't exist. **409** if a `PENDING` request for the same job + actionType already exists.
+
+### `GET /api/admin/action-approvals`
+- **Auth:** `ADMIN`
+- **Query:** `status?` — one of `PENDING`/`CONFIRMED`/`REJECTED`/`EXECUTED` (last 100 otherwise, newest first).
+- **200** `{ approvals: [...] }`
+- Note: this was previously named `GET /api/admin/approvals`, which silently collided with the unrelated pending-account-approval queue in §6 (Express resolved it to whichever router registered first, so this handler was 100% dead code). Renamed to `action-approvals` so it can't collide again.
+
+### `POST /api/admin/action-approvals/:id/confirm`
+- **Auth:** `ADMIN`, and **must not** be the admin who requested it
+- **200** `{ approval }` (now `EXECUTED`) — atomically applies the underlying effect (`MANUAL_ESCROW_RELEASE` moves `jobs.escrow_status` → `RELEASED` and the payout to `RELEASED`/`MANUAL_OVERRIDE`; `MANUAL_REFUND` moves escrow → `REFUNDED` and cancels the payout) and audits `APPROVAL_EXECUTED`. **403** if the caller is the original requester (two-person rule). **404** not found. **409** if the request isn't `PENDING`, or the escrow state no longer permits the action.
+
+### `POST /api/admin/action-approvals/:id/reject`
+- **Auth:** `ADMIN`, and **must not** be the admin who requested it
+- **Body:** `{ reason? }`
+- **200** `{ approval }` (now `REJECTED`), audits `APPROVAL_REJECTED`. **403** if the caller is the original requester. **404** not found. **409** if not `PENDING`.
+
+### `GET /api/admin/ledger/verify-chain`
+- **Auth:** `ADMIN`
+- **200** `{ ok, checked, breaks: [{ id, reason }] }` — walks `ledger_transactions` in id order verifying each row's `hash`/`prev_hash` against its predecessor; pre-chain-era rows (written before Change 21, `hash IS NULL`) are skipped, not flagged. `ok` is `false` and `breaks` lists every fork found.
+
+### `GET /api/audit/chain/verify`
+- **Auth:** `ADMIN`
+- **200** `{ ok, brokenAt, length, checked, head }` — same tamper-evidence check as above, over `audit_log` instead of `ledger_transactions`. `brokenAt` is the first broken row's id, or `null`.
+
+### `GET /api/audit/chain`
+- **Auth:** `ADMIN`
+- **200** `{ chain: [{ id, action, entity_type, entity_id, hash, prev_hash, created_at }] }` — last 100 rows, newest first.
+
+---
+
+## 30. GCC corridor expansion (Phase 8, Change 31)
+
+A 6-country config (`lib/gcc.js`) existed but was imported nowhere; these endpoints wire it into real behavior. Market entry itself (business registration, local payment licensing) stays a separate business decision — these describe technical readiness, not legal authority. Settlement is AED-only in v1; multi-currency settlement is explicit follow-up work.
+
+### `GET /api/gcc/countries`
+- **Auth:** none
+- **200** `{ countries: [{ code, currency, taxBps, paymentProvider, ledgerNote }], home: "AE", note }`
+
+### `GET /api/gcc/corridors`
+- **Auth:** none
+- **Query:** `to?` — destination country code (e.g. `SA`, `OM`) to filter.
+- **200** `{ corridors: [{ id, origin, originCountry, destination, destinationCountry, distanceKm, transitDays, indicativeAed, borderCrossing, currency }], settlement }` — currently 4 curated UAE→Saudi Arabia/Oman lanes.
+
+---
+
+## 31. Multi-stop itinerary & lane-rate quote (Phase 8, Change 28 remainder)
+
+Stops are **intermediate** legs — a job's own `pickupTerminal`/`deliveryArea` stay the canonical first/last legs. `GET /api/jobs/:id` surfaces stops as `stops[]`.
+
+### `GET /api/jobs/:id/stops`
+- **Auth:** session, job participant or admin (same visibility rule as job detail)
+- **200** `{ stops: [...] }` ordered by `seq`.
+
+### `POST /api/jobs/:id/stops`
+- **Auth:** `SHIPPER`/`CARRIER`/`FORWARDER`/`BROKER` seat-role `OPS`, job owner or awarded carrier
+- **Body:** `{ stopType: "PICKUP"|"DROP"|"WAYPOINT", location, addressDetail?, lat?, lng? }`
+- **201** `{ stop }`, appended at the next `seq`. **400** if `stopType` is invalid or `location` is blank. **403** if not permitted, or the job isn't `OPEN`/`AWARDED`/`PICKED_UP`/`IN_TRANSIT`. **404** job not found.
+
+### `POST /api/jobs/:id/stops/:stopId/complete`
+- **Auth:** `CARRIER` seat-role `OPS`, the job's awarded carrier (or `ADMIN`)
+- **200** `{ stop }` (`completed_at` stamped). **403** if not the awarded carrier. **404** job or stop not found. **409** if already completed.
+
+### `DELETE /api/jobs/:id/stops/:stopId`
+- **Auth:** `SHIPPER`/`FORWARDER`/`BROKER` seat-role `OPS`, job owner
+- **200** `{ ok: true }`. **403** if not permitted, the job isn't in an editable status, or the stop is already completed (completed stops can't be removed). **404** job or stop not found.
+
+### `GET /api/lanes/quote`
+- **Auth:** none — market data, not account data, same as `GET /api/public/lanes`.
+- **Query:** `terminal`, `area` (both required).
+- **200** on an exact lane match: `{ lane, guidance: { suggestedTargetAed, onTimePct, monthlyLoads, note } }`. On no match: `{ lane: null, fallback: { indicativeAed, note } }` — a platform-average estimate, not a real lane reference. **400** if `terminal`/`area` are missing.
+
+---
+
+## 32. Status codes cheat sheet
 
 | Code | Meaning |
 |---|---|
@@ -811,7 +938,7 @@ Beyond the processor-agnostic `POST /api/jobs/:id/payment-checkout` and `POST /a
 
 ---
 
-## 28. Demo API flow (quick curl)
+## 33. Demo API flow (quick curl)
 
 ```bash
 BASE=http://localhost:4000/api
@@ -832,7 +959,7 @@ See `TUTORIAL.md` for the full demo walkthrough.
 
 ---
 
-## 29. Endpoints added beyond the original spec
+## 34. Endpoints added beyond the original spec
 
 Several routes exist beyond this document's original scope; the notable ones the
 Industrial Trust redesign pass newly wired into the UI (they were built and
