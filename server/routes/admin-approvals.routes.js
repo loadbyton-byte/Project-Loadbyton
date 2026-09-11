@@ -8,9 +8,18 @@ const { sendError } = require('../lib/http');
 const { apiResponse } = require('../lib/apiResponse');
 const { auth } = require('../middleware/auth');
 const { writeAudit } = require('../lib/helpers');
+const { resolveDisputeCore, markTransferredCore, executeManualOverrideCore } = require('../lib/adminActions');
 
 const router = require('express').Router();
 
+// Only the two actions the generic reason-only /request endpoint below can
+// create. DISPUTE_RESOLVE and MARK_TRANSFERRED are NOT in this list on
+// purpose — they carry a much richer payload (decision/split percentages,
+// or payoutId/reference) than {reason}, so admin.routes.js's own
+// dispute-resolve/mark-transferred handlers INSERT their own admin_approvals
+// row directly (see the two_person_approval_required branches there)
+// instead of going through /request. executeApproval() below still knows
+// how to execute both action types once a second admin confirms.
 const EXECUTABLE = ['MANUAL_ESCROW_RELEASE', 'MANUAL_REFUND'];
 
 async function executeApproval(approval, confirmer, req) {
@@ -18,24 +27,28 @@ async function executeApproval(approval, confirmer, req) {
   if (!job) throw Object.assign(new Error('Job not found'), { status: 404 });
   const payload = approval.payload ? JSON.parse(approval.payload) : {};
 
-  await db.transaction(async (trx) => {
-    if (approval.action_type === 'MANUAL_ESCROW_RELEASE') {
-      if (!['HELD', 'FUNDED'].includes(job.escrow_status)) {
-        throw Object.assign(new Error(`Escrow is ${job.escrow_status}, nothing to release`), { status: 409 });
-      }
-      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`, [job.id]);
-      await trx.query(`UPDATE payouts SET status='RELEASED', release_type='MANUAL_OVERRIDE', released_at=datetime('now') WHERE job_id=? AND status != 'RELEASED'`, [job.id]);
-    } else if (approval.action_type === 'MANUAL_REFUND') {
-      if (job.escrow_status === 'RELEASED') {
-        throw Object.assign(new Error('Escrow already released, cannot refund'), { status: 409 });
-      }
-      await trx.query(`UPDATE jobs SET escrow_status='REFUNDED', updated_at=datetime('now') WHERE id=?`, [job.id]);
-      await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [job.id]);
-    } else {
-      throw Object.assign(new Error(`Unknown action ${approval.action_type}`), { status: 400 });
-    }
-    await trx.query(`UPDATE admin_approvals SET status='EXECUTED', confirmed_by=?, decided_at=datetime('now') WHERE id=?`, [confirmer.id, approval.id]);
-  });
+  if (approval.action_type === 'DISPUTE_RESOLVE') {
+    const dispute = await db.prepare('SELECT * FROM disputes WHERE id=?').get(payload.disputeId);
+    if (!dispute) throw Object.assign(new Error('Dispute not found'), { status: 404 });
+    if (dispute.status === 'RESOLVED') throw Object.assign(new Error('Dispute already resolved'), { status: 409 });
+    await resolveDisputeCore(req, {
+      dispute, job, determination: payload.determination, decision: payload.decision,
+      splitShipperPct: payload.splitShipperPct, splitCarrierPct: payload.splitCarrierPct,
+      resolvedByUserId: confirmer.id,
+    });
+    await db.prepare(`UPDATE admin_approvals SET status='EXECUTED', confirmed_by=?, decided_at=datetime('now') WHERE id=?`).run(confirmer.id, approval.id);
+  } else if (approval.action_type === 'MARK_TRANSFERRED') {
+    const payout = await db.prepare('SELECT * FROM payouts WHERE id=?').get(payload.payoutId);
+    if (!payout) throw Object.assign(new Error('Payout not found'), { status: 404 });
+    if (payout.status !== 'RELEASED') throw Object.assign(new Error(`Payout is ${payout.status}, not RELEASED`), { status: 409 });
+    if (payout.transfer_executed_at) throw Object.assign(new Error('Transfer already confirmed for this payout'), { status: 409 });
+    await markTransferredCore(req, { payout, reference: payload.reference, confirmedByUserId: confirmer.id });
+    await db.prepare(`UPDATE admin_approvals SET status='EXECUTED', confirmed_by=?, decided_at=datetime('now') WHERE id=?`).run(confirmer.id, approval.id);
+  } else if (approval.action_type === 'MANUAL_ESCROW_RELEASE' || approval.action_type === 'MANUAL_REFUND') {
+    await executeManualOverrideCore(req, { approval, job, actionType: approval.action_type, confirmerId: confirmer.id });
+  } else {
+    throw Object.assign(new Error(`Unknown action ${approval.action_type}`), { status: 400 });
+  }
 
   await writeAudit(req, {
     userId: confirmer.id, action: 'APPROVAL_EXECUTED',

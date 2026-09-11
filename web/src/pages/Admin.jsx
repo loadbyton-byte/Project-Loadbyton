@@ -18,8 +18,9 @@ const ReconciliationTab = lazy(() => import('./admin/AdminReconciliation.jsx'));
 const PlatformFeesTab = lazy(() => import('./admin/AdminPlatformFees.jsx'));
 const LedgerVerifyTab = lazy(() => import('./admin/AdminLedgerVerify.jsx'));
 const CreditTab = lazy(() => import('./admin/CreditTab.jsx'));
+const ApprovalsTab = lazy(() => import('./admin/ApprovalsTab.jsx'));
 
-const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Documents', 'Registrations', 'Payout SLA', 'Credit', 'Audit log', 'Revenue', 'Settings', 'Reconciliation', 'Platform fees', 'Ledger verify'];
+const TABS = ['Health', 'Live activity', 'Verification', 'Account approvals', 'Members', 'Disputes', 'Approvals', 'Documents', 'Registrations', 'Payout SLA', 'Credit', 'Audit log', 'Revenue', 'Settings', 'Reconciliation', 'Platform fees', 'Ledger verify'];
 const TAB_COMPONENTS = {
   Health: HealthTab,
   'Live activity': LiveActivityTab,
@@ -27,6 +28,7 @@ const TAB_COMPONENTS = {
   'Account approvals': AccountApprovalsTab,
   Members: MembersTab,
   Disputes: DisputesTab,
+  Approvals: ApprovalsTab,
   Documents: DocumentsTab,
   Registrations: RegistrationsTab,
   'Payout SLA': PayoutsSlaTab,

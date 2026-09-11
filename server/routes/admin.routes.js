@@ -6,6 +6,7 @@ const apiResponse = require('../lib/apiResponse');
 const { encryptField, decryptField } = require('../lib/crypto');
 const { writeAudit, toPublicUser, getSettings, notify, notifyAdmins, parseDbDate, createSession } = require('../lib/helpers');
 const { refundJobAsync, executePayoutAsync } = require('../services/payout.service');
+const { resolveDisputeCore, markTransferredCore } = require('../lib/adminActions');
 const { DEFERRED_PAYMENT_TERMS } = require('../lib/constants');
 // Every deferred-payment job (NET_24H/7/15/28), plus the legacy
 // CONTRACT_CREDIT value a job posted before this migration might still
@@ -493,73 +494,36 @@ router.post('/api/admin/disputes/:id/resolve', auth(['ADMIN']), async (req, res)
   // RELEASE_TO_CARRIER — an admin choosing "split the difference" got a
   // full release with zero indication anything different happened. This
   // computes and executes a real proportional split.
-  let carrierPortionGross = null;
-  let carrierPlatformFee = null;
-  let carrierNetAed = null;
-  let shipperRefundAed = null;
   if (decision === 'SPLIT') {
     const shipperPct = Number(splitShipperPct);
     const carrierPct = Number(splitCarrierPct);
     if (!Number.isFinite(shipperPct) || !Number.isFinite(carrierPct) || Math.abs(shipperPct + carrierPct - 100) > 0.01) {
       return sendError(res, 400, 'splitShipperPct and splitCarrierPct are required for a SPLIT decision and must sum to 100');
     }
-    const { commission_rate_bps } = await getSettings();
-    carrierPortionGross = Math.round((job.agreed_price_aed || 0) * carrierPct / 100 * 100) / 100;
-    carrierPlatformFee = Math.round(carrierPortionGross * (commission_rate_bps / 10000));
-    carrierNetAed = carrierPortionGross - carrierPlatformFee;
-    shipperRefundAed = Math.round(((job.agreed_price_aed || 0) - carrierPortionGross) * 100) / 100;
   }
 
-  // All three writes (payouts, jobs, disputes) happen atomically — a crash
-  // between them used to leave the dispute row still OPEN despite the
-  // payout already having been marked CANCELLED/RELEASED, so a retry could
-  // re-pass the "already resolved" guard and fire a second real
-  // refund/payout. The fire-and-forget processor calls run only after this
-  // transaction has actually committed, so a crash before commit means
-  // nothing was dispatched at all.
-  await db.transaction(async (trx) => {
-    if (decision === 'REFUND_SHIPPER') {
-      await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`, [job.id]);
-    } else if (decision === 'SPLIT') {
-      await trx.query(
-        `UPDATE payouts SET gross_aed=?, platform_fee_aed=?, net_aed=?, status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`,
-        [carrierPortionGross, carrierPlatformFee, carrierNetAed, job.id]
-      );
-    } else {
-      await trx.query(`UPDATE payouts SET status='RELEASED', release_type='DISPUTE_RESOLUTION', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=?`, [job.id]);
-    }
-    await trx.query(
-      `UPDATE jobs SET status='COMPLETED', escrow_status='RELEASED', processor_payment_status=CASE WHEN ?='REFUND_SHIPPER' THEN 'REFUNDED' ELSE processor_payment_status END, payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
-      [dispute.decision || decision, job.id]
-    );
-    await trx.query(
-      `UPDATE disputes SET status='RESOLVED', determination=?, decision=?, resolved_by=?, resolved_at=datetime('now'), split_shipper_pct=?, split_carrier_pct=? WHERE id=?`,
-      [determination || null, decision, req.user.id, decision === 'SPLIT' ? Number(splitShipperPct) : null, decision === 'SPLIT' ? Number(splitCarrierPct) : null, dispute.id]
-    );
-  });
+  // REVIEW-2026-09-08.md §6 follow-up #2: this used to always execute on a
+  // single admin's say-so — real money (release/refund/split) moving off
+  // one person's decision, unlike MANUAL_ESCROW_RELEASE/MANUAL_REFUND
+  // (admin-approvals.routes.js), which already require a second admin.
+  // Gated behind a setting (default off — this is a real operational
+  // policy call the platform operator makes, not something to force on
+  // every existing deployment/test unilaterally): when on, this creates a
+  // pending approval instead of resolving immediately, and only a
+  // DIFFERENT admin's confirm on that approval actually executes it (via
+  // the exact same resolveDisputeCore admin-approvals.routes.js calls).
+  const { two_person_approval_required } = await getSettings();
+  if (two_person_approval_required) {
+    const dup = await db.prepare(`SELECT id FROM admin_approvals WHERE action_type='DISPUTE_RESOLVE' AND job_id=? AND status='PENDING'`).get(job.id);
+    if (dup) return apiResponse.error(req, res, 'CONFLICT', 'A pending resolution request for this dispute already exists', { status: 409 });
+    const payload = JSON.stringify({ disputeId: dispute.id, determination: determination || null, decision, splitShipperPct: splitShipperPct ?? null, splitCarrierPct: splitCarrierPct ?? null });
+    const r = await db.prepare(`INSERT INTO admin_approvals (action_type, job_id, payload, requested_by) VALUES ('DISPUTE_RESOLVE',?,?,?) RETURNING id`).run(job.id, payload, req.user.id);
+    const approval = await db.prepare(`SELECT * FROM admin_approvals WHERE id=?`).get(Number(r.lastInsertRowid));
+    await writeAudit(req, { userId: req.actorId, action: 'APPROVAL_REQUESTED', details: `DISPUTE_RESOLVE on ${job.job_code} requested (${decision})`, entityType: 'dispute', entityId: dispute.id });
+    return res.status(202).json({ pendingApproval: approval });
+  }
 
-  if (decision === 'REFUND_SHIPPER') {
-    // TODO-3: give the money back via the processor when it was taken.
-    // No-op in internal mode / when the charge never went through.
-    refundJobAsync(job);
-  } else if (decision === 'SPLIT') {
-    try { await issueInvoice(db, job.id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${job.id}:`, e); }
-    if (shipperRefundAed > 0) refundJobAsync(job, shipperRefundAed);
-    executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
-  } else {
-    try { await issueInvoice(db, job.id); } catch (e) { console.error(`[invoice] issueInvoice failed for job ${job.id}:`, e); }
-    // TODO-3: with a processor configured this moves the money; in
-    // internal mode it is a no-op and the admin SLA flow applies.
-    executePayoutAsync(job, await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id), req);
-  }
-  // Carrier reliability: a REFUND_SHIPPER (or the carrier's portion of a
-  // SPLIT) resolution implies the carrier didn't deliver as promised.
-  if ((decision === 'REFUND_SHIPPER' || decision === 'SPLIT') && job.carrier_id) {
-    await db.prepare(`UPDATE profiles SET reliability_score = MAX(0, reliability_score - 1) WHERE user_id=?`).run(job.carrier_id);
-  }
-  await writeAudit(req, { userId: req.actorId, action: 'DISPUTE_RESOLVE', details: `${decision}: ${determination || ''}${decision === 'SPLIT' ? ` (${splitShipperPct}/${splitCarrierPct})` : ''}`, entityType: 'dispute', entityId: dispute.id, beforeState: 'OPEN', afterState: 'RESOLVED' });
-  await notify(job.shipper_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
-  await notify(job.carrier_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
+  await resolveDisputeCore(req, { dispute, job, determination, decision, splitShipperPct, splitCarrierPct, resolvedByUserId: req.user.id });
   res.json({ ok: true });
 });
 
@@ -677,16 +641,24 @@ router.post('/api/admin/payouts/:id/mark-transferred', auth(['ADMIN']), async (r
   if (payout.status !== 'RELEASED') return apiResponse.error(req, res, 'ESCROW_NOT_HELD', 'Payout is not in RELEASED state yet');
   if (payout.transfer_executed_at) return apiResponse.error(req, res, 'PAYOUT_DUPLICATE', 'Transfer already confirmed for this payout');
   const { reference } = req.body || {};
-  await db.prepare(`UPDATE payouts SET transfer_executed_at=datetime('now'), transfer_reference=? WHERE id=?`).run(reference || null, payout.id);
-  await writeAudit(req, {
-    userId: req.actorId,
-    action: 'PAYOUT_TRANSFER_CONFIRMED',
-    details: `Payout #${payout.id} (AED ${payout.net_aed}) confirmed transferred${reference ? ` — ref ${reference}` : ''}`,
-    entityType: 'payout',
-    entityId: payout.id,
-    beforeState: 'PENDING_TRANSFER',
-    afterState: 'TRANSFERRED',
-  });
+
+  // Same two_person_approval_required gate as dispute-resolve just above —
+  // see that handler's comment. Reuses admin_approvals.job_id (every
+  // payout has one via payouts.job_id) even though this approval is really
+  // "about" the payout, not the job itself; the payload carries the actual
+  // payoutId.
+  const { two_person_approval_required } = await getSettings();
+  if (two_person_approval_required) {
+    const dup = await db.prepare(`SELECT id FROM admin_approvals WHERE action_type='MARK_TRANSFERRED' AND job_id=? AND status='PENDING'`).get(payout.job_id);
+    if (dup) return apiResponse.error(req, res, 'CONFLICT', 'A pending transfer-confirmation request for this payout already exists', { status: 409 });
+    const payload = JSON.stringify({ payoutId: payout.id, reference: reference || null });
+    const r = await db.prepare(`INSERT INTO admin_approvals (action_type, job_id, payload, requested_by) VALUES ('MARK_TRANSFERRED',?,?,?) RETURNING id`).run(payout.job_id, payload, req.user.id);
+    const approval = await db.prepare(`SELECT * FROM admin_approvals WHERE id=?`).get(Number(r.lastInsertRowid));
+    await writeAudit(req, { userId: req.actorId, action: 'APPROVAL_REQUESTED', details: `MARK_TRANSFERRED requested for payout #${payout.id}`, entityType: 'payout', entityId: payout.id });
+    return res.status(202).json({ pendingApproval: approval });
+  }
+
+  await markTransferredCore(req, { payout, reference, confirmedByUserId: req.user.id });
   const updated = await db.prepare('SELECT * FROM payouts WHERE id=?').get(payout.id);
   res.json({ payout: updated });
 });
@@ -696,7 +668,7 @@ router.get('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
 });
 
 router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
-  const { commission_rate_bps, auto_release_hours, cancellation_fee_bps_after_award } = req.body || {};
+  const { commission_rate_bps, auto_release_hours, cancellation_fee_bps_after_award, two_person_approval_required } = req.body || {};
   if (commission_rate_bps !== undefined) {
     // Number.isFinite (not just a bounds comparison) rejects non-numeric
     // input outright — "abc" < 0 and "abc" > 10000 are both false for a
@@ -718,6 +690,9 @@ router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
       return sendError(res, 400, 'cancellation_fee_bps_after_award must be a number between 0 and 10000');
     }
     await db.prepare('UPDATE settings SET value=? WHERE key=\'cancellation_fee_bps_after_award\'').run(String(Number(cancellation_fee_bps_after_award)));
+  }
+  if (two_person_approval_required !== undefined) {
+    await db.prepare('UPDATE settings SET value=? WHERE key=\'two_person_approval_required\'').run(two_person_approval_required ? '1' : '0');
   }
   await writeAudit(req, { userId: req.actorId, action: 'SETTINGS_UPDATE', details: JSON.stringify(req.body) });
   res.json({ settings: await getSettings() });

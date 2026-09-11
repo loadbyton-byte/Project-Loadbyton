@@ -201,6 +201,18 @@ async function getSettings() {
     // cancelled (escrow HELD/FUNDED) — a job cancelled before award is
     // already free, since nothing was ever deducted.
     cancellation_fee_bps_after_award: Number(/** @type {any} */ (map).cancellation_fee_bps_after_award ?? 1000),
+    // Was seeded (schema.js) and read (validators/job.schema.js) but never
+    // actually surfaced here — every priority-placement charge silently
+    // used the JS-side `|| 50` fallback regardless of what an admin set,
+    // since the destructured value was always undefined.
+    priority_placement_fee_aed: Number(/** @type {any} */ (map).priority_placement_fee_aed ?? 50),
+    // REVIEW-2026-09-08.md §6 follow-up #2 — gates dispute-resolve and
+    // payout mark-transferred behind a second admin's confirmation
+    // (server/routes/admin.routes.js, server/routes/admin-approvals.routes.js).
+    // Default off: whether every deployment should require this is a real
+    // operational policy call for the platform operator, not something to
+    // force on unilaterally.
+    two_person_approval_required: (/** @type {any} */ (map).two_person_approval_required ?? '0') === '1',
   };
 }
 

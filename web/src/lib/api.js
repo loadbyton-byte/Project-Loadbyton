@@ -210,6 +210,11 @@ export const api = {
   adminRevenue: () => get('/admin/revenue'),
   adminPayoutsSla: () => get('/admin/payouts-sla'),
   adminMarkTransferred: (payoutId, reference) => post(`/admin/payouts/${payoutId}/mark-transferred`, { reference }),
+  // Two-person approval inbox (admin-approvals.routes.js) — was API-only
+  // with no frontend caller at all until the Approvals tab.
+  adminActionApprovals: (status) => get(`/admin/action-approvals${status ? `?status=${status}` : ''}`),
+  adminConfirmApproval: (id) => post(`/admin/action-approvals/${id}/confirm`, {}),
+  adminRejectApproval: (id, reason) => post(`/admin/action-approvals/${id}/reject`, { reason }),
   adminApprovals: () => get('/admin/approvals'),
   adminApprove: (id, action) => post(`/admin/approve/${id}`, { action }),
   adminGetSettings: () => get('/admin/settings'),
@@ -282,7 +287,13 @@ Object.assign(api, {
   // — distinct from adminApprovals()/adminApprove() above, which are the
   // pending-account-registration queue, a different feature entirely that
   // happened to collide on this exact GET path before the server-side rename.
-  adminReject: (id) => post(`/admin/action-approvals/${id}/reject`, {}),
+  // adminRequestApproval is for the generic reason-only request (MANUAL_
+  // ESCROW_RELEASE/MANUAL_REFUND, requested from the Approvals tab itself);
+  // DISPUTE_RESOLVE/MARK_TRANSFERRED requests are instead created directly
+  // by DisputesTab.jsx/PayoutsSlaTab.jsx's own existing actions (via
+  // adminResolveDispute/adminMarkTransferred), since those carry a much
+  // richer payload than {reason} — see admin.routes.js's
+  // two_person_approval_required branches.
   adminRequestApproval: (body) => post('/admin/action-approvals/request', body),
   // Admin reconciliation / platform fees / ledger
   adminReconciliation: () => get('/admin/reconciliation'),

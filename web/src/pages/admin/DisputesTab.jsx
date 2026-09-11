@@ -43,7 +43,15 @@ function DisputesTab() {
       const extra = decision === 'SPLIT'
         ? { splitShipperPct: Number(splitDrafts[id]?.shipper) || 0, splitCarrierPct: Number(splitDrafts[id]?.carrier) || 0 }
         : {};
-      await api.adminResolveDispute(id, { decision, determination: resolveDrafts[id] || '', ...extra });
+      const result = await api.adminResolveDispute(id, { decision, determination: resolveDrafts[id] || '', ...extra });
+      // Server-side setting two_person_approval_required (Settings tab) can
+      // turn this into a pending request instead of an immediate resolution
+      // — without this branch the dispute card just silently stayed OPEN
+      // with no explanation, indistinguishable from the click having done
+      // nothing at all.
+      if (result?.pendingApproval) {
+        addToast({ type: 'status_change', title: 'Sent for approval', body: 'A second admin must confirm this in the Approvals tab before the dispute actually resolves.' });
+      }
       load();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Could not resolve dispute', body: err.message });
