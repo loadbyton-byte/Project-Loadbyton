@@ -79,7 +79,14 @@ async function awardJob(req, res, jobId, bidId) {
   const { commission_rate_bps } = await getSettings();
   const commissionRate = commission_rate_bps / 10000;
   const agreedPrice = preBid.amount_aed + ancillaryTotal;
-  const platformFee = Math.round(agreedPrice * commissionRate);
+  // Financial-audit finding: rounded to the nearest whole AED instead of
+  // the nearest fils (2 decimals), unlike every other fee computation in
+  // this codebase (cancellation fee, dispute SPLIT) — e.g. 6.5% on AED
+  // 100.50 (6.5325) rounded to 7, not 6.53. Bounded to under AED 1 of
+  // error per job, but a real, systematic discrepancy between the "true"
+  // proportional commission and what actually got booked to
+  // platform_revenue.
+  const platformFee = Math.round(agreedPrice * commissionRate * 100) / 100;
   const netAed = agreedPrice - platformFee;
   const idempotencyKey = `award-${jobId}-${bidId}`;
 

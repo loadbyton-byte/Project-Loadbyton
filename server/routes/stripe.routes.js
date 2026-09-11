@@ -97,8 +97,18 @@ router.post('/api/webhooks/stripe', express.raw({type:'*/*'}), async (req,res) =
       `INSERT INTO payment_webhook_events (provider, provider_event_id, event_type, payload_hash, raw_payload, status) VALUES ('stripe',?,?,?,?, 'PENDING')`
     ).run(providerEventId, event.type || 'unknown', payloadHash, String(req.rawBody || '').slice(0, 8000));
   } catch (e) {
-    if (e.message && /UNIQUE|duplicate key/i.test(e.message)) return res.json({ received:true, idempotent:true, duplicate_event:true });
-    if (!/no such table/i.test(e.message || '')) throw e;
+    if (e.message && /UNIQUE|duplicate key/i.test(e.message)) {
+      // A row already exists for this event id. If it was actually
+      // PROCESSED, this is a genuine Stripe retry — ack and skip. But if
+      // it's still PENDING (or FAILED), a prior delivery crashed or errored
+      // between the INSERT and the final PROCESSED update — that event was
+      // never actually applied, so silently swallowing it here would drop
+      // the payment/escrow update forever. Fall through and reprocess.
+      const existing = await db.prepare(`SELECT status FROM payment_webhook_events WHERE provider='stripe' AND provider_event_id=?`).get(providerEventId);
+      if (existing?.status === 'PROCESSED') return res.json({ received:true, idempotent:true, duplicate_event:true });
+    } else if (!/no such table/i.test(e.message || '')) {
+      throw e;
+    }
     // Table missing (DB without the payments-hardening migration) — fall through.
   }
 
@@ -136,7 +146,7 @@ router.post('/api/webhooks/stripe', express.raw({type:'*/*'}), async (req,res) =
       await db.prepare(
         `INSERT INTO disputes (job_id, opened_by, reason, status, dispute_type) VALUES (?,?,?,?,?)`
       ).run(job.id, job.shipper_id, `Stripe chargeback opened by the cardholder's bank (charge dispute id: ${dispute.id || 'unknown'})`, 'OPEN', 'PAYMENT_VAT');
-      await writeAudit({ headers: {}, actorId: 0, requestId: req.headers['x-request-id'] }, { userId: 0, action: 'CHARGEBACK_OPENED', details: `${job.job_code}: Stripe dispute ${dispute.id}`, entityType: 'job', entityId: job.id, beforeState: job.escrow_status, afterState: 'DISPUTED' });
+      await writeAudit({ headers: {}, actorId: 0, requestId: req.headers['x-request-id'] || null }, { userId: 0, action: 'CHARGEBACK_OPENED', details: `${job.job_code}: Stripe dispute ${dispute.id}`, entityType: 'job', entityId: job.id, beforeState: job.escrow_status, afterState: 'DISPUTED' });
       await notifyAdmins('Chargeback opened', `${job.job_code}: a cardholder disputed this charge via their bank. Escrow frozen, evidence submission needed.`, job.id, 'dispute');
     }
   } else if (event.type === 'charge.dispute.closed') {
@@ -144,8 +154,33 @@ router.post('/api/webhooks/stripe', express.raw({type:'*/*'}), async (req,res) =
     const paymentIntentId = dispute.payment_intent;
     const job = paymentIntentId ? await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(paymentIntentId) : null;
     if (job) {
-      await writeAudit({ headers: {}, actorId: 0, requestId: req.headers['x-request-id'] }, { userId: 0, action: 'CHARGEBACK_CLOSED', details: `${job.job_code}: Stripe dispute ${dispute.id} closed, outcome ${dispute.status || 'unknown'}`, entityType: 'job', entityId: job.id });
+      await writeAudit({ headers: {}, actorId: 0, requestId: req.headers['x-request-id'] || null }, { userId: 0, action: 'CHARGEBACK_CLOSED', details: `${job.job_code}: Stripe dispute ${dispute.id} closed, outcome ${dispute.status || 'unknown'}`, entityType: 'job', entityId: job.id });
       await notifyAdmins('Chargeback closed', `${job.job_code}: the chargeback was closed (${dispute.status || 'unknown'}) — review and resolve the linked dispute manually.`, job.id, 'dispute');
+    }
+  }
+
+  // charge.refunded — previously entirely unhandled on this route. A refund
+  // that Stripe reports here can be one WE initiated (payout.service.js's
+  // refundCharge, which already updates processor_payment_status/escrow
+  // itself when it runs) or one issued out-of-band (e.g. directly from the
+  // Stripe dashboard, or a partial/support-initiated refund) that our own
+  // state has no idea happened — in that second case escrow could still
+  // show FUNDED/HELD/RELEASED while the money already left the platform's
+  // Stripe balance. Since this handler can't tell those two cases apart
+  // from the webhook alone, it only acts when our own state hasn't already
+  // caught up (processor_payment_status isn't REFUNDED yet) — same
+  // conservative "freeze + notify admin for manual review" pattern already
+  // used for charge.dispute.created, rather than silently auto-flipping
+  // escrow on an event we can't fully trust.
+  if (event.type === 'charge.refunded') {
+    const charge = event.data?.object || {};
+    const paymentIntentId = charge.payment_intent;
+    const job = paymentIntentId ? await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(paymentIntentId) : null;
+    if (job && job.processor_payment_status !== 'REFUNDED') {
+      const refundedAed = Number.isFinite(charge.amount_refunded) ? charge.amount_refunded / 100 : null;
+      await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', processor_last_error='Unrecognized Stripe refund — see audit log', updated_at=datetime('now') WHERE id=?`).run(job.id);
+      await writeAudit({ headers: {}, actorId: 0, requestId: req.headers['x-request-id'] || null }, { userId: 0, action: 'UNRECOGNIZED_REFUND', details: `${job.job_code}: Stripe reported charge.refunded (charge ${charge.id}, ${refundedAed != null ? `AED ${refundedAed}` : 'amount unknown'}) that our own records had not already applied — escrow frozen pending manual review`, entityType: 'job', entityId: job.id, beforeState: job.escrow_status, afterState: 'DISPUTED' });
+      await notifyAdmins('Unrecognized Stripe refund', `${job.job_code}: Stripe reported a refund (charge ${charge.id}) this platform did not initiate through the app. Escrow frozen — review and resolve manually.`, job.id, 'dispute');
     }
   }
 

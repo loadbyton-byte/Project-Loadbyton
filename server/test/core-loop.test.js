@@ -168,6 +168,41 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   assert.equal(doubleConfirm.status, 409, 'confirming an already-confirmed transfer must not silently succeed');
 });
 
+// Financial-audit finding: award.service.js rounded commission to the
+// nearest whole AED instead of the nearest fils (2 decimals), unlike every
+// other fee computation in this codebase. 125.40 @ the default 6%
+// commission = 7.524 — the old code rounded that to 8 (a whole AED off);
+// the fix rounds to 7.52.
+test('award commission rounds to the nearest fils, not the nearest whole AED', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Commission rounding regression test',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+  });
+  assert.equal(created.status, 201, created.raw);
+  const jobId = created.body.job.id;
+
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 125.40, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+  });
+  assert.equal(bid.status, 201, bid.raw);
+
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });
+  assert.equal(award.status, 200, award.raw);
+
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(server.dbPath);
+  const payout = db.prepare('SELECT gross_aed, platform_fee_aed, net_aed FROM payouts WHERE job_id=?').get(jobId);
+  db.close();
+  assert.equal(payout.gross_aed, 125.40);
+  assert.ok(Math.abs(payout.platform_fee_aed - 7.52) < 1e-9, `expected commission rounded to fils (7.52), got ${payout.platform_fee_aed}`);
+  assert.ok(Math.abs(payout.net_aed - 117.88) < 1e-9, `expected net = gross - fee (117.88), got ${payout.net_aed}`);
+});
+
 test('auto-release sweep (x-internal-key) releases past-window deliveries without an admin session', async () => {
   const res = await fetch(`${server.baseUrl}/api/system/auto-release`, {
     method: 'POST',

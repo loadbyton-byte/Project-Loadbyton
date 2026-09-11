@@ -174,6 +174,37 @@ test('AUTHORISED webhook funds escrow exactly once; replays are idempotent', asy
   assert.equal(afterDecline.processor_payment_status, 'PAID');
 });
 
+test('a stuck PENDING webhook_events row (delivery crashed before PROCESSED) is retried, not silently swallowed as a duplicate', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+
+  const { jobId } = await createAwardedJob(shipper, carrier);
+  const ref = (await shipper.post(`/api/jobs/${jobId}/payment-checkout`, {})).body.ref;
+
+  // Simulate a PRIOR delivery of this exact event that crashed (or errored)
+  // after the dedup row was inserted but before the final PROCESSED
+  // update ran — the processor still considers that delivery failed and
+  // will redeliver the same event id. A dedup check that short-circuits on
+  // row-existence alone (rather than status='PROCESSED') would swallow
+  // this real event forever and escrow would never fund.
+  const providerEventId = 'mock-' + ref + '-AUTHORISED-mcktran-stuck';
+  const { DatabaseSync } = require('node:sqlite');
+  const rawDb = new DatabaseSync(server.dbPath);
+  rawDb.prepare(
+    `INSERT INTO payment_webhook_events (provider, provider_event_id, event_type, status) VALUES ('mock', ?, 'AUTHORISED', 'PENDING')`
+  ).run(providerEventId);
+  rawDb.close();
+
+  const res = await sendWebhook(server.baseUrl, { event: 'AUTHORISED', ref, tranref: 'mcktran-stuck', amount_aed: 650 });
+  assert.equal(res.status, 200);
+
+  const funded = (await shipper.get(`/api/jobs/${jobId}`)).body.job;
+  assert.equal(funded.escrow_status, 'FUNDED', 'the redelivered event must still be processed, not dropped as a false duplicate');
+  assert.equal(funded.processor_payment_status, 'PAID');
+});
+
 test('full loop: paid -> delivered -> completed auto-executes the carrier payout', async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
