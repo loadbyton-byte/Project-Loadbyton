@@ -94,6 +94,72 @@ test('two-person rule: requester cannot self-confirm; second admin executes rele
   assert.equal(job.escrow_status, 'RELEASED', 'confirmed release override must actually release escrow');
 });
 
+// Promotes a fresh SHIPPER account to ADMIN via direct DB write (mirrors
+// the pattern in the confirm-flow test above) and returns a logged-in
+// client for it — factored out here since the reject-flow test below
+// needs the same "a different admin decides" setup twice.
+async function makeSecondAdmin(server, requesterAdmin) {
+  const email = `second-admin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.ae`;
+  const reg = await requesterAdmin.post('/api/auth/register', {
+    email, password: 'demo1234', role: 'SHIPPER',
+    companyName: 'Second Admin Co', phone: '0509998877', trnNumber: '100000000000042',
+    tradeLicenseNumber: 'CN-4200042', agreedToTerms: true,
+  });
+  void reg;
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(server.dbPath);
+  db.prepare(`UPDATE users SET role='ADMIN', is_verified=1 WHERE email=?`).run(email);
+  db.close();
+  const client = require('./harness').makeClient(server.baseUrl);
+  await client.login(email, 'demo1234');
+  return client;
+}
+
+// REVIEW-2026-09-08.md §6 follow-up #1: reject was the only action-approvals
+// endpoint with no test coverage. This checks the two-person rule holds for
+// rejection too, and — the actual financial invariant that matters — that a
+// rejected request never executes the underlying escrow/payout change.
+test('action-approvals reject: requester cannot self-reject; a rejected request never executes; decided requests cannot be re-decided', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+  const admin1 = makeClient(server.baseUrl);
+  await admin1.login('admin@loadbyton.ae', 'demo1234');
+
+  const jobId = await postAwardFund(shipper, carrier, admin1);
+  const beforeJob = (await shipper.get(`/api/jobs/${jobId}`)).body.job;
+
+  const req1 = await admin1.post('/api/admin/action-approvals/request', {
+    actionType: 'MANUAL_ESCROW_RELEASE', jobId, reason: 'carrier disputes off-system settlement',
+  });
+  assert.equal(req1.status, 201, req1.raw);
+  const approvalId = req1.body.approval.id;
+
+  const selfReject = await admin1.post(`/api/admin/action-approvals/${approvalId}/reject`, {});
+  assert.equal(selfReject.status, 403, 'requester must never reject their own request');
+  assert.match(selfReject.raw, /Two-person/);
+
+  const admin2 = await makeSecondAdmin(server, admin1);
+  const reject = await admin2.post(`/api/admin/action-approvals/${approvalId}/reject`, { reason: 'insufficient evidence' });
+  assert.equal(reject.status, 200, reject.raw);
+  assert.equal(reject.body.approval.status, 'REJECTED');
+  assert.ok(reject.body.approval.confirmed_by, 'deciding admin is recorded on the approval row');
+
+  // The core invariant: rejecting must never touch escrow/payout state.
+  const afterJob = (await shipper.get(`/api/jobs/${jobId}`)).body.job;
+  assert.equal(afterJob.escrow_status, beforeJob.escrow_status, 'a rejected approval must not release or otherwise change escrow');
+
+  const audit = await admin1.get('/api/admin/audit');
+  assert.ok(audit.body.entries.some((e) => e.action === 'APPROVAL_REJECTED' && e.entity_id === jobId), 'rejection must be on the audit trail');
+
+  // Already-decided: neither confirm nor a second reject may act on it again.
+  const confirmAfterReject = await admin2.post(`/api/admin/action-approvals/${approvalId}/confirm`, {});
+  assert.equal(confirmAfterReject.status, 409, 'a rejected request cannot later be confirmed');
+  const rejectAgain = await admin2.post(`/api/admin/action-approvals/${approvalId}/reject`, {});
+  assert.equal(rejectAgain.status, 409, 'an already-decided request cannot be rejected again');
+});
+
 test('ledger hash-chain verifies; cancellation + priority fees accrue via chargeFee', async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');

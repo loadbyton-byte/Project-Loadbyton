@@ -95,6 +95,18 @@ function CreditTab() {
                 <div>
                   <p className="text-sm font-semibold text-ink">{s.company_name}</p>
                   <p className="text-xs text-ink-muted">{s.email}</p>
+                  {s.credit_approved_at && (
+                    <p className="mt-0.5 text-xs">
+                      <span className="text-ink-muted">Payment reliability </span>
+                      <span
+                        className="font-semibold"
+                        style={{ color: s.payment_reliability_score >= 4 ? 'var(--status-success)' : s.payment_reliability_score >= 2.5 ? 'var(--status-warning)' : 'var(--status-danger)' }}
+                        title="Starts at 5.0; +0.1 per on-time deferred-payment settlement, -0.5 per late one — rises slowly, drops fast."
+                      >
+                        {Number(s.payment_reliability_score ?? 5).toFixed(1)}/5
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="text-right text-sm">
                   {s.credit_approved_at ? (
