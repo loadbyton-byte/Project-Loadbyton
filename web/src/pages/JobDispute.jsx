@@ -7,6 +7,7 @@ import { formatDateTime } from '../lib/constants.js';
 import { Card, Badge, Button, Input, Spinner, ChatThread, ErrorState } from '../components/ui.jsx';
 import { IconArrowLeft, IconGavel, IconFile, IconSend } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const DECISION_LABEL = {
   RELEASE_TO_CARRIER: 'Released to carrier',
@@ -24,6 +25,7 @@ export default function JobDispute() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addToast } = useToasts();
+  const { isRtl } = useLocale();
   const [data, setData] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -78,7 +80,7 @@ export default function JobDispute() {
   }));
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <button type="button" onClick={() => navigate(`/jobs/${id}`)} className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-ink-secondary hover:text-ink">
         <IconArrowLeft size={16} /> Back to job
       </button>

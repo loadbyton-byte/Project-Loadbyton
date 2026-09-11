@@ -7,6 +7,7 @@ import { uploadFile, UPLOAD_ACCEPT, profileDocumentUrl } from '../lib/upload.js'
 import { Card, Badge, StatusBadge, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconShield, IconFile, IconCheckCircle, IconAlert, IconTruck } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 // The Stitch document_compliance mockup shows a "compliance score" +
 // document checklist — kept as-is below. Extended with three real sections
@@ -17,6 +18,7 @@ import { useToasts } from '../components/Toast.jsx';
 // documents to.
 export default function DocumentCompliance() {
   usePageTitle('Document compliance');
+  const { isRtl } = useLocale();
   const { user, refresh } = useAuth();
   const { addToast } = useToasts();
   const p = user.profile || {};
@@ -73,7 +75,7 @@ export default function DocumentCompliance() {
   const score = Math.round((checklist.filter((c) => c.done).length / checklist.length) * 100);
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Document compliance</h1>
       <p className="mt-1 text-sm text-ink-muted">What Loadbyton has on file for {p.company_name || user.email}.</p>
 

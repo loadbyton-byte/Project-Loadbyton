@@ -5,6 +5,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatLabel } from '../lib/constants.js';
 import { BentoStat, Spinner, Card, ErrorState } from '../components/ui.jsx';
 import { IconTrendUp, IconStar } from '../components/icons.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 // Promoted from the stats strip every dashboard already showed inline
 // (Dashboard.jsx / OpenLoads.jsx) into its own route — matches the Stitch
@@ -101,6 +102,7 @@ function TopLanes({ lanes }) {
 
 export default function Analytics() {
   usePageTitle('Analytics');
+  const { isRtl } = useLocale();
   const { user } = useAuth();
   const [analytics, setAnalytics] = useState(null);
   const [error, setError] = useState('');
@@ -124,7 +126,7 @@ export default function Analytics() {
   const lanes = analytics.topLanes || [];
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Performance</h1>
       <p className="mt-1 text-sm text-ink-muted">
         {isCarrier ? 'Your bidding and delivery performance.' : 'Your spend and negotiation performance vs. the lane index.'}

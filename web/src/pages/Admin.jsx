@@ -1,6 +1,7 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { usePageTitle } from '../lib/seo.jsx';
 import { Spinner } from '../components/ui.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const HealthTab = lazy(() => import('./admin/HealthTab.jsx'));
 const LiveActivityTab = lazy(() => import('./admin/LiveActivityTab.jsx'));
@@ -43,10 +44,11 @@ const TAB_COMPONENTS = {
 
 export default function Admin() {
   usePageTitle('Admin console');
+  const { isRtl } = useLocale();
   const [tab, setTab] = useState('Health');
   const Active = TAB_COMPONENTS[tab];
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Admin console</h1>
       <p className="mt-1 text-sm text-ink-muted">Verification, escrow oversight, disputes, and the audit trail.</p>
       <div className="mt-6 flex gap-1 overflow-x-auto scroll-fade-x border-b" style={{ borderColor: 'var(--border-default)' }}>

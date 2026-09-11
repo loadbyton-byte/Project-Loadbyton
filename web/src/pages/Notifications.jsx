@@ -7,6 +7,7 @@ import { formatDateTime } from '../lib/constants.js';
 import { Button, Card, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconBell } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const TYPE_LABELS = {
   bid: 'New bids',
@@ -20,6 +21,7 @@ const TYPE_LABELS = {
 
 export default function Notifications() {
   usePageTitle('Notifications');
+  const { isRtl } = useLocale();
   const [items, setItems] = useState(null);
   const [itemsError, setItemsError] = useState('');
   const [prefs, setPrefs] = useState(null);
@@ -59,7 +61,7 @@ export default function Notifications() {
   }
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-ink">Notifications</h1>
         {items && items.some((n) => !n.is_read) && <Button variant="secondary" size="sm" onClick={markRead}>Mark all read</Button>}

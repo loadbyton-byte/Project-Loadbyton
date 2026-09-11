@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { EmptyState, ErrorState, StatusBadge, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
 import { IconPackage, IconSearch } from '../components/icons.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 import { formatLabel, CONTAINER_EQUIPMENT, STATUS_FLOW, equipmentLabel, cargoTypeLabel } from '../lib/constants.js';
 
 const ACTIVE_STATUSES = ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'];
@@ -17,6 +18,7 @@ const SORT_OPTIONS = [
 
 export default function WonJobs() {
   usePageTitle('Won jobs');
+  const { isRtl } = useLocale();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [jobs, setJobs] = useState(null);
@@ -45,14 +47,14 @@ export default function WonJobs() {
   useEffect(loadWonJobs, [user.id, sort, debouncedSearch, offset]);
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Won jobs</h1>
       <p className="mt-1 text-sm text-ink-muted">Your active shipments — from award through delivery. Open a job to advance its status, upload POD, or chat with the shipper.</p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full sm:w-64">
-          <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job code, address…" className="pl-9" />
+          <IconSearch size={15} className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted ${isRtl ? 'right-3' : 'left-3'}`} />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job code, address…" className={isRtl ? 'pr-9' : 'pl-9'} />
         </div>
         <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-auto">
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

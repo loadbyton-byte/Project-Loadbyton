@@ -6,6 +6,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { Button, Card, Input, Label, Select, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
 import EquipmentCapacity from '../features/profile/EquipmentCapacity.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const SEAT_ROLE_HELP = {
   OPS: 'Full day-to-day access — post jobs, bid, award, update status.',
@@ -117,6 +118,7 @@ function TeamSection() {
 
 export default function Profile() {
   usePageTitle('Profile & settings');
+  const { isRtl } = useLocale();
   const { user, refresh, restartWalkthrough, isOrgRoot, actingAs } = useAuth();
   const [form, setForm] = useState({
     companyName: user.profile?.company_name || '',
@@ -240,7 +242,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="container-page max-w-2xl py-6" dir="ltr">
+    <div className="container-page max-w-2xl py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Profile &amp; settings</h1>
       <p className="mt-1 font-mono text-xs text-ink-muted">{user.email} · {user.role} · Tier {user.tier}</p>
       {actingAs && (
@@ -346,8 +348,8 @@ export default function Profile() {
             )}
           </Card.Content>
           <Card.Footer>
-            {saved && <span className="mr-auto text-sm text-status-success">Saved.</span>}
-            {saveError && <span className="mr-auto text-sm text-status-danger">{saveError}</span>}
+            {saved && <span className={`${isRtl ? 'ml-auto' : 'mr-auto'} text-sm text-status-success`}>Saved.</span>}
+            {saveError && <span className={`${isRtl ? 'ml-auto' : 'mr-auto'} text-sm text-status-danger`}>{saveError}</span>}
             <Button type="submit" loading={busy}>Save changes</Button>
           </Card.Footer>
         </form>

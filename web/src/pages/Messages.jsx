@@ -8,6 +8,7 @@ import { Button, Input, Badge, EmptyState, ErrorState } from '../components/ui.j
 import { IconMessage, IconArrowLeft, IconSearch, IconChat } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { ROLE_LABELS, ThreadMessageList } from '../features/job/ThreadPane.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 // One color per counterparty role — reuses the existing semantic status
 // tokens as identity colors (not literal statuses) so a thread's avatar
@@ -29,6 +30,7 @@ function roleInitial(role) {
 // call ChatPopup makes) rather than duplicating message storage here.
 export default function Messages() {
   usePageTitle('Messages');
+  const { isRtl } = useLocale();
   const { user, actingAs } = useAuth();
   const myId = actingAs?.id ?? user.id;
   const { addToast } = useToasts();
@@ -116,7 +118,7 @@ export default function Messages() {
   ));
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink">
         <span className="flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}>
           <IconChat size={16} />
@@ -129,12 +131,12 @@ export default function Messages() {
         <div className={`flex flex-col overflow-hidden rounded-2xl border ${selected ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border-default)' }}>
           {inbox && inbox.length > 0 && (
             <div className="relative shrink-0 border-b p-2.5" style={{ borderColor: 'var(--border-subtle)' }}>
-              <IconSearch size={15} className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-ink-muted" />
+              <IconSearch size={15} className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted ${isRtl ? 'right-5' : 'left-5'}`} />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by job code, contact, or message…"
-                className="pl-9"
+                className={isRtl ? 'pr-9' : 'pl-9'}
                 aria-label="Search conversations"
               />
             </div>
@@ -162,10 +164,12 @@ export default function Messages() {
                   key={row.id}
                   type="button"
                   onClick={() => openThread(row)}
-                  className="animate-thread-row-in flex w-full origin-left items-start gap-2.5 border-l-[3px] p-3.5 text-left transition-all duration-150 hover:z-10 hover:scale-[1.015] hover:bg-surface-container hover:shadow-md"
+                  className={`animate-thread-row-in flex w-full items-start gap-2.5 p-3.5 transition-all duration-150 hover:z-10 hover:scale-[1.015] hover:bg-surface-container hover:shadow-md ${isRtl ? 'origin-right border-r-[3px] text-right' : 'origin-left border-l-[3px] text-left'}`}
                   style={{
                     '--msg-delay': `${Math.min(i * 30, 240)}ms`,
-                    borderLeftColor: active ? 'var(--brand-accent)' : unread ? roleColor : 'transparent',
+                    ...(isRtl
+                      ? { borderRightColor: active ? 'var(--brand-accent)' : unread ? roleColor : 'transparent' }
+                      : { borderLeftColor: active ? 'var(--brand-accent)' : unread ? roleColor : 'transparent' }),
                     background: active ? 'var(--surface-container-high)' : unread ? 'color-mix(in srgb, var(--brand-accent) 5%, transparent)' : undefined,
                   }}
                 >

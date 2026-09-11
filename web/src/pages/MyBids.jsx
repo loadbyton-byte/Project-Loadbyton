@@ -6,6 +6,7 @@ import { formatAED, formatLabel, equipmentLabel, formatDateTime } from '../lib/c
 import { Button, Badge, EmptyState, ErrorState, RatingPill, Select, Input, Pagination, JobCard } from '../components/ui.jsx';
 import { IconPackage, IconX, IconSearch } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 const STATUS_COLOR = { PENDING: 'neutral', ACCEPTED: 'success', REJECTED: 'danger', WITHDRAWN: 'neutral' };
 const PAGE_SIZE = 20;
@@ -18,6 +19,7 @@ const SORT_OPTIONS = [
 
 export default function MyBids() {
   usePageTitle('My bids');
+  const { isRtl } = useLocale();
   const [bids, setBids] = useState(null);
   const [bidsError, setBidsError] = useState('');
   const [total, setTotal] = useState(0);
@@ -56,14 +58,14 @@ export default function MyBids() {
   }
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">My bids</h1>
       <p className="mt-1 text-sm text-ink-muted">Your competitive quotes on open loads.</p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <div className="relative w-full sm:w-64">
-          <IconSearch size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job code, address…" className="pl-9" />
+          <IconSearch size={15} className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted ${isRtl ? 'right-3' : 'left-3'}`} />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search job code, address…" className={isRtl ? 'pr-9' : 'pl-9'} />
         </div>
         <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-auto">
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

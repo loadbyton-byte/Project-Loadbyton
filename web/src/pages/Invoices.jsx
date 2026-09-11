@@ -4,6 +4,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatDate } from '../lib/constants.js';
 import { Card, Input, EmptyState, ErrorState } from '../components/ui.jsx';
 import { IconReceipt } from '../components/icons.jsx';
+import { useLocale } from '../lib/i18n.jsx';
 
 // Dedicated invoice history/search — Earnings.jsx keeps its existing
 // lightweight per-payout link; this is the full list GET /api/invoices
@@ -11,6 +12,7 @@ import { IconReceipt } from '../components/icons.jsx';
 // already returns everything, filtering below is client-side over that.
 export default function Invoices() {
   usePageTitle('Invoices');
+  const { isRtl } = useLocale();
   const [invoices, setInvoices] = useState(null);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ search: '', from: '', to: '' });
@@ -32,7 +34,7 @@ export default function Invoices() {
   const total = filtered?.reduce((s, inv) => s + inv.total_aed, 0) || 0;
 
   return (
-    <div className="container-page py-6" dir="ltr">
+    <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Invoices</h1>
       <p className="mt-1 text-sm text-ink-muted">Every invoice issued on your completed jobs.</p>
 
@@ -53,7 +55,7 @@ export default function Invoices() {
       ) : (
         <>
           <div className="mt-6 overflow-x-auto scroll-fade-x">
-            <table className="w-full text-left text-sm">
+            <table className={`w-full text-sm ${isRtl ? 'text-right' : 'text-left'}`}>
               <thead>
                 <tr className="border-b text-xs uppercase tracking-wide text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
                   <th className="px-5 py-3 font-medium">Invoice #</th>
