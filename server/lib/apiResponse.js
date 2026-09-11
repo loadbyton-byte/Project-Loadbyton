@@ -49,10 +49,4 @@ function error(req, res, code, customMessage, extra = {}) {
   });
 }
 
-// Backwards-compatible sendError — wraps old { error: string } shape but
-// also includes success:false and code for new clients that check it.
-function sendErrorCompat(res, status, message, code = 'ERROR') {
-  return res.status(status).json({ success: false, error: { code, message }, requestId: null, _legacy: { error: message } });
-}
-
-module.exports = { ERROR_CATALOG, success, error, sendErrorCompat };
+module.exports = { success, error };

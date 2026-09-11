@@ -13,6 +13,11 @@ const router = require('express').Router();
 
 const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
 
+// @deprecated No web/e2e/test caller found — web/src/lib/api.js's getFleet()
+// hits /api/carrier/fleet instead, which is what this route's own comment
+// says it was a thin proxy for. Left in place rather than removed because
+// it's documented as a public endpoint in docs/API.md (GET /api/fleet/overview)
+// and removing a documented contract is out of scope here.
 router.get('/api/fleet/overview', auth(['CARRIER']), async (req, res) => {
   // thin proxy to /api/carrier/fleet for fleet ops UI
   const jobs = await db.prepare('SELECT * FROM jobs WHERE carrier_id=? ORDER BY created_at DESC LIMIT 50').all(req.user.id);

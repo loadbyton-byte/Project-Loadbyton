@@ -212,6 +212,17 @@ router.get('/api/invoices', auth(['CARRIER', 'ADMIN']), async (req, res) => {
   res.json({ invoices });
 });
 
+// @deprecated Investigated as part of a dead-code audit: the literal ".js"
+// in the path is NOT a routing bug — this really is a static JS asset
+// served at a predictable URL (correct Content-Type, immutable cache
+// headers), registered ahead of the /:id param route below so it isn't
+// shadowed. But nothing references it: no document anywhere emits
+// <script src="/api/invoices/print.js">, and there's no element with
+// id="invoice-print-btn" for it to wire up — every generated document,
+// invoices included (see renderInvoiceHtml -> renderDocumentShell), now
+// gets its print button from lib/documents/shell.js's inline
+// onclick="window.print()" instead. Left in place (documented in
+// docs/API.md) rather than deleted.
 router.get('/api/invoices/print.js', (req, res) => {
   res.set('Content-Type', 'application/javascript').set('Cache-Control', 'public, max-age=31536000, immutable').send(
     `document.getElementById('invoice-print-btn')?.addEventListener('click', () => window.print());`

@@ -20,4 +20,10 @@ function getHsmKeys() {
   const raw = process.env.HSM_SECRET || '';
   return raw.split(',').map(s=>s.trim()).filter(Boolean);
 }
+// @deprecated sha256/sign as EXPORTS: only stripe.routes.js imports from this
+// module, and only for { ledgerHash, verifyMultiSig, getHsmKeys } — nothing
+// external imports sha256 or sign directly. Both stay exported (not deleted)
+// because ledger-adjacent HSM signing code is exactly where a false-positive
+// deletion is most expensive, and they're still very much alive internally
+// (ledgerHash calls sha256, verifyMultiSig calls sign).
 module.exports = { sha256, ledgerHash, sign, verifyMultiSig, getHsmKeys };

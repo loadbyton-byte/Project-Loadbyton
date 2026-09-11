@@ -70,20 +70,6 @@ function captureException(error, context = {}) {
   }
 }
 
-function captureMessage(message, level = 'info', context = {}) {
-  if (!Sentry) return;
-  try {
-    Sentry.withScope((scope) => {
-      if (context.requestId) scope.setTag('request_id', context.requestId);
-      if (context.userId) scope.setUser({ id: String(context.userId) });
-      if (context.extra) scope.setExtras(context.extra);
-      Sentry.captureMessage(message, level);
-    });
-  } catch (e) {
-    console.error('[Sentry] captureMessage failed:', e.message);
-  }
-}
-
 function expressErrorHandler() {
   if (!Sentry || !Sentry.Handlers || !Sentry.Handlers.errorHandler) return (err, req, res, next) => next(err);
   return Sentry.Handlers.errorHandler({
@@ -101,8 +87,6 @@ function requestHandler() {
 module.exports = {
   init,
   captureException,
-  captureMessage,
   expressErrorHandler,
   requestHandler,
-  isEnabled: () => !!Sentry,
 };

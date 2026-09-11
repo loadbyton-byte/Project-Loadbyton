@@ -43,4 +43,4 @@ function sendEmailAsync(args) {
   sendEmail(args).catch(() => {});
 }
 
-module.exports = { sendEmail, sendEmailAsync, isConfigured };
+module.exports = { sendEmailAsync };

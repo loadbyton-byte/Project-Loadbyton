@@ -58,6 +58,11 @@ function hasPermission(user, permission) {
   return perms.includes(permission);
 }
 
+// @deprecated No callers found anywhere in server/ or web/ — hasPermission()
+// (used by middleware/auth.js's requirePermission wrapper) is the only
+// consumer of this module's exports in the live app. Left in place rather
+// than deleted since it's a legitimate small read of ROLE_PERMISSIONS a
+// future admin/settings UI could plausibly want.
 function getPermissionsForRole(role) {
   if (role === 'ADMIN') return Object.values(PERMISSIONS);
   return ROLE_PERMISSIONS[role] || [];
