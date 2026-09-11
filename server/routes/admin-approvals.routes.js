@@ -8,7 +8,7 @@ const { sendError } = require('../lib/http');
 const { apiResponse } = require('../lib/apiResponse');
 const { auth } = require('../middleware/auth');
 const { writeAudit } = require('../lib/helpers');
-const { resolveDisputeCore, markTransferredCore } = require('../lib/adminActions');
+const { resolveDisputeCore, markTransferredCore, executeManualOverrideCore } = require('../lib/adminActions');
 
 const router = require('express').Router();
 
@@ -44,25 +44,10 @@ async function executeApproval(approval, confirmer, req) {
     if (payout.transfer_executed_at) throw Object.assign(new Error('Transfer already confirmed for this payout'), { status: 409 });
     await markTransferredCore(req, { payout, reference: payload.reference, confirmedByUserId: confirmer.id });
     await db.prepare(`UPDATE admin_approvals SET status='EXECUTED', confirmed_by=?, decided_at=datetime('now') WHERE id=?`).run(confirmer.id, approval.id);
+  } else if (approval.action_type === 'MANUAL_ESCROW_RELEASE' || approval.action_type === 'MANUAL_REFUND') {
+    await executeManualOverrideCore(req, { approval, job, actionType: approval.action_type, confirmerId: confirmer.id });
   } else {
-    await db.transaction(async (trx) => {
-      if (approval.action_type === 'MANUAL_ESCROW_RELEASE') {
-        if (!['HELD', 'FUNDED'].includes(job.escrow_status)) {
-          throw Object.assign(new Error(`Escrow is ${job.escrow_status}, nothing to release`), { status: 409 });
-        }
-        await trx.query(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`, [job.id]);
-        await trx.query(`UPDATE payouts SET status='RELEASED', release_type='MANUAL_OVERRIDE', released_at=datetime('now') WHERE job_id=? AND status != 'RELEASED'`, [job.id]);
-      } else if (approval.action_type === 'MANUAL_REFUND') {
-        if (job.escrow_status === 'RELEASED') {
-          throw Object.assign(new Error('Escrow already released, cannot refund'), { status: 409 });
-        }
-        await trx.query(`UPDATE jobs SET escrow_status='REFUNDED', updated_at=datetime('now') WHERE id=?`, [job.id]);
-        await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [job.id]);
-      } else {
-        throw Object.assign(new Error(`Unknown action ${approval.action_type}`), { status: 400 });
-      }
-      await trx.query(`UPDATE admin_approvals SET status='EXECUTED', confirmed_by=?, decided_at=datetime('now') WHERE id=?`, [confirmer.id, approval.id]);
-    });
+    throw Object.assign(new Error(`Unknown action ${approval.action_type}`), { status: 400 });
   }
 
   await writeAudit(req, {

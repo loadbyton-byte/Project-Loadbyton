@@ -177,3 +177,76 @@ test('with the setting on, mark-transferred creates a pending approval, and only
   assert.ok(finalPayout.transfer_executed_at, 'confirming the approval must actually stamp transfer_executed_at');
   assert.equal(finalPayout.transfer_reference, 'WIRE-TEST-001');
 });
+
+// Financial-audit finding: MANUAL_ESCROW_RELEASE and MANUAL_REFUND requests
+// can legitimately coexist as two separate PENDING approvals on the same
+// job (the duplicate-request check in POST .../request is scoped per
+// action_type, not per job) — if two different admins confirm each one
+// concurrently, the executor's own pre-transaction read of
+// job.escrow_status used to be the only guard, so both could pass and both
+// execute, leaving the job's escrow_status as whichever wrote last while
+// payouts ends up inconsistent. Fixed with a SELECT ... FOR UPDATE + fresh
+// escrow_status re-check inside executeManualOverrideCore's own transaction
+// (server/lib/adminActions.js).
+//
+// As with resolveDisputeCore's equivalent test, genuine wall-clock
+// concurrency across two HTTP requests doesn't reliably reproduce this
+// locally (verified: confirming both via Promise.all still produced a
+// clean 200/409 split even with the fix disabled — one request's full
+// check-to-commit chain finishes before the other's outer read runs, in
+// this low-latency environment). So this calls executeManualOverrideCore
+// directly with a deliberately stale `job` snapshot for the second call —
+// exactly what a genuinely concurrent second confirmer would be holding.
+test('executeManualOverrideCore: a second call carrying a stale escrow_status snapshot is refused, not a double override', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+  const jobId = await fullyDeliveredJob(shipper, carrier);
+  // fullyDeliveredJob leaves the job at IN_TRANSIT/awaiting POD — confirm
+  // receipt + POD already ran inside it, so escrow should be HELD/FUNDED,
+  // eligible for either a manual release or a manual refund override.
+
+  const reqRelease = await admin.post('/api/admin/action-approvals/request', { actionType: 'MANUAL_ESCROW_RELEASE', jobId, reason: 'carrier says delivered off-system' });
+  assert.equal(reqRelease.status, 201, reqRelease.raw);
+  const reqRefund = await admin.post('/api/admin/action-approvals/request', { actionType: 'MANUAL_REFUND', jobId, reason: 'shipper disputes off-system' });
+  assert.equal(reqRefund.status, 201, reqRefund.raw);
+
+  process.env.DB_PATH = server.dbPath;
+  const { DatabaseSync } = require('node:sqlite');
+  const readDb = new DatabaseSync(server.dbPath);
+  // One snapshot, taken once while escrow is still HELD/FUNDED, reused for
+  // BOTH calls below — exactly what two concurrent confirmers would each
+  // be holding, having both read the job before either one executed.
+  const staleJobSnapshot = readDb.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
+  const releaseApproval = readDb.prepare('SELECT * FROM admin_approvals WHERE id=?').get(reqRelease.body.approval.id);
+  const refundApproval = readDb.prepare('SELECT * FROM admin_approvals WHERE id=?').get(reqRefund.body.approval.id);
+  // confirmed_by references users(id) — needs a real user, not an
+  // arbitrary number, or the UPDATE at the end of executeManualOverrideCore
+  // fails its FK constraint.
+  const anyAdmin = readDb.prepare(`SELECT id FROM users WHERE role='ADMIN' LIMIT 1`).get();
+  readDb.close();
+  assert.ok(['HELD', 'FUNDED'].includes(staleJobSnapshot.escrow_status), `expected HELD/FUNDED, got ${staleJobSnapshot.escrow_status}`);
+
+  const { executeManualOverrideCore } = require('../lib/adminActions');
+  const fakeReq = { requestId: 'test' };
+
+  await executeManualOverrideCore(fakeReq, { approval: releaseApproval, job: staleJobSnapshot, actionType: 'MANUAL_ESCROW_RELEASE', confirmerId: anyAdmin.id });
+
+  // Second call reuses the SAME stale snapshot (still escrow_status=HELD/
+  // FUNDED as far as this caller knows) — if the fix weren't there, this
+  // would execute a second, real refund on top of the release that
+  // already happened above.
+  await assert.rejects(
+    () => executeManualOverrideCore(fakeReq, { approval: refundApproval, job: staleJobSnapshot, actionType: 'MANUAL_REFUND', confirmerId: anyAdmin.id }),
+    /already released/i,
+    'a second executeManualOverrideCore call must be refused even if its own snapshot still shows HELD/FUNDED'
+  );
+
+  const db = new DatabaseSync(server.dbPath);
+  const finalJob = db.prepare('SELECT escrow_status FROM jobs WHERE id=?').get(jobId);
+  const finalPayout = db.prepare('SELECT status FROM payouts WHERE job_id=?').get(jobId);
+  db.close();
+  assert.equal(finalJob.escrow_status, 'RELEASED', 'the first call\'s outcome must be the one that stuck');
+  assert.equal(finalPayout.status, 'RELEASED', 'the payout must reflect only the release, not also get CANCELLED by the refused refund');
+});

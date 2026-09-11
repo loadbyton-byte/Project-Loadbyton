@@ -39,7 +39,26 @@ async function resolveDisputeCore(req, { dispute, job, determination, decision, 
   // refund/payout. The fire-and-forget processor calls run only after this
   // transaction has actually committed, so a crash before commit means
   // nothing was dispatched at all.
+  //
+  // The dispute/job rows passed in were read by the caller BEFORE this
+  // transaction opened — both admin.routes.js's direct path and
+  // admin-approvals.routes.js's confirm path only check `dispute.status`
+  // against that stale snapshot. Without a locked re-read here, two admins
+  // resolving the same dispute concurrently (direct path, or two different
+  // pending DISPUTE_RESOLVE approvals — the two-person dup-check is scoped
+  // per job+action_type, not per dispute) could both pass their stale
+  // check and both reach the post-transaction refundJobAsync/
+  // executePayoutAsync calls below — a real double money-movement (both a
+  // refund AND a payout for the same job), not just a DB inconsistency.
+  // SELECT ... FOR UPDATE + re-checking status='OPEN' inside the
+  // transaction closes that: whichever transaction commits first flips the
+  // status, so the second one's locked read sees it's no longer OPEN and
+  // aborts before either UPDATE or any post-commit money movement.
   await db.transaction(async (trx) => {
+    const lockedDispute = await trx.query('SELECT status FROM disputes WHERE id=? FOR UPDATE', [dispute.id]);
+    if (lockedDispute.rows[0]?.status !== 'OPEN') {
+      throw Object.assign(new Error('Dispute is no longer open — already resolved by a concurrent request'), { status: 409 });
+    }
     if (decision === 'REFUND_SHIPPER') {
       await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=?`, [job.id]);
     } else if (decision === 'SPLIT') {
@@ -97,4 +116,39 @@ async function markTransferredCore(req, { payout, reference, confirmedByUserId }
   });
 }
 
-module.exports = { resolveDisputeCore, markTransferredCore };
+// Executes a confirmed MANUAL_ESCROW_RELEASE/MANUAL_REFUND approval. `job`
+// is the caller's own snapshot (read before the approval was confirmed,
+// possibly stale by the time this runs) — deliberately NOT trusted for the
+// actual guard condition. Two pending approvals can legitimately coexist on
+// the same job (the dup-check in POST .../request is scoped per
+// action_type, so a MANUAL_ESCROW_RELEASE and a MANUAL_REFUND request can
+// both be PENDING at once); if two admins confirm each one concurrently,
+// both would pass a check against their own stale snapshot and both
+// execute, leaving escrow_status as whichever wrote last while payouts
+// ends up in a mixed state. A SELECT ... FOR UPDATE + fresh escrow_status
+// re-check inside the transaction closes that, same pattern as
+// resolveDisputeCore above and award.service.js's row locks.
+async function executeManualOverrideCore(req, { approval, job, actionType, confirmerId }) {
+  await db.transaction(async (trx) => {
+    const lockedJob = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [job.id]);
+    const currentEscrowStatus = lockedJob.rows[0]?.escrow_status;
+    if (actionType === 'MANUAL_ESCROW_RELEASE') {
+      if (!['HELD', 'FUNDED'].includes(currentEscrowStatus)) {
+        throw Object.assign(new Error(`Escrow is ${currentEscrowStatus}, nothing to release`), { status: 409 });
+      }
+      await trx.query(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now'), updated_at=datetime('now') WHERE id=?`, [job.id]);
+      await trx.query(`UPDATE payouts SET status='RELEASED', release_type='MANUAL_OVERRIDE', released_at=datetime('now') WHERE job_id=? AND status != 'RELEASED'`, [job.id]);
+    } else if (actionType === 'MANUAL_REFUND') {
+      if (currentEscrowStatus === 'RELEASED') {
+        throw Object.assign(new Error('Escrow already released, cannot refund'), { status: 409 });
+      }
+      await trx.query(`UPDATE jobs SET escrow_status='REFUNDED', updated_at=datetime('now') WHERE id=?`, [job.id]);
+      await trx.query(`UPDATE payouts SET status='CANCELLED' WHERE job_id=? AND status != 'RELEASED'`, [job.id]);
+    } else {
+      throw Object.assign(new Error(`Unknown action ${actionType}`), { status: 400 });
+    }
+    await trx.query(`UPDATE admin_approvals SET status='EXECUTED', confirmed_by=?, decided_at=datetime('now') WHERE id=?`, [confirmerId, approval.id]);
+  });
+}
+
+module.exports = { resolveDisputeCore, markTransferredCore, executeManualOverrideCore };

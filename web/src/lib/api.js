@@ -287,7 +287,13 @@ Object.assign(api, {
   // — distinct from adminApprovals()/adminApprove() above, which are the
   // pending-account-registration queue, a different feature entirely that
   // happened to collide on this exact GET path before the server-side rename.
-  adminReject: (id) => post(`/admin/action-approvals/${id}/reject`, {}),
+  // adminRequestApproval is for the generic reason-only request (MANUAL_
+  // ESCROW_RELEASE/MANUAL_REFUND, requested from the Approvals tab itself);
+  // DISPUTE_RESOLVE/MARK_TRANSFERRED requests are instead created directly
+  // by DisputesTab.jsx/PayoutsSlaTab.jsx's own existing actions (via
+  // adminResolveDispute/adminMarkTransferred), since those carry a much
+  // richer payload than {reason} — see admin.routes.js's
+  // two_person_approval_required branches.
   adminRequestApproval: (body) => post('/admin/action-approvals/request', body),
   // Admin reconciliation / platform fees / ledger
   adminReconciliation: () => get('/admin/reconciliation'),

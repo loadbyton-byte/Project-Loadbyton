@@ -27,12 +27,37 @@ function ApprovalsTab() {
   const [statusFilter, setStatusFilter] = useState('PENDING');
   const [busyId, setBusyId] = useState(null);
   const [rejectDrafts, setRejectDrafts] = useState({});
+  const [requestForm, setRequestForm] = useState({ actionType: 'MANUAL_ESCROW_RELEASE', jobId: '', reason: '' });
+  const [requesting, setRequesting] = useState(false);
 
   function load() {
     setError('');
     api.adminActionApprovals(statusFilter || undefined).then((d) => setApprovals(d.approvals)).catch((err) => { setApprovals([]); setError(err.message); });
   }
   useEffect(load, [statusFilter]);
+
+  // Manual escrow release/refund had a working request endpoint
+  // (POST /admin/action-approvals/request) with no UI caller anywhere —
+  // an admin could confirm/reject a pending request once it existed, but
+  // had no way to actually create one short of curl. DISPUTE_RESOLVE/
+  // MARK_TRANSFERRED don't need this form since DisputesTab.jsx/
+  // PayoutsSlaTab.jsx's own resolve/mark-transferred actions create those
+  // requests directly, with a richer payload than this generic form sends.
+  async function requestOverride(e) {
+    e.preventDefault();
+    setRequesting(true);
+    try {
+      await api.adminRequestApproval({ actionType: requestForm.actionType, jobId: Number(requestForm.jobId), reason: requestForm.reason });
+      addToast({ type: 'status_change', title: 'Request created', body: 'A different admin must confirm it below before anything executes.' });
+      setRequestForm({ actionType: 'MANUAL_ESCROW_RELEASE', jobId: '', reason: '' });
+      setStatusFilter('PENDING');
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not create request', body: err.message });
+    } finally {
+      setRequesting(false);
+    }
+  }
 
   async function confirm(id) {
     setBusyId(id);
@@ -67,6 +92,23 @@ function ApprovalsTab() {
 
   return (
     <div>
+      <Card className="mb-5 p-4">
+        <p className="font-display text-sm font-semibold text-ink">Request a manual override</p>
+        <p className="mt-0.5 text-xs text-ink-muted">For an escrow release or refund that needs to happen outside the normal delivery/dispute flow — e.g. carrier completed off-system, or a shipper needs an out-of-band refund. Creates a pending request; a different admin must confirm it below.</p>
+        <form onSubmit={requestOverride} className="mt-3 flex flex-wrap items-end gap-2">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-muted">Action</label>
+            <Select value={requestForm.actionType} onChange={(e) => setRequestForm({ ...requestForm, actionType: e.target.value })} className="w-52">
+              <option value="MANUAL_ESCROW_RELEASE">Manual escrow release</option>
+              <option value="MANUAL_REFUND">Manual refund</option>
+            </Select>
+          </div>
+          <Input placeholder="Job ID" type="number" min="1" value={requestForm.jobId} onChange={(e) => setRequestForm({ ...requestForm, jobId: e.target.value })} required className="w-28" />
+          <Input placeholder="Reason" value={requestForm.reason} onChange={(e) => setRequestForm({ ...requestForm, reason: e.target.value })} required className="flex-1 min-w-[220px]" />
+          <Button type="submit" variant="secondary" loading={requesting}>Create request</Button>
+        </form>
+      </Card>
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <Stat label="Showing" value={approvals.length} />
