@@ -245,6 +245,7 @@ Object.assign(api, {
   postEir: (id, photos, { stage = 'pickup', sealNumber } = {}) => post(`/jobs/${id}/eir?stage=${stage}`, { photos, sealNumber }),
   getDetention: (id) => get(`/jobs/${id}/detention`),
   requestFuelAdvance: (id, type) => post(`/jobs/${id}/fuel-advance`, { type }),
+  getFuelAdvances: (id) => get(`/jobs/${id}/fuel-advances`),
   getFleet: () => get('/carrier/fleet'),
   // RFPs
   listRfps: () => get('/rfps'),

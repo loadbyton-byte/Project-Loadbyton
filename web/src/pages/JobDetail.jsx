@@ -16,6 +16,7 @@ import JobHeader from '../features/job/JobHeader.jsx';
 import JobTimeline from '../features/job/JobTimeline.jsx';
 import ChatPopup from '../features/job/ChatPopup.jsx';
 import DriverPanel from '../features/job/DriverPanel.jsx';
+import FuelAdvancePanel from '../features/job/FuelAdvancePanel.jsx';
 import RatingPanel from '../features/job/RatingPanel.jsx';
 import BidForm from '../features/job/BidForm.jsx';
 import PaymentPanel from '../features/job/PaymentPanel.jsx';
@@ -814,6 +815,10 @@ export default function JobDetail() {
 
           {isAwardedCarrier && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status) && (
             <DriverPanel job={job} onDone={load} />
+          )}
+
+          {isAwardedCarrier && job.escrow_status !== 'RELEASED' && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(job.status) && (
+            <FuelAdvancePanel job={job} onDone={load} />
           )}
 
           {/* Read-only for the shipper — the carrier's DriverPanel above is

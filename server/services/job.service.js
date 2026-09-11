@@ -208,8 +208,15 @@ async function updateJobStatus(jobId, nextStatus, req) {
       const locked = await trx.query('SELECT escrow_status FROM jobs WHERE id=? FOR UPDATE', [id]);
       const currentEscrow = locked.rows[0]?.escrow_status;
       if (currentEscrow === 'RELEASED') return false; // already released by a concurrent request
+      // Fuel/Salik advances (enterprise.routes.js POST /api/jobs/:id/fuel-advance)
+      // were never deducted anywhere — a carrier could take a 20% advance
+      // mid-job and still collect the FULL net payout at completion, a real
+      // double payment. This is the one place the payout amount is
+      // finalized before release, so it's the right place to net them out.
+      const advanceRow = await trx.query(`SELECT COALESCE(SUM(amount_aed),0) as total FROM fuel_advances WHERE job_id=? AND status='APPROVED'`, [id]);
+      const advanceTotal = Number(advanceRow.rows[0]?.total) || 0;
       await trx.query(`UPDATE jobs SET escrow_status='RELEASED', payout_released_at=datetime('now') WHERE id=?`, [id]);
-      await trx.query(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours') WHERE job_id=? AND status != 'RELEASED'`, [id]);
+      await trx.query(`UPDATE payouts SET status='RELEASED', release_type='MANUAL', released_at=datetime('now'), sla_deadline=datetime('now', '+48 hours'), net_aed = MAX(0, net_aed - ?) WHERE job_id=? AND status != 'RELEASED'`, [advanceTotal, id]);
       return true;
     });
     if (released) {

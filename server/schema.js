@@ -487,6 +487,11 @@ module.exports = function initSchema(db) {
     status TEXT NOT NULL DEFAULT 'APPROVED',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  -- The route's own SELECT-then-INSERT "already taken" check is a
+  -- best-effort fast path, not the real safety boundary — two rapid
+  -- concurrent requests could both pass it. This UNIQUE index is what
+  -- actually blocks a duplicate advance for the same job+carrier.
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_fuel_advances_job_carrier ON fuel_advances(job_id, carrier_id);
   `);
 
   addColumn('jobs', 'currency', "currency TEXT NOT NULL DEFAULT 'AED'");
