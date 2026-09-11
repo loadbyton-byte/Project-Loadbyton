@@ -38,11 +38,19 @@ export async function openDocument(path) {
   window.open(blobUrl, '_blank', 'noopener');
 }
 
+// CSRF defense (server/app.js) — every mutating request carrying the
+// session cookie must send this, or the server refuses it with
+// CSRF_HEADER_MISSING. A plain cross-site <form> POST or "simple"
+// cross-origin fetch can't attach a custom header without triggering a
+// CORS preflight, which the server's own origin allowlist blocks for any
+// origin other than this app's real frontend(s).
+export const CSRF_HEADER = 'x-loadbyton-client';
+
 async function request(method, path, body, extraHeaders) {
   const res = await fetch(`${API_BASE_URL}/api${path}`, {
     method,
     credentials: 'include',
-    headers: body !== undefined ? { 'Content-Type': 'application/json', ...extraHeaders } : extraHeaders,
+    headers: { [CSRF_HEADER]: '1', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...extraHeaders },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const isJson = res.headers.get('content-type')?.includes('application/json');
@@ -233,7 +241,7 @@ Object.assign(api, {
   // Stripe escrow
   payJob: (id) => post(`/jobs/${id}/pay`, {}),
   mockConfirmPay: (ref) => post('/webhooks/stripe/mock-confirm', { processorPaymentRef: ref }),
-  releasePayout: (id, sigs) => fetch(`${API_BASE_URL}/api/jobs/${id}/release-payout`, { method:'POST', credentials:'include', headers: { 'Content-Type':'application/json', 'x-hsm-sigs': (sigs||[]).join(',') } }).then(r=>r.json()),
+  releasePayout: (id, sigs) => fetch(`${API_BASE_URL}/api/jobs/${id}/release-payout`, { method:'POST', credentials:'include', headers: { 'Content-Type':'application/json', 'x-hsm-sigs': (sigs||[]).join(','), [CSRF_HEADER]: '1' } }).then(r=>r.json()),
   // verification
   verifyTrn: (trn) => get(`/verify/trn/${encodeURIComponent(trn)}`),
   verifyCheck: (body) => post('/verify/check', body),

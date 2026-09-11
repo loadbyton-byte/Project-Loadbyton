@@ -119,6 +119,11 @@ function makeClient(baseUrl) {
       method,
       headers: {
         'Content-Type': 'application/json',
+        // CSRF defense (server/app.js) — every real frontend request sends
+        // this on a mutating call; the harness simulates a legitimate
+        // client, so it needs to as well, or every POST/PATCH/DELETE test
+        // in the suite would start failing with CSRF_HEADER_MISSING.
+        'x-loadbyton-client': '1',
         ...(cookie ? { Cookie: cookie } : {}),
         ...extraHeaders,
       },
