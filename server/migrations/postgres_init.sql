@@ -922,4 +922,10 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_settled_at TEXT;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS telr_split_id TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS telr_split_applied INTEGER NOT NULL DEFAULT 0;
 
+-- Admin-impersonation audit attribution (server/schema.js's addColumn
+-- call for this shipped in the same commit; this one was missed there,
+-- which took every writeAudit() call — including login — down on
+-- Postgres with 42703 "column does not exist").
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS acting_admin_id INTEGER;
+
 COMMIT;
