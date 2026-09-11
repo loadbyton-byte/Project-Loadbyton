@@ -264,6 +264,14 @@ async function writeAudit(req, { userId = null, action, details = null, entityTy
   // between the two lib modules.
   const ipAddress = req ? (req.headers?.['cf-connecting-ip'] || req.ip || null) : null;
   const userAgent = req ? (req.headers?.['user-agent'] || null) : null;
+  // Security-audit finding: during an admin impersonation session, userId
+  // above (almost always req.actorId, the ACTING identity) resolves to the
+  // impersonated user's own id — every action taken while impersonating
+  // was indistinguishable from the victim doing it themselves. Records the
+  // real admin separately whenever the current session is an impersonation
+  // one (see routes/admin.routes.js's impersonate/start, which sets
+  // sessions.impersonating_admin_id).
+  const actingAdminId = req?.session?.impersonating_admin_id || null;
   // Change 21's tamper-evident hash chain — schema had prev_hash/hash
   // columns from the start, but this insert never populated them (a real
   // gap found in review: the audit trail wasn't actually tamper-evident
@@ -315,9 +323,9 @@ async function writeAudit(req, { userId = null, action, details = null, entityTy
   const createdAt = new Date().toISOString();
   const hash = crypto.createHash('sha256').update(`${prevHash}|${action}|${entityType || ''}|${entityId || ''}|${createdAt}`).digest('hex');
   await db.prepare(
-    `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id, ip_address, user_agent, prev_hash, hash, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).run(userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null, ipAddress, userAgent, prevHash, hash, createdAt);
+    `INSERT INTO audit_log (user_id, action, details, entity_type, entity_id, before_state, after_state, request_id, ip_address, user_agent, prev_hash, hash, created_at, acting_admin_id)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).run(userId, action, details, entityType, entityId, beforeState, afterState, req ? req.requestId : null, ipAddress, userAgent, prevHash, hash, createdAt, actingAdminId);
 }
 
 /**

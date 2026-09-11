@@ -400,6 +400,13 @@ router.post('/api/admin/impersonate/end', auth(), async (req, res) => {
   const admin = await db.prepare('SELECT * FROM users WHERE id=?').get(adminId);
   if (!admin) return sendError(res, 404, 'Original admin account not found');
   await createSession(req, res, admin.id);
+  // Security-audit finding: createSession only INSERTs the new (real
+  // admin) session — it never touched the impersonation session it's
+  // replacing. Without this, the impersonation token stayed valid server-
+  // side (any client that had captured it, e.g. via a compromised
+  // browser) for up to its own 30-minute max-age even after "ending"
+  // impersonation in the UI.
+  await db.prepare('DELETE FROM sessions WHERE session_token=?').run(req.session.session_token);
   await writeAudit(req, {
     userId: adminId,
     action: 'IMPERSONATE_END',
