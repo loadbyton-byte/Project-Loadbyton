@@ -342,6 +342,40 @@ async function writeAudit(req, { userId = null, action, details = null, entityTy
 }
 
 /**
+ * Records one entry in a shipment's structured event timeline
+ * (shipment_events — see schema.js). Distinct from writeAudit: that's the
+ * system-wide security/action trail; this is a business-domain log built
+ * for one job's Case File view. Call sites that need both keep calling
+ * both — they serve different readers.
+ *
+ * Same append-only hash-chain pattern as writeAudit above (one global
+ * chain, not per-job, for the same consistency/simplicity reasons), and
+ * the same reason for NOT wrapping this in db.transaction(): it's called
+ * from inside award/dispute-resolve/payout-release code paths that may
+ * already have their own transaction open.
+ *
+ * @param {number} jobId
+ * @param {{ eventType: string, actorId?: any, actorRole?: any, summary: string, data?: any }} opts
+ * @returns {Promise<void>}
+ */
+async function recordShipmentEvent(jobId, { eventType, actorId = null, actorRole = null, summary, data = null }) {
+  let prevHash = 'GENESIS';
+  try {
+    const prevRows = await db.prepare(`SELECT hash FROM shipment_events WHERE hash IS NOT NULL ORDER BY id DESC LIMIT 1`).all();
+    prevHash = prevRows[0]?.hash || 'GENESIS';
+  } catch (e) {
+    console.error('[shipment_events] hash-chain tip lookup failed, chaining from GENESIS:', e.message);
+  }
+  const createdAt = new Date().toISOString();
+  const hash = crypto.createHash('sha256').update(`${prevHash}|${eventType}|${jobId}|${createdAt}`).digest('hex');
+  const dataJson = data === null || data === undefined ? null : JSON.stringify(data);
+  await db.prepare(
+    `INSERT INTO shipment_events (job_id, event_type, actor_id, actor_role, summary, data, prev_hash, hash, created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)`
+  ).run(jobId, eventType, actorId, actorRole, summary, dataJson, prevHash, hash, createdAt);
+}
+
+/**
  * @param {any} userId
  * @returns {Promise<any>}
  */
@@ -552,7 +586,7 @@ module.exports = {
   getAssignedDriverSeatId, effectiveRole, resolveActingSeat,
   normalizeUaeMobile, isValidUaeTrn, isValidUaeTradeLicence, isValidUaeLatLng, haversineKm, parseDbDate,
   isPasswordValid, timingSafeEqualStr, hashToken,
-  getSettings, toPublicUser, writeAudit, unreadNotificationCount, notify, notifyAdmins,
+  getSettings, toPublicUser, writeAudit, recordShipmentEvent, unreadNotificationCount, notify, notifyAdmins,
   isParticipantOrBidder, isPartyOnJob, canViewJob, canSeeDocument,
   sessionCookieAttributes, createSession, clearSessionCookie,
 };

@@ -4,7 +4,7 @@ const { issueInvoice } = require('../lib/invoice');
 const { sendError } = require('../lib/http');
 const apiResponse = require('../lib/apiResponse');
 const { encryptField, decryptField } = require('../lib/crypto');
-const { writeAudit, toPublicUser, getSettings, notify, notifyAdmins, parseDbDate, createSession } = require('../lib/helpers');
+const { writeAudit, recordShipmentEvent, toPublicUser, getSettings, notify, notifyAdmins, parseDbDate, createSession } = require('../lib/helpers');
 const { refundJobAsync, executePayoutAsync, reconcilePayoutAttempt } = require('../services/payout.service');
 const { resolveDisputeCore, markTransferredCore } = require('../lib/adminActions');
 const { DEFERRED_PAYMENT_TERMS } = require('../lib/constants');
@@ -482,6 +482,15 @@ router.post('/api/admin/disputes', auth(['ADMIN']), async (req, res) => {
   const result = await db.prepare('INSERT INTO disputes (job_id, opened_by, reason, status) VALUES (?,?,?,\'OPEN\') RETURNING id').run(job.id, req.user.id, reason);
   await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
   await writeAudit(req, { userId: req.actorId, action: 'DISPUTE_OPEN', details: reason, entityType: 'job', entityId: job.id, beforeState: job.status, afterState: 'DISPUTED' });
+  try {
+    await recordShipmentEvent(job.id, {
+      eventType: 'DISPUTE_OPENED',
+      actorId: req.actorId,
+      actorRole: 'ADMIN',
+      summary: `${job.job_code}: dispute opened by admin`,
+      data: { disputeId: Number(result.lastInsertRowid) },
+    });
+  } catch (e) { console.error(`[shipment_events] DISPUTE_OPENED record failed for job ${job.id}:`, e); }
   await notify(job.shipper_id, 'Dispute opened', `A dispute was opened on ${job.job_code}. Escrow is frozen.`, job.id, 'dispute');
   await notify(job.carrier_id, 'Dispute opened', `A dispute was opened on ${job.job_code}. Escrow is frozen.`, job.id, 'dispute');
   const dispute = await db.prepare('SELECT * FROM disputes WHERE id=?').get(Number(result.lastInsertRowid));

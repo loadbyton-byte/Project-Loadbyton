@@ -12,7 +12,7 @@ const jobRepository = require('../repositories/job.repository');
 const payoutRepository = require('../repositories/payout.repository');
 const bidRepository = require('../repositories/bid.repository');
 const { TRANSITIONS, DEFERRED_PAYMENT_TERMS } = require('../lib/constants');
-const { getSettings, writeAudit, notify, notifyAdmins } = require('../lib/helpers');
+const { getSettings, writeAudit, recordShipmentEvent, notify, notifyAdmins } = require('../lib/helpers');
 const { issueInvoice } = require('../lib/invoice');
 const { executePayoutAsync, refundJobAsync } = require('./payout.service');
 
@@ -281,6 +281,15 @@ async function updateJobStatus(jobId, nextStatus, req) {
     beforeState: job.status,
     afterState: nextStatus,
   });
+  try {
+    await recordShipmentEvent(id, {
+      eventType: 'STATUS_CHANGE',
+      actorId: req.actorId,
+      actorRole: role,
+      summary: `${job.job_code}: ${job.status} -> ${nextStatus}`,
+      data: { from: job.status, to: nextStatus },
+    });
+  } catch (e) { console.error(`[shipment_events] STATUS_CHANGE record failed for job ${id}:`, e); }
 
   const other = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
   if (other) {

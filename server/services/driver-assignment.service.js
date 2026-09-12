@@ -4,7 +4,7 @@
 // does — one implementation, not two. Callers are responsible for their
 // own authorization/status checks before calling this.
 const db = require('../db');
-const { writeAudit, notify } = require('../lib/helpers');
+const { writeAudit, recordShipmentEvent, notify } = require('../lib/helpers');
 const { notifyDriverAsync } = require('../lib/whatsapp');
 
 /**
@@ -27,6 +27,15 @@ async function bindDriverToJob(job, { driverId, driverName, driverPhone, actorId
     beforeState: job.assigned_driver_phone || 'unset',
     afterState: driverPhone,
   });
+  try {
+    await recordShipmentEvent(job.id, {
+      eventType: 'DRIVER_ASSIGNED',
+      actorId: actorId,
+      actorRole: 'CARRIER',
+      summary: `${job.job_code}: driver assigned — ${driverName}${driverId ? '' : ' (not linked to carrier roster)'}`,
+      data: { driverId: driverId || null, driverName, driverPhone },
+    });
+  } catch (e) { console.error(`[shipment_events] DRIVER_ASSIGNED record failed for job ${job.id}:`, e); }
   await notify(job.shipper_id, 'Driver reassigned', `${job.job_code}: the assigned driver was changed to ${driverName}.`, job.id, 'status');
   notifyDriverAsync({
     to: driverPhone,

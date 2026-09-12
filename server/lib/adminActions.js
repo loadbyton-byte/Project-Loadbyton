@@ -7,7 +7,7 @@
 // admin.routes.js and admin-approvals.routes.js importing from each other.
 const db = require('../db');
 const { issueInvoice } = require('./invoice');
-const { writeAudit, getSettings, notify } = require('./helpers');
+const { writeAudit, recordShipmentEvent, getSettings, notify } = require('./helpers');
 const { refundJobAsync, executePayoutAsync } = require('../services/payout.service');
 
 // dispute + job are the already-loaded rows; decision/determination/split
@@ -99,6 +99,15 @@ async function resolveDisputeCore(req, { dispute, job, determination, decision, 
     await db.prepare(`UPDATE profiles SET reliability_score = MAX(0, reliability_score - 1) WHERE user_id=?`).run(job.carrier_id);
   }
   await writeAudit(req, { userId: resolvedByUserId, action: 'DISPUTE_RESOLVE', details: `${decision}: ${determination || ''}${decision === 'SPLIT' ? ` (${splitShipperPct}/${splitCarrierPct})` : ''}`, entityType: 'dispute', entityId: dispute.id, beforeState: 'OPEN', afterState: 'RESOLVED' });
+  try {
+    await recordShipmentEvent(job.id, {
+      eventType: 'DISPUTE_RESOLVED',
+      actorId: resolvedByUserId,
+      actorRole: 'ADMIN',
+      summary: `${job.job_code}: dispute resolved — ${decision}`,
+      data: { disputeId: dispute.id, decision, determination: determination || null, splitShipperPct: splitShipperPct ?? null, splitCarrierPct: splitCarrierPct ?? null },
+    });
+  } catch (e) { console.error(`[shipment_events] DISPUTE_RESOLVED record failed for job ${job.id}:`, e); }
   await notify(job.shipper_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
   await notify(job.carrier_id, 'Dispute resolved', `${job.job_code}: ${decision.replaceAll('_', ' ')}.`, job.id, 'dispute');
 }

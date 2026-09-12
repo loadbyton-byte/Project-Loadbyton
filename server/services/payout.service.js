@@ -10,7 +10,7 @@ const db = require('../db');
 /** @type {any} */
 const payments = require('../lib/payments');
 /** @type {any} */
-const { writeAudit, notify } = require('../lib/helpers');
+const { writeAudit, recordShipmentEvent, notify } = require('../lib/helpers');
 
 /**
  * @param {Job} _job
@@ -232,6 +232,14 @@ async function applySuccessfulTransfer(job, payout, idempotencyKey, r, req) {
     try { await db.prepare(`UPDATE payouts SET transfer_executed_at=datetime('now'), processor_payout_status='SENT', transfer_reference=? WHERE id=? AND transfer_executed_at IS NULL`).run(`processor:${r.payoutRef}`, payout.id); } catch {}
   }
   await (/** @type {any} */ (writeAudit))(req, { action: 'PAYOUT_EXECUTED', details: `${job.job_code}: payout AED ${payout.net_aed} executed (ref ${r.payoutRef})`, entityType: 'payout', entityId: payout.id });
+  try {
+    await recordShipmentEvent(job.id, {
+      eventType: 'PAYOUT_RELEASED',
+      actorRole: 'SYSTEM',
+      summary: `${job.job_code}: payout AED ${payout.net_aed} released to carrier`,
+      data: { payoutId: payout.id, netAed: payout.net_aed, reference: r.payoutRef },
+    });
+  } catch (e) { console.error(`[shipment_events] PAYOUT_RELEASED record failed for job ${job.id}:`, e); }
 }
 
 /**
