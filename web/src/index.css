@@ -324,6 +324,54 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   animation: hero-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* First-visit cinematic intro (components/CinematicIntro.jsx) — same
+   "pure CSS entrance, collapses under reduced-motion via the block
+   above" discipline as .animate-hero-in. Only the logo fades/scales in;
+   the overlay itself appears instantly ("screen begins quiet") and only
+   animates on the way OUT (skip or auto-dismiss), via the
+   .intro-overlay-leaving class swap. Never applied during prerendering
+   or SSR (the component's own visibility check requires a real
+   sessionStorage + matchMedia, both absent under Node) — no server/
+   client markup mismatch risk. */
+@keyframes intro-logo-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--lb-ink-950);
+  transition: opacity 0.4s ease;
+}
+.intro-overlay-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+.intro-logo {
+  height: 2.75rem;
+  width: auto;
+  animation: intro-logo-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.intro-skip {
+  position: absolute;
+  bottom: 1.5rem;
+  inset-inline-end: 1.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0.5rem 0.75rem;
+  border-radius: 999px;
+}
+.intro-skip:hover,
+.intro-skip:focus-visible {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .reveal {
   opacity: 0;
   transform: translateY(20px);
