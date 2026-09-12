@@ -94,7 +94,17 @@ export default function Landing() {
                   </span>
                   Shipment in motion
                 </p>
-                <span className="badge" style={{ background: 'rgba(242,96,12,0.2)', color: 'var(--lb-orange-500)' }}>Escrow-backed</span>
+                {/* #FF7A70 literal, not a semantic token — this badge sits
+                    on the hero card, which (like the sidebar) is fixed dark
+                    chrome in both themes, so it needs a color chosen for
+                    that fixed dark background rather than whatever the
+                    current theme's accent token resolves to. Was
+                    var(--lb-orange-500) (#E53935): 2.81:1 against this
+                    badge's actual composited background (its own 20%-alpha
+                    orange over the dark card), below WCAG AA's 4.5:1.
+                    #FF7A70 (the existing --brand-accent-hover dark-mode
+                    value) measures 4.68:1 against the same background. */}
+                <span className="badge" style={{ background: 'rgba(242,96,12,0.2)', color: '#FF7A70' }}>Escrow-backed</span>
               </div>
 
               <FreightMotionScene />
@@ -107,7 +117,14 @@ export default function Landing() {
                 ].map(([label, value]) => (
                   <div key={label} className="px-1 py-1 text-center">
                     <p className="tabular font-display text-base font-semibold text-white">{value}</p>
-                    <p className="mt-0.5 text-[11px] text-white/50">{label}</p>
+                    {/* Was text-white/50 — axe-core measured 4.34:1 against
+                        this card's actual composited background (the stat
+                        row's own rgba(255,255,255,0.06) overlay lightens it
+                        slightly beyond the card's base --lb-ink-900), below
+                        WCAG AA's 4.5:1. /60 matches the opacity already used
+                        for equivalent secondary text on this same dark-panel
+                        pattern elsewhere on this page. */}
+                    <p className="mt-0.5 text-[11px] text-white/60">{label}</p>
                   </div>
                 ))}
               </div>
@@ -228,7 +245,7 @@ export default function Landing() {
               style={{ color: 'var(--brand-accent)', opacity: 0.12 }}
             />
             <div className="relative">
-              <span className="badge" style={{ background: 'color-mix(in srgb, var(--brand-accent) 16%, transparent)', color: 'var(--brand-accent)' }}>Volume inquiry</span>
+              <span className="badge" style={{ background: 'color-mix(in srgb, var(--brand-accent) 16%, transparent)', color: 'var(--brand-accent-on-tint)' }}>Volume inquiry</span>
               <p className="mt-3 font-display text-xl font-semibold text-ink">Ten containers or five trucks — one job, not ten conversations.</p>
               <p className="mt-1 max-w-lg text-sm text-ink-muted">State the count once. Carriers bid to cover the whole batch at one agreed price — no unit-by-unit negotiation, no separate thread per truck.</p>
             </div>
@@ -253,7 +270,7 @@ export default function Landing() {
               <Reveal key={c?.id || i} delay={(i % 4) * 60} className="card card-hover p-5">
                 <div className="flex items-start justify-between">
                   <p className="font-display text-sm font-semibold text-ink">{c?.name || 'Loading…'}</p>
-                  <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent)' }}>{c?.tier}</span>
+                  <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>{c?.tier}</span>
                 </div>
                 <p className="mt-2 flex items-center gap-1 text-sm text-ink-secondary">
                   <IconStar size={14} style={{ color: 'var(--brand-accent)' }} /> {c?.rating?.toFixed?.(2) ?? '—'} · {c?.completedJobs ?? 0} jobs

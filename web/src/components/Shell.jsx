@@ -543,7 +543,16 @@ function ShellInner({ children }) {
             <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
               {groupNavItems(navItems).map(({ group, items }) => (
                 <div key={group}>
-                  <p className="px-2.5 pb-1.5 pt-4 font-mono text-[10px] font-bold uppercase tracking-widest first:pt-1" style={{ color: '#5E7A8C' }}>
+                  {/* var(--lb-slate-400), not the fixed --text-muted token — the
+                      sidebar is always dark-chrome in both themes (--sidebar-bg),
+                      so it needs a color chosen for that fixed dark background,
+                      not whichever the current theme's muted-text token resolves
+                      to. Was a hardcoded #5E7A8C (3.23:1 against --sidebar-bg's
+                      #0F2B3D, below WCAG AA's 4.5:1) — a real violation found
+                      wiring axe-core into e2e/accessibility.spec.js; this
+                      already-defined primitive measures 5.71:1 against the same
+                      background. */}
+                  <p className="px-2.5 pb-1.5 pt-4 font-mono text-[10px] font-bold uppercase tracking-widest first:pt-1" style={{ color: 'var(--lb-slate-400)' }}>
                     {group}
                   </p>
                   {items.map((item) => (

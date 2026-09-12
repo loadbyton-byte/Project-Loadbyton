@@ -57,7 +57,7 @@ jobs:
         working-directory: server
         run: npm audit --audit-level=moderate
 
-      # NOTE: the three steps below are intentionally advisory, not gates.
+      # NOTE: the two steps below are intentionally advisory, not gates.
       # Each needs real setup before it can safely block a merge:
       #   - Lint: `npm run lint` in server/ references eslint, which isn't
       #     an installed dependency or configured here — needs an ESLint
@@ -65,8 +65,6 @@ jobs:
       #   - k6: the load script targets a running app server, which no
       #     step here starts — needs a "boot the app in the background,
       #     wait for /api/health" step before this can measure anything.
-      #   - Playwright: needs `npx playwright install --with-deps` (browser
-      #     binaries) and the same running-server step as k6.
       # Tracked as follow-up work, not silently treated as "passing" — each
       # failure below prints why it didn't run rather than being swallowed.
       - name: Lint server (advisory — not yet a gate, see note above)
@@ -83,10 +81,38 @@ jobs:
             echo "not enforced: docker unavailable in this runner"
           fi
 
-      - name: Install Playwright
-        working-directory: e2e
-        run: npm ci 2>/dev/null || npm install
+      # Playwright: real e2e suite lives in web/e2e (the empty root-level
+      # e2e/ dir was a stale target that made this step silently no-op —
+      # it started no server and had no browser binaries, so
+      # `|| echo "not enforced"` always ran). This boots the real API
+      # server (SQLite, self-seeding — see server/seed.js) in the
+      # background, waits for it to answer, then runs the real suite.
+      # Includes the axe-core accessibility checks (web/e2e/accessibility.spec.js).
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright E2E (advisory — not yet a gate, see note above)
+      - name: Boot API server for e2e
+        working-directory: server
         run: |
-          npx playwright test --reporter=list || echo "not enforced -- no browser binaries installed and no running server in this job yet"
+          nohup node index.js > /tmp/loadbyton-api.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:4000/api/health && break
+            sleep 1
+          done
+        env:
+          NODE_ENV: development
+          PORT: 4000
+          INTERNAL_KEY: ci-test-key
+          ENCRYPTION_KEY: ci-test-encryption-key-32chars-long
+
+      - name: Run Playwright E2E
+        working-directory: web
+        run: npx playwright test --reporter=list
+
+      - name: Upload API server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadbyton-api-log
+          path: /tmp/loadbyton-api.log

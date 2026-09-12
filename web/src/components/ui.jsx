@@ -78,9 +78,16 @@ const BADGE_COLORS = {
   neutral: { background: 'var(--bg-raised)', color: 'var(--text-secondary)' },
   success: { background: 'var(--status-success-bg)', color: 'var(--status-success)' },
   warning: { background: 'var(--status-warning-bg)', color: 'var(--status-warning)' },
-  danger: { background: 'var(--status-danger-bg)', color: 'var(--status-danger)' },
+  // danger/accent both use --brand-accent-on-tint, not --status-danger/
+  // --brand-accent directly — text-on-its-own-light-tint needs a darker
+  // value than text-on-a-solid-fill does (buttons use the latter, and
+  // that pairing is a separate, already-documented tradeoff — see
+  // index.css's --text-on-accent comment). Real violation found wiring
+  // axe-core into e2e/accessibility.spec.js: 3.6:1 in light mode against
+  // WCAG AA's 4.5:1 floor; dark mode's pairing was already fine.
+  danger: { background: 'var(--status-danger-bg)', color: 'var(--brand-accent-on-tint)' },
   info: { background: 'var(--status-info-bg)', color: 'var(--status-info)' },
-  accent: { background: 'var(--brand-accent-bg)', color: 'var(--brand-accent)' },
+  accent: { background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' },
 };
 
 export function Badge({ color = 'neutral', dot = true, className, children }) {

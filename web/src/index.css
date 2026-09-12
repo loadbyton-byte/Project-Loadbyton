@@ -110,7 +110,17 @@
      token via .font-display. */
   --text-primary: #0F2129;
   --text-secondary: #586A72;
-  --text-muted: #7A8A90;
+  /* Darkened from #7A8A90 (measured 3.51-3.58:1 against --bg-canvas/
+     --bg-surface via axe-core, both below WCAG AA's 4.5:1 normal-text
+     minimum) to #5F7178 (5.01-5.10:1 against the same two backgrounds) —
+     a real violation found wiring axe-core into e2e/accessibility.spec.js,
+     not a hypothetical. Deliberate margin above the 4.5:1 floor (not the
+     ~4.6:1 a value right at the boundary would give) — real anti-aliased
+     rendering measures a few hundredths off the nominal hex depending on
+     font weight/smoothing, so a value that only just clears the line on
+     paper can still fail in a real browser. Same hue, same role as
+     before, still clearly the lightest/least-prominent text tier. */
+  --text-muted: #5F7178;
   --text-inverse: var(--lb-slate-0);
   /* White text on Loadbyton Red (#E53935) measures ~4.2:1 — passes AA for
      large/bold text and UI components (3:1) but falls just short of the
@@ -128,6 +138,18 @@
      both read this. Routed through a semantic token (not a raw primitive)
      so the dark-mode override below actually applies. */
   --brand-accent-bg: var(--lb-orange-200);
+  /* --brand-accent's own text-on-tint pairing (Badge's accent/danger
+     variants: color: var(--brand-accent) on background: var(--brand-
+     accent-bg)) measured 3.6:1 against its light-mode tint via axe-core —
+     below WCAG AA's 4.5:1. This is a DIFFERENT pairing from --text-on-
+     accent above (white text on a SOLID accent fill, e.g. buttons — that
+     one is pre-existing/documented/accepted at ~4.2:1). Fixing this one
+     doesn't touch --brand-accent itself (every solid-fill/button usage
+     is unaffected) — just what text color Badge's tint variants use.
+     --lb-red-600 (#C62828, an existing primitive) measures 4.79:1 against
+     this same tint. Dark mode's existing accent/tint pair already passes
+     (4.99:1) without any change, so this only needs a light-mode value. */
+  --brand-accent-on-tint: var(--lb-red-600);
 
   --status-success: var(--lb-teal-600);
   --status-success-bg: var(--lb-teal-100);
@@ -183,6 +205,9 @@
     --brand-accent: #FF5449;
     --brand-accent-hover: #FF7A70;
     --brand-accent-bg: #3D1616;
+    /* Already 4.99:1 against its own tint (#3D1616) — dark mode's pairing
+       was never the problem, only light mode's was. */
+    --brand-accent-on-tint: #FF5449;
     /* Was --lb-teal-500 (#43A047) — only 3.9:1 against --status-success-bg,
        under WCAG AA's 4.5:1 for normal text. #56D364 keeps the same green
        hue, just lighter, giving 6.7:1 on the same background. */
@@ -224,6 +249,9 @@
   --brand-accent: #FF5449;
   --brand-accent-hover: #FF7A70;
   --brand-accent-bg: #3D1616;
+  /* Already 4.99:1 against its own tint (#3D1616) — dark mode's pairing
+     was never the problem, only light mode's was. */
+  --brand-accent-on-tint: #FF5449;
   /* Was --lb-teal-500 (#43A047) — only 3.9:1 against --status-success-bg,
      under WCAG AA's 4.5:1 for normal text. #56D364 keeps the same green
      hue, just lighter, giving 6.7:1 on the same background. */

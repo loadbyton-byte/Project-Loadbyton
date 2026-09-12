@@ -32,7 +32,7 @@ export default function Blog() {
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent)' }}>Blog</span>
+            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Blog</span>
             <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Notes from building Loadbyton</h1>
             <p className="mt-4 text-lg leading-relaxed text-ink-secondary">Field notes on UAE drayage economics and the product/engineering decisions behind the platform.</p>
           </Reveal>
