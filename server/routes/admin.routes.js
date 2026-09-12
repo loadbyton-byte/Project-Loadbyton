@@ -5,7 +5,7 @@ const { sendError } = require('../lib/http');
 const apiResponse = require('../lib/apiResponse');
 const { encryptField, decryptField } = require('../lib/crypto');
 const { writeAudit, toPublicUser, getSettings, notify, notifyAdmins, parseDbDate, createSession } = require('../lib/helpers');
-const { refundJobAsync, executePayoutAsync } = require('../services/payout.service');
+const { refundJobAsync, executePayoutAsync, reconcilePayoutAttempt } = require('../services/payout.service');
 const { resolveDisputeCore, markTransferredCore } = require('../lib/adminActions');
 const { DEFERRED_PAYMENT_TERMS } = require('../lib/constants');
 // Every deferred-payment job (NET_24H/7/15/28), plus the legacy
@@ -640,6 +640,36 @@ router.get('/api/admin/payouts-sla', auth(['ADMIN']), async (req, res) => {
     return { ...r, overdue: deadline ? deadline < now : false };
   });
   res.json({ pending, overdueCount: pending.filter((r) => r.overdue).length });
+});
+
+// Attempts whose provider call was ambiguous (network/transport failure —
+// see payout.service.js's UNKNOWN status) and cannot resolve themselves:
+// executePayoutAsync refuses to start a new attempt for a payout stuck
+// here, so these need an explicit admin-triggered reconciliation.
+router.get('/api/admin/payouts/unknown', auth(['ADMIN']), async (req, res) => {
+  const rows = await db
+    .prepare(
+      `SELECT pa.id AS attempt_id, pa.payout_id, pa.provider, pa.amount_aed, pa.destination, pa.idempotency_key, pa.error, pa.created_at, j.job_code
+       FROM payout_attempts pa
+       JOIN payouts p ON p.id = pa.payout_id
+       JOIN jobs j ON j.id = p.job_id
+       WHERE pa.status = 'UNKNOWN'
+       ORDER BY pa.created_at ASC`
+    )
+    .all();
+  res.json({ unknown: rows });
+});
+
+// Re-drives the SAME idempotency key against the provider — safe to call
+// repeatedly (see reconcilePayoutAttempt's own comment). Not gated behind
+// two-person approval like mark-transferred: this asks the provider for
+// the truth rather than trusting an admin's assertion, so it can only ever
+// confirm what already happened or safely complete a transfer that never
+// went through under this exact key — it cannot itself create a duplicate.
+router.post('/api/admin/payout-attempts/:id/reconcile', auth(['ADMIN']), async (req, res) => {
+  const result = await reconcilePayoutAttempt(Number(req.params.id), req);
+  if (!result.resolved && result.status === 'NOT_FOUND') return apiResponse.error(req, res, 'BID_NOT_FOUND', result.detail, { status: 404 });
+  res.json(result);
 });
 
 router.post('/api/admin/payouts/:id/mark-transferred', auth(['ADMIN']), async (req, res) => {

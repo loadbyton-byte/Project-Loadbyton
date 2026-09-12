@@ -25,12 +25,25 @@ async function createPaymentIntent({ amountAed, jobCode, shipperEmail }) {
     capture_method: 'automatic',
   });
 }
-async function createTransfer({ amountAed, destination, jobCode }) {
+async function createTransfer({ amountAed, destination, jobCode, idempotencyKey }) {
   const s = getStripe();
   if (!s) {
     return { id: `tr_mock_${crypto.randomBytes(8).toString('hex')}`, amount: Math.round(amountAed*100), destination, status: 'paid' };
   }
-  return s.transfers.create({ amount: Math.round(amountAed*100), currency: 'aed', destination, metadata: { job_code: jobCode } });
+  // idempotencyKey (payout.service.js's per-attempt key, e.g.
+  // "payout-42-stripe-attempt1") is passed as a REQUEST option, not a
+  // transfer field — this is what makes a retry of this exact attempt
+  // safe. Without it, a network timeout whose request actually reached
+  // Stripe (transfer created, but the response never got back to us)
+  // followed by any retry creates a genuine second transfer: Stripe has
+  // no other way to know the retry means "the same transfer", not a new
+  // one. With it, Stripe returns the original transfer object instead of
+  // creating another — see payout.service.js's reconcilePayoutAttempt,
+  // which relies on exactly this to safely re-drive an UNKNOWN attempt.
+  return s.transfers.create(
+    { amount: Math.round(amountAed*100), currency: 'aed', destination, metadata: { job_code: jobCode } },
+    idempotencyKey ? { idempotencyKey } : undefined
+  );
 }
 async function constructWebhookEvent(rawBody, sig) {
   const s = getStripe();

@@ -56,11 +56,17 @@ export type ExecutePayoutParams = {
   carrierAccountId?: string | null;
   carrierIban?: string | null;
   reference?: string;
+  idempotencyKey?: string;
 };
 
 export type ExecutePayoutResult =
-  | { ok: true; payoutRef: string; provider: string }
-  | { ok: false; error: string; detail?: string; provider?: string };
+  | { ok: true; payoutRef: string; provider: string; detail?: string }
+  // ambiguous: true means the provider call itself threw (network error,
+  // timeout) rather than returning a clean ok:false — we cannot tell
+  // whether the transfer was actually created. Callers must NOT treat
+  // this the same as a clean failure (safe to retry with a fresh
+  // idempotency key); see payout.service.js's UNKNOWN attempt status.
+  | { ok: false; error: string; detail?: string; provider?: string; ambiguous?: boolean };
 
 export type WebhookEvent = 'AUTHORISED' | 'DECLINED' | 'CANCELLED' | 'REFUNDED';
 
@@ -421,6 +427,7 @@ export async function executePayout({
   carrierAccountId,
   carrierIban,
   reference,
+  idempotencyKey,
 }: ExecutePayoutParams): Promise<ExecutePayoutResult> {
   const p: string = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured' };
@@ -462,6 +469,7 @@ export async function executePayout({
         amountAed,
         destination: carrierAccountId,
         jobCode: jobCode || '',
+        idempotencyKey,
       });
       if (!tr || !tr.id) return { ok: false, error: 'stripe_transfer_failed', detail: tr?.detail || 'missing transfer id', provider: p };
       return { ok: true, payoutRef: tr.id, provider: p };
@@ -469,7 +477,12 @@ export async function executePayout({
 
     return { ok: false, error: 'unknown_provider' };
   } catch (e) {
+    // Thrown here means the provider call itself failed at the network/
+    // transport level (timeout, connection reset, DNS) rather than
+    // returning a structured rejection — Stripe may have received and
+    // processed the request before the failure occurred on our side. We
+    // genuinely don't know, so this is ambiguous, not a clean failure.
     const detail: string = e instanceof Error ? e.message : String(e);
-    return { ok: false, error: 'network_error', detail, provider: p };
+    return { ok: false, error: 'network_error', detail, provider: p, ambiguous: true };
   }
 }

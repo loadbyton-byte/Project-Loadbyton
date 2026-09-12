@@ -70,7 +70,7 @@
  * @typedef {{ ok: boolean, ref?: string, url?: string|null, error?: string, provider?: string, detail?: string, mock?: boolean }} CreateCheckoutOrderResult
  * @typedef {{ ok: boolean, event?: 'AUTHORISED'|'DECLINED'|'CANCELLED'|'REFUNDED', ref?: string, tranref?: string|null, amountAed?: number|null, error?: string, provider?: string, providerEventId?: string, rawEventType?: string, detail?: string }} ParseWebhookResult
  * @typedef {{ tranref: string, amountAed: number, paymentRef?: string }} RefundChargeParams
- * @typedef {{ paymentRef: string, jobCode?: string, amountAed: number, carrierAccountId?: string|null, carrierIban?: string|null, reference?: string }} ExecutePayoutParams
+ * @typedef {{ paymentRef: string, jobCode?: string, amountAed: number, carrierAccountId?: string|null, carrierIban?: string|null, reference?: string, idempotencyKey?: string }} ExecutePayoutParams
  */
 
 const crypto = require('node:crypto');
@@ -456,7 +456,7 @@ async function refundCharge({ tranref, amountAed, paymentRef }) {
  * @param {ExecutePayoutParams & { alreadySplitPaid?: boolean }} params
  * @returns {Promise<{ok: boolean, payoutRef?: string, error?: string, detail?: string, provider?: string}>}
  */
-async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId, carrierIban, reference, alreadySplitPaid = false }) {
+async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId, carrierIban, reference, idempotencyKey, alreadySplitPaid = false }) {
   const p = provider();
   if (!isConfigured()) return { ok: false, error: 'not_configured' };
   if (!Number.isFinite(amountAed) || amountAed <= 0) return { ok: false, error: 'invalid_args' };
@@ -495,7 +495,7 @@ async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId,
       if (!carrierAccountId) {
         return { ok: false, error: 'missing_destination', detail: 'Stripe payout requires a carrier Connect account (profiles.processor_account_id) — onboard via POST /api/stripe/connect', provider: p };
       }
-      const tr = await stripeLib.createTransfer({ amountAed, destination: carrierAccountId, jobCode });
+      const tr = await stripeLib.createTransfer({ amountAed, destination: carrierAccountId, jobCode, idempotencyKey });
       // createTransfer returns a Transfer object on success (has .id). On
       // mock it returns a fake id; on failure Stripe throws -> caught as
       // network_error below. Be defensive: if it unexpectedly lacks an id
@@ -506,7 +506,13 @@ async function executePayout({ paymentRef, jobCode, amountAed, carrierAccountId,
 
     return { ok: false, error: 'unknown_provider' };
   } catch (e) {
-    return { ok: false, error: 'network_error', detail: e.message, provider: p };
+    // Thrown here means the request itself failed at the network/transport
+    // level (timeout, connection reset) rather than Stripe returning a
+    // clean rejection — Stripe may have already created the transfer
+    // before the failure happened on our side. ambiguous:true tells the
+    // caller this must NOT be treated as a safe-to-retry-with-a-new-key
+    // failure — see payout.service.js's UNKNOWN attempt status.
+    return { ok: false, error: 'network_error', detail: e.message, provider: p, ambiguous: true };
   }
 }
 
