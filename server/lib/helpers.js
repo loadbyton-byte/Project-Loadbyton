@@ -32,6 +32,7 @@ const randomToken = /** @type {any} */ (httpMod).randomToken;
 /** @type {any} */
 const constantsMod = require('./constants');
 const MIN_PASSWORD_LENGTH = /** @type {any} */ (constantsMod).MIN_PASSWORD_LENGTH;
+const NOTIFICATION_PRIORITY_BY_TYPE = /** @type {any} */ (constantsMod).NOTIFICATION_PRIORITY_BY_TYPE;
 /** @type {any} */
 const configMod = require('./config');
 const FRONTEND_URL = /** @type {any} */ (configMod).FRONTEND_URL;
@@ -363,7 +364,27 @@ async function notify(userId, title, body, jobId = null, type = 'system') {
     const disabled = user ? String(user.notification_prefs_disabled).split(',').filter(Boolean) : [];
     if (disabled.includes(type)) return;
   }
-  await db.prepare('INSERT INTO notifications (user_id, title, body, job_id, type) VALUES (?,?,?,?,?)').run(userId, title, body, jobId, type);
+  const priority = NOTIFICATION_PRIORITY_BY_TYPE[type] || 'normal';
+  const r = /** @type {any} */ (await db.prepare('INSERT INTO notifications (user_id, title, body, job_id, type, priority) VALUES (?,?,?,?,?,?) RETURNING id').run(userId, title, body, jobId, type, priority));
+  // Same-session live push, best-effort — the notifications row above is
+  // the durable read model (bell-click poll, Notifications.jsx) and stays
+  // correct even if no one is connected right now; this only shaves the
+  // latency down to "instant" for whoever already has a tab open. Lazy
+  // require avoids a hard circular dependency: socket.js already requires
+  // this file for resolveActingSeat.
+  try {
+    const { emitNotification } = require('./socket');
+    emitNotification(userId, {
+      id: Number(r.lastInsertRowid),
+      title,
+      body,
+      job_id: jobId,
+      type,
+      priority,
+      is_read: 0,
+      created_at: new Date().toISOString(),
+    });
+  } catch {}
 }
 
 /**
