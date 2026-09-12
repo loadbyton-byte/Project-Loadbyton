@@ -95,6 +95,7 @@ function DisputesTab() {
                 </div>
               </div>
               {evidenceFor?.id === d.id && <EvidenceDossier jobId={d.job_id} />}
+              {evidenceFor?.id === d.id && d.dispute_type === 'FRAUD_IDENTITY' && <FraudIdentityReview dispute={d} onReported={load} />}
               {d.status === 'OPEN' && (
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
                   <Input placeholder="Determination note" value={resolveDrafts[d.id] || ''} onChange={(e) => setResolveDrafts({ ...resolveDrafts, [d.id]: e.target.value })} className="flex-1 min-w-[220px]" />
@@ -154,6 +155,80 @@ function EvidenceDossier({ jobId }) {
           {evidence.auditTrail.map((a) => <li key={a.id}>{a.action} — {formatDateTime(a.created_at)}</li>)}
           {evidence.auditTrail.length === 0 && <li className="text-ink-muted">None</li>}
         </ul>
+      </div>
+    </div>
+  );
+}
+
+// GET /api/admin/disputes/:id/evidence — the FRAUD_IDENTITY branch (server/
+// routes/admin.routes.js) re-surfaces both parties' onboarding identity
+// documents side by side and offers a place to record a police-report
+// reference (a case-file note, not Loadbyton filing one on anyone's
+// behalf) — had a real backend with zero frontend caller until this.
+function FraudIdentityReview({ dispute, onReported }) {
+  const { addToast } = useToasts();
+  const [bundle, setBundle] = useState(null);
+  const [reference, setReference] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.adminDisputeEvidence(dispute.id).then(setBundle).catch(() => setBundle(false));
+  }, [dispute.id]);
+
+  async function fileReport(e) {
+    e.preventDefault();
+    if (!reference.trim()) return;
+    setBusy(true);
+    try {
+      await api.adminFileDisputePoliceReport(dispute.id, reference.trim());
+      addToast({ type: 'system_message', title: 'Police report recorded', body: `Reference ${reference.trim()} saved to the case file.` });
+      setReference('');
+      onReported?.();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not record police report', body: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (bundle === null) return <p className="mt-2 text-sm text-ink-muted">Loading identity review…</p>;
+  if (bundle === false) return <p className="mt-2 text-sm text-status-danger">Could not load identity review.</p>;
+
+  const parties = [
+    { label: 'Shipper', profile: bundle.shipperProfile },
+    { label: 'Carrier', profile: bundle.carrierProfile },
+  ];
+
+  return (
+    <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+      <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Fraud / identity review</p>
+      <div className="mt-2 grid gap-4 sm:grid-cols-2">
+        {parties.map(({ label, profile }) => (
+          <div key={label}>
+            <p className="text-sm font-medium text-ink">{label}</p>
+            {!profile ? (
+              <p className="text-sm text-ink-muted">No profile on file.</p>
+            ) : (
+              <ul className="mt-1 space-y-1 text-sm text-ink-secondary">
+                <li>{profile.company_name || 'Unnamed company'}</li>
+                <li>TRN: {profile.trn_number || 'not on file'}</li>
+                <li>Trade licence: {profile.trade_license_number || 'not on file'}</li>
+                <li>Trade licence doc: <Badge color={profile.trade_license_doc_storage_path ? 'success' : 'warning'}>{profile.trade_license_doc_storage_path ? 'Uploaded' : 'Missing'}</Badge></li>
+                <li>Insurance doc: <Badge color={profile.insurance_doc_storage_path ? 'success' : 'warning'}>{profile.insurance_doc_storage_path ? 'Uploaded' : 'Missing'}</Badge></li>
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+        {dispute.police_report_filed ? (
+          <p className="text-sm text-ink-secondary">Police report on file: <span className="font-mono">{dispute.police_report_reference}</span></p>
+        ) : (
+          <form onSubmit={fileReport} className="flex flex-wrap items-center gap-2">
+            <Input placeholder="Police report reference" value={reference} onChange={(e) => setReference(e.target.value)} className="flex-1 min-w-[200px]" />
+            <Button type="submit" variant="secondary" loading={busy}>Record police report</Button>
+          </form>
+        )}
       </div>
     </div>
   );

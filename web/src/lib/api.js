@@ -215,6 +215,11 @@ export const api = {
   adminOpenDispute: (body) => post('/admin/disputes', body),
   adminResolveDispute: (id, body) => post(`/admin/disputes/${id}/resolve`, body),
   adminEvidence: (jobId) => get(`/admin/evidence/${jobId}`),
+  // Dispute-type-aware evidence bundle (server-side branches per
+  // dispute_type) — the FRAUD_IDENTITY branch had a real backend but no
+  // frontend caller anywhere until this.
+  adminDisputeEvidence: (disputeId) => get(`/admin/disputes/${disputeId}/evidence`),
+  adminFileDisputePoliceReport: (disputeId, reference) => post(`/admin/disputes/${disputeId}/police-report`, { reference }),
   adminRevenue: () => get('/admin/revenue'),
   adminPayoutsSla: () => get('/admin/payouts-sla'),
   adminMarkTransferred: (payoutId, reference) => post(`/admin/payouts/${payoutId}/mark-transferred`, { reference }),
