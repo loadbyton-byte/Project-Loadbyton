@@ -928,4 +928,8 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS telr_split_applied INTEGER NOT NULL DE
 -- Postgres with 42703 "column does not exist").
 ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS acting_admin_id INTEGER;
 
+-- Notification priority — see server/schema.js for the full reasoning;
+-- mirrored here for the opt-in Postgres path.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
+
 COMMIT;

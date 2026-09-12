@@ -249,6 +249,17 @@ router.post('/api/notifications/read', auth(), async (req, res) => {
   res.json({ ok: true });
 });
 
+// Single-item mark-read — the Notification Center needs to let a user
+// clear one item without wiping every other unread notification, which
+// the mark-ALL route above can't do. Scoped to user_id=req.user.id in the
+// UPDATE itself (not a separate ownership SELECT first) so this can never
+// mark another user's notification read even if a client sent someone
+// else's id.
+router.post('/api/notifications/:id/read', auth(), async (req, res) => {
+  await db.prepare('UPDATE notifications SET is_read=1 WHERE id=? AND user_id=?').run(req.params.id, req.user.id);
+  res.json({ ok: true });
+});
+
 router.get('/api/notifications/preferences', auth(), async (req, res) => {
   const row = await db.prepare('SELECT notification_prefs_disabled FROM users WHERE id=?').get(req.user.id);
   const disabled = row ? row.notification_prefs_disabled.split(',').filter(Boolean) : [];

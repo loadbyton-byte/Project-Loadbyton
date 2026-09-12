@@ -62,6 +62,16 @@ function initSocket(httpServer) {
   });
 
   io.on('connection', (socket) => {
+    // One room per authenticated user, joined automatically at connection
+    // time (unlike thread rooms below, which need an explicit join +
+    // per-thread authorization check) — identity is already established
+    // by the handshake-time cookie auth above, so there's nothing further
+    // to authorize: a user's own notifications are always theirs. Used by
+    // notify()/notifyAdmins() (lib/helpers.js) to push new notifications
+    // to whoever's already connected, in addition to the durable
+    // notifications-table row they always write regardless of push.
+    socket.join(`user:${socket.user.id}`);
+
     // One room per thread (job + role-pair), not per job — a shipper's
     // socket only receives pushes for threads they're actually a party to
     // (their SHIPPER-CARRIER and SHIPPER-ADMIN threads on that job), never
@@ -103,4 +113,14 @@ function emitNewMessage(threadId, message) {
   io.to(`thread:${threadId}`).emit('new_message', message);
 }
 
-module.exports = { initSocket, emitNewMessage };
+// Called by notify() (lib/helpers.js) right after it inserts a
+// notifications row — the only place this fires from. A no-op if the
+// socket server isn't up yet (e.g. during a test that never calls
+// initSocket) rather than throwing, since push is always best-effort on
+// top of the durable row notify() already wrote.
+function emitNotification(userId, notification) {
+  if (!io || !userId) return;
+  io.to(`user:${userId}`).emit('notification:new', notification);
+}
+
+module.exports = { initSocket, emitNewMessage, emitNotification };

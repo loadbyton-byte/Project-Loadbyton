@@ -101,6 +101,30 @@ const DEPOTS = ['JAFZA_DEPOT', 'AL_QUSAIS_DEPOT', 'KHALIFA_DEPOT', 'SHARJAH_DEPO
 // not mutable — account-level notices shouldn't be silenceable.
 const NOTIFICATION_TYPES = ['bid', 'award', 'status', 'payout', 'dispute', 'verification', 'message'];
 
+// Severity, derived from `type` at notify()-time — not a second mutable
+// preference, and not set per call site (every notify() call for a given
+// type gets the same priority; a call site that genuinely needs to
+// override it can still pass an explicit priority argument). Drives which
+// surface an event gets: 'critical'/'high' also fire a toast in addition
+// to landing in the notification center; 'normal'/'low' go straight to
+// the center only. 'dispute' and 'payout' are 'high' — both are
+// financial/conflict events a user needs to see promptly, even though
+// today's actual notify() call sites for 'payout' are all success cases
+// (see docs note in helpers.js: payout FAILURE/UNKNOWN currently only
+// writes an audit entry, not a user notification — a separate, real gap,
+// not something this mapping can paper over).
+const NOTIFICATION_PRIORITIES = ['critical', 'high', 'normal', 'low'];
+const NOTIFICATION_PRIORITY_BY_TYPE = {
+  dispute: 'high',
+  payout: 'high',
+  bid: 'normal',
+  award: 'normal',
+  status: 'normal',
+  message: 'normal',
+  verification: 'normal',
+  system: 'low',
+};
+
 // DRIVER_ASSOCIATE: a pool driver who never bids and never sees the open
 // marketplace — a carrier pushes a specific job as a trip offer they
 // accept/decline over WhatsApp (see routes/whatsapp.routes.js). Distinct
@@ -164,7 +188,7 @@ module.exports = {
   STATUS_ORDER: ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'],
   TERMINAL_EMIRATE, AREA_EMIRATE, MIN_PASSWORD_LENGTH,
   EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS,
-  NOTIFICATION_TYPES, SEAT_ROLES,
+  NOTIFICATION_TYPES, NOTIFICATION_PRIORITIES, NOTIFICATION_PRIORITY_BY_TYPE, SEAT_ROLES,
   BID_SORT_COLUMNS, JOB_SORT_COLUMNS, ESCROW_STATUSES,
   TRANSITIONS, DISPUTABLE_STATUSES,
   BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM,

@@ -200,6 +200,7 @@ export const api = {
   invoices: () => get('/invoices'),
   notifications: () => get('/notifications'),
   markNotificationsRead: () => post('/notifications/read'),
+  markNotificationRead: (id) => post(`/notifications/${id}/read`),
   notificationPreferences: () => get('/notifications/preferences'),
   updateNotificationPreferences: (disabled) => patch('/notifications/preferences', { disabled }),
 

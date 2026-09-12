@@ -146,6 +146,12 @@ function makeClient(baseUrl) {
       if (!r.ok) throw new Error(`login failed for ${email}: ${r.status} ${r.raw}`);
       return r;
     },
+    // Exposes the session cookie captured above for tests that need to
+    // authenticate a non-fetch client against the same session — e.g. a
+    // socket.io-client connection, which (unlike a browser) sends no
+    // cookies of its own and must be handed one explicitly via
+    // `extraHeaders: { Cookie: ... }`.
+    getCookie: () => cookie,
   };
 }
 

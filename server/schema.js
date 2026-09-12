@@ -320,6 +320,11 @@ module.exports = function initSchema(db) {
 
   addColumn('notifications', 'type', "type TEXT NOT NULL DEFAULT 'system'");
   addColumn('users', 'notification_prefs_disabled', "notification_prefs_disabled TEXT NOT NULL DEFAULT ''");
+  // Severity, not a mutable preference like `type` — derived server-side
+  // from `type` (NOTIFICATION_PRIORITY_BY_TYPE, lib/constants.js) at
+  // insert time, not user-settable. Drives which surface an event gets
+  // (toast vs. notification-center-only) and the center's visual weight.
+  addColumn('notifications', 'priority', "priority TEXT NOT NULL DEFAULT 'normal'");
 
   addColumn('users', 'account_approval_status', "account_approval_status TEXT NOT NULL DEFAULT 'APPROVED'");
   addColumn('users', 'account_approved_at', 'account_approved_at TEXT');
