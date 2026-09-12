@@ -9,9 +9,10 @@ import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
   IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt,
-  IconCompass, IconShield,
+  IconCompass, IconShield, IconSearch,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
+import CommandPalette from './CommandPalette.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -183,6 +184,22 @@ function TrnQuickLink() {
   );
 }
 
+// Visible entry point for CommandPalette.jsx — the Cmd/Ctrl+K shortcut
+// alone has no discoverability and doesn't exist on a touch device.
+function CommandPaletteHint() {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new CustomEvent('command-palette:open'))}
+      className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+      aria-label="Search"
+      title="Search (Ctrl/Cmd+K)"
+    >
+      <IconSearch size={18} />
+    </button>
+  );
+}
+
 // Role-based nav — drives both the desktop sidebar and the mobile drawer,
 // so there is exactly one source of truth for "what links does this role
 // see" (see CLAUDE.md's navigation note for why that matters).
@@ -334,6 +351,7 @@ function ShellInner({ children }) {
 
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">
+      {user && <CommandPalette navItems={navItems} />}
       {user?.impersonating && (
         <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-center text-xs font-medium text-white" style={{ background: 'var(--status-danger)' }}>
           <span>Impersonating {user.profile?.company_name || user.email} — logged to the audit trail.</span>
@@ -619,6 +637,7 @@ function ShellInner({ children }) {
 
             {user ? (
               <div className="flex items-center">
+                <CommandPaletteHint />
                 <TrnQuickLink />
                 <NotificationBell />
               </div>
