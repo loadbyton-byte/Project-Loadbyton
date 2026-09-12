@@ -38,7 +38,7 @@ export default function Security() {
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent)' }}>Security</span>
+            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Security</span>
             <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">What's actually implemented — not a marketing checklist.</h1>
             <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
               Where something isn't done yet, it's listed as a roadmap item below — not implied as already in place.

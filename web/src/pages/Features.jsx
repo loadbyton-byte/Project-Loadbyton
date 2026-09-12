@@ -24,7 +24,7 @@ export default function Features() {
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent)' }}>Platform capabilities</span>
+            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Platform capabilities</span>
             <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Everything it takes to stop re-negotiating the same shipment.</h1>
             <p className="mt-4 text-lg leading-relaxed text-ink-secondary">Loadbyton isn't a listings board. It's the escrow, the state machine, and the paper trail a drayage marketplace actually needs.</p>
           </Reveal>

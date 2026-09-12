@@ -22,7 +22,7 @@ export default function Pricing() {
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent)' }}>Pricing</span>
+            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Pricing</span>
             <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">One take rate. No subscription, no listing fee.</h1>
             <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
               Loadbyton takes <span className="tabular font-semibold text-ink">{takeRate}</span> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.
