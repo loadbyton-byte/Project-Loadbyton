@@ -385,6 +385,46 @@ module.exports = function initSchema(db) {
   `);
 
   // ---------------------------------------------------------------------------
+  // shipment_events — a structured, business-domain event ledger for one
+  // shipment's timeline (POSTED -> ... -> COMPLETED, awards, driver binds,
+  // disputes, payouts), distinct from audit_log (system-wide security/action
+  // trail with free-text `details`, 70+ call sites). Kept separate rather
+  // than retrofitting structured `data` onto audit_log: this table exists
+  // specifically to be rendered as a shipment's Case File / timeline, not to
+  // extend the security audit trail. Append-only + hash-chained, exact same
+  // proven pattern as audit_log above (see recordShipmentEvent in
+  // lib/helpers.js for the chain computation, mirroring writeAudit's).
+  // ---------------------------------------------------------------------------
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shipment_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job_id INTEGER NOT NULL REFERENCES jobs(id),
+      event_type TEXT NOT NULL,
+      actor_id INTEGER REFERENCES users(id),
+      actor_role TEXT,
+      summary TEXT NOT NULL,
+      data TEXT,
+      prev_hash TEXT,
+      hash TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_shipment_events_job ON shipment_events(job_id);
+
+    CREATE TRIGGER IF NOT EXISTS shipment_events_no_update
+    BEFORE UPDATE ON shipment_events
+    BEGIN
+      SELECT RAISE(ABORT, 'shipment_events is append-only: UPDATE is not permitted');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS shipment_events_no_delete
+    BEFORE DELETE ON shipment_events
+    BEGIN
+      SELECT RAISE(ABORT, 'shipment_events is append-only: DELETE is not permitted');
+    END;
+  `);
+
+  // ---------------------------------------------------------------------------
   // Enterprise tables (idempotent)
   // ---------------------------------------------------------------------------
 

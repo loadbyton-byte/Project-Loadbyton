@@ -320,6 +320,51 @@ BEGIN
   END IF;
 END $$;
 
+-- shipment_events: structured, business-domain event ledger for one
+-- shipment's timeline, distinct from audit_log (system-wide security/action
+-- trail). See schema.js's mirror of this table for the full rationale.
+CREATE TABLE IF NOT EXISTS shipment_events (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  event_type TEXT NOT NULL,
+  actor_id INTEGER REFERENCES users(id),
+  actor_role TEXT,
+  summary TEXT NOT NULL,
+  data TEXT,
+  prev_hash TEXT,
+  hash TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_shipment_events_job ON shipment_events(job_id);
+
+CREATE OR REPLACE FUNCTION shipment_events_no_update_fn()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'shipment_events is append-only: UPDATE is not permitted';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION shipment_events_no_delete_fn()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'shipment_events is append-only: DELETE is not permitted';
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'shipment_events_no_update') THEN
+    CREATE TRIGGER shipment_events_no_update
+    BEFORE UPDATE ON shipment_events
+    FOR EACH ROW EXECUTE FUNCTION shipment_events_no_update_fn();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'shipment_events_no_delete') THEN
+    CREATE TRIGGER shipment_events_no_delete
+    BEFORE DELETE ON shipment_events
+    FOR EACH ROW EXECUTE FUNCTION shipment_events_no_delete_fn();
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS notifications (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

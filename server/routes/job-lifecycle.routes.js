@@ -45,6 +45,7 @@ const helpersMod = require('../lib/helpers');
 const normalizeUaeMobile = /** @type {any} */ (helpersMod).normalizeUaeMobile;
 const getSettings = /** @type {any} */ (helpersMod).getSettings;
 const writeAudit = /** @type {any} */ (helpersMod).writeAudit;
+const recordShipmentEvent = /** @type {any} */ (helpersMod).recordShipmentEvent;
 const notify = /** @type {any} */ (helpersMod).notify;
 const notifyAdmins = /** @type {any} */ (helpersMod).notifyAdmins;
 const isPartyOnJob = /** @type {any} */ (helpersMod).isPartyOnJob;
@@ -366,6 +367,15 @@ router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRo
     beforeState: job.status,
     afterState: 'DISPUTED',
   });
+  try {
+    await recordShipmentEvent(job.id, {
+      eventType: 'DISPUTE_OPENED',
+      actorId: req.actorId,
+      actorRole: req.user.role,
+      summary: `${job.job_code}: dispute opened (${disputeType})`,
+      data: { disputeType, disputeId: Number(result.lastInsertRowid) },
+    });
+  } catch (e) { console.error(`[shipment_events] DISPUTE_OPENED record failed for job ${job.id}:`, e); }
   const other = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
   await notify(other, 'Dispute opened', `${job.job_code}: a dispute was opened by the counterparty. Escrow is frozen pending admin review.`, job.id, 'dispute');
   await notifyAdmins('New dispute filed', `${job.job_code}: filed by ${req.actorLabel}. Escrow frozen, awaiting review.`, job.id);

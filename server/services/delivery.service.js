@@ -7,7 +7,7 @@
 // function assumes the caller has already established the actor is allowed
 // to confirm delivery for this job.
 const db = require('../db');
-const { resolveUploadedFile, getSettings, writeAudit, notify } = require('../lib/helpers');
+const { resolveUploadedFile, getSettings, writeAudit, recordShipmentEvent, notify } = require('../lib/helpers');
 const { DOC_TYPES } = require('../lib/constants');
 
 /**
@@ -87,6 +87,15 @@ async function confirmDelivery(job, { actorId, doc, req }) {
     beforeState: 'IN_TRANSIT',
     afterState: 'DELIVERED',
   });
+  try {
+    await recordShipmentEvent(job.id, {
+      eventType: 'POD_SUBMITTED',
+      actorId,
+      actorRole: 'CARRIER',
+      summary: `${job.job_code}: proof of delivery submitted`,
+      data: { hasDocument: !!(doc && (doc.fileUrl || storagePath)) },
+    });
+  } catch (e) { console.error(`[shipment_events] POD_SUBMITTED record failed for job ${job.id}:`, e); }
   const { auto_release_hours } = await getSettings();
   await notify(job.shipper_id, 'Proof of delivery submitted', `Confirm delivery on ${job.job_code}, or it auto-releases in ${auto_release_hours}h.`, job.id, 'status');
   return db.prepare('SELECT * FROM jobs WHERE id=?').get(job.id);

@@ -8,7 +8,7 @@
 /** @type {any} */
 const db = require('../db');
 /** @type {any} */
-const { getSettings, writeAudit, notify } = require('../lib/helpers');
+const { getSettings, writeAudit, notify, recordShipmentEvent } = require('../lib/helpers');
 const { DEFERRED_PAYMENT_TERMS, PAYMENT_TERM_DUE_HOURS } = require('../lib/constants');
 
 /**
@@ -289,6 +289,15 @@ async function awardJob(req, res, jobId, bidId) {
     await (/** @type {any} */ (notify))(preBid.carrier_id, 'Bid awarded', `Your bid on ${preJob.job_code} was awarded. Agreed price: AED ${agreedPrice}.`, jobId, 'award');
     await (/** @type {any} */ (notify))(preJob.shipper_id, 'Job awarded', shipperAwardMessage, jobId, 'award');
   } catch {}
+  try {
+    await recordShipmentEvent(jobId, {
+      eventType: 'BID_AWARDED',
+      actorId: req.actorId || req.user.id,
+      actorRole: 'SHIPPER',
+      summary: `${preJob.job_code}: awarded to carrier at AED ${agreedPrice}`,
+      data: { bidId, carrierId: preBid.carrier_id, agreedPriceAed: agreedPrice, paymentTier: preJob.payment_tier },
+    });
+  } catch (e) { console.error(`[shipment_events] BID_AWARDED record failed for job ${jobId}:`, e); }
 
   const updated = await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId);
   res.json({ job: updated });
