@@ -72,6 +72,7 @@ export default function JobDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t, isRtl } = useLocale();
+  const { addToast } = useToasts();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [error, setError] = useState('');
@@ -89,6 +90,9 @@ export default function JobDetail() {
   const [newChargeAmount, setNewChargeAmount] = useState('');
   const [lowCapacityAcked, setLowCapacityAcked] = useState(false);
   const [negotiationBusy, setNegotiationBusy] = useState(false);
+  const [blNumberDraft, setBlNumberDraft] = useState('');
+  const [instruments, setInstruments] = useState([]);
+  const [tokenizeBusy, setTokenizeBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -136,6 +140,15 @@ export default function JobDetail() {
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [awardConfirm]);
+
+  // Existing BL tokens for this job — GET /api/jobs/:id/instruments had a
+  // real backend and an api.js client (getInstruments) but was never
+  // called anywhere, so a token created via "Tokenize BL" below was
+  // immediately invisible again on the next page load.
+  useEffect(() => {
+    if (!data?.job?.id) return;
+    api.getInstruments(data.job.id).then((r) => setInstruments(r.instruments || [])).catch(() => {});
+  }, [data?.job?.id]);
 
   if (error && !data) {
     return (
@@ -241,6 +254,24 @@ export default function JobDetail() {
     }
   }
 
+  // DELETE /api/bids/:id/ancillary-charges/:chargeId had a real backend
+  // (blocked once terms_confirmed_at is set) and an api.js client
+  // (deleteBidAncillaryCharge) but no button anywhere called it — a
+  // charge either side disagreed with, proposed by mistake, or wanted to
+  // retract before terms lock could never actually be removed.
+  async function removeCharge(chargeId) {
+    setNegotiationBusy(true);
+    try {
+      await api.deleteBidAncillaryCharge(awardConfirm.id, chargeId);
+      const charges = await api.getAncillaryCharges(awardConfirm.id);
+      setAncillaryCharges(charges.charges || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setNegotiationBusy(false);
+    }
+  }
+
   const allChargesAgreed = ancillaryCharges.every((c) => c.agreed_by_shipper && c.agreed_by_carrier);
   // Matches award.service.js exactly: only charges BOTH sides have agreed
   // become part of the final price — a proposed-but-unagreed charge
@@ -321,13 +352,16 @@ export default function JobDetail() {
                     {ancillaryCharges.map((c) => (
                       <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
                         <span>{c.charge_type} — {formatMoney(c.amount_aed, job.currency)}</span>
-                        {c.agreed_by_shipper && c.agreed_by_carrier ? (
-                          <Badge color="success">Agreed</Badge>
-                        ) : !c.agreed_by_shipper ? (
-                          <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
-                        ) : (
-                          <Badge color="neutral">Awaiting carrier</Badge>
-                        )}
+                        <span className="flex items-center gap-1.5">
+                          {c.agreed_by_shipper && c.agreed_by_carrier ? (
+                            <Badge color="success">Agreed</Badge>
+                          ) : !c.agreed_by_shipper ? (
+                            <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
+                          ) : (
+                            <Badge color="neutral">Awaiting carrier</Badge>
+                          )}
+                          <Button size="sm" variant="ghost" onClick={() => removeCharge(c.id)} loading={negotiationBusy}>Remove</Button>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -740,19 +774,58 @@ export default function JobDetail() {
           {(isShipper || isAwardedCarrier) && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(job.status) && (
             <Section title="Bill of Lading Token" className="mb-6">
               <Card className="border-l-4" style={{ borderLeftColor: 'var(--brand-accent)' }}>
-                <Card.Content className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4">
-                  <div>
-                    <p className="font-medium text-ink">{t('jobDetail.tokenizeBL', 'Tokenize Bill of Lading')}</p>
-                    <p className="text-xs text-ink-muted">{t('jobDetail.tokenizeBLDesc', 'Create a verifiable, transferable digital token for this shipment\'s bill of lading')}</p>
+                <Card.Content className="flex flex-col gap-3 p-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-ink">{t('jobDetail.tokenizeBL', 'Tokenize Bill of Lading')}</p>
+                      <p className="text-xs text-ink-muted">{t('jobDetail.tokenizeBLDesc', 'Create a verifiable, transferable digital token for this shipment\'s bill of lading')}</p>
+                    </div>
                   </div>
-                  <Button variant="accent" onClick={async () => {
-                    const result = await act(async () => {
-                      const res = await api.tokenizeBL(job.id, { shipmentType: job.shipment_type });
-                      return res;
-                    });
-                  }} loading={busy}>
-                    {t('jobDetail.tokenizeBLBtn', 'Tokenize BL')}
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      placeholder={t('jobDetail.blNumber', 'Bill of Lading number')}
+                      value={blNumberDraft}
+                      onChange={(e) => setBlNumberDraft(e.target.value)}
+                      className="flex-1 min-w-[200px]"
+                    />
+                    <Button
+                      variant="accent"
+                      loading={tokenizeBusy}
+                      disabled={!blNumberDraft.trim()}
+                      onClick={async () => {
+                        setTokenizeBusy(true);
+                        try {
+                          const res = await api.tokenizeBL(job.id, { blNumber: blNumberDraft.trim(), shipmentType: job.shipment_type });
+                          setInstruments((prev) => [res.instrument, ...prev]);
+                          setBlNumberDraft('');
+                          addToast({
+                            type: 'system_message',
+                            title: 'Bill of Lading tokenized',
+                            body: `Token ${res.instrument.token_id} · risk score ${res.risk.score} · rate ${res.risk.rateBps}bps`,
+                          });
+                        } catch (err) {
+                          addToast({ type: 'system_message', title: 'Could not tokenize BL', body: err.message });
+                        } finally {
+                          setTokenizeBusy(false);
+                        }
+                      }}
+                    >
+                      {t('jobDetail.tokenizeBLBtn', 'Tokenize BL')}
+                    </Button>
+                  </div>
+                  {instruments.length > 0 && (
+                    <ul className="mt-1 space-y-1 text-sm text-ink-secondary">
+                      {instruments.map((inst) => (
+                        <li key={inst.id} className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs">{inst.token_id}</span>
+                          <span>BL {inst.bl_number}</span>
+                          <span>{formatAED(inst.face_value_aed)}</span>
+                          <span className="text-xs text-ink-muted">risk {inst.risk_score} · {inst.interest_rate_bps}bps</span>
+                          <Badge color={inst.status === 'ACTIVE' ? 'success' : 'warning'}>{inst.status}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </Card.Content>
               </Card>
             </Section>
