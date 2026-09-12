@@ -285,7 +285,7 @@ export default function Dashboard() {
           </span>
           <div className="min-w-0">
             <h1 className="truncate font-display text-lg font-bold text-ink">{user?.profile?.company_name}</h1>
-            <p className="mt-0.5 font-mono text-xs font-semibold text-brand-accent">{t('dashboard.tier', 'Tier {tier} · {count} jobs posted', { tier: user?.tier, count: analytics?.jobsPosted ?? 0 })}</p>
+            <p className="mt-0.5 font-mono text-xs font-semibold" style={{ color: 'var(--brand-accent-on-tint)' }}>{t('dashboard.tier', 'Tier {tier} · {count} jobs posted', { tier: user?.tier, count: analytics?.jobsPosted ?? 0 })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:shrink-0">
@@ -902,8 +902,8 @@ export default function Dashboard() {
                 cards from showing through underneath it. */}
             <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-end gap-3 px-4 py-3 sm:mx-0 sm:px-0" style={{ background: 'var(--bg-canvas)' }}>
               <div className="min-w-[140px]">
-                <Label>Filter by status</Label>
-                <Select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full">
+                <Label htmlFor="dashboard-filter-status">Filter by status</Label>
+                <Select id="dashboard-filter-status" value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full">
                   <option value="all">All statuses</option>
                   {STATUS_FLOW.map((s) => <option key={s} value={s}>{formatLabel(s)}</option>)}
                   <option value="CANCELLED">Cancelled</option>
@@ -911,8 +911,8 @@ export default function Dashboard() {
                 </Select>
               </div>
               <div className="min-w-[140px]">
-                <Label>Sort</Label>
-                <Select value={sort} onChange={(e) => setSort(e.target.value)} className="w-full">
+                <Label htmlFor="dashboard-sort">Sort</Label>
+                <Select id="dashboard-sort" value={sort} onChange={(e) => setSort(e.target.value)} className="w-full">
                   {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
               </div>

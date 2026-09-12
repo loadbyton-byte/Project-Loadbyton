@@ -28,6 +28,30 @@ export default defineConfig({
       },
     },
   },
+  // e2e (web/e2e/*.spec.js via playwright.config.js) runs against this,
+  // not `server` above — a production build, not the dev server. Needed
+  // because `server`'s dev mode (React.StrictMode's intentional
+  // double-invoke of effects) doubles every AuthProvider /api/auth/me
+  // call, which — combined with real logins across ~17 e2e specs — blew
+  // well past authIpLimiter's 20-req/min-per-IP budget regardless of how
+  // few logins any single spec performed. A production build doesn't
+  // double-invoke effects, so this proxy exists to keep /api reachable
+  // under `vite preview` the same way it already is under `vite dev`.
+  preview: {
+    port: 5173,
+    // Explicit IPv4 bind — CI (github actions) resolved a bare loopback
+    // bind to ::1 (IPv6) rather than 127.0.0.1, invisible to both
+    // curl-based health checks and playwright.config.js's IPv4 baseURL
+    // (see .github/workflows/ci.yml's own comment on the same issue for
+    // `vite dev`'s boot step — applies equally here).
+    host: '127.0.0.1',
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     outDir: 'dist',
     sourcemap: process.env.NODE_ENV !== 'production',

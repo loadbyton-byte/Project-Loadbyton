@@ -19,6 +19,16 @@ const { MIN_PASSWORD_LENGTH, TERMS_VERSION } = require('../lib/constants');
 
 const router = require('express').Router();
 const authIpLimiter = rateLimiter({ windowMs: 60 * 1000, max: 20, keyFn: byIp, message: 'Too many auth requests. Please slow down.' });
+// GET /api/auth/me is a read-only "who am I" check, already gated by
+// auth() requiring a valid session cookie — unlike login/register/
+// forgot-password above, there is no credential or account-existence to
+// guess here, so it doesn't belong on the same tight budget as those.
+// A real SPA calls this once per page load; sharing login's 20-req/min
+// budget throttled legitimate multi-tab/frequent-reload usage for no
+// security benefit (confirmed while root-causing e2e flakiness: this
+// endpoint alone, not logins, was the dominant contributor to the shared
+// budget being exceeded).
+const authMeLimiter = rateLimiter({ windowMs: 60 * 1000, max: 120, keyFn: byIp, message: 'Too many requests. Please slow down.' });
 
 router.post(
   '/api/auth/register',
@@ -231,7 +241,7 @@ router.post(
   })
 );
 
-router.get('/api/auth/me', authIpLimiter, auth(), async (req, res) => {
+router.get('/api/auth/me', authMeLimiter, auth(), async (req, res) => {
   const impersonatingAdminId = req.session.impersonating_admin_id;
   const impersonatedBy = impersonatingAdminId
     ? await db.prepare('SELECT id, email FROM users WHERE id=?').get(impersonatingAdminId)
