@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { IconStar, IconMapPin, IconAlert, IconX, IconCheck } from './icons.jsx';
 
 function cx(...parts) {
@@ -455,19 +455,70 @@ export function ChatThread({ messages, emptyLabel = 'No messages yet.', classNam
 }
 
 // ---------------------------------------------------------------- Modal
+const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ open, onClose, title, children, className }) {
+  const dialogRef = useRef(null);
+  const bodyRef = useRef(null);
+  const previouslyFocusedRef = useRef(null);
+
+  // Focus trap + restore: no dialog in this app previously moved focus into
+  // itself on open, cycled Tab within itself, or gave it back to whatever
+  // triggered it on close — a keyboard/screen-reader user's focus stayed
+  // wherever it was, behind the overlay, or fell back to <body> on close.
+  // Hooks run unconditionally (before the `!open` early return below) so
+  // this cleans up correctly even when the parent keeps Modal mounted and
+  // just flips `open`, not only when it mounts/unmounts the component.
+  useEffect(() => {
+    if (!open) return;
+    previouslyFocusedRef.current = document.activeElement;
+    const dialog = dialogRef.current;
+    // Initial focus prefers the first focusable field in the BODY (e.g. a
+    // form's first input) over the header's close button — every Modal
+    // consumer shares this same header, so "first focusable in the whole
+    // dialog" would always land on Close, which is rarely the useful spot
+    // to start. Tab-cycling below still covers the whole dialog, close
+    // button included.
+    const firstFocusable = bodyRef.current?.querySelector(FOCUSABLE_SELECTOR);
+    (firstFocusable || dialog)?.focus();
+
+    function onKeyDown(e) {
+      if (e.key === 'Escape') {
+        onClose?.();
+        return;
+      }
+      if (e.key !== 'Tab' || !dialog) return;
+      const nodes = dialog.querySelectorAll(FOCUSABLE_SELECTOR);
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocusedRef.current?.focus?.();
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div className={cx('fixed inset-0 z-50 flex items-center justify-center p-4', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-lg rounded-xl bg-white shadow-xl animate-slide-up overflow-hidden">
+      <div ref={dialogRef} tabIndex={-1} className="relative w-full max-w-lg rounded-xl bg-surface shadow-xl animate-slide-up overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 id="modal-title" className="font-display text-lg font-semibold text-ink">{title}</h2>
           <button type="button" onClick={onClose} className="p-1 rounded-lg hover:bg-surface-container-high text-ink-muted transition-colors" aria-label="Close">
             <IconX size={20} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div ref={bodyRef} className="p-5">{children}</div>
       </div>
     </div>
   );
