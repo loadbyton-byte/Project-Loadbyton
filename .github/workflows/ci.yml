@@ -106,13 +106,34 @@ jobs:
           INTERNAL_KEY: ci-test-key
           ENCRYPTION_KEY: ci-test-encryption-key-32chars-long
 
+      # Playwright's own `webServer` (playwright.config.js) is meant to
+      # spawn this itself, and does on a real dev machine — but on this
+      # runner it silently never reached "ready" (no Vite banner ever
+      # printed in the job log) while Playwright proceeded to run tests
+      # anyway, so every single test failed with ERR_CONNECTION_REFUSED.
+      # Booting it explicitly here, the same way as the API server above,
+      # sidesteps whatever CI-specific quirk that is: playwright.config.js's
+      # `reuseExistingServer: true` then just detects this already-running
+      # instance instead of depending on Playwright's own spawn/readiness
+      # logic in this environment.
+      - name: Boot web dev server for e2e
+        working-directory: web
+        run: |
+          nohup npm run dev -- --port 5173 > /tmp/loadbyton-web.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:5173/ && break
+            sleep 1
+          done
+
       - name: Run Playwright E2E
         working-directory: web
         run: npx playwright test --reporter=list
 
-      - name: Upload API server log on failure
+      - name: Upload server logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: loadbyton-api-log
-          path: /tmp/loadbyton-api.log
+          name: loadbyton-server-logs
+          path: |
+            /tmp/loadbyton-api.log
+            /tmp/loadbyton-web.log
