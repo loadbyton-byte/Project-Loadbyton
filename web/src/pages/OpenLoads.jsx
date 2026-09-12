@@ -5,6 +5,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel, paymentTermLabel } from '../lib/constants.js';
 import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button, Badge } from '../components/ui.jsx';
+import ActionRequired from '../components/ActionRequired.jsx';
 import { IconAlert, IconPackage, IconSearch, IconMapPin } from '../components/icons.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 
@@ -94,6 +95,8 @@ export default function OpenLoads() {
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">Open loads</h1>
       <p className="mt-1 text-sm text-ink-muted">Verified carriers can bid price + ETA. Competitor amounts stay hidden until award.</p>
+
+      <ActionRequired />
 
       {analytics && (
         <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">

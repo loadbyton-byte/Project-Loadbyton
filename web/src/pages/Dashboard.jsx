@@ -18,6 +18,7 @@ import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.j
 import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
 import TimeSlotPicker from '../components/TimeSlotPicker.jsx';
 import TermsModal from '../components/TermsModal.jsx';
+import ActionRequired from '../components/ActionRequired.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -298,6 +299,8 @@ export default function Dashboard() {
       </section>
 
       {showImport && <CsvImportPanel onDone={() => { setShowImport(false); load(); }} onCancel={() => setShowImport(false)} />}
+
+      <ActionRequired />
 
       {analytics && (
         <section className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
