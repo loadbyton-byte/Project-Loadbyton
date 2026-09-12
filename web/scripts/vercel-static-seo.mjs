@@ -4,8 +4,7 @@
 // fragment from scripts/prerender.mjs) once, at build time, and writes a
 // fully-formed static HTML file per public route so a crawler still gets
 // real content on Vercel exactly like it does on the Express deploy path
-// (Render/Oracle Cloud). Mirrors SEO_META/renderSeoPage in server/index.js —
-// keep the two in sync if either changes.
+// (Render/Oracle Cloud).
 //
 // Only runs as part of the Vercel build (see package.json's "build:vercel"
 // script) — the Express deploy path is untouched and keeps doing this
@@ -22,18 +21,11 @@ const distDir = path.join(webRoot, 'dist');
 const indexPath = path.join(distDir, 'index.html');
 const prerenderDir = path.join(distDir, '__prerendered__');
 
-// Must match server/index.js's SEO_META exactly.
-const SEO_META = {
-  '/': { title: 'Loadbyton — UAE Road Freight & Container Drayage Marketplace', description: 'Post a freight job — container, flatbed, tripper, or a multi-truck volume inquiry — get verified-carrier bids across Dubai, Abu Dhabi, Sharjah and Fujairah, and move it under escrow with live tracking and payout on delivery.', slug: 'root' },
-  '/features': { title: 'Features — Loadbyton', description: 'Escrow-backed drayage jobs, live tracking, contract lanes and a verified carrier network — everything Loadbyton ships.', slug: 'features' },
-  '/pricing': { title: 'Pricing — Loadbyton', description: 'A transparent 6% take rate, no subscription. See how Loadbyton pricing compares to broker markups.', slug: 'pricing' },
-  '/about': { title: 'About — Loadbyton', description: 'Loadbyton is a UAE container drayage marketplace built to make the second shipment happen on-platform, not on WhatsApp.', slug: 'about' },
-  '/blog': { title: 'Blog — Loadbyton', description: 'Notes on UAE drayage, demurrage, and building a freight marketplace that survives past the first job.', slug: 'blog' },
-  '/security': { title: 'Security — Loadbyton', description: 'How Loadbyton protects account, financial, and shipment data — what is built today, and what is on the roadmap.', slug: 'security' },
-  '/compliance': { title: 'Compliance — Loadbyton', description: 'How Loadbyton handles personal data under UAE PDPL, VAT invoicing, and where account data is hosted.', slug: 'compliance' },
-  '/terms': { title: 'Terms of Service — Loadbyton', description: 'Loadbyton Terms of Service — governing your use of the UAE road freight & container drayage marketplace.', slug: 'terms' },
-  '/privacy': { title: 'Privacy Policy — Loadbyton', description: 'Loadbyton Privacy Policy — how we collect, use, protect, and share your personal data under UAE PDPL.', slug: 'privacy' },
-};
+// Single source of truth, ../seo-meta.json (repo root) — this used to be a
+// hand-copied object here AND in server/app.js, with only a code comment
+// ("must match X exactly") holding the two in sync. Both now read the same
+// file instead.
+const SEO_META = JSON.parse(fs.readFileSync(path.join(webRoot, '..', 'seo-meta.json'), 'utf8'));
 
 const PUBLIC_APP_PATHS_DISALLOWED = [
   '/dashboard', '/open-loads', '/my-bids', '/won-jobs', '/earnings', '/jobs/', '/profile',
