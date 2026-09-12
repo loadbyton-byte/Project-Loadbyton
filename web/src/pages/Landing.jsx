@@ -6,6 +6,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import FreightMotionScene from '../components/FreightMotionScene.jsx';
+import CinematicIntro from '../components/CinematicIntro.jsx';
 import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
 
 const EQUIPMENT_ICONS = {
@@ -54,6 +55,7 @@ export default function Landing() {
 
   return (
     <div>
+      <CinematicIntro />
       {/* Hero — split, not centered. Left: thesis. Right: an animated motion
           scene (FreightMotionScene) — a simple auto-advancing slide deck
           explaining the workflow, registration, posting, and payout — not a

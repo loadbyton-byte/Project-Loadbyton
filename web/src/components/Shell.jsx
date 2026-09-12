@@ -326,6 +326,10 @@ function ShellInner({ children }) {
     { to: '/pricing', label: t('nav.pricing', 'Pricing') },
     { to: '/about', label: t('nav.about', 'About') },
     { to: '/blog', label: 'Blog' },
+    // Security.jsx/Compliance.jsx (App.jsx routes) existed with no link to
+    // them anywhere in the public nav — reachable only by typing the URL.
+    { to: '/security', label: 'Security' },
+    { to: '/compliance', label: 'Compliance' },
   ];
 
   return (
@@ -387,9 +391,15 @@ function ShellInner({ children }) {
               <NotificationBell />
             </div>
           ) : (
-            <Link to="/login" className="rounded-full px-3.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
-              {t('nav.login', 'Log in')}
-            </Link>
+            <div className="flex items-center gap-1.5">
+              <Link to="/login" className="rounded-full px-2.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
+                {t('nav.login', 'Log in')}
+              </Link>
+              {/* Desktop's slim header already had both Log in and Get
+                  started (below) — mobile's compact TopAppBar had only
+                  Log in, no primary conversion action at all. */}
+              <Link to="/register" className="btn-accent px-3 py-1.5 text-sm">{t('nav.register', 'Get started')}</Link>
+            </div>
           )}
         </div>
       </header>
