@@ -4,6 +4,7 @@ import { useAuth, homePath } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
 import { formatDateTime } from '../lib/constants.js';
+import { getSocket } from '../lib/socket.js';
 import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
@@ -63,6 +64,22 @@ function NotificationBell() {
     };
   }, [open]);
 
+  // Bumps the unread badge live instead of only after the next click —
+  // Toast.jsx already connects this same shared socket once signed in;
+  // this just adds another listener to it, not a second connection. If
+  // the dropdown happens to be open when one arrives, prepend it to the
+  // already-fetched preview list too, so it doesn't only appear after
+  // closing and reopening.
+  useEffect(() => {
+    const socket = getSocket();
+    function onNotification(n) {
+      refresh().catch(() => {});
+      setItems((prev) => (prev ? [n, ...prev].slice(0, 6) : prev));
+    }
+    socket.on('notification:new', onNotification);
+    return () => socket.off('notification:new', onNotification);
+  }, [refresh]);
+
   function toggle() {
     const next = !open;
     setOpen(next);
@@ -98,7 +115,7 @@ function NotificationBell() {
       >
         <IconBell size={20} />
         {hasUnread && (
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)' }} />
+          <span data-testid="notification-unread-dot" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)' }} />
         )}
       </button>
       {open && (

@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { IconShield, IconTruck, IconClock, IconCheck, IconAlert, IconInfo } from './icons.jsx';
+import { useAuth } from '../lib/auth.jsx';
+import { getSocket } from '../lib/socket.js';
 
 // Toast type → icon + semantic color token. Colors are drawn from the
 // existing design-token palette (never a one-off hex) so toasts stay
@@ -13,6 +15,15 @@ export const toastTypes = {
   dispute_resolved: { icon: IconCheck, color: 'var(--status-success)' },
   carrier_verified: { icon: IconShield, color: 'var(--status-info)' },
   system_message: { icon: IconInfo, color: 'var(--text-muted)' },
+  // Server-pushed (lib/socket.js's `notification:new`, one per connected
+  // user's own room) — deliberately generic rather than guessing which of
+  // the specific types above an arbitrary notify() call site meant.
+  // Priority (server-computed, NOTIFICATION_PRIORITY_BY_TYPE) decides the
+  // color; 'normal'/'low' priority notifications never reach a toast at
+  // all — see the listener below — they land in the Notification Center
+  // only, per the "modals/toasts only when genuinely needed" rule.
+  notification_critical: { icon: IconAlert, color: 'var(--status-danger)' },
+  notification_high: { icon: IconAlert, color: 'var(--status-warning)' },
 };
 
 function cx(...parts) {
@@ -72,6 +83,7 @@ const ToastContext = createContext(null);
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const { user } = useAuth();
 
   const addToast = useCallback(({ type, title, body, timeout }) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -84,6 +96,31 @@ export function ToastProvider({ children }) {
   }, []);
 
   const clearToasts = useCallback(() => setToasts([]), []);
+
+  // Live push, in addition to the client-only toasts every other addToast
+  // call site above already fires locally. This is the one place that
+  // connects the shared socket for a signed-in user rather than only when
+  // opening a chat (features/job/ChatPopup.jsx, pages/Messages.jsx do the
+  // same guarded connect — safe to call from more than one place since
+  // it's a singleton and .connect() on an already-connected socket is a
+  // no-op). 'normal'/'low' priority notifications are deliberately not
+  // toasted here — they still land in the notifications table/center,
+  // this only decides which ones interrupt with a toast.
+  useEffect(() => {
+    if (!user) return;
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+    function onNotification(n) {
+      if (n.priority !== 'critical' && n.priority !== 'high') return;
+      addToast({
+        type: n.priority === 'critical' ? 'notification_critical' : 'notification_high',
+        title: n.title,
+        body: n.body,
+      });
+    }
+    socket.on('notification:new', onNotification);
+    return () => socket.off('notification:new', onNotification);
+  }, [user, addToast]);
 
   return (
     <ToastContext.Provider value={{ toasts, addToast, removeToast, clearToasts }}>
