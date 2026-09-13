@@ -524,11 +524,19 @@ html[dir="rtl"] .animate-drawer-in {
    references it — there's no single variable it derives from (CSS
    @keyframes percentages can't be computed), so this table is what keeps
    them honest. */
+/* This site's own signature "premium" easing (see .animate-hero-in above) —
+   reused here so the hero's expressive motion and the rest of the site's
+   restrained motion still read as one system, per the motion brief. */
+:root {
+  --hs-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .hero-scene { position: relative; width: 100%; }
 .hero-scene-svg { display: block; width: 100%; height: auto; }
 
 .hero-scene-svg .hs-node-ring { fill: none; stroke: rgba(255, 255, 255, 0.35); stroke-width: 1.5; }
 .hero-scene-svg .hs-node-dot { fill: var(--lb-orange-500); }
+.hero-scene-svg .hs-node-halo { fill: var(--lb-orange-500); fill-opacity: 0.55; }
 
 .hero-scene-svg .hs-carrier { fill: rgba(255, 255, 255, 0.55); }
 .hero-scene-svg .hs-carrier-select { fill: var(--lb-orange-500); }
@@ -540,23 +548,45 @@ html[dir="rtl"] .animate-drawer-in {
 .hero-scene-svg .hs-load-icon rect { fill: var(--lb-orange-500); }
 
 .hero-scene-svg .hs-route { fill: none; stroke: var(--lb-orange-500); stroke-width: 2.5; stroke-linecap: round; }
+.hero-scene-svg .hs-route-glow { stroke-width: 8; stroke-opacity: 0.45; }
 
 .hero-scene-svg .hs-vehicle-body { fill: #F1F5F9; }
 .hero-scene-svg .hs-vehicle-cab { fill: var(--lb-ink-800); }
+.hero-scene-svg .hs-vehicle-glass { fill: #7DD3FC; fill-opacity: 0.8; }
 .hero-scene-svg .hs-wheel { fill: var(--lb-ink-600); }
+.hero-scene-svg .hs-vehicle-shadow { fill: #000000; opacity: 0.32; }
+.hero-scene-svg .hs-vehicle-trail { fill: var(--lb-orange-500); fill-opacity: 0.3; }
+.hero-scene-svg .hs-vehicle-headlight { fill: #FFE8C2; animation: hs-headlight-pulse 1.6s ease-in-out infinite; }
+@keyframes hs-headlight-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
 
 .hero-scene-svg .hs-checkmark-badge { fill: var(--lb-orange-500); }
+.hero-scene-svg .hs-checkmark-halo { fill: var(--lb-orange-500); fill-opacity: 0.5; }
 .hero-scene-svg .hs-checkmark-mark { fill: none; stroke: var(--lb-ink-950); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+/* Ambient warm pool of light around the destination — absent at first,
+   builds in as the shipment approaches and peaks through delivery/
+   settlement, so arriving somewhere reads as a small, deliberate moment
+   rather than a node simply switching color. */
+.hs-arrival-glow { animation: hs-arrival-glow var(--hs-cycle) var(--hs-ease) infinite; }
+@keyframes hs-arrival-glow {
+  0%, 63% { opacity: 0; }
+  72%, 93% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 /* Origin lights up at 5% and holds through settlement; destination stays
-   dim until delivery at 68%. */
-.hs-origin { animation: hs-origin-pulse var(--hs-cycle) ease-in-out infinite; }
+   dim until delivery at 68%. Halo shares the same animation as its crisp
+   node (same class list) so the glow and the dot never drift apart. */
+.hs-origin { animation: hs-origin-pulse var(--hs-cycle) var(--hs-ease) infinite; }
 @keyframes hs-origin-pulse {
   0% { opacity: 0.3; }
   5%, 93% { opacity: 1; }
   100% { opacity: 0.3; }
 }
-.hs-destination { animation: hs-destination-pulse var(--hs-cycle) ease-in-out infinite; }
+.hs-destination { animation: hs-destination-pulse var(--hs-cycle) var(--hs-ease) infinite; }
 @keyframes hs-destination-pulse {
   0%, 65% { opacity: 0.3; }
   70%, 93% { opacity: 1; }
@@ -608,22 +638,27 @@ html[dir="rtl"] .animate-drawer-in {
   98%, 100% { opacity: 0; }
 }
 @keyframes hs-route-draw {
-  0%, 37% { stroke-dashoffset: 320; }
+  0%, 37% { stroke-dashoffset: 340; }
   68%, 97% { stroke-dashoffset: 0; }
-  100% { stroke-dashoffset: 320; }
+  100% { stroke-dashoffset: 340; }
 }
 
 /* Vehicle — hidden until the agreement completes, travels the route during
    transit, holds at the destination through settlement, fades out (already
-   parked) rather than driving back offscreen. Wheels only turn while it's
-   actually moving, not while parked. */
+   parked) rather than driving back offscreen. The 52% midpoint stop lifts
+   it toward the arc's apex (200,122) so it approximately follows the
+   curved route (d="M40,150 Q200,122 360,150" in FreightMotionScene.jsx)
+   instead of cutting a straight line under it — true path-following
+   (offset-path) was considered and skipped for browser-support simplicity.
+   Wheels only turn while it's actually moving, not while parked. */
 .hs-vehicle {
   transform-box: view-box;
-  animation: hs-vehicle-move var(--hs-cycle) ease-in-out infinite;
+  animation: hs-vehicle-move var(--hs-cycle) var(--hs-ease) infinite;
 }
 @keyframes hs-vehicle-move {
   0%, 34% { opacity: 0; transform: translate(40px, 150px); }
   37% { opacity: 1; transform: translate(40px, 150px); }
+  52% { transform: translate(200px, 123px); }
   68% { opacity: 1; transform: translate(360px, 150px); }
   93% { opacity: 1; transform: translate(360px, 150px); }
   98%, 100% { opacity: 0; transform: translate(360px, 150px); }
@@ -635,7 +670,7 @@ html[dir="rtl"] .animate-drawer-in {
 }
 
 /* Delivery confirmation, right after the vehicle arrives at 68%. */
-.hs-checkmark { animation: hs-checkmark-appear var(--hs-cycle) ease-in-out infinite; transform-origin: center; }
+.hs-checkmark { animation: hs-checkmark-appear var(--hs-cycle) var(--hs-ease) infinite; transform-origin: center; }
 @keyframes hs-checkmark-appear {
   0%, 67% { opacity: 0; transform: scale(0.4); }
   72%, 91% { opacity: 1; transform: scale(1); }
@@ -665,7 +700,7 @@ html[dir="rtl"] .animate-drawer-in {
   font-size: 12px;
   font-weight: 600;
   opacity: 0;
-  animation-timing-function: ease-in-out;
+  animation-timing-function: var(--hs-ease);
   animation-iteration-count: infinite;
   animation-duration: var(--hs-cycle);
 }
@@ -741,6 +776,8 @@ html[dir="rtl"] .animate-drawer-in {
   .hero-scene-svg .hs-line-select,
   .hero-scene-svg .hs-junction,
   .hero-scene-svg .hs-wheel,
+  .hero-scene-svg .hs-vehicle-headlight,
+  .hero-scene-svg .hs-arrival-glow,
   .hero-scene-chip {
     animation: none !important;
   }
@@ -748,7 +785,8 @@ html[dir="rtl"] .animate-drawer-in {
   .hero-scene-svg .hs-destination,
   .hero-scene-svg .hs-route,
   .hero-scene-svg .hs-vehicle,
-  .hero-scene-svg .hs-checkmark {
+  .hero-scene-svg .hs-checkmark,
+  .hero-scene-svg .hs-arrival-glow {
     opacity: 1 !important;
   }
   .hero-scene-svg .hs-route { stroke-dashoffset: 0 !important; }
