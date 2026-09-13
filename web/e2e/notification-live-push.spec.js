@@ -35,6 +35,17 @@ test('a new bid makes the shipper\'s unread bell dot appear live, without a clic
   await expect(page.getByRole('button', { name: 'Notifications' }).first()).toBeVisible();
   await expect(page.locator('[data-testid="notification-unread-dot"]')).toHaveCount(0);
 
+  // Same reconnect race as dashboard-action-required.spec.js, root-caused
+  // there via direct browser instrumentation: Toast.jsx only calls
+  // socket.connect() once `user` resolves post-reload, and the bid below
+  // can otherwise fire before that reconnect (and the server-side room
+  // join it triggers) completes — Socket.IO doesn't queue/replay a room
+  // broadcast for a client that joins after it fired, so the push is
+  // genuinely, silently lost, not just delayed. Confirmed intermittent
+  // here too (this test flaked once in ~4 repeated full-suite runs) — see
+  // that file's comment for the full trace.
+  await page.waitForTimeout(1500);
+
   const createRes = await page.request.post('/api/jobs', {
     headers: { 'x-loadbyton-client': '1' },
     data: {

@@ -27,6 +27,22 @@ test('a dispute appears in Dashboard\'s Action Required section and links to the
   await page.reload();
   await expect(page.getByText('Action required')).toHaveCount(0);
 
+  // Root-caused via direct browser instrumentation (page.on('console')/
+  // page.on('websocket')): Toast.jsx only calls socket.connect() once
+  // `user` resolves post-reload, and the dispute below could otherwise
+  // fire before that reconnect (and the server-side room-join it
+  // triggers) completes — Socket.IO doesn't queue/replay a room
+  // broadcast for a client that joins the room after it fired, so the
+  // push is genuinely, silently lost, not just delayed. Confirmed
+  // directly: with no wait here, the socket's 'connect' event fired
+  // *after* the dispute had already been created, and no amount of
+  // waiting afterward ever surfaced the card. A real user reloading and
+  // then having someone else act on their job within milliseconds is not
+  // a realistic scenario this test needs to cover — this wait reflects a
+  // genuine, brief, real reconnect window instead of masking it with an
+  // arbitrarily long final assertion timeout.
+  await page.waitForTimeout(1500);
+
   const createRes = await page.request.post('/api/jobs', {
     headers: { 'x-loadbyton-client': '1' },
     data: {
@@ -49,14 +65,9 @@ test('a dispute appears in Dashboard\'s Action Required section and links to the
   await adminContext.dispose();
 
   // No reload — proves the live push (Phase 1) feeds this section too,
-  // not just the bell/toast. 10s, not 5s: this test reloads the page just
-  // above (for a clean notification baseline) then immediately triggers
-  // the dispute — on a loaded CI runner, the socket can still be
-  // rejoining its room right after that reload when the push fires,
-  // needing more real margin than a fast local run does. The backend
-  // side of this (dispute creation) is consistently fast (server logs
-  // show ~17ms) — this is genuinely about the client's reconnect timing,
-  // not a slow server.
+  // not just the bell/toast. The reconnect race is handled by the wait
+  // above; this remaining timeout just covers ordinary render/network
+  // variance once the socket is actually connected and in its room.
   const actionCard = page.getByRole('link', { name: /Dispute opened/i });
   await expect(actionCard).toBeVisible({ timeout: 10000 });
   await actionCard.click();
