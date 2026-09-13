@@ -990,4 +990,10 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAUL
 -- mirrored here for the opt-in Postgres path.
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS iban_changed_at TEXT;
 
+-- Cancellation actor/reason record — see server/schema.js for the full
+-- reasoning; mirrored here for the opt-in Postgres path.
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancelled_by_role TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancellation_reason TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancelled_at TEXT;
+
 COMMIT;

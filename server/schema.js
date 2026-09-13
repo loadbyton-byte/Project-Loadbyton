@@ -1272,6 +1272,16 @@ module.exports = function initSchema(db) {
   // executePayoutAsync reads it against the iban_change_hold_hours
   // setting below and defers the transfer while inside that window.
   addColumn('profiles', 'iban_changed_at', 'iban_changed_at TEXT');
+  // Commercial-logic audit finding — cancellation had no actor/reason
+  // record at all: the audit log's DETAILS string plus job.status='CANCELLED'
+  // was the only trace, with no structured way to ask "who cancelled this
+  // and why" across jobs later (e.g. to spot a carrier who repeatedly
+  // no-shows). Doesn't change any fee/compensation logic by itself — see
+  // job.service.js's cancellation block comment for what this does and,
+  // as importantly, does NOT decide.
+  addColumn('jobs', 'cancelled_by_role', 'cancelled_by_role TEXT');
+  addColumn('jobs', 'cancellation_reason', 'cancellation_reason TEXT');
+  addColumn('jobs', 'cancelled_at', 'cancelled_at TEXT');
   // Durable record of whether THIS job's checkout actually included the
   // split (not just whether the carrier has a Split ID on file NOW — that
   // could be set after this job's checkout already happened without one).

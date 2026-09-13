@@ -47,10 +47,15 @@ test('award decrements available_units by the job\'s unit count; cancellation re
   const afterAward = await carrier.get('/api/fleet/capacity');
   assert.equal(afterAward.body.available_units, startUnits - 2, 'available_units must decrement by the job\'s container_count');
 
-  const cancelled = await shipper.patch(`/api/jobs/${jobId}/status`, { status: 'CANCELLED' });
+  const cancelled = await shipper.patch(`/api/jobs/${jobId}/status`, { status: 'CANCELLED', reason: 'Customer changed delivery plans' });
   assert.equal(cancelled.status, 200, cancelled.raw);
   const afterCancel = await carrier.get('/api/fleet/capacity');
   assert.equal(afterCancel.body.available_units, startUnits, 'cancelling an awarded job must restore the units');
+  // Commercial-logic audit finding: cancellation previously recorded no
+  // actor/reason at all.
+  assert.equal(cancelled.body.job.cancelled_by_role, 'SHIPPER');
+  assert.equal(cancelled.body.job.cancellation_reason, 'Customer changed delivery plans');
+  assert.ok(cancelled.body.job.cancelled_at);
 });
 
 test('delivery restores available_units', async () => {
