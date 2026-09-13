@@ -11,6 +11,7 @@ COPY server/package*.json ./server/
 RUN cd server && npm ci --omit=dev
 COPY server ./server
 COPY docs ./docs
+COPY seo-meta.json ./seo-meta.json
 COPY --from=webbuild /app/web/dist ./web/dist
 # Create non-root user (enterprise security) and ensure data dir writable
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
