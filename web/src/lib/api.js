@@ -121,6 +121,7 @@ export const api = {
     return get(`/bids/mine${suffix}`);
   },
   withdrawBid: (id) => post(`/bids/${id}/withdraw`),
+  acceptDirectAssign: (id) => post(`/bids/${id}/accept`, {}),
   getJob: (id) => get(`/jobs/${id}`),
   placeBid: (id, body) => post(`/jobs/${id}/bids`, body),
   awardJob: (id, bidId, opts) => post(`/jobs/${id}/award`, { bidId, ...opts }),

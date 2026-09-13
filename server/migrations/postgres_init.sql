@@ -803,6 +803,10 @@ CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
 CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
 
 ALTER TABLE bids ADD COLUMN IF NOT EXISTS terms_confirmed_at TEXT;
+-- Direct-assign carrier acceptance — see server/schema.js for the full
+-- reasoning; mirrored here for the opt-in Postgres path.
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS carrier_acceptance_required INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE bids ADD COLUMN IF NOT EXISTS carrier_accepted_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_code TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS haulier_token_set_by INTEGER REFERENCES users(id);

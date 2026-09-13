@@ -9,6 +9,7 @@ const apiResponse = require('../lib/apiResponse');
 const { BID_SORT_COLUMNS, ANCILLARY_CHARGE_TYPES } = require('../lib/constants');
 const { writeAudit, notify } = require('../lib/helpers');
 const { auth, requireSeatRole } = require('../middleware/auth');
+const { awardJob } = require('../services/award.service');
 
 // Access for the pre-award negotiation/ancillary-charges surface: only the
 // job's shipper, or the specific bid's own carrier — nobody else, not even
@@ -66,6 +67,42 @@ router.post('/api/bids/:id/withdraw', auth(['CARRIER']), requireSeatRole(['OPS']
   await writeAudit(req, { userId: req.actorId, action: 'BID_WITHDRAW', details: `Withdrew bid #${bid.id}`, entityType: 'bid', entityId: bid.id, beforeState: 'PENDING', afterState: 'WITHDRAWN' });
   const updated = await db.prepare('SELECT * FROM bids WHERE id=?').get(bid.id);
   res.json({ ok: true, bid: updated });
+});
+
+// Commercial-logic audit finding — a broker/forwarder direct-assigning a
+// job (POST /api/jobs/:id/direct-assign, broker.routes.js) used to create
+// this carrier's bid AND award it in the same request, with no action
+// from the carrier at all. This is that missing action: only a bid
+// actually created that way (carrier_acceptance_required=1) needs it — a
+// carrier's own marketplace bid is already their own affirmative action,
+// same as it's always been (see award.service.js and the commercial-logic
+// audit's verification notes on why that stays a legitimate design, not a
+// gap). Declining is the existing withdraw endpoint just above — a
+// direct-assign bid is a normal PENDING bid in every other respect.
+router.post('/api/bids/:id/accept', auth(['CARRIER']), requireSeatRole(['OPS']), async (req, res) => {
+  const bid = await db.prepare('SELECT * FROM bids WHERE id=?').get(req.params.id);
+  if (!bid) return apiResponse.error(req, res, 'BID_NOT_FOUND', 'Bid not found');
+  if (bid.carrier_id !== req.user.id) return apiResponse.error(req, res, 'FORBIDDEN', 'Not your bid');
+  if (!bid.carrier_acceptance_required) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'This bid does not require a separate acceptance step', { status: 400 });
+  if (bid.carrier_accepted_at) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'Already accepted', { status: 409 });
+  if (bid.status !== 'PENDING') return apiResponse.error(req, res, 'BID_NOT_PENDING', 'This bid is no longer pending', { status: 400 });
+  const job = await db.prepare('SELECT shipper_id FROM jobs WHERE id=?').get(bid.job_id);
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found');
+  await db.prepare(`UPDATE bids SET carrier_accepted_at=datetime('now') WHERE id=?`).run(bid.id);
+  await writeAudit(req, { userId: req.actorId, action: 'DIRECT_ASSIGN_ACCEPTED', details: `Accepted direct-assign bid #${bid.id}`, entityType: 'bid', entityId: bid.id });
+  // Reuses the exact same award transaction a normal marketplace award
+  // uses — skipNegotiation:true because a direct-assign bid has no
+  // ancillary-charges negotiation UI on either side to confirm terms
+  // through (broker.routes.js sets the price directly).
+  // awardAsShipperId: the caller here is the CARRIER, not the job's
+  // shipper (often a broker/forwarder), so awardJob's normal
+  // req.user.id===job.shipper_id ownership check would always fail —
+  // see that function's own comment on this explicit escape hatch. This
+  // route has already established the real authorization (this carrier
+  // owns this specific accepted bid), which is what actually matters here.
+  req.body = { ...(req.body || {}), bidId: bid.id, skipNegotiation: true };
+  req.awardAsShipperId = job.shipper_id;
+  return awardJob(req, res, bid.job_id, bid.id);
 });
 
 // --- Pre-award negotiation (per bid, not per job) -------------------------

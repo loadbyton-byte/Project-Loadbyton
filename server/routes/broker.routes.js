@@ -6,15 +6,17 @@
 // client/carrier rosters and the direct-assign-vs-open-post choice.
 // WhatsApp-in-dashboard + bulk CSV import are explicit Phase 2 (not here).
 //
-// Direct-assign reuses the exact award transaction (award.service.js
-// awardJob) by creating a PENDING bid for the target carrier first — one
-// escrow/ledger/capacity implementation, not a second copy. The disclosed
-// one-hop rule is enforced here: a job already carrying broker_id rejects
-// any other broker, and targets must be CARRIER/OWNER_OPERATOR in-roster.
+// Direct-assign creates a PENDING bid for the target carrier, requiring
+// their explicit acceptance (POST /api/bids/:id/accept in bids.routes.js)
+// before it reuses the exact same award transaction (award.service.js
+// awardJob) a normal marketplace award does — one escrow/ledger/capacity
+// implementation, not a second copy. The disclosed one-hop rule is
+// enforced here: a job already carrying broker_id rejects any other
+// broker, and targets must be CARRIER/OWNER_OPERATOR in-roster.
 const db = require('../db');
 const { sendError } = require('../lib/http');
 const { auth, requireApproved } = require('../middleware/auth');
-const { awardJob } = require('../services/award.service');
+const { notify } = require('../lib/helpers');
 
 const router = require('express').Router();
 
@@ -111,8 +113,14 @@ router.post('/api/jobs/:id/direct-assign', auth(['BROKER', 'FORWARDER']), requir
 
   let bidId;
   try {
+    // carrier_acceptance_required=1 — commercial-logic audit finding: this
+    // bid is the BROKER/FORWARDER's proposal, not the carrier's. The
+    // carrier never took any affirmative action here (unlike a normal
+    // marketplace bid, where submitting it IS that action), so it must
+    // not auto-award below — the carrier explicitly accepts via
+    // POST /api/bids/:id/accept first.
     const bidInsert = await db
-      .prepare(`INSERT INTO bids (job_id, carrier_id, amount_aed, eta_at, status, truck_type) VALUES (?,?,?,?, 'PENDING', ?) RETURNING id`)
+      .prepare(`INSERT INTO bids (job_id, carrier_id, amount_aed, eta_at, status, truck_type, carrier_acceptance_required) VALUES (?,?,?,?, 'PENDING', ?, 1) RETURNING id`)
       .run(job.id, carrier.id, amount, etaAt || null, 'flatbed');
     bidId = Number(bidInsert.lastInsertRowid);
   } catch (e) {
@@ -133,8 +141,15 @@ router.post('/api/jobs/:id/direct-assign', auth(['BROKER', 'FORWARDER']), requir
     await db.prepare(`UPDATE jobs SET forwarder_client_id=? WHERE id=?`).run(client.id, job.id);
   }
 
-  req.body = { ...(req.body || {}), bidId, skipNegotiation: true };
-  return awardJob(req, res, job.id, bidId);
+  // Does NOT call awardJob here anymore — see carrier_acceptance_required
+  // above. The job stays OPEN (not awarded, not even "pending" as far as
+  // its own status goes) until the carrier accepts via
+  // POST /api/bids/:id/accept, or the broker/forwarder can direct-assign
+  // someone else / the shipper can still cancel the job outright in the
+  // meantime, same as any other OPEN job with a pending bid.
+  await notify(carrier.id, 'Job assignment awaiting your acceptance', `${job.job_code}: ${req.user.profile?.company_name || 'A broker/forwarder'} wants to assign you this job at AED ${amount}. Accept or decline it from My Bids.`, job.id, 'bid');
+  const bid = await db.prepare('SELECT * FROM bids WHERE id=?').get(bidId);
+  res.status(201).json({ bid, pendingCarrierAcceptance: true });
 });
 
 module.exports = router;
