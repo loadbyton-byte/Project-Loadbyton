@@ -488,6 +488,16 @@ async function getJob(jobId, user) {
     ...(driverIdentityVisible ? null : { assigned_driver_name: null, assigned_driver_phone: null }),
     shipper_rating: shipperProfile ? shipperProfile.rating_avg : null,
     driver_info: driverIdentityVisible ? driverInfo : null,
+    // Commercial-logic audit finding: a carrier can bind a driver via
+    // free-text name/phone (PATCH /api/jobs/:id/driver without a
+    // driverId) with zero link to their verified roster — license,
+    // license-expiry and vehicle docs then can't exist for this
+    // assignment either, since driverInfo above is only ever populated
+    // from assigned_driver_id. Rather than hard-blocking free-text
+    // (a real product decision — some carriers may need it for a
+    // one-off driver), surface it: true only when the assignment is
+    // actually linked to a roster driver.
+    driver_verified: !!job.assigned_driver_id,
     extra_line_items: extraLineItems,
     stops,
   };

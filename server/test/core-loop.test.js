@@ -97,6 +97,18 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
   const reassign = await carrier.patch(`/api/jobs/${jobId}/driver`, { driverName: 'Yusuf Al Naqbi', driverPhone: '0559998877' });
   assert.equal(reassign.status, 200, reassign.raw);
   assert.equal(reassign.body.job.assigned_driver_phone, '0559998877');
+  // Commercial-logic audit finding: a free-text driver (name/phone, no
+  // driverId) has no link to the carrier's verified roster — no license,
+  // no vehicle doc, nothing checked. driver_verified must say so.
+  const asShipperAfterReassign = await shipper.get(`/api/jobs/${jobId}`);
+  assert.equal(asShipperAfterReassign.body.job.driver_verified, false, 'a free-text driver assignment must not read as verified');
+  // A roster-linked driver (driverId, not raw name/phone) must read as verified.
+  const rosterDriver = await carrier.post('/api/fleet/drivers', { name: 'Roster Driver', phone: '0501239999' });
+  assert.equal(rosterDriver.status, 201, rosterDriver.raw);
+  const rosterReassign = await carrier.patch(`/api/jobs/${jobId}/driver`, { driverId: rosterDriver.body.driver.id });
+  assert.equal(rosterReassign.status, 200, rosterReassign.raw);
+  const asShipperAfterRoster = await shipper.get(`/api/jobs/${jobId}`);
+  assert.equal(asShipperAfterRoster.body.job.driver_verified, true, 'a roster-linked driver assignment must read as verified');
 
   const illegalSkip = await carrier.patch(`/api/jobs/${jobId}/status`, { status: 'IN_TRANSIT' });
   assert.equal(illegalSkip.status, 403, 'carrier must not be able to skip PICKED_UP');

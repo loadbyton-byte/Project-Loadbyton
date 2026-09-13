@@ -918,7 +918,20 @@ export default function JobDetail() {
             <Card className="mb-6">
               <Card.Content>
                 <p className="text-xs text-ink-muted">Assigned driver</p>
-                <p className="font-medium text-ink">{job.assigned_driver_name}</p>
+                <p className="flex items-center gap-2 font-medium text-ink">
+                  {job.assigned_driver_name}
+                  {/* Commercial-logic audit finding: a carrier can type a
+                      driver name/phone with no link to their verified
+                      roster — no license, no vehicle doc, nothing checked.
+                      Not blocked (a carrier may genuinely need a one-off
+                      driver), but the shipper should see the difference
+                      rather than this looking identical to a roster driver. */}
+                  {!job.driver_verified && (
+                    <Badge color="warning" title="This driver was entered by name/phone only — not linked to the carrier's verified roster (no license or vehicle document on file)">
+                      Not verified
+                    </Badge>
+                  )}
+                </p>
                 <p className="text-xs text-ink-muted">{job.assigned_driver_phone}</p>
                 {job.driver_info?.licenseNumber && (
                   <p className="mt-1 text-xs text-ink-muted">
