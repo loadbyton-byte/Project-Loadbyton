@@ -13,11 +13,17 @@ import path from 'node:path';
 // authIpLimiter budget every other spec in the run also draws from.
 test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json') });
 
-async function dismissWalkthrough(page) {
-  await page.goto('/dashboard');
-  // Shell.jsx's first-run WalkthroughModal can cover the page independently
-  // of anything this spec is testing — dismiss it if present so it doesn't
-  // intercept clicks meant for the Create RFP trigger.
+// Shell.jsx's first-run WalkthroughModal renders wherever the shipper
+// lands (it wraps every route via Shell.jsx, not just /dashboard), and
+// its appearance is gated by the same async user-resolution chain as the
+// rest of the app — dismissing it once right after goto('/dashboard')
+// isn't reliable under real load: if the modal hasn't rendered yet within
+// that check's window, it can still show up moments later on WHATEVER
+// page the test has since navigated to (confirmed in CI: it intercepted
+// a click on /rfps after the /dashboard check found nothing to dismiss).
+// So this runs at the actual point of use, on whatever page is current,
+// not just once upfront.
+async function dismissWalkthroughIfPresent(page) {
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
   if (await skipWalkthrough.isVisible({ timeout: 5000 }).catch(() => false)) {
     await skipWalkthrough.click();
@@ -25,8 +31,10 @@ async function dismissWalkthrough(page) {
 }
 
 test('Modal moves focus in, cycles Tab, closes on Escape, and restores focus on close', async ({ page }) => {
-  await dismissWalkthrough(page);
+  await page.goto('/dashboard');
+  await dismissWalkthroughIfPresent(page);
   await page.goto('/rfps');
+  await dismissWalkthroughIfPresent(page);
   const trigger = page.getByRole('button', { name: /Create.*RFP/i }).first();
   await trigger.click();
 
@@ -46,8 +54,10 @@ test('Modal moves focus in, cycles Tab, closes on Escape, and restores focus on 
 });
 
 test('Modal traps Tab within itself', async ({ page }) => {
-  await dismissWalkthrough(page);
+  await page.goto('/dashboard');
+  await dismissWalkthroughIfPresent(page);
   await page.goto('/rfps');
+  await dismissWalkthroughIfPresent(page);
   await page.getByRole('button', { name: /Create.*RFP/i }).first().click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
