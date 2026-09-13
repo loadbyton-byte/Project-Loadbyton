@@ -27,10 +27,22 @@ function _strictTypeRefs(_job, _payout, _money) {}
  * @returns {Promise<void>}
  */
 async function awardJob(req, res, jobId, bidId) {
+  // Ownership check normally requires the CALLER to be the job's own
+  // shipper (the marketplace-award and broker-direct-assign-as-poster
+  // paths both satisfy this naturally). req.awardAsShipperId is an
+  // explicit escape hatch for a caller who has already established
+  // authorization through a DIFFERENT legitimate check and is now acting
+  // on the job's real shipper's behalf — currently only
+  // POST /api/bids/:id/accept (bids.routes.js), where a carrier accepting
+  // their own direct-assign bid is the authorized actor, not the shipper
+  // who's often a broker/forwarder the carrier has no other relationship
+  // to. Never read from req.body/req.query — only ever set server-side,
+  // by a route that has done its own equivalent ownership check first.
+  const ownerIdToCheck = req.awardAsShipperId || req.user.id;
   // Pre-checks outside transaction for fast 404/403 (still re-validated inside)
   const preJob = /** @type {Job | undefined} */ (await db.prepare('SELECT * FROM jobs WHERE id=?').get(jobId));
   if (!preJob) { res.status(404).json({ error: 'Job not found' }); return; }
-  if (preJob.shipper_id !== req.user.id) { res.status(403).json({ error: 'Not your job' }); return; }
+  if (preJob.shipper_id !== ownerIdToCheck) { res.status(403).json({ error: 'Not your job' }); return; }
   const preBid = await db.prepare('SELECT * FROM bids WHERE id=? AND job_id=?').get(bidId, jobId);
   if (!preBid) { res.status(404).json({ error: 'Bid not found' }); return; }
 
@@ -124,7 +136,7 @@ async function awardJob(req, res, jobId, bidId) {
         err.status = job.status === 'AWARDED' ? 409 : 403;
         throw err;
       }
-      if (job.shipper_id !== req.user.id) {
+      if (job.shipper_id !== ownerIdToCheck) {
         const err = /** @type {any} */ (new Error('Not your job')); err.status = 403; throw err;
       }
 

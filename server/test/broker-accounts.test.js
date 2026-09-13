@@ -130,12 +130,36 @@ test('broker roster + direct-assign awards via the real award transaction; one-h
   const add = await broker.post('/api/broker/carriers', { carrierId: seededCarrierId });
   assert.equal(add.status, 201, add.raw);
 
+  // Commercial-logic audit finding: this used to award immediately, with
+  // no action from the carrier at all. Now it only creates a bid awaiting
+  // the carrier's explicit acceptance — the job stays OPEN until then.
   const assign = await broker.post(`/api/jobs/${jobId}/direct-assign`, {
     carrierId: seededCarrierId, amountAed: 700, brokerSpreadBps: 500,
   });
-  assert.equal(assign.status, 200, assign.raw);
-  assert.equal(assign.body.job.status, 'AWARDED');
-  assert.equal(assign.body.job.carrier_id, seededCarrierId);
+  assert.equal(assign.status, 201, assign.raw);
+  assert.equal(assign.body.pendingCarrierAcceptance, true);
+  assert.equal(assign.body.bid.carrier_acceptance_required, 1);
+  assert.equal(assign.body.bid.carrier_accepted_at, null);
+  const bidId = assign.body.bid.id;
+
+  const stillOpen = await broker.get(`/api/jobs/${jobId}`);
+  assert.equal(stillOpen.body.job.status, 'OPEN', 'the job must stay OPEN until the carrier actually accepts');
+  assert.equal(stillOpen.body.job.carrier_id, null);
+
+  // The shipper/broker cannot accept on the carrier's behalf.
+  const wrongParty = await broker.post(`/api/bids/${bidId}/accept`, {});
+  assert.equal(wrongParty.status, 403);
+
+  // The carrier accepts -> THIS is what actually awards it, reusing the
+  // real award transaction (award.service.js).
+  const accept = await seededCarrier.post(`/api/bids/${bidId}/accept`, {});
+  assert.equal(accept.status, 200, accept.raw);
+  assert.equal(accept.body.job.status, 'AWARDED');
+  assert.equal(accept.body.job.carrier_id, seededCarrierId);
+
+  // Accepting twice must not double-award.
+  const acceptAgain = await seededCarrier.post(`/api/bids/${bidId}/accept`, {});
+  assert.equal(acceptAgain.status, 409);
 
   // One-hop: a second, unrelated broker cannot touch this brokered job.
   // Reuses the shared seeded broker rather than minting a fresh one — the
@@ -145,6 +169,33 @@ test('broker roster + direct-assign awards via the real award transaction; one-h
     carrierId: seededCarrierId, amountAed: 700,
   });
   assert.equal(rebroker.status, 403);
+});
+
+test('a carrier can decline a direct-assign bid (existing withdraw endpoint), leaving the job open for reassignment', async () => {
+  // Reuses the shared seededBroker (already logged in, already has
+  // seededCarrierId in its roster from an earlier test in this file) —
+  // this file's demo-account logins are rate-limited, and this test
+  // doesn't need a fresh broker to prove a decline works.
+  const created = await seededBroker.post('/api/jobs', {
+    containerSize: '40FT', containerType: 'DRY',
+    pickupTerminal: 'JEBEL_ALI_T2', deliveryArea: 'JAFZA_SOUTH', deliveryAddress: 'Broker Warehouse — decline test',
+    readyAt: new Date(Date.now() + 86400000).toISOString(),
+    deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+  });
+  const jobId = created.body.job.id;
+  const add = await seededBroker.post('/api/broker/carriers', { carrierId: seededCarrierId });
+  assert.ok([201, 409].includes(add.status), add.raw); // 409 = already in roster from an earlier test, fine
+  const assign = await seededBroker.post(`/api/jobs/${jobId}/direct-assign`, { carrierId: seededCarrierId, amountAed: 650 });
+  assert.equal(assign.status, 201, assign.raw);
+
+  const decline = await seededCarrier.post(`/api/bids/${assign.body.bid.id}/withdraw`, {});
+  assert.equal(decline.status, 200, decline.raw);
+
+  const acceptAfterDecline = await seededCarrier.post(`/api/bids/${assign.body.bid.id}/accept`, {});
+  assert.equal(acceptAfterDecline.status, 400, 'a withdrawn bid must not still be acceptable');
+
+  const jobAfter = await seededBroker.get(`/api/jobs/${jobId}`);
+  assert.equal(jobAfter.body.job.status, 'OPEN', 'a declined direct-assign must leave the job open, not stuck');
 });
 
 test('broker accounts cannot bid — direct-assign is their only win path (no self-dealing)', async () => {
@@ -219,7 +270,7 @@ test('a broker can view (and mine=true lists) the job they personally brokered, 
   const add = await broker.post('/api/broker/carriers', { carrierId: seededCarrierId });
   assert.equal(add.status, 201, add.raw);
   const assign = await broker.post(`/api/jobs/${jobId}/direct-assign`, { carrierId: seededCarrierId, amountAed: 650, brokerSpreadBps: 500 });
-  assert.equal(assign.status, 200, assign.raw);
+  assert.equal(assign.status, 201, assign.raw);
 
   // Before this fix: isParticipantOrBidder only checked shipper_id/
   // carrier_id, never broker_id — a broker got 403 on the exact job they

@@ -1170,6 +1170,18 @@ module.exports = function initSchema(db) {
   CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
   `);
   addColumn('bids', 'terms_confirmed_at', 'terms_confirmed_at TEXT');
+  // Commercial-logic audit finding — POST /api/jobs/:id/direct-assign
+  // (broker.routes.js) created a bid on the CARRIER's behalf and awarded
+  // it immediately, with no acceptance step at all: the carrier never
+  // proposed anything and never confirmed anything, yet ended up
+  // committed. A carrier's OWN bid stays "bid = binding offer, award =
+  // acceptance" (a legitimate, common marketplace pattern — see the
+  // commercial-logic audit's verification notes) since submitting it was
+  // already their own affirmative action; a broker/forwarder-created bid
+  // has no equivalent action from the carrier to point to, so it gets an
+  // explicit one here instead.
+  addColumn('bids', 'carrier_acceptance_required', 'carrier_acceptance_required INTEGER NOT NULL DEFAULT 0');
+  addColumn('bids', 'carrier_accepted_at', 'carrier_accepted_at TEXT');
 
   // Haulier code/token — modeled as free text, not tied to DP World's
   // specific process, so it still works for an Abu Dhabi Ports or Sharjah

@@ -57,6 +57,25 @@ export default function MyBids() {
     }
   }
 
+  // Commercial-logic audit finding: a broker/forwarder direct-assigning a
+  // job used to award it to this carrier with zero action from them.
+  // carrier_acceptance_required marks a bid created that way; accepting
+  // here actually commits (award.service.js runs), declining reuses the
+  // same withdraw() above — a direct-assign bid is a normal PENDING bid
+  // in every other respect.
+  async function acceptAssignment(bid) {
+    setBusyId(bid.id);
+    try {
+      await api.acceptDirectAssign(bid.id);
+      addToast({ type: 'status_change', title: 'Assignment accepted', body: `${bid.job_code} is now yours — check Won Jobs for pickup details.` });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not accept', body: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <h1 className="font-display text-xl font-bold text-ink">My bids</h1>
@@ -94,14 +113,23 @@ export default function MyBids() {
                   priceLabel={formatAED(b.amount_aed)}
                   origin={formatLabel(b.pickup_terminal)}
                   destination={formatLabel(b.delivery_area)}
-                  chips={[b.eta_at ? `Delivery by ${formatDateTime(b.eta_at)}` : 'ETA n/a', ...(b.truck_type ? [equipmentLabel(b.truck_type)] : [])]}
+                  chips={[
+                    b.eta_at ? `Delivery by ${formatDateTime(b.eta_at)}` : 'ETA n/a',
+                    ...(b.truck_type ? [equipmentLabel(b.truck_type)] : []),
+                    ...(b.carrier_acceptance_required && !b.carrier_accepted_at ? ['Direct assignment — awaiting your acceptance'] : []),
+                  ]}
                   meta={
                     <div className="flex items-center justify-between">
                       <RatingPill rating={b.shipper_rating} />
                       <div className="flex items-center gap-2">
+                        {b.status === 'PENDING' && b.job_status === 'OPEN' && b.carrier_acceptance_required && !b.carrier_accepted_at && (
+                          <Button variant="accent" size="sm" onClick={() => acceptAssignment(b)} loading={busyId === b.id}>
+                            Accept
+                          </Button>
+                        )}
                         {b.status === 'PENDING' && b.job_status === 'OPEN' && (
                           <Button variant="ghost" size="sm" onClick={() => withdraw(b)} loading={busyId === b.id}>
-                            <IconX size={13} /> Withdraw
+                            <IconX size={13} /> {b.carrier_acceptance_required && !b.carrier_accepted_at ? 'Decline' : 'Withdraw'}
                           </Button>
                         )}
                         <Link to={`/jobs/${b.job_id}`} className="text-sm font-semibold text-brand-secondary hover:underline">
