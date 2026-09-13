@@ -20,7 +20,7 @@ test('a new bid makes the shipper\'s unread bell dot appear live, without a clic
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/dashboard/);
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skipWalkthrough.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await skipWalkthrough.isVisible({ timeout: 5000 }).catch(() => false)) {
     await skipWalkthrough.click();
   }
 

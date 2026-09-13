@@ -11,7 +11,7 @@ test('Login → Post → OpenLoads → JobDetail', async ({ page }) => {
   // could never actually run before @playwright/test was a declared
   // dependency, so this gap was never caught.
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skipWalkthrough.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await skipWalkthrough.isVisible({ timeout: 5000 }).catch(() => false)) {
     await skipWalkthrough.click();
   }
   await page.click('text=Post a job');

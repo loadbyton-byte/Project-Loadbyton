@@ -46,7 +46,7 @@ export default function ActionRequired() {
               <p className="text-sm font-semibold text-ink">{n.title}</p>
               {n.body && <p className="mt-0.5 truncate text-sm text-ink-muted">{n.body}</p>}
             </div>
-            <span className="shrink-0 text-sm font-semibold" style={{ color: 'var(--brand-accent)' }}>Review →</span>
+            <span className="shrink-0 text-sm font-semibold" style={{ color: 'var(--brand-accent-on-tint)' }}>Review →</span>
           </Link>
         ))}
       </div>

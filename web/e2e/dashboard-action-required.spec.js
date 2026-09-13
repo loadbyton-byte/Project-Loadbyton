@@ -17,7 +17,7 @@ test('a dispute appears in Dashboard\'s Action Required section and links to the
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/dashboard/);
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skipWalkthrough.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await skipWalkthrough.isVisible({ timeout: 5000 }).catch(() => false)) {
     await skipWalkthrough.click();
   }
 
@@ -49,9 +49,16 @@ test('a dispute appears in Dashboard\'s Action Required section and links to the
   await adminContext.dispose();
 
   // No reload — proves the live push (Phase 1) feeds this section too,
-  // not just the bell/toast.
+  // not just the bell/toast. 10s, not 5s: this test reloads the page just
+  // above (for a clean notification baseline) then immediately triggers
+  // the dispute — on a loaded CI runner, the socket can still be
+  // rejoining its room right after that reload when the push fires,
+  // needing more real margin than a fast local run does. The backend
+  // side of this (dispute creation) is consistently fast (server logs
+  // show ~17ms) — this is genuinely about the client's reconnect timing,
+  // not a slow server.
   const actionCard = page.getByRole('link', { name: /Dispute opened/i });
-  await expect(actionCard).toBeVisible({ timeout: 5000 });
+  await expect(actionCard).toBeVisible({ timeout: 10000 });
   await actionCard.click();
   await expect(page).toHaveURL(new RegExp(`/jobs/${job.id}`));
 });

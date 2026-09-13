@@ -19,7 +19,7 @@ async function dismissWalkthrough(page) {
   // of anything this spec is testing — dismiss it if present so it doesn't
   // intercept clicks meant for the Create RFP trigger.
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skipWalkthrough.isVisible({ timeout: 2000 }).catch(() => false)) {
+  if (await skipWalkthrough.isVisible({ timeout: 5000 }).catch(() => false)) {
     await skipWalkthrough.click();
   }
 }
