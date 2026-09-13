@@ -373,7 +373,13 @@ export default function JobDetail() {
                           ) : (
                             <Badge color="neutral">Awaiting carrier</Badge>
                           )}
-                          <Button size="sm" variant="ghost" onClick={() => removeCharge(c.id)} loading={negotiationBusy}>Remove</Button>
+                          {/* Only the party who proposed a charge can withdraw it (server now
+                              enforces this — see bids.routes.js) — a shipper couldn't previously
+                              tell a carrier-proposed charge apart here, and this button would
+                              have 403'd on one instead of just not being offered. */}
+                          {c.proposed_by === user?.id && (
+                            <Button size="sm" variant="ghost" onClick={() => removeCharge(c.id)} loading={negotiationBusy}>Remove</Button>
+                          )}
                         </span>
                       </li>
                     ))}

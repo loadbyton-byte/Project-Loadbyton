@@ -108,6 +108,10 @@ router.get('/api/bids/:id/ancillary-charges', auth(), async (req, res) => {
 router.post('/api/bids/:id/ancillary-charges', auth(), requireSeatRole(['OPS']), async (req, res) => {
   const ctx = await loadBidWithJobForNegotiation(req, res, req.params.id);
   if (!ctx) return;
+  // Same lock the DELETE handler below already enforces — without this, a
+  // charge could be added AFTER confirm-terms recorded both sides agreeing
+  // to the terms as they stood, silently invalidating that confirmation.
+  if (ctx.bid.terms_confirmed_at) return apiResponse.error(req, res, 'FORBIDDEN', 'Terms are already confirmed — this bid\'s charges are locked and no new ones can be proposed.');
   const { chargeType, amountAed, notes } = req.body || {};
   if (!ANCILLARY_CHARGE_TYPES.includes(chargeType)) return apiResponse.error(req, res, 'VALIDATION_FAILED', `chargeType must be one of: ${ANCILLARY_CHARGE_TYPES.join(', ')}`);
   const amount = Number(amountAed);
@@ -143,6 +147,13 @@ router.delete('/api/bids/:id/ancillary-charges/:chargeId', auth(), requireSeatRo
   const charge = await db.prepare('SELECT * FROM bid_ancillary_charges WHERE id=? AND bid_id=?').get(req.params.chargeId, ctx.bid.id);
   if (!charge) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'Charge not found', { status: 404 });
   if (ctx.bid.terms_confirmed_at) return apiResponse.error(req, res, 'FORBIDDEN', 'Terms are already confirmed — this charge can no longer be removed');
+  // Only the party who proposed a charge may withdraw it — this endpoint
+  // previously let either side delete the other's proposal outright (no
+  // ownership check at all), which meant a shipper could unilaterally
+  // erase a carrier's ancillary charge instead of negotiating it. The
+  // counterparty's actual recourse is to withhold agreement (the /agree
+  // endpoint) rather than delete outright, or withdraw their own bid.
+  if (charge.proposed_by !== req.actorId) return apiResponse.error(req, res, 'FORBIDDEN', 'Only the party who proposed this charge can withdraw it');
   await db.prepare('DELETE FROM bid_ancillary_charges WHERE id=?').run(charge.id);
   res.json({ ok: true });
 });

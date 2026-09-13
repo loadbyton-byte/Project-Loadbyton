@@ -232,3 +232,43 @@ test('a losing bidder can see the winning bid\'s price/charges post-award (marke
   assert.equal(winningBidAsSeenByLoser.amount_aed, 700, 'price stays visible post-award as market info');
   assert.equal(winningBidAsSeenByLoser.ancillary_charges.length, 1, 'ancillary charges stay visible post-award, same treatment as price');
 });
+
+test('only the party who proposed an ancillary charge can withdraw it, and no new charge can be proposed once terms are confirmed', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+  const { bidId } = await postJobAndBid(shipper, carrier);
+
+  const propose = await carrier.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'SALIK', amountAed: 25 });
+  assert.equal(propose.status, 201, propose.raw);
+  const chargeId = propose.body.charge.id;
+
+  // The shipper did not propose this charge — previously this succeeded
+  // outright (no ownership check at all), letting either side erase the
+  // other's commercial proposal.
+  const wrongParty = await shipper.delete(`/api/bids/${bidId}/ancillary-charges/${chargeId}`);
+  assert.equal(wrongParty.status, 403, wrongParty.raw);
+  assert.match(wrongParty.raw, /Only the party who proposed/);
+
+  const stillThere = await shipper.get(`/api/bids/${bidId}/ancillary-charges`);
+  assert.equal(stillThere.body.charges.length, 1, 'the charge must still exist after the blocked delete attempt');
+
+  // The actual proposer can withdraw their own charge.
+  const rightParty = await carrier.delete(`/api/bids/${bidId}/ancillary-charges/${chargeId}`);
+  assert.equal(rightParty.status, 200, rightParty.raw);
+  const gone = await shipper.get(`/api/bids/${bidId}/ancillary-charges`);
+  assert.equal(gone.body.charges.length, 0);
+
+  // Same clients/bid, continued: once terms are confirmed, no new charge
+  // can be proposed either. Previously only DELETE was blocked post-
+  // confirmation; POST (adding a brand new charge) had no such guard, so
+  // terms could silently drift after being "confirmed." (Sharing this
+  // test's existing login session rather than a fresh test with its own
+  // logins — this file's demo-account logins are throttled at 8/15min.)
+  const confirm = await shipper.post(`/api/bids/${bidId}/confirm-terms`, {});
+  assert.equal(confirm.status, 200, confirm.raw);
+  const lateCharge = await carrier.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'SALIK', amountAed: 25 });
+  assert.equal(lateCharge.status, 403, lateCharge.raw);
+  assert.match(lateCharge.raw, /already confirmed/);
+});
