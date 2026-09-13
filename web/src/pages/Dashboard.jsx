@@ -11,7 +11,7 @@ import {
   VEHICLE_CLASSES, vehicleClassOf, equipmentTypesForClass,
   LOCAL_EQUIPMENT, LOCAL_LENGTH_TYPES, LOCAL_BODY_TYPE_TYPES, TRUCK_LENGTH_OPTIONS_M, EQUIPMENT_BODY_TYPES, equipmentBodyTypeLabel,
 } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard, Skeleton } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconClose, IconArrowRight, IconTrendUp } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
@@ -887,7 +887,7 @@ export default function Dashboard() {
       <div id="dashboard-job-list" className="mt-8 scroll-mt-20">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">Your jobs</h2>
         {jobs === null ? (
-          <p className="mt-3 text-sm text-ink-muted">Loading…</p>
+          <Skeleton variant="card" count={6} className="mt-3 sm:grid-cols-2 lg:grid-cols-3" />
         ) : jobsError ? (
           <ErrorState className="mt-3" title="Couldn't load your jobs" description={jobsError} onRetry={loadJobs} />
         ) : jobs.length === 0 && filter === 'all' && !debouncedSearch ? (
@@ -1095,7 +1095,7 @@ function RecentActivity({ jobs, onViewAll }) {
                 <p className="truncate font-mono text-[13px] font-semibold text-ink">{j.job_code}</p>
                 <p className="truncate text-xs text-ink-muted">{formatLabel(j.pickup_terminal)} → {formatLabel(j.delivery_area)}</p>
               </div>
-              <StatusBadge status={j.status} />
+              <StatusBadge status={j.status} explain />
             </button>
           ))}
         </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { IconStar, IconMapPin, IconAlert, IconX, IconCheck } from './icons.jsx';
+import { IconStar, IconMapPin, IconAlert, IconX, IconCheck, IconFile, IconPackage, IconHandshake, IconTruck, IconGavel } from './icons.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -106,8 +106,42 @@ const JOB_STATUS_COLOR = {
   IN_TRANSIT: 'warning', DELIVERED: 'success', COMPLETED: 'success',
   CANCELLED: 'danger', DISPUTED: 'danger',
 };
-export function StatusBadge({ status }) {
-  return <Badge color={JOB_STATUS_COLOR[status] || 'neutral'}>{status?.replaceAll('_', ' ')}</Badge>;
+// UI-evolution brief §13: status must communicate meaning, not just a
+// color — "IN TRANSIT / Driver has departed pickup location", not a bare
+// colored dot. Icon lives inside the existing pill (no new box); the
+// explanation line is opt-in via `explain` so dense contexts (table
+// cells, JobCard grids) keep the compact pill-only rendering they already
+// have — every existing <StatusBadge status={...} /> call site keeps
+// working unchanged.
+const JOB_STATUS_ICON = {
+  DRAFT: IconFile, OPEN: IconPackage, AWARDED: IconHandshake, PICKED_UP: IconTruck,
+  IN_TRANSIT: IconTruck, DELIVERED: IconCheck, COMPLETED: IconCheck,
+  CANCELLED: IconX, DISPUTED: IconGavel,
+};
+const JOB_STATUS_EXPLANATION = {
+  DRAFT: 'Not yet posted — visible only to you.',
+  OPEN: 'Visible to carriers — awaiting bids.',
+  AWARDED: 'Carrier confirmed — awaiting pickup.',
+  PICKED_UP: 'Cargo collected — awaiting departure confirmation.',
+  IN_TRANSIT: 'Driver has departed the pickup location.',
+  DELIVERED: 'Delivered — awaiting your confirmation to release payout.',
+  COMPLETED: 'Delivered, confirmed, and payout released.',
+  CANCELLED: 'This job was cancelled.',
+  DISPUTED: 'Under dispute — escrow is frozen pending review.',
+};
+export function StatusBadge({ status, explain = false, className }) {
+  const Icon = JOB_STATUS_ICON[status];
+  return (
+    <span className={cx(explain && 'inline-flex flex-col items-start gap-1', className)}>
+      <Badge color={JOB_STATUS_COLOR[status] || 'neutral'} dot={!Icon}>
+        {Icon && <Icon size={12} />}
+        {status?.replaceAll('_', ' ')}
+      </Badge>
+      {explain && JOB_STATUS_EXPLANATION[status] && (
+        <span className="text-xs text-ink-muted">{JOB_STATUS_EXPLANATION[status]}</span>
+      )}
+    </span>
+  );
 }
 
 const ESCROW_COLOR = { PENDING: 'neutral', HELD: 'warning', FUNDED: 'info', RELEASED: 'success', DISPUTED: 'danger' };
@@ -192,6 +226,69 @@ export function Spinner({ size = 20, className }) {
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
+  );
+}
+
+// -------------------------------------------------------------- Skeleton
+// UI-evolution brief §21: loading UX shouldn't leave the user wondering
+// whether the page is broken. Before this, loading was either plain
+// "Loading…" text or a bare Spinner, never a content-shaped placeholder
+// (zero prior "skeleton" usage anywhere in this codebase).
+//
+// --surface-container-high (not the LaneRateBenchmark precedent's
+// --surface-container-low): verified visually (real Playwright
+// screenshot, not assumed) that --surface-container-low is the exact
+// same hex as --bg-canvas in light mode, making a `variant="text"`
+// skeleton sitting directly on the page background completely invisible
+// — only visible at all inside `variant="card"`'s white card wrapper by
+// coincidence. -high has real contrast against both.
+//
+// `variant="card"` deliberately has NO baked-in responsive grid-cols of
+// its own (unlike an earlier version of this component) — a Tailwind
+// class collision between a hardcoded default and a caller-supplied
+// override is not reliably resolved by JSX string order, confirmed by
+// the same screenshot check. Callers own their own grid columns via
+// `className`, same as they will once real content replaces the skeleton.
+const SKELETON_BLOCK = 'rounded';
+function SkeletonBlock({ className, style }) {
+  return <div className={cx(SKELETON_BLOCK, className)} style={{ background: 'var(--surface-container-high)', ...style }} />;
+}
+export function Skeleton({ variant = 'text', count = 3, className }) {
+  const items = Array.from({ length: Math.max(1, count) });
+  if (variant === 'row') {
+    return (
+      <div className={cx('space-y-3', className)}>
+        {items.map((_, i) => (
+          <div key={i} className="flex animate-pulse items-center gap-3">
+            <SkeletonBlock className="h-9 w-9 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-1.5">
+              <SkeletonBlock className="h-3 w-2/3" />
+              <SkeletonBlock className="h-2.5 w-1/3" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (variant === 'card') {
+    return (
+      <div className={cx('grid gap-4', className)}>
+        {items.map((_, i) => (
+          <div key={i} className="card animate-pulse space-y-3 p-5">
+            <SkeletonBlock className="h-4 w-1/2" />
+            <SkeletonBlock className="h-3 w-full" />
+            <SkeletonBlock className="h-3 w-5/6" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className={cx('animate-pulse space-y-2', className)}>
+      {items.map((_, i) => (
+        <SkeletonBlock key={i} className="h-3" style={{ width: i === items.length - 1 ? '60%' : '100%' }} />
+      ))}
+    </div>
   );
 }
 
