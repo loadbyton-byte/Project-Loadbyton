@@ -1,6 +1,19 @@
 import { test, expect } from '@playwright/test';
 import path from 'node:path';
 
+// Forces prefers-reduced-motion for every test in this file — the app's
+// own CSS (index.css's global prefers-reduced-motion rule) already
+// collapses Reveal's fade/slide-in transitions to near-zero under it. Not
+// doing this caused a real, flaky false-ish-positive in CI: axe-core
+// sometimes sampled a card's computed style mid-fade-in (e.g. text at
+// ~90% opacity against its own card background), reporting a contrast
+// ratio that never reflects what a settled page actually shows any real
+// user. WCAG contrast requirements are about static, settled content, not
+// a fleeting animation frame — auditing the reduced-motion state (which
+// the app already fully supports) is the correct, standard way to test
+// this deterministically rather than adding an arbitrary settle-timeout.
+test.use({ reducedMotion: 'reduce' });
+
 // Relative to process.cwd(), not import.meta.url — Playwright's test
 // transform doesn't carry import.meta through cleanly, and every
 // Playwright run here always has cwd = web/ (where playwright.config.js
@@ -106,7 +119,7 @@ test.describe('authenticated dashboard', () => {
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/dashboard/);
     const skip = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-    if (await skip.isVisible({ timeout: 2000 }).catch(() => false)) await skip.click();
+    if (await skip.isVisible({ timeout: 5000 }).catch(() => false)) await skip.click();
 
     const violations = await auditPage(page);
     expect(violations, describeViolations(violations)).toEqual([]);
