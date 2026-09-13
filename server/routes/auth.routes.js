@@ -294,6 +294,10 @@ async function requireReauthIfIbanChanging(req, res, next) {
   const profile = await db.prepare('SELECT iban FROM profiles WHERE user_id=?').get(req.user.id);
   const currentIban = profile?.iban ? decryptField(profile.iban) : '';
   if (String(req.body.iban).trim() === String(currentIban || '').trim()) return next();
+  // Stashed for the route handler below, so it can stamp iban_changed_at
+  // (bank-change payout hold) without a second decrypt/compare of the
+  // same fields this middleware just did.
+  req.ibanActuallyChanging = true;
   return requireReauth()(req, res, next);
 }
 
@@ -314,6 +318,12 @@ router.patch('/api/profile', auth(), requireSeatRole(['OPS']), requireReauthIfIb
     // automate this, unlike Stripe Connect), so it's carrier-entered here
     // the same way as any other self-declared processor detail.
     telr_split_id: b.telrSplitId,
+    // Bank-change payout hold — requireReauthIfIbanChanging above already
+    // determined this is a real change (not a resubmit of the current
+    // value) and forced re-auth for it; payout.service.js's
+    // executePayoutAsync reads this against the iban_change_hold_hours
+    // setting to defer a transfer made shortly after.
+    iban_changed_at: req.ibanActuallyChanging ? new Date().toISOString() : undefined,
   };
   const sets = [];
   const params = [];
@@ -326,6 +336,9 @@ router.patch('/api/profile', auth(), requireSeatRole(['OPS']), requireReauthIfIb
   if (sets.length) {
     params.push(req.user.id);
     await db.prepare(`UPDATE profiles SET ${sets.join(', ')} WHERE user_id=?`).run(...params);
+  }
+  if (req.ibanActuallyChanging) {
+    await writeAudit(req, { userId: req.actorId, action: 'IBAN_CHANGED', entityType: 'user', entityId: req.user.id, details: 'Bank account details changed — new payouts held for the configured review window' });
   }
   const user = await db.prepare('SELECT * FROM users WHERE id=?').get(req.user.id);
   res.json({ user: await toPublicUser(user) });

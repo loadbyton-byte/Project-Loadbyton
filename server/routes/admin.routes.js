@@ -681,6 +681,23 @@ router.post('/api/admin/payout-attempts/:id/reconcile', auth(['ADMIN']), async (
   res.json(result);
 });
 
+// Re-runs executePayoutAsync's own checks from scratch (no payout_attempts
+// row is created for a payout deferred by the bank-change hold below, so
+// the reconcile endpoint above — which only re-drives an EXISTING attempt
+// — doesn't apply to it). Safe to call anytime: every guard inside
+// executePayoutAsync (already-transferred, UNKNOWN-attempt-pending,
+// bank-change hold) re-checks its own condition fresh, so calling this on
+// a payout that isn't actually ready yet is a no-op, not a duplicate send.
+router.post('/api/admin/payouts/:id/retry', auth(['ADMIN']), async (req, res) => {
+  const payout = await db.prepare('SELECT * FROM payouts WHERE id=?').get(req.params.id);
+  if (!payout) return apiResponse.error(req, res, 'BID_NOT_FOUND', 'Payout not found', { status: 404 });
+  const job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(payout.job_id);
+  if (!job) return apiResponse.error(req, res, 'JOB_NOT_FOUND', 'Job not found for this payout', { status: 404 });
+  await executePayoutAsync(job, payout, req);
+  const updated = await db.prepare('SELECT * FROM payouts WHERE id=?').get(payout.id);
+  res.json({ payout: updated });
+});
+
 router.post('/api/admin/payouts/:id/mark-transferred', auth(['ADMIN']), async (req, res) => {
   const payout = await db.prepare('SELECT * FROM payouts WHERE id=?').get(req.params.id);
   if (!payout) return apiResponse.error(req, res, 'BID_NOT_FOUND', 'Payout not found');
@@ -714,7 +731,7 @@ router.get('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
 });
 
 router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
-  const { commission_rate_bps, auto_release_hours, cancellation_fee_bps_after_award, two_person_approval_required } = req.body || {};
+  const { commission_rate_bps, auto_release_hours, cancellation_fee_bps_after_award, two_person_approval_required, iban_change_hold_hours } = req.body || {};
   if (commission_rate_bps !== undefined) {
     // Number.isFinite (not just a bounds comparison) rejects non-numeric
     // input outright — "abc" < 0 and "abc" > 10000 are both false for a
@@ -739,6 +756,12 @@ router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
   }
   if (two_person_approval_required !== undefined) {
     await db.prepare('UPDATE settings SET value=? WHERE key=\'two_person_approval_required\'').run(two_person_approval_required ? '1' : '0');
+  }
+  if (iban_change_hold_hours !== undefined) {
+    if (!Number.isFinite(Number(iban_change_hold_hours)) || Number(iban_change_hold_hours) < 0 || Number(iban_change_hold_hours) > 720) {
+      return sendError(res, 400, 'iban_change_hold_hours must be a number between 0 and 720');
+    }
+    await db.prepare('UPDATE settings SET value=? WHERE key=\'iban_change_hold_hours\'').run(String(Number(iban_change_hold_hours)));
   }
   await writeAudit(req, { userId: req.actorId, action: 'SETTINGS_UPDATE', details: JSON.stringify(req.body) });
   res.json({ settings: await getSettings() });
