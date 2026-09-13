@@ -25,6 +25,17 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
+        // socket.io (lib/socket.js) connects to /api/socket.io on this
+        // same origin. Without ws:true, Vite's proxy never forwards the
+        // WebSocket upgrade request — the client falls back to
+        // long-polling silently (no visible error), which still works but
+        // adds real per-request latency to every live-push notification.
+        // Found while root-causing dashboard-action-required.spec.js's
+        // live-push flake: confirmed directly (a bare socket.io-client
+        // hung indefinitely with transports forced to websocket-first
+        // through this proxy, connected instantly once forced to polling
+        // only, and the upgrade never actually completes either way).
+        ws: true,
       },
     },
   },
@@ -49,6 +60,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
+        // Same ws:true as `server.proxy` above — see that comment.
+        ws: true,
       },
     },
   },
