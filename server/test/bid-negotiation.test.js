@@ -8,17 +8,32 @@ const assert = require('node:assert/strict');
 const { startServer, makeClient } = require('./harness');
 
 let server;
+// Logged in ONCE in test.before and reused by every test below, rather
+// than each test creating its own fresh client — this file's demo-account
+// logins are rate-limited (8/15min per email), and with 9+ tests each
+// doing their own shipper+carrier(+outsider) login, that budget was
+// already tight before any of the audit-finding regression tests below
+// were added, and got exceeded once they were.
+let shipper;
+let carrier;
+let outsider;
 
 test.before(async () => {
   server = await startServer();
+  shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+  outsider = makeClient(server.baseUrl);
+  await outsider.login('falcon@containerxpress.ae', 'demo1234');
 });
 
 test.after(async () => {
   await server.stop();
 });
 
-async function postJobAndBid(shipper, carrier) {
-  const created = await shipper.post('/api/jobs', {
+async function postJobAndBid(shipperClient, carrierClient) {
+  const created = await shipperClient.post('/api/jobs', {
     containerSize: '20FT',
     containerType: 'DRY',
     pickupTerminal: 'JEBEL_ALI_T1',
@@ -30,7 +45,7 @@ async function postJobAndBid(shipper, carrier) {
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrierClient.post(`/api/jobs/${jobId}/bids`, {
     amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);
@@ -38,10 +53,6 @@ async function postJobAndBid(shipper, carrier) {
 }
 
 test('award is blocked until terms are confirmed, unless skipNegotiation is explicitly set', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const carrier = makeClient(server.baseUrl);
-  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const { jobId, bidId } = await postJobAndBid(shipper, carrier);
 
   const blocked = await shipper.post(`/api/jobs/${jobId}/award`, { bidId });
@@ -53,12 +64,6 @@ test('award is blocked until terms are confirmed, unless skipNegotiation is expl
 });
 
 test('a third-party carrier cannot access another bid\'s negotiation or ancillary charges', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const carrier = makeClient(server.baseUrl);
-  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
-  const outsider = makeClient(server.baseUrl);
-  await outsider.login('falcon@containerxpress.ae', 'demo1234');
   const { bidId } = await postJobAndBid(shipper, carrier);
 
   const negotiationBlocked = await outsider.get(`/api/bids/${bidId}/negotiation`);
@@ -68,10 +73,6 @@ test('a third-party carrier cannot access another bid\'s negotiation or ancillar
 });
 
 test('an ancillary charge must be agreed by both sides before confirm-terms succeeds, then award proceeds', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const carrier = makeClient(server.baseUrl);
-  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const { jobId, bidId } = await postJobAndBid(shipper, carrier);
 
   // Negotiation thread works both ways.
@@ -106,10 +107,6 @@ test('an ancillary charge must be agreed by both sides before confirm-terms succ
 });
 
 test('agreed ancillary charges become part of the final award price; unagreed ones do not', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const carrier = makeClient(server.baseUrl);
-  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const { jobId, bidId } = await postJobAndBid(shipper, carrier); // amountAed: 450
 
   const agreedCharge = await carrier.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'SALIK', amountAed: 25 });
@@ -130,10 +127,6 @@ test('agreed ancillary charges become part of the final award price; unagreed on
 });
 
 test('confirm-terms succeeds with zero ancillary charges (nothing to discuss on a simple job)', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const carrier = makeClient(server.baseUrl);
-  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const { jobId, bidId } = await postJobAndBid(shipper, carrier);
 
   const confirm = await shipper.post(`/api/bids/${bidId}/confirm-terms`, {});
@@ -144,12 +137,8 @@ test('confirm-terms succeeds with zero ancillary charges (nothing to discuss on 
 });
 
 test('a carrier can declare ancillary charges at bid time, and the shipper sees them; a competing bidder never sees another bidder\'s price, charges, or docs while OPEN', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const carrierA = makeClient(server.baseUrl);
-  await carrierA.login('carrier@dubaidrayage.com', 'demo1234');
-  const carrierB = makeClient(server.baseUrl);
-  await carrierB.login('falcon@containerxpress.ae', 'demo1234');
+  const carrierA = carrier;
+  const carrierB = outsider;
 
   const created = await shipper.post('/api/jobs', {
     containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
@@ -198,12 +187,8 @@ test('a carrier can declare ancillary charges at bid time, and the shipper sees 
 });
 
 test('a losing bidder can see the winning bid\'s price/charges post-award (market info) but never the driver\'s name/phone', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const winner = makeClient(server.baseUrl);
-  await winner.login('carrier@dubaidrayage.com', 'demo1234');
-  const loser = makeClient(server.baseUrl);
-  await loser.login('falcon@containerxpress.ae', 'demo1234');
+  const winner = carrier;
+  const loser = outsider;
 
   const created = await shipper.post('/api/jobs', {
     containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
@@ -234,10 +219,6 @@ test('a losing bidder can see the winning bid\'s price/charges post-award (marke
 });
 
 test('only the party who proposed an ancillary charge can withdraw it, and no new charge can be proposed once terms are confirmed', async () => {
-  const shipper = makeClient(server.baseUrl);
-  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
-  const carrier = makeClient(server.baseUrl);
-  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const { bidId } = await postJobAndBid(shipper, carrier);
 
   const propose = await carrier.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'SALIK', amountAed: 25 });
@@ -263,12 +244,48 @@ test('only the party who proposed an ancillary charge can withdraw it, and no ne
   // Same clients/bid, continued: once terms are confirmed, no new charge
   // can be proposed either. Previously only DELETE was blocked post-
   // confirmation; POST (adding a brand new charge) had no such guard, so
-  // terms could silently drift after being "confirmed." (Sharing this
-  // test's existing login session rather than a fresh test with its own
-  // logins — this file's demo-account logins are throttled at 8/15min.)
+  // terms could silently drift after being "confirmed."
   const confirm = await shipper.post(`/api/bids/${bidId}/confirm-terms`, {});
   assert.equal(confirm.status, 200, confirm.raw);
   const lateCharge = await carrier.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'SALIK', amountAed: 25 });
   assert.equal(lateCharge.status, 403, lateCharge.raw);
   assert.match(lateCharge.raw, /already confirmed/);
+});
+
+test('a bid ETA after the job\'s own deadline is rejected; withdrawing a bid notifies the shipper', async () => {
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Test Warehouse — ETA vs deadline regression',
+    readyAt: new Date(Date.now() + 86400000).toISOString(),
+    deadline: new Date(Date.now() + 2 * 86400000).toISOString(), // 2 days out
+    maxBudgetAed: 500,
+  });
+  assert.equal(created.status, 201, created.raw);
+  const jobId = created.body.job.id;
+
+  // Commercial-logic audit finding: nothing previously checked a bid's ETA
+  // against the job's own deadline.
+  const tooLate = await carrier.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 450, etaAt: new Date(Date.now() + 3 * 86400000).toISOString(), truckType: 'flatbed', // 3 days out, past the 2-day deadline
+  });
+  assert.equal(tooLate.status, 400, tooLate.raw);
+  assert.match(tooLate.raw, /after this job's deadline/);
+
+  const onTime = await carrier.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 450, etaAt: new Date(Date.now() + 1.5 * 86400000).toISOString(), truckType: 'flatbed', // within the deadline
+  });
+  assert.equal(onTime.status, 201, onTime.raw);
+  const bidId = onTime.body.bid.id;
+
+  // Commercial-logic audit finding: a withdrawn bid previously never told
+  // the shipper at all. Reuses the on-time bid just placed above.
+  const withdraw = await carrier.post(`/api/bids/${bidId}/withdraw`, {});
+  assert.equal(withdraw.status, 200, withdraw.raw);
+
+  const notifications = await shipper.get('/api/notifications');
+  assert.equal(notifications.status, 200, notifications.raw);
+  assert.ok(
+    notifications.body.notifications.some((n) => /withdrew their bid/i.test(n.body || '')),
+    'the shipper must be notified when a carrier withdraws their bid'
+  );
 });
