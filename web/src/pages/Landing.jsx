@@ -54,10 +54,12 @@ export default function Landing() {
 
   return (
     <div>
-      {/* Hero — split, not centered. Left: thesis. Right: an animated motion
-          scene (FreightMotionScene) — a simple auto-advancing slide deck
-          explaining the workflow, registration, posting, and payout — not a
-          stock photo. */}
+      {/* Hero — split, not centered. Left: thesis. Right: an animated
+          operations diagram (FreightMotionScene) — a load posted, matched
+          against candidate carriers, agreed, moved and delivered, with the
+          transaction settling at the end — not a stock photo, and not a
+          slide deck about the product UI (that content is redundant with
+          the "How it works" section immediately below). */}
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
           <div className="flex flex-col justify-center">

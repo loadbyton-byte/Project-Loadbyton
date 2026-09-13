@@ -1,143 +1,122 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { IconLayers, IconUser, IconEdit, IconWallet, IconArrowLeft, IconArrowRight } from './icons.jsx';
+import React from 'react';
+import { IconPackage, IconSearch, IconTag, IconHandshake, IconTruck, IconMapPin, IconCheck, IconWallet } from './icons.jsx';
 
-// Hero visual — a simple auto-advancing slide deck explaining the platform:
-// how it works -> how to register -> how to post a job -> how payout works.
-// One slide at a time, a gentle fade/slide entrance, manual arrows and dots
-// for anyone who wants to browse. No auto-advance under prefers-reduced-motion
-// (the first slide stays put, arrows/dots still work). Kept inside its own
-// dark card with the single accent color, so it reads as the one deliberately
-// vivid moment rather than breaking the page's restraint elsewhere. The
-// entrance is a single CSS keyframe, so the global prefers-reduced-motion
-// rule collapses it to a static frame.
-const SLIDES = [
-  {
-    Icon: IconLayers,
-    title: 'How it works',
-    intro: 'One sequence for every load — from posting to payout.',
-    steps: [
-      ['Post the job', 'Equipment, route, target price'],
-      ['Carriers bid', 'Verified fleet, priced live'],
-      ['Award & escrow', 'Price locks, funds secured'],
-      ['Deliver & paid', 'POD up, payout within 48h'],
-    ],
-  },
-  {
-    Icon: IconUser,
-    title: 'Register in minutes',
-    intro: 'Create an account, get verified, start moving freight.',
-    steps: [
-      ['Create your account', 'Email and company details'],
-      ['Get verified', 'TRN, licence, insurance — checked by us'],
-      ['Start', 'Bid on loads or post jobs, escrow-backed'],
-    ],
-  },
-  {
-    Icon: IconEdit,
-    title: 'Post a job',
-    intro: 'One structured form — no back-and-forth to reach carriers.',
-    steps: [
-      ['Equipment & route', 'Truck class, terminal, delivery area'],
-      ['Price & cargo', 'Target price per trip, cargo weight'],
-      ['Submit', 'Goes live as OPEN — bids arrive within minutes'],
-    ],
-  },
-  {
-    Icon: IconWallet,
-    title: 'Get paid fast',
-    intro: 'Escrow holds the funds; release is automatic.',
-    steps: [
-      ['Deliver', 'Hand off and collect the POD'],
-      ['Confirm', 'Shipper confirms, or 24h auto-release'],
-      ['Payout', 'In your account within 48 hours'],
-    ],
-  },
+// Hero visual — was an auto-advancing slide deck explaining how to use the
+// platform (register / post / payout). That content is redundant with the
+// "How it works" section immediately below this one on the page, and it
+// made the hero about the PRODUCT UI rather than the thing Loadbyton
+// actually coordinates. This replaces it with a looping diagram of a
+// shipment's commercial lifecycle: a load is posted, the platform matches
+// it against candidate carriers, terms are agreed, the shipment moves,
+// delivery is confirmed, and the transaction settles. The truck is one
+// participant on the route, not the subject.
+//
+// Plain SVG + CSS keyframes — no animation library, no JS timers, same
+// convention this file used before (and the same stroke-dashoffset trick
+// the old freight-deck-progress bar used). CYCLE_SECONDS sets the shared
+// --hs-cycle duration every .hs-* rule in index.css animates against. Each
+// caption has its OWN dedicated keyframe (.hs-chip-1 .. .hs-chip-8) hand-
+// timed to the SAME narrative percentages as the network/route/vehicle
+// rules — see the "Hero scene timeline" table in index.css. A shared
+// keyframe with per-chip animation-delay spacing was tried first and
+// drifted out of sync with the SVG's uneven phase lengths (transit is a
+// third of the cycle, "Agreed" is a beat) — don't go back to that.
+const CYCLE_SECONDS = 20;
+
+const STAGES = [
+  { Icon: IconPackage, label: 'Load posted' },
+  { Icon: IconSearch, label: 'Matching carriers' },
+  { Icon: IconTag, label: 'Quote received' },
+  { Icon: IconHandshake, label: 'Agreed' },
+  { Icon: IconTruck, label: 'In transit' },
+  { Icon: IconMapPin, label: 'Approaching destination' },
+  { Icon: IconCheck, label: 'Delivered' },
+  { Icon: IconWallet, label: 'Settled' },
 ];
-const INTERVAL_MS = 6000;
+
+// Route is a flat spine from the origin node to the destination node; the
+// matching cluster (junction + 3 carrier candidates) sits above it and is
+// only relevant before the shipment departs.
+const ORIGIN_X = 40;
+const DEST_X = 360;
+const ROUTE_Y = 150;
+const JUNCTION_X = 170;
+const ROUTE_LENGTH = DEST_X - ORIGIN_X; // matches the flat path's actual length
 
 export default function FreightMotionScene() {
-  const [index, setIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const prefersReduced = useMemo(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    []
-  );
-
-  useEffect(() => {
-    if (prefersReduced || paused) return undefined;
-    const id = setInterval(() => setIndex((i) => (i + 1) % SLIDES.length), INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [prefersReduced, paused, index]);
-
-  const slide = SLIDES[index];
-
   return (
-    <div
-      className="freight-deck"
-      role="group"
-      aria-roledescription="carousel"
-      aria-label="How Loadbyton works"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-    >
-      <div className="freight-deck-progress" aria-hidden="true">
-        <div key={index} className="freight-deck-progress-fill" style={{ animationDuration: `${INTERVAL_MS}ms` }} />
-      </div>
+    <div className="hero-scene" style={{ '--hs-cycle': `${CYCLE_SECONDS}s` }}>
+      <svg
+        viewBox="0 0 400 200"
+        className="hero-scene-svg"
+        preserveAspectRatio="xMidYMid meet"
+        role="img"
+        aria-label="Animated diagram of a shipment's commercial lifecycle: a load is posted, the platform matches it against candidate carriers, terms are agreed, the shipment moves to its destination, delivery is confirmed, and the transaction settles"
+      >
+        {/* Matching cluster — junction plus three candidate carriers. Fades
+            out once a carrier is selected and the shipment departs, so it
+            doesn't compete with the route for attention during transit. */}
+        <g className="hs-network">
+          <line className="hs-line-reject" x1={JUNCTION_X} y1={ROUTE_Y} x2="120" y2="70" />
+          <line className="hs-line-select" x1={JUNCTION_X} y1={ROUTE_Y} x2="170" y2="48" />
+          <line className="hs-line-reject" x1={JUNCTION_X} y1={ROUTE_Y} x2="220" y2="70" />
 
-      <div key={index} className="freight-slide" aria-label={slide.title}>
-        <div className="flex items-start gap-3">
-          <span className="freight-slide-icon">
-            <slide.Icon size={16} />
-          </span>
-          <div className="min-w-0">
-            <p className="font-display text-base font-semibold text-white">{slide.title}</p>
-            <p className="mt-0.5 text-xs text-white/60">{slide.intro}</p>
+          <circle className="hs-carrier hs-carrier-reject" cx="120" cy="70" r="7" />
+          <circle className="hs-carrier hs-carrier-select" cx="170" cy="48" r="8" />
+          <circle className="hs-carrier hs-carrier-reject" cx="220" cy="70" r="7" />
+
+          <circle className="hs-junction" cx={JUNCTION_X} cy={ROUTE_Y} r="4" />
+        </g>
+
+        {/* Route — hidden until the shipment departs, drawn left-to-right as
+            it travels, held complete through delivery/settlement, then
+            reset to hidden while invisible (never an on-screen rewind). */}
+        <line className="hs-route" x1={ORIGIN_X} y1={ROUTE_Y} x2={DEST_X} y2={ROUTE_Y} strokeDasharray={ROUTE_LENGTH} />
+
+        {/* Origin */}
+        <g className="hs-origin">
+          <circle className="hs-node-ring" cx={ORIGIN_X} cy={ROUTE_Y} r="12" />
+          <circle className="hs-node-dot" cx={ORIGIN_X} cy={ROUTE_Y} r="5" />
+        </g>
+        <g style={{ transform: `translate(${ORIGIN_X}px, ${ROUTE_Y - 26}px)`, transformBox: 'view-box' }}>
+          <g className="hs-load-icon">
+            <rect x="-8" y="-8" width="16" height="16" rx="2" />
+          </g>
+        </g>
+
+        {/* Destination */}
+        <g className="hs-destination">
+          <circle className="hs-node-ring" cx={DEST_X} cy={ROUTE_Y} r="12" />
+          <circle className="hs-node-dot" cx={DEST_X} cy={ROUTE_Y} r="5" />
+        </g>
+        <g style={{ transform: `translate(${DEST_X}px, ${ROUTE_Y - 26}px)`, transformBox: 'view-box' }}>
+          <g className="hs-checkmark">
+            <circle r="9" className="hs-checkmark-badge" />
+            <path d="M-4,0 L-1,3.2 L4.5,-4" className="hs-checkmark-mark" />
+          </g>
+        </g>
+
+        {/* Vehicle — travels the full route once a carrier is agreed; not the
+            hero of the scene, just the participant that makes the movement
+            visible. */}
+        <g className="hs-vehicle">
+          <g className="hs-wheel" style={{ transformOrigin: '-10px 10px' }}>
+            <circle cx="-10" cy="10" r="4.5" />
+          </g>
+          <g className="hs-wheel" style={{ transformOrigin: '11px 10px' }}>
+            <circle cx="11" cy="10" r="4.5" />
+          </g>
+          <rect x="-20" y="-6" width="30" height="16" rx="2" className="hs-vehicle-body" />
+          <path d="M10,-6 h9 l6,8 v8 h-15 Z" className="hs-vehicle-cab" />
+        </g>
+      </svg>
+
+      <div className="hero-scene-chips" aria-hidden="true">
+        {STAGES.map((s, i) => (
+          <div key={s.label} className={`hero-scene-chip hs-chip-${i + 1}`}>
+            <s.Icon size={14} /> {s.label}
           </div>
-        </div>
-        <ol className="freight-slide-steps">
-          {slide.steps.map(([label, sub], i) => (
-            <li key={label} className="freight-step-row">
-              <span className="freight-step-num">{i + 1}</span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium text-white">{label}</span>
-                <span className="block truncate text-[11px] text-white/50">{sub}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      <div className="freight-deck-controls">
-        <div className="flex items-center gap-1.5">
-          {SLIDES.map((s, i) => (
-            <button
-              key={s.title}
-              type="button"
-              className={`freight-dot${i === index ? ' freight-dot-active' : ''}`}
-              aria-label={`Go to slide ${i + 1}: ${s.title}`}
-              aria-current={i === index}
-              onClick={() => setIndex(i)}
-            />
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            className="freight-nav"
-            aria-label="Previous slide"
-            onClick={() => setIndex((index - 1 + SLIDES.length) % SLIDES.length)}
-          >
-            <IconArrowLeft size={14} />
-          </button>
-          <button
-            type="button"
-            className="freight-nav"
-            aria-label="Next slide"
-            onClick={() => setIndex((index + 1) % SLIDES.length)}
-          >
-            <IconArrowRight size={14} />
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );
