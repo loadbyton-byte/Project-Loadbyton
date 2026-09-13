@@ -324,8 +324,8 @@ export default function Dashboard() {
       )}
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={t('dashboard.postNewJob', 'Post a new job')} onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={t('dashboard.postNewJob', 'Post a new job')} onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+          <div className="animate-slide-up max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
             <Card className="border-0 shadow-none">
               <Card.Header>
                 <Card.Title className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span> {t('dashboard.postNewJob', 'Post a new job')}</Card.Title>

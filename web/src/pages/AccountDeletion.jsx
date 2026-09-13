@@ -92,8 +92,8 @@ export default function AccountDeletion() {
       </Card>
 
       {dangerZone && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setDangerZone(false)} role="dialog" aria-modal="true" aria-label="Confirm account deletion">
-          <div className="w-full max-w-md rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--status-danger-bg)', background: 'var(--bg-surface)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setDangerZone(false)} role="dialog" aria-modal="true" aria-label="Confirm account deletion">
+          <div className="animate-slide-up w-full max-w-md rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--status-danger-bg)', background: 'var(--bg-surface)' }} onClick={(e) => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <IconAlert size={24} className="text-status-danger" />

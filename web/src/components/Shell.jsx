@@ -121,7 +121,7 @@ function NotificationBell() {
       </button>
       {open && (
         <div
-          className="card absolute right-0 top-12 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+          className="animate-panel-in card absolute right-0 top-12 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden p-0"
           role="dialog"
           aria-label="Notifications"
         >
@@ -427,7 +427,7 @@ function ShellInner({ children }) {
           and the theme/locale toggles. */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
-          <button aria-label="Close menu" className="absolute inset-0 bg-black/50" onClick={closeDrawer} />
+          <button aria-label="Close menu" className="animate-fade-in absolute inset-0 bg-black/50" onClick={closeDrawer} />
           <div className="animate-drawer-in relative flex h-full w-[84%] max-w-xs flex-col bg-surface" style={{ boxShadow: 'var(--lb-shadow-lg)' }}>
             {/* Sticky header — a short phone's drawer content (5 nav items +
                 toggles + account block + logout) can exceed the visible
