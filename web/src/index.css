@@ -411,6 +411,29 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   transform-origin: bottom right;
 }
 
+/* Modal entrance — .animate-fade-in (backdrop) and .animate-slide-up
+   (panel) were already referenced by the shared Modal component
+   (ui.jsx) and by TermsModal.jsx/AccountDeletion.jsx/JobDetail.jsx/
+   Dashboard.jsx's own dialogs, but neither class was ever defined here —
+   every one of those modals has been opening with zero entrance
+   animation, backdrop and panel both just snapping into place. Same
+   mount-triggered convention and easing as .animate-menu-in/.animate-
+   panel-in above. */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-slide-up {
+  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Unread-message cue on the chat FAB — a soft expanding ring, not a harsh
    blink, so it reads as "something happened" without being alarming. */
 @keyframes chat-fab-glow {
@@ -933,8 +956,12 @@ html[dir="rtl"] .animate-drawer-in {
   /* Tag-style, not a pill — sharper shape language (confirmed with the
      user for this rebrand) reads status badges as data tags, not the
      rounded consumer-app chip style Industrial Trust used. */
+  /* transition-colors so a live status change (this app pushes them over
+     socket.io — see lib/socket.js) recolors in place instead of snapping;
+     background/color come from Badge's inline `style` prop, but a CSS
+     transition-property applies to those the same as a class-set value. */
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold;
+    @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold transition-colors duration-200;
   }
 
   .nav-link {

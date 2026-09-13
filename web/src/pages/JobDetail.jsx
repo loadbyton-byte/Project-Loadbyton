@@ -312,13 +312,13 @@ export default function JobDetail() {
     <div className="container-page py-10" dir={isRtl ? 'rtl' : 'ltr'}>
       {awardConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-label="Confirm award"
           onClick={(e) => { if (e.target === e.currentTarget) setAwardConfirm(null); }}
         >
-          <div className="w-full max-w-lg rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="animate-slide-up w-full max-w-lg rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)', maxHeight: '90vh', overflowY: 'auto' }}>
             <Card className="border-0 shadow-none">
               <Card.Header>
                 <Card.Title className="flex items-center gap-2">
