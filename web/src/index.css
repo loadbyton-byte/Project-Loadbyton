@@ -494,123 +494,272 @@ html[dir="rtl"] .animate-drawer-in {
   animation-play-state: paused;
 }
 
-/* Hero visual (components/FreightMotionScene.jsx) — a simple auto-advancing
-   slide deck: one slide at a time explaining the workflow, then how to
-   register, how to post a job, and how payout works. Gentle fade/slide
-   entrance per slide, a thin auto-progress bar, arrows and dots for manual
-   browsing; auto-advance pauses on hover. Deliberately more vivid than the
-   rest of the page (dark card, accent color) — contained entirely inside
-   its own dark card so it reads as one intentional vivid moment, not a
-   break from the page's restraint elsewhere. All keyframe-driven, so the
-   global prefers-reduced-motion rule above collapses the entrance and
-   progress animations to static frames. */
-.freight-deck {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 22px 22px 14px;
-  background:
-    radial-gradient(120% 120% at 85% -10%, rgba(255, 176, 103, 0.28), transparent 55%),
-    linear-gradient(180deg, #15111f 0%, #2a1a22 55%, #1a1418 100%);
+/* Hero visual (components/FreightMotionScene.jsx) — a looping diagram of a
+   shipment's commercial lifecycle: load posted -> matched against candidate
+   carriers -> agreed -> moved -> delivered -> settled. The truck is one
+   participant on the route, not the subject — the network/route/labels
+   together are what carry the story. One shared --hs-cycle duration (set
+   inline from the component's CYCLE_SECONDS) drives every keyframe below.
+   All keyframe-driven, so the global prefers-reduced-motion block above
+   still applies everywhere else; this component additionally defines its
+   own reduced-motion freeze frame further down, because "collapse every
+   animation to ~0 duration" isn't a coherent state for a multi-stage story —
+   the section below picks a single deliberate completed frame instead.
+
+   Hero scene timeline — the single source of truth every keyframe and every
+   .hs-chip-N below is hand-timed against (percentages of --hs-cycle):
+     0-5%     idle (nothing active, calm establishing beat)
+     5-15%    load posted — origin lights up, load token appears
+     15-27%   matching — 3 candidate carriers appear, connections pulse
+     27-33%   quote received / selection resolves — 2 dim, 1 solidifies
+     33-37%   agreed — vehicle appears at origin
+     37-58%   in transit — route draws, vehicle travels, wheels turn
+     58-68%   approaching destination — still travelling, final stretch
+     68-80%   delivered — vehicle parked, destination lit, checkmark shown
+     80-98%   settled — checkmark/route/vehicle hold, "Settled" caption
+     98-100%  fade to invisible, then reset (route/vehicle repositioned
+              only while already fully transparent, so the loop never
+              visibly rewinds)
+   Changing a phase boundary means updating it in every rule below that
+   references it — there's no single variable it derives from (CSS
+   @keyframes percentages can't be computed), so this table is what keeps
+   them honest. */
+.hero-scene { position: relative; width: 100%; }
+.hero-scene-svg { display: block; width: 100%; height: auto; }
+
+.hero-scene-svg .hs-node-ring { fill: none; stroke: rgba(255, 255, 255, 0.35); stroke-width: 1.5; }
+.hero-scene-svg .hs-node-dot { fill: var(--lb-orange-500); }
+
+.hero-scene-svg .hs-carrier { fill: rgba(255, 255, 255, 0.55); }
+.hero-scene-svg .hs-carrier-select { fill: var(--lb-orange-500); }
+.hero-scene-svg .hs-junction { fill: rgba(255, 255, 255, 0.6); }
+.hero-scene-svg .hs-line-reject,
+.hero-scene-svg .hs-line-select { stroke: rgba(255, 255, 255, 0.35); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.hero-scene-svg .hs-line-select { stroke: var(--lb-orange-500); stroke-dasharray: none; stroke-width: 2; }
+
+.hero-scene-svg .hs-load-icon rect { fill: var(--lb-orange-500); }
+
+.hero-scene-svg .hs-route { fill: none; stroke: var(--lb-orange-500); stroke-width: 2.5; stroke-linecap: round; }
+
+.hero-scene-svg .hs-vehicle-body { fill: #F1F5F9; }
+.hero-scene-svg .hs-vehicle-cab { fill: var(--lb-ink-800); }
+.hero-scene-svg .hs-wheel { fill: var(--lb-ink-600); }
+
+.hero-scene-svg .hs-checkmark-badge { fill: var(--lb-orange-500); }
+.hero-scene-svg .hs-checkmark-mark { fill: none; stroke: var(--lb-ink-950); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Origin lights up at 5% and holds through settlement; destination stays
+   dim until delivery at 68%. */
+.hs-origin { animation: hs-origin-pulse var(--hs-cycle) ease-in-out infinite; }
+@keyframes hs-origin-pulse {
+  0% { opacity: 0.3; }
+  5%, 93% { opacity: 1; }
+  100% { opacity: 0.3; }
 }
-.freight-deck-progress {
+.hs-destination { animation: hs-destination-pulse var(--hs-cycle) ease-in-out infinite; }
+@keyframes hs-destination-pulse {
+  0%, 65% { opacity: 0.3; }
+  70%, 93% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+
+/* Load token appears at origin once posted, and disappears once the vehicle
+   departs with it — it doesn't need to visually travel, the vehicle does. */
+.hs-load-icon { animation: hs-load-appear var(--hs-cycle) ease-in-out infinite; }
+@keyframes hs-load-appear {
+  0%, 4% { opacity: 0; }
+  7%, 32% { opacity: 1; }
+  36%, 100% { opacity: 0; }
+}
+
+/* Matching cluster: all three candidates appear together (15-27%), then two
+   are dimmed (rejected) while one solidifies (selected, 27-33%) — then the
+   whole cluster recedes once the shipment is underway (37%+). */
+.hs-network { animation: hs-network-visible var(--hs-cycle) ease-in-out infinite; }
+@keyframes hs-network-visible {
+  0%, 13% { opacity: 0; }
+  16%, 32% { opacity: 1; }
+  37%, 100% { opacity: 0.1; }
+}
+.hs-carrier-reject, .hs-line-reject { animation: hs-reject var(--hs-cycle) ease-in-out infinite; }
+@keyframes hs-reject {
+  0%, 13% { opacity: 0; }
+  16%, 23% { opacity: 1; }
+  27%, 100% { opacity: 0.2; }
+}
+.hs-carrier-select, .hs-line-select, .hs-junction { animation: hs-select var(--hs-cycle) ease-in-out infinite; }
+@keyframes hs-select {
+  0%, 13% { opacity: 0; }
+  16%, 23% { opacity: 0.7; }
+  27%, 93% { opacity: 1; }
+  98%, 100% { opacity: 0; }
+}
+
+/* Route — hidden pre-departure, drawn (stroke-dashoffset) across transit
+   (37-68%), held complete through delivery/settlement, then un-drawn only
+   while its own opacity has already reached 0 — so the loop never visibly
+   rewinds. */
+.hs-route {
+  animation: hs-route-opacity var(--hs-cycle) linear infinite, hs-route-draw var(--hs-cycle) linear infinite;
+}
+@keyframes hs-route-opacity {
+  0%, 36% { opacity: 0; }
+  38%, 93% { opacity: 1; }
+  98%, 100% { opacity: 0; }
+}
+@keyframes hs-route-draw {
+  0%, 37% { stroke-dashoffset: 320; }
+  68%, 97% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 320; }
+}
+
+/* Vehicle — hidden until the agreement completes, travels the route during
+   transit, holds at the destination through settlement, fades out (already
+   parked) rather than driving back offscreen. Wheels only turn while it's
+   actually moving, not while parked. */
+.hs-vehicle {
+  transform-box: view-box;
+  animation: hs-vehicle-move var(--hs-cycle) ease-in-out infinite;
+}
+@keyframes hs-vehicle-move {
+  0%, 34% { opacity: 0; transform: translate(40px, 150px); }
+  37% { opacity: 1; transform: translate(40px, 150px); }
+  68% { opacity: 1; transform: translate(360px, 150px); }
+  93% { opacity: 1; transform: translate(360px, 150px); }
+  98%, 100% { opacity: 0; transform: translate(360px, 150px); }
+}
+.hs-wheel { animation: hs-wheel-spin var(--hs-cycle) linear infinite; }
+@keyframes hs-wheel-spin {
+  0%, 37% { transform: rotate(0deg); }
+  68%, 100% { transform: rotate(1080deg); }
+}
+
+/* Delivery confirmation, right after the vehicle arrives at 68%. */
+.hs-checkmark { animation: hs-checkmark-appear var(--hs-cycle) ease-in-out infinite; transform-origin: center; }
+@keyframes hs-checkmark-appear {
+  0%, 67% { opacity: 0; transform: scale(0.4); }
+  72%, 91% { opacity: 1; transform: scale(1); }
+  97%, 100% { opacity: 0; transform: scale(0.4); }
+}
+
+.hero-scene-chips {
+  position: absolute;
+  top: 10%;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+.hero-scene-chip {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.freight-deck-progress-fill {
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(90deg, var(--lb-orange-500), var(--lb-orange-400));
-  transform-origin: left;
-  animation-name: freight-deck-progress;
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
-}
-@keyframes freight-deck-progress {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-.freight-slide {
-  min-height: 200px;
-  animation: freight-slide-in 320ms ease-out both;
-}
-@keyframes freight-slide-in {
-  from { opacity: 0; transform: translateX(14px); }
-  to { opacity: 1; transform: none; }
-}
-.freight-slide-icon {
-  display: flex;
-  flex: none;
+  left: 50%;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--lb-radius-md);
-  background: rgba(242, 96, 12, 0.18);
-  color: var(--lb-orange-500);
-}
-.freight-slide-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-}
-.freight-step-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.freight-step-num {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 5px 12px;
   border-radius: var(--lb-radius-full);
-  font-family: var(--lb-font-mono);
-  font-size: 10px;
-  line-height: 1;
-  background: rgba(255, 255, 255, 0.09);
-  color: var(--lb-orange-500);
+  background: rgba(17, 17, 19, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-duration: var(--hs-cycle);
 }
-.freight-deck-controls {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+/* One keyframe per caption, each hand-timed to its own row in the timeline
+   table above (not evenly spaced) — see the CYCLE_SECONDS comment in
+   FreightMotionScene.jsx for why a shared/delay-offset keyframe was
+   rejected. */
+.hs-chip-1 { animation-name: hs-chip-1; } /* Load posted: 5-15% */
+@keyframes hs-chip-1 {
+  0%, 4% { opacity: 0; transform: translate(-50%, 6px); }
+  6%, 13% { opacity: 1; transform: translate(-50%, 0); }
+  16%, 100% { opacity: 0; transform: translate(-50%, 6px); }
 }
-.freight-dot {
-  width: 18px;
-  height: 4px;
-  border-radius: var(--lb-radius-full);
-  background: rgba(255, 255, 255, 0.2);
-  transition: background 150ms ease;
+.hs-chip-2 { animation-name: hs-chip-2; } /* Matching carriers: 15-27% */
+@keyframes hs-chip-2 {
+  0%, 14% { opacity: 0; transform: translate(-50%, 6px); }
+  16%, 26% { opacity: 1; transform: translate(-50%, 0); }
+  28%, 100% { opacity: 0; transform: translate(-50%, 6px); }
 }
-.freight-dot-active {
-  background: var(--lb-orange-500);
+.hs-chip-3 { animation-name: hs-chip-3; } /* Quote received: 27-33% */
+@keyframes hs-chip-3 {
+  0%, 26% { opacity: 0; transform: translate(-50%, 6px); }
+  28%, 32% { opacity: 1; transform: translate(-50%, 0); }
+  34%, 100% { opacity: 0; transform: translate(-50%, 6px); }
 }
-.freight-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--lb-radius-md);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
-  transition: background 150ms ease;
+.hs-chip-4 { animation-name: hs-chip-4; } /* Agreed: 33-37% */
+@keyframes hs-chip-4 {
+  0%, 32% { opacity: 0; transform: translate(-50%, 6px); }
+  34%, 36% { opacity: 1; transform: translate(-50%, 0); }
+  38%, 100% { opacity: 0; transform: translate(-50%, 6px); }
 }
-.freight-nav:hover {
-  background: rgba(255, 255, 255, 0.16);
+.hs-chip-5 { animation-name: hs-chip-5; } /* In transit: 37-58% */
+@keyframes hs-chip-5 {
+  0%, 36% { opacity: 0; transform: translate(-50%, 6px); }
+  38%, 56% { opacity: 1; transform: translate(-50%, 0); }
+  60%, 100% { opacity: 0; transform: translate(-50%, 6px); }
+}
+.hs-chip-6 { animation-name: hs-chip-6; } /* Approaching destination: 58-68% */
+@keyframes hs-chip-6 {
+  0%, 58% { opacity: 0; transform: translate(-50%, 6px); }
+  60%, 66% { opacity: 1; transform: translate(-50%, 0); }
+  68%, 100% { opacity: 0; transform: translate(-50%, 6px); }
+}
+.hs-chip-7 { animation-name: hs-chip-7; } /* Delivered: 68-80% */
+@keyframes hs-chip-7 {
+  0%, 66% { opacity: 0; transform: translate(-50%, 6px); }
+  69%, 78% { opacity: 1; transform: translate(-50%, 0); }
+  81%, 100% { opacity: 0; transform: translate(-50%, 6px); }
+}
+.hs-chip-8 { animation-name: hs-chip-8; } /* Settled: 80-98% */
+@keyframes hs-chip-8 {
+  0%, 79% { opacity: 0; transform: translate(-50%, 6px); }
+  82%, 95% { opacity: 1; transform: translate(-50%, 0); }
+  98%, 100% { opacity: 0; transform: translate(-50%, 6px); }
+}
+
+/* Reduced motion: freeze on the completed transaction rather than fast-
+   forwarding through it — origin lit, route fully drawn, vehicle parked at
+   the destination, delivery confirmed, matching sub-plot hidden. That one
+   frame still communicates "a shipment moved and the transaction closed"
+   without any motion at all. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-scene-svg .hs-origin,
+  .hero-scene-svg .hs-destination,
+  .hero-scene-svg .hs-route,
+  .hero-scene-svg .hs-vehicle,
+  .hero-scene-svg .hs-checkmark,
+  .hero-scene-svg .hs-load-icon,
+  .hero-scene-svg .hs-network,
+  .hero-scene-svg .hs-carrier-reject,
+  .hero-scene-svg .hs-carrier-select,
+  .hero-scene-svg .hs-line-reject,
+  .hero-scene-svg .hs-line-select,
+  .hero-scene-svg .hs-junction,
+  .hero-scene-svg .hs-wheel,
+  .hero-scene-chip {
+    animation: none !important;
+  }
+  .hero-scene-svg .hs-origin,
+  .hero-scene-svg .hs-destination,
+  .hero-scene-svg .hs-route,
+  .hero-scene-svg .hs-vehicle,
+  .hero-scene-svg .hs-checkmark {
+    opacity: 1 !important;
+  }
+  .hero-scene-svg .hs-route { stroke-dashoffset: 0 !important; }
+  .hero-scene-svg .hs-vehicle { transform: translate(360px, 150px) !important; }
+  .hero-scene-svg .hs-checkmark { transform: scale(1) !important; }
+  .hero-scene-svg .hs-network,
+  .hero-scene-svg .hs-load-icon {
+    opacity: 0 !important;
+  }
+  .hero-scene-chip { opacity: 0 !important; }
+  .hs-chip-8 { opacity: 1 !important; transform: translate(-50%, 0) !important; }
 }
 
 
