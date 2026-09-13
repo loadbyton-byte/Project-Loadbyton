@@ -10,7 +10,7 @@ const db = require('../db');
 /** @type {any} */
 const payments = require('../lib/payments');
 /** @type {any} */
-const { writeAudit, recordShipmentEvent, notify } = require('../lib/helpers');
+const { writeAudit, recordShipmentEvent, notify, getSettings } = require('../lib/helpers');
 
 /**
  * @param {Job} _job
@@ -43,6 +43,32 @@ async function markJobPaymentFailed(jobId, error) {
  */
 async function executePayoutAsync(job, payout, req) {
   if (!payout) return;
+  // Bank-change payout hold (commercial-logic audit / backend P0 backlog
+  // Phase 3) — a genuinely compromised carrier account could change its
+  // IBAN and cash out before anyone notices; requireReauthIfIbanChanging
+  // (auth.routes.js) stops a stolen-cookie-only attacker, but not one who
+  // actually controls the account. Deferring here (not erroring) means
+  // whatever calls executePayoutAsync again later — an admin manually
+  // retrying, or a future scheduled re-scan — picks this back up
+  // automatically once the hold window has passed, since this check
+  // simply re-evaluates "now" each time.
+  if (job.carrier_id) {
+    const carrierProfile = await db.prepare('SELECT iban_changed_at FROM profiles WHERE user_id=?').get(job.carrier_id);
+    const ibanChangedAt = /** @type {any} */ (carrierProfile)?.iban_changed_at;
+    if (ibanChangedAt) {
+      const { iban_change_hold_hours } = await getSettings();
+      const holdUntil = new Date(ibanChangedAt).getTime() + iban_change_hold_hours * 3600 * 1000;
+      if (Date.now() < holdUntil) {
+        await writeAudit(req, {
+          action: 'PAYOUT_HELD_IBAN_CHANGE',
+          details: `${job.job_code}: payout deferred — carrier's bank details changed within the last ${iban_change_hold_hours}h (held until ${new Date(holdUntil).toISOString()})`,
+          entityType: 'payout',
+          entityId: payout.id,
+        });
+        return;
+      }
+    }
+  }
   if (!payments.isConfigured()) {
     await (/** @type {any} */ (writeAudit))(req, {
       action: 'PAYOUT_DEFERRED',

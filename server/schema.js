@@ -1025,6 +1025,11 @@ module.exports = function initSchema(db) {
   seedSetting.run('cancellation_fee_bps_after_award', '1000');
   seedSetting.run('priority_placement_fee_aed', '50');
   seedSetting.run('two_person_approval_required', '0');
+  // Placeholder default (72h) — same "mechanism real and testable, policy
+  // owned by the operator" pattern as cancellation_fee_bps_after_award
+  // above. Change via POST /api/admin/settings once a real fraud-review
+  // SLA is set, not by editing this default.
+  seedSetting.run('iban_change_hold_hours', '72');
 
   // ---------------------------------------------------------------------------
   // Equipment capacity tracking — profiles.fleet_size was a static,
@@ -1245,6 +1250,16 @@ module.exports = function initSchema(db) {
   // detail on this table.
   // ---------------------------------------------------------------------------
   addColumn('profiles', 'telr_split_id', 'telr_split_id TEXT');
+  // Commercial-logic audit / backend P0 backlog Phase 3 — bank-change
+  // payout hold. A stolen session already can't redirect a payout by
+  // itself (requireReauthIfIbanChanging forces a fresh re-auth on any
+  // real IBAN change), but re-auth alone doesn't stop a genuinely
+  // compromised account from changing the IBAN and immediately cashing
+  // out before anyone notices. Set whenever PATCH /api/profile actually
+  // changes iban (see auth.routes.js); payout.service.js's
+  // executePayoutAsync reads it against the iban_change_hold_hours
+  // setting below and defers the transfer while inside that window.
+  addColumn('profiles', 'iban_changed_at', 'iban_changed_at TEXT');
   // Durable record of whether THIS job's checkout actually included the
   // split (not just whether the carrier has a Split ID on file NOW — that
   // could be set after this job's checkout already happened without one).

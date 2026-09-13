@@ -765,6 +765,11 @@ ON CONFLICT (key) DO NOTHING;
 INSERT INTO settings (key, value) VALUES ('two_person_approval_required', '0')
 ON CONFLICT (key) DO NOTHING;
 
+-- Bank-change payout hold — see server/schema.js for the full reasoning;
+-- mirrored here for the opt-in Postgres path.
+INSERT INTO settings (key, value) VALUES ('iban_change_hold_hours', '72')
+ON CONFLICT (key) DO NOTHING;
+
 -- Terms & Conditions acceptance, pre-award negotiation/ancillary charges,
 -- haulier code/token, and EIR seal-number/two-stage photos — see
 -- server/schema.js (the actual auto-migrating SQLite path this app runs
@@ -976,5 +981,9 @@ ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS acting_admin_id INTEGER;
 -- Notification priority — see server/schema.js for the full reasoning;
 -- mirrored here for the opt-in Postgres path.
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal';
+
+-- Bank-change payout hold — see server/schema.js for the full reasoning;
+-- mirrored here for the opt-in Postgres path.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS iban_changed_at TEXT;
 
 COMMIT;

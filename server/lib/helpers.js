@@ -214,6 +214,14 @@ async function getSettings() {
     // operational policy call for the platform operator, not something to
     // force on unilaterally.
     two_person_approval_required: (/** @type {any} */ (map).two_person_approval_required ?? '0') === '1',
+    // Bank-change payout hold (commercial-logic audit / backend P0 backlog
+    // Phase 3) — payout.service.js's executePayoutAsync defers a transfer
+    // to a carrier whose profiles.iban_changed_at falls within this many
+    // hours of "now." 72h is a placeholder (same "mechanism real, policy
+    // owned by the operator" pattern as cancellation_fee_bps_after_award
+    // above) — change via POST /api/admin/settings once a real
+    // fraud-review SLA is set.
+    iban_change_hold_hours: Number(/** @type {any} */ (map).iban_change_hold_hours ?? 72),
   };
 }
 
