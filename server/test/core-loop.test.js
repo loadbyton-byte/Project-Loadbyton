@@ -344,11 +344,34 @@ test('a job-post retried under the same Idempotency-Key after a validation error
 // Deliberately placed after every test above that needs to log in — this
 // test intentionally exhausts the per-IP auth rate limit, and its cooldown
 // window would otherwise cause spurious 429s on any later test's login().
+//
+// Hits /api/auth/login (with garbage credentials, never a real account)
+// rather than /api/auth/me: /me moved to its own, much higher-ceiling
+// limiter (authMeLimiter, auth.routes.js) after e2e flakiness root-caused
+// to it sharing login/register's tight 20-req/min budget for a read-only,
+// already-session-gated endpoint with no credential to guess — 25 rapid
+// /me calls alone no longer proves anything. Login attempts are also the
+// more representative case for what this limiter actually defends against.
 test('per-IP rate limiting kicks in on /api/auth — previously the ONLY throttle in the app was per-email login lockout', async () => {
   const statuses = [];
   for (let i = 0; i < 25; i++) {
-    const res = await fetch(`${server.baseUrl}/api/auth/me`);
+    const res = await fetch(`${server.baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-loadbyton-client': '1' },
+      body: JSON.stringify({ email: `rate-limit-probe-${i}@test.local`, password: 'wrong-password' }),
+    });
     statuses.push(res.status);
   }
   assert.ok(statuses.includes(429), `expected a 429 somewhere in 25 rapid requests, got: ${statuses.join(',')}`);
+});
+
+// /me's own, separate, much higher ceiling (120/min) still exists — proves
+// the split didn't accidentally remove throttling from it entirely.
+test('per-IP rate limiting also applies to /api/auth/me, just at a much higher ceiling', async () => {
+  const statuses = [];
+  for (let i = 0; i < 130; i++) {
+    const res = await fetch(`${server.baseUrl}/api/auth/me`);
+    statuses.push(res.status);
+  }
+  assert.ok(statuses.includes(429), `expected a 429 somewhere in 130 rapid /me requests, got no 429s at all`);
 });

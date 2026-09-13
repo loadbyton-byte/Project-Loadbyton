@@ -1,4 +1,5 @@
 import { test, expect, request } from '@playwright/test';
+import path from 'node:path';
 
 // Full-stack proof that the notification live-push wiring actually
 // renders, not just that the backend emits the right socket event
@@ -9,11 +10,14 @@ import { test, expect, request } from '@playwright/test';
 // shipper's NotificationBell unread dot (Shell.jsx, data-testid
 // "notification-unread-dot") must appear live, with no reload and no
 // click on the bell.
+
+// Pre-baked shipper session (e2e/global-setup.js) — see its comment for
+// why: avoids this spec's own login call adding to the shared
+// authIpLimiter budget every other spec in the run also draws from.
+test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json') });
+
 test('a new bid makes the shipper\'s unread bell dot appear live, without a click or reload', async ({ page, baseURL }) => {
-  await page.goto('/login');
-  await page.fill('input[type="email"]', 'shipper@jebelalilogistics.ae');
-  await page.fill('input[type="password"]', 'demo1234');
-  await page.click('button[type="submit"]');
+  await page.goto('/dashboard');
   await expect(page).toHaveURL(/dashboard/);
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
   if (await skipWalkthrough.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -43,13 +47,10 @@ test('a new bid makes the shipper\'s unread bell dot appear live, without a clic
   const job = (await createRes.json()).job;
 
   // Independent session — a different real user, not the shipper's own
-  // cookies — matches how two real people would interact.
-  const carrierContext = await request.newContext({ baseURL });
-  const carrierLogin = await carrierContext.post('/api/auth/login', {
-    headers: { 'x-loadbyton-client': '1' },
-    data: { email: 'carrier@dubaidrayage.com', password: 'demo1234' },
-  });
-  expect(carrierLogin.ok()).toBeTruthy();
+  // cookies — matches how two real people would interact. Pre-baked
+  // carrier session (e2e/global-setup.js) instead of a fresh login, same
+  // authIpLimiter-budget reasoning as the shipper session above.
+  const carrierContext = await request.newContext({ baseURL, storageState: path.join(process.cwd(), 'e2e', '.auth', 'carrier.json') });
   const bidRes = await carrierContext.post(`/api/jobs/${job.id}/bids`, {
     headers: { 'x-loadbyton-client': '1' },
     data: { amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' },

@@ -26,9 +26,10 @@ test.before(async () => {
   await seededShipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   seededCarrier = makeClient(server.baseUrl);
   await seededCarrier.login('carrier@dubaidrayage.com', 'demo1234');
-  // GET /api/auth/me is ALSO gated by the same authIpLimiter (20 req/min/
-  // IP) as login/register — cached once here instead of every test
-  // re-fetching "who am I" for this same already-known account.
+  // GET /api/auth/me has its own, much higher-ceiling limiter
+  // (authMeLimiter) than login/register do, so it's not the budget concern
+  // the comment above is about — cached once here anyway, just to avoid
+  // every test re-fetching "who am I" for this same already-known account.
   seededCarrierId = (await seededCarrier.get('/api/auth/me')).body.user.id;
   // Used wherever a test just needs "some OTHER, unrelated broker" (e.g.
   // proving one-hop / broker_id scoping) — saves a full register+login

@@ -117,18 +117,23 @@ jobs:
       # instance instead of depending on Playwright's own spawn/readiness
       # logic in this environment.
       #
-      # --host 127.0.0.1 is required here specifically: without it, Vite's
-      # default loopback-only bind resolved to ::1 (IPv6) on this runner,
-      # not 127.0.0.1 (IPv4) — confirmed by pulling the actual web-server
-      # log artifact, which showed Vite genuinely ready in ~300ms while
-      # this step's IPv4 curl health-check still failed for its full 30s
-      # timeout. playwright.config.js's baseURL is 127.0.0.1, so the bind
-      # must match that explicitly rather than relying on however
-      # "localhost" happens to resolve on a given runner.
-      - name: Boot web dev server for e2e
+      # --host 127.0.0.1 was required here to fix an earlier IPv4/IPv6
+      # bind mismatch — now set in vite.config.js's `preview` block
+      # instead of a CLI flag, since `vite preview` (below) reads
+      # host/port from there.
+      #
+      # `vite preview` (production build), not `vite dev`: the dev
+      # server's React.StrictMode double-invokes effects, doubling every
+      # AuthProvider /api/auth/me call — combined with per-spec logins,
+      # this blew well past authIpLimiter's 20-req/min-per-IP budget
+      # regardless of how few logins any one spec performed (root-caused
+      # via actual request counts in a from-scratch local run, not
+      # guessed). Reuses the dist/ already built by "Build web frontend"
+      # above — no second build needed.
+      - name: Boot web preview server for e2e
         working-directory: web
         run: |
-          nohup npm run dev -- --port 5173 --host 127.0.0.1 > /tmp/loadbyton-web.log 2>&1 &
+          nohup npx vite preview --port 5173 > /tmp/loadbyton-web.log 2>&1 &
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:5173/ && break
             sleep 1

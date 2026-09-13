@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import path from 'node:path';
 
 // web/src/components/ui.jsx's shared Modal had no focus trap, no
 // focus-on-open, no Escape handler, and no focus-restore-on-close — a
@@ -7,12 +8,13 @@ import { test, expect } from '@playwright/test';
 // fix against RfpList.jsx's real "Create RFP" modal, one of Modal's 5
 // real consumers, not a synthetic fixture.
 
-async function loginAndDismissWalkthrough(page) {
-  await page.goto('/login');
-  await page.fill('input[type="email"]', 'shipper@jebelalilogistics.ae');
-  await page.fill('input[type="password"]', 'demo1234');
-  await page.click('button[type="submit"]');
-  await expect(page).toHaveURL(/dashboard/);
+// Pre-baked shipper session (e2e/global-setup.js) — see its comment for
+// why: avoids each test below adding its own login call to the shared
+// authIpLimiter budget every other spec in the run also draws from.
+test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json') });
+
+async function dismissWalkthrough(page) {
+  await page.goto('/dashboard');
   // Shell.jsx's first-run WalkthroughModal can cover the page independently
   // of anything this spec is testing — dismiss it if present so it doesn't
   // intercept clicks meant for the Create RFP trigger.
@@ -23,7 +25,7 @@ async function loginAndDismissWalkthrough(page) {
 }
 
 test('Modal moves focus in, cycles Tab, closes on Escape, and restores focus on close', async ({ page }) => {
-  await loginAndDismissWalkthrough(page);
+  await dismissWalkthrough(page);
   await page.goto('/rfps');
   const trigger = page.getByRole('button', { name: /Create.*RFP/i }).first();
   await trigger.click();
@@ -44,7 +46,7 @@ test('Modal moves focus in, cycles Tab, closes on Escape, and restores focus on 
 });
 
 test('Modal traps Tab within itself', async ({ page }) => {
-  await loginAndDismissWalkthrough(page);
+  await dismissWalkthrough(page);
   await page.goto('/rfps');
   await page.getByRole('button', { name: /Create.*RFP/i }).first().click();
   const dialog = page.getByRole('dialog');

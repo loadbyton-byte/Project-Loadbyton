@@ -96,15 +96,19 @@ test('security page has no critical/serious accessibility violations', async ({ 
   expect(violations, describeViolations(violations)).toEqual([]);
 });
 
-test('dashboard (authenticated) has no critical/serious accessibility violations', async ({ page }) => {
-  await page.goto('/login');
-  await page.fill('input[type="email"]', 'shipper@jebelalilogistics.ae');
-  await page.fill('input[type="password"]', 'demo1234');
-  await page.click('button[type="submit"]');
-  await expect(page).toHaveURL(/dashboard/);
-  const skip = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skip.isVisible({ timeout: 2000 }).catch(() => false)) await skip.click();
+test.describe('authenticated dashboard', () => {
+  // Pre-baked shipper session (e2e/global-setup.js) — see its comment for
+  // why: avoids this spec's own login call adding to the shared
+  // authIpLimiter budget every other spec in the run also draws from.
+  test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json') });
 
-  const violations = await auditPage(page);
-  expect(violations, describeViolations(violations)).toEqual([]);
+  test('dashboard (authenticated) has no critical/serious accessibility violations', async ({ page }) => {
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/dashboard/);
+    const skip = page.getByRole('button', { name: /Skip.*don.t show this again/i });
+    if (await skip.isVisible({ timeout: 2000 }).catch(() => false)) await skip.click();
+
+    const violations = await auditPage(page);
+    expect(violations, describeViolations(violations)).toEqual([]);
+  });
 });

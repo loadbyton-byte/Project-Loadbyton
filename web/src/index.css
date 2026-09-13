@@ -60,8 +60,17 @@
   --lb-slate-0: #FFFFFF;
 
   /* Loadbyton's "Success Green" / kept named --lb-teal-* (used only via
-     --status-success below) for the same minimal-diff reason as above. */
-  --lb-teal-600: #2E7D32;
+     --status-success below) for the same minimal-diff reason as above.
+     Darkened from #2E7D32: measured 4.41:1 against --status-success-bg
+     (--lb-teal-100, #E3F2E4) via axe-core (web/e2e/accessibility.spec.js),
+     just under the 4.5:1 minimum — #256B29 gives ~5.6:1, chosen with real
+     margin rather than right at the boundary (same reasoning as
+     --text-muted's fix elsewhere in this file: anti-aliased rendering can
+     measure a bit off the nominal hex). --status-success is used pervasively
+     as icon/text/border color against many different backgrounds, not just
+     its own -bg tint, so darkening the base token is correct here rather
+     than a narrow one-off fix. */
+  --lb-teal-600: #256B29;
   --lb-teal-500: #43A047;
   --lb-teal-100: #E3F2E4;
   --lb-red-600: #C62828;
@@ -131,7 +140,14 @@
 
   --brand-primary: var(--lb-ink-900);
   --brand-primary-hover: var(--lb-ink-800);
-  --brand-secondary: var(--lb-blue-500);
+  /* Was --lb-blue-500 (#3B82F6) — measured 3.68:1 on white via axe-core
+     (web/e2e/accessibility.spec.js), short of the 4.5:1 minimum for normal
+     text. --lb-blue-600 (#2563EB, already an existing named token, also
+     used for --status-info) gives ~5.2:1. Used pervasively as text/icon
+     color across ~27 files against many different backgrounds, so
+     darkening the base token is correct here rather than a narrow one-off
+     fix — same reasoning as --status-success's fix elsewhere in this file. */
+  --brand-secondary: var(--lb-blue-600);
   --brand-accent: var(--lb-orange-600);
   --brand-accent-hover: var(--lb-orange-700);
   /* D4 (gstack review): Badge's "accent" variant and the carrier tier badge

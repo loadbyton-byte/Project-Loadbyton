@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import path from 'node:path';
 
 // components/CommandPalette.jsx (brief §44) — Ctrl/Cmd+K quick nav + job
 // search. Authorization is NOT re-tested here — it's a UI layer over the
@@ -6,18 +7,19 @@ import { test, expect } from '@playwright/test';
 // calls, which is already role-scoped server-side. This only proves the
 // palette itself opens, searches, and navigates correctly.
 
-async function loginAndDismissWalkthrough(page) {
-  await page.goto('/login');
-  await page.fill('input[type="email"]', 'shipper@jebelalilogistics.ae');
-  await page.fill('input[type="password"]', 'demo1234');
-  await page.click('button[type="submit"]');
-  await expect(page).toHaveURL(/dashboard/);
+// Pre-baked shipper session (e2e/global-setup.js) — see its comment for
+// why: avoids each test below adding its own login call to the shared
+// authIpLimiter budget every other spec in the run also draws from.
+test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json') });
+
+async function dismissWalkthrough(page) {
+  await page.goto('/dashboard');
   const skip = page.getByRole('button', { name: /Skip.*don.t show this again/i });
   if (await skip.isVisible({ timeout: 2000 }).catch(() => false)) await skip.click();
 }
 
 test('opens with Ctrl/Cmd+K, filters nav items while typing, and navigates on Enter', async ({ page }) => {
-  await loginAndDismissWalkthrough(page);
+  await dismissWalkthrough(page);
 
   await page.keyboard.press('ControlOrMeta+k');
   const dialog = page.getByRole('dialog', { name: 'Jump to' });
@@ -37,13 +39,13 @@ test('opens with Ctrl/Cmd+K, filters nav items while typing, and navigates on En
 });
 
 test('the visible search button opens the same palette (discoverability for non-keyboard users)', async ({ page }) => {
-  await loginAndDismissWalkthrough(page);
+  await dismissWalkthrough(page);
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(page.getByRole('dialog', { name: 'Jump to' })).toBeVisible();
 });
 
 test('finds a real job by code and navigates to it', async ({ page }) => {
-  await loginAndDismissWalkthrough(page);
+  await dismissWalkthrough(page);
 
   const createRes = await page.request.post('/api/jobs', {
     headers: { 'x-loadbyton-client': '1' },
