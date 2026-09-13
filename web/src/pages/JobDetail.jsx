@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, Spinner, RatingPill, ErrorState } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, RatingPill, ErrorState, Skeleton } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
@@ -161,7 +161,20 @@ export default function JobDetail() {
       </div>
     );
   }
-  if (!data) return <div className="container-page flex justify-center py-24"><Spinner size={28} /></div>;
+  // Shaped like the real page (header block, then a 2-column body) rather
+  // than a bare centered spinner — this is the single most-visited,
+  // longest page in the app, so what "loading" looks like here matters.
+  if (!data) {
+    return (
+      <div className="container-page py-10">
+        <Skeleton variant="text" count={2} className="max-w-md" />
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1fr,340px]">
+          <Skeleton variant="card" count={3} className="grid-cols-1" />
+          <Skeleton variant="card" count={2} className="grid-cols-1" />
+        </div>
+      </div>
+    );
+  }
 
   const { job, bids, documents, payout, myRating } = data;
   const isShipper = user.id === job.shipper_id;

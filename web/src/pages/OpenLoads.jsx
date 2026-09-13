@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatAED, formatLabel, CONTAINER_EQUIPMENT, EQUIPMENT_TYPES, equipmentLabel, cargoTypeLabel, SHIPMENT_TYPES, depotLabel, paymentTermLabel } from '../lib/constants.js';
-import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button, Badge } from '../components/ui.jsx';
+import { EmptyState, ErrorState, Select, Input, Pagination, BentoStat, Card, Button, Badge, Skeleton } from '../components/ui.jsx';
 import ActionRequired from '../components/ActionRequired.jsx';
 import { IconAlert, IconPackage, IconSearch, IconMapPin } from '../components/icons.jsx';
 import { useLocale } from '../lib/i18n.jsx';
@@ -133,7 +133,7 @@ export default function OpenLoads() {
 
       <div className="mt-6">
         {jobs === null ? (
-          <p className="text-sm text-ink-muted">Loading…</p>
+          <Skeleton variant="row" count={6} />
         ) : jobsError ? (
           <ErrorState title="Couldn't load open loads" description={jobsError} onRetry={loadOpenJobs} />
         ) : jobs.length === 0 ? (
