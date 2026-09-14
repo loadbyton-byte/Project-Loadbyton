@@ -41,7 +41,7 @@ export default function Contracts() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">Contract lanes</h1>
-          <p className="mt-1 text-sm text-ink-muted">Commit monthly volume on a lane for priority carrier visibility and a discounted rate.</p>
+          <p className="mt-1 text-sm text-ink-muted">Commit monthly volume on a lane for priority transporter visibility and a discounted rate.</p>
         </div>
         <Button onClick={() => setShowForm(true)} className="shrink-0">
           <IconPlus size={18} /> New contract lane
@@ -89,7 +89,7 @@ export default function Contracts() {
         {contractsError ? (
           <ErrorState title="Couldn't load contract lanes" description={contractsError} onRetry={load} />
         ) : contracts.length === 0 ? (
-          <EmptyState icon={<IconShield size={28} />} title="No contract lanes yet" description="Commit to a monthly volume to get priority visibility from carriers and a lower take rate." />
+          <EmptyState icon={<IconShield size={28} />} title="No contract lanes yet" description="Commit to a monthly volume to get priority visibility from transporters and a lower take rate." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {contracts.map((c) => (

@@ -78,14 +78,14 @@ export default function RfpDetail() {
         </Card.Header>
         <Card.Content>
           {bids.length === 0 ? (
-            <EmptyState icon={<IconGavel size={28} />} title={t('rfp.noBids', 'No bids yet')} description={t('rfp.noBidsDesc', 'Carriers will submit their proposals here')} />
+            <EmptyState icon={<IconGavel size={28} />} title={t('rfp.noBids', 'No bids yet')} description={t('rfp.noBidsDesc', 'Transporters will submit their proposals here')} />
           ) : (
             <div className="space-y-3">
               {bids.map((bid) => (
                 <div key={bid.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3" style={{ borderColor: bid.status === 'ACCEPTED' ? 'var(--status-success)' : 'var(--border-default)' }}>
                   <div className="min-w-0">
                     <p className="tabular font-display text-base font-semibold text-ink">AED {bid.amount_aed?.toLocaleString()}</p>
-                    <p className="text-xs text-ink-muted">{bid.carrier_company || 'Unknown carrier'} · {bid.eta_days ? `${bid.eta_days}d ETA` : 'No ETA'}</p>
+                    <p className="text-xs text-ink-muted">{bid.carrier_company || 'Unknown transporter'} · {bid.eta_days ? `${bid.eta_days}d ETA` : 'No ETA'}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <Badge color={bid.status === 'ACCEPTED' ? 'success' : bid.status === 'REJECTED' ? 'danger' : 'neutral'}>{bid.status}</Badge>

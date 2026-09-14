@@ -120,8 +120,8 @@ const JOB_STATUS_ICON = {
 };
 const JOB_STATUS_EXPLANATION = {
   DRAFT: 'Not yet posted — visible only to you.',
-  OPEN: 'Visible to carriers — awaiting bids.',
-  AWARDED: 'Carrier confirmed — awaiting pickup.',
+  OPEN: 'Visible to transporters — awaiting bids.',
+  AWARDED: 'Transporter confirmed — awaiting pickup.',
   PICKED_UP: 'Cargo collected — awaiting departure confirmation.',
   IN_TRANSIT: 'Driver has departed the pickup location.',
   DELIVERED: 'Delivered — awaiting your confirmation to release payout.',

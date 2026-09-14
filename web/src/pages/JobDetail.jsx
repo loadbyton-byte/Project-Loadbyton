@@ -330,7 +330,7 @@ export default function JobDetail() {
               <Card.Content>
                 <p className="text-sm text-ink">
                   <strong>{formatMoney(awardConfirm.amount_aed, job.currency)}</strong> from{' '}
-                  <strong>{awardConfirm.carrier_company || 'this carrier'}</strong>.
+                  <strong>{awardConfirm.carrier_company || 'this transporter'}</strong>.
                 </p>
                 <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
                   <li>Every other bid on this job will be rejected once assigned</li>
@@ -347,7 +347,7 @@ export default function JobDetail() {
                     className="mt-3 rounded-md px-3 py-2 text-sm"
                     style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
                   >
-                    <p className="font-semibold">⚠ This carrier has declared 0 available units.</p>
+                    <p className="font-semibold">⚠ This transporter has declared 0 available units.</p>
                     <p className="mt-0.5 text-xs">They may already be fully committed to other jobs. You can still award — just confirm you understand the risk.</p>
                     <label className="mt-2 flex items-center gap-2 text-xs font-medium">
                       <input type="checkbox" checked={lowCapacityAcked} onChange={(e) => setLowCapacityAcked(e.target.checked)} />
@@ -372,7 +372,7 @@ export default function JobDetail() {
                           ) : !c.agreed_by_shipper ? (
                             <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
                           ) : (
-                            <Badge color="neutral">Awaiting carrier</Badge>
+                            <Badge color="neutral">Awaiting transporter</Badge>
                           )}
                           {/* Only the party who proposed a charge can withdraw it (server now
                               enforces this — see bids.routes.js) — a shipper couldn't previously
@@ -401,7 +401,7 @@ export default function JobDetail() {
                 {/* Negotiation thread — pre-award commercial chat on this
                     specific bid, separate from the post-award job chat. */}
                 <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Discuss with this carrier</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Discuss with this transporter</p>
                   <div className="mt-2 max-h-32 space-y-1.5 overflow-y-auto text-sm">
                     {negotiationMessages.length === 0 && <p className="text-ink-muted">No messages yet.</p>}
                     {negotiationMessages.map((m) => (
@@ -656,7 +656,7 @@ export default function JobDetail() {
                           className="mt-1 inline-flex w-fit items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium"
                           style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
                         >
-                          ⚠ Carrier expects extra charges: {b.ancillary_charges.map((c) => `${ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type} (${formatMoney(c.amount_aed, job.currency)})`).join(', ')}
+                          ⚠ Transporter expects extra charges: {b.ancillary_charges.map((c) => `${ANCILLARY_CHARGE_LABELS[c.charge_type] || c.charge_type} (${formatMoney(c.amount_aed, job.currency)})`).join(', ')}
                         </p>
                       )}
                       {!b.masked && b.carrier_available_units != null && (
@@ -940,7 +940,7 @@ export default function JobDetail() {
                       driver), but the shipper should see the difference
                       rather than this looking identical to a roster driver. */}
                   {!job.driver_verified && (
-                    <Badge color="warning" title="This driver was entered by name/phone only — not linked to the carrier's verified roster (no license or vehicle document on file)">
+                    <Badge color="warning" title="This driver was entered by name/phone only — not linked to the transporter's verified roster (no license or vehicle document on file)">
                       Not verified
                     </Badge>
                   )}

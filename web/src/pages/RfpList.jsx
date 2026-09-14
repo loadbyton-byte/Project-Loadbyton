@@ -57,7 +57,7 @@ export default function RfpList() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">{t('rfp.title', 'Request for Proposals')}</h1>
-          <p className="text-ink-muted mt-1">{t('rfp.desc', 'Manage your RFPs and carrier bids')}</p>
+          <p className="text-ink-muted mt-1">{t('rfp.desc', 'Manage your RFPs and transporter bids')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}><IconPlus size={16} className="mr-2" /> {t('rfp.create', 'Create RFP')}</Button>
       </div>
@@ -66,7 +66,7 @@ export default function RfpList() {
         <Card className="p-12 text-center">
           <IconPackage size={48} className="mx-auto text-ink-muted mb-4" />
           <h3 className="font-semibold text-ink mb-2">{t('rfp.none', 'No RFPs yet')}</h3>
-          <p className="text-ink-muted mb-6">{t('rfp.noneDesc', 'Create your first RFP to receive carrier proposals')}</p>
+          <p className="text-ink-muted mb-6">{t('rfp.noneDesc', 'Create your first RFP to receive transporter proposals')}</p>
           <Button onClick={() => setShowModal(true)}><IconPlus size={16} className="mr-2" /> {t('rfp.createFirst', 'Create First RFP')}</Button>
         </Card>
       ) : (

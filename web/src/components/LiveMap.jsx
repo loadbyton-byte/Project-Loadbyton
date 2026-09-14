@@ -96,7 +96,7 @@ export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, delivery
     }
     setMarker('pickup', pickupLat, pickupLng, '#2563eb', 'Pickup', false);
     setMarker('delivery', deliveryLat, deliveryLng, '#16a34a', 'Delivery', false);
-    setMarker('live', liveLat, liveLng, '#dc2626', 'Carrier — live', true);
+    setMarker('live', liveLat, liveLng, '#dc2626', 'Transporter — live', true);
     if (bounds.length === 1) map.setView(bounds[0], 13);
     else if (bounds.length > 1) map.fitBounds(bounds, { padding: [32, 32] });
   }, [hasAnyPoint, pickupLat, pickupLng, deliveryLat, deliveryLng, liveLat, liveLng]);

@@ -14,7 +14,7 @@ const POSTS = [
     title: 'Why "just add a phone number field" breaks a freight marketplace',
     date: '2026-06-30',
     tag: 'Product',
-    body: 'The instant a shipper and carrier can text each other directly, the second job happens off-platform — at which point the marketplace only ever sees the first transaction from any given pair. Contact gating isn\'t friction for its own sake; it\'s the difference between a marketplace and a one-time introduction service.',
+    body: 'The moment a shipper and transporter can text each other directly, the second job happens off-platform — at which point the marketplace only ever sees the first transaction from any given pair. Contact gating isn\'t friction for its own sake; it\'s the difference between a marketplace and a one-time introduction service.',
   },
   {
     title: 'A payment-holding state machine is not optional, even for a demo',

@@ -91,9 +91,9 @@ export default function StripeConnect() {
         <div className="flex items-start gap-3">
           <IconAlert size={20} className="text-brand-secondary mt-0.5" />
           <div className="text-sm text-ink-secondary space-y-1">
-            <p>{t('stripe.info1', 'Automated payouts release funds to carriers on delivery confirmation')}</p>
+            <p>{t('stripe.info1', 'Automated payouts release funds to transporters on delivery confirmation')}</p>
             <p>{t('stripe.info2', 'Supports instant payouts where available in UAE/GCC')}</p>
-            <p>{t('stripe.info3', 'Carriers must complete their own Stripe onboarding separately')}</p>
+            <p>{t('stripe.info3', 'Transporters must complete their own Stripe onboarding separately')}</p>
           </div>
         </div>
       </Card>
