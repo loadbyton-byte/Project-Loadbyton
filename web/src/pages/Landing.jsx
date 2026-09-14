@@ -5,7 +5,7 @@ import { EQUIPMENT_TYPES, equipmentLabel, formatAED, formatLabel } from '../lib/
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import FreightMotionScene from '../components/FreightMotionScene.jsx';
+import HeroLoadSnapshot from '../components/HeroLoadSnapshot.jsx';
 import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
 
 const EQUIPMENT_ICONS = {
@@ -16,31 +16,12 @@ const EQUIPMENT_ICONS = {
   PICKUP_10T: IconTruck, SIDE_LOADER_TRAILER: IconLayers, TRIPPER: IconLayers, CUSTOM: IconTruck,
 };
 
-// Module scope, evaluated once when this chunk first loads — before React
-// mounts anything. True only when server/index.js spliced build-time-
-// prerendered static markup into #root (see entry-server.jsx): that markup
-// already plays the hero's CSS entrance animation once, via CSS alone,
-// before any JS has run. main.jsx's createRoot() then discards and
-// recreates this whole tree, and without this guard the freshly created
-// elements would replay the same animation a second time — a visible
-// double-fade "pop" on every cold load of "/". Consumed at most once, by
-// whichever Landing instance mounts first; a later mount from client-side
-// navigation back to "/" animates normally.
-let skipHeroAnimOnce = typeof document !== 'undefined' && !!document.getElementById('root')?.hasChildNodes();
-
 export default function Landing() {
   usePageTitle('');
   const { t } = useLocale();
   const [carriers, setCarriers] = useState([]);
   const [market, setMarket] = useState(null);
   const [lanes, setLanes] = useState([]);
-  const [heroAnim] = useState(() => {
-    if (skipHeroAnimOnce) {
-      skipHeroAnimOnce = false;
-      return '';
-    }
-    return 'animate-hero-in';
-  });
 
   useEffect(() => {
     api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 4))).catch(() => {});
@@ -54,22 +35,21 @@ export default function Landing() {
 
   return (
     <div>
-      {/* Hero — split, not centered. Left: thesis. Right: an animated
-          operations diagram (FreightMotionScene) — a load posted, matched
-          against candidate carriers, agreed, moved and delivered, with the
-          transaction settling at the end — not a stock photo, and not a
-          slide deck about the product UI (that content is redundant with
-          the "How it works" section immediately below). */}
+      {/* Hero — split, not centered. Left: thesis. Right: a static example
+          of a shipper's actual first moment of value (comparing bids on a
+          posted load) — product direction is explicitly no hero
+          animation, no motion, no "instant matching" framing. See
+          HeroLoadSnapshot.jsx. */}
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
           <div className="flex flex-col justify-center">
-            <h1 className={`${heroAnim} font-display text-4xl font-semibold leading-[1.08] tracking-tight text-ink md:text-5xl`}>
+            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-ink md:text-5xl">
               {t('landing.hero.title')}
             </h1>
-            <p className={`${heroAnim} mt-5 max-w-lg text-base leading-relaxed text-ink-secondary md:text-lg`} style={{ animationDelay: '90ms' }}>
+            <p className="mt-5 max-w-lg text-base leading-relaxed text-ink-secondary md:text-lg">
               {t('landing.hero.subtitle')}
             </p>
-            <div className={`${heroAnim} mt-8 flex flex-wrap items-center gap-3`} style={{ animationDelay: '160ms' }}>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/register" className="btn-accent rounded-full px-6 py-3 text-base">
                 {t('landing.hero.ctaShipper')} <IconArrowRight size={18} />
               </Link>
@@ -77,23 +57,17 @@ export default function Landing() {
                 {t('landing.hero.ctaCarrier')}
               </Link>
             </div>
-            <div className={`${heroAnim} mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-ink-muted`} style={{ animationDelay: '230ms' }}>
+            <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-ink-muted">
               <span className="inline-flex items-center gap-1.5"><IconShield size={16} /> {t('landing.hero.verified')}</span>
-              <span className="inline-flex items-center gap-1.5"><IconClock size={16} /> {t('landing.hero.autoRelease', 'Auto-released in {hours}h', { hours: 24 })}</span>
+              <span className="inline-flex items-center gap-1.5"><IconClock size={16} /> {t('landing.hero.autoRelease', 'Payment releases automatically in {hours}h', { hours: 24 })}</span>
               <span className="inline-flex items-center gap-1.5"><IconCompass size={16} /> {t('landing.hero.coverage')}</span>
             </div>
           </div>
 
-          <div className={`${heroAnim} flex items-center`} style={{ animationDelay: '120ms' }}>
-            <div className="w-full overflow-hidden rounded-xl border shadow-lg transition-shadow duration-500 hover:shadow-xl" style={{ borderColor: 'var(--border-default)', background: 'var(--lb-ink-900)' }}>
+          <div className="flex items-center">
+            <div className="w-full overflow-hidden rounded-xl border shadow-lg" style={{ borderColor: 'var(--border-default)', background: 'var(--lb-ink-900)' }}>
               <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                <p className="flex items-center gap-2 font-display text-sm font-semibold text-white">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ background: 'var(--lb-orange-500)' }} />
-                    <span className="relative inline-flex h-2 w-2 rounded-full" style={{ background: 'var(--lb-orange-500)' }} />
-                  </span>
-                  Shipment in motion
-                </p>
+                <p className="font-display text-sm font-semibold text-white">Example load, open for bids</p>
                 {/* #FF7A70 literal, not a semantic token — this badge sits
                     on the hero card, which (like the sidebar) is fixed dark
                     chrome in both themes, so it needs a color chosen for
@@ -104,10 +78,10 @@ export default function Landing() {
                     orange over the dark card), below WCAG AA's 4.5:1.
                     #FF7A70 (the existing --brand-accent-hover dark-mode
                     value) measures 4.68:1 against the same background. */}
-                <span className="badge" style={{ background: 'rgba(242,96,12,0.2)', color: '#FF7A70' }}>Escrow-backed</span>
+                <span className="badge" style={{ background: 'rgba(242,96,12,0.2)', color: '#FF7A70' }}>Sample</span>
               </div>
 
-              <FreightMotionScene />
+              <HeroLoadSnapshot />
 
               <div className="grid grid-cols-3 gap-px px-5 py-4" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 {[
