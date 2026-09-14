@@ -49,7 +49,7 @@ router.get('/api/public/carriers', async (req, res) => {
 });
 
 router.get('/api/public/market', async (req, res) => {
-  const { commission_rate_bps } = await getSettings();
+  const { commission_rate_bps, cancellation_fee_bps_after_award } = await getSettings();
   const openJobs = (await db.prepare(`SELECT COUNT(*) c FROM jobs WHERE status='OPEN' AND is_demo=0`).get()).c;
   const avgDrayageAED = Math.round(unifiedLanes.reduce((s, l) => s + l.basePriceAed, 0) / unifiedLanes.length);
   const containersPerDay = 300;
@@ -61,6 +61,11 @@ router.get('/api/public/market', async (req, res) => {
       takeRate: `${(commission_rate_bps / 100).toFixed(1)}%`,
       annualSpend: Math.round(avgDrayageAED * containersPerDay * 365),
       openJobsNow: openJobs,
+      // Non-sensitive, admin-configurable policy value (getSettings) —
+      // same disclosure category as takeRate above. Lets the cancellation
+      // UI (CancelJobPanel.jsx) show a real, accurate fee estimate instead
+      // of vague "a fee may apply" language or a guessed number.
+      cancellationFeeBpsAfterAward: cancellation_fee_bps_after_award,
     },
   });
 });
