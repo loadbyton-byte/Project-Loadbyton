@@ -673,7 +673,11 @@ function ShellInner({ children }) {
                 <Logo />
                 <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-muted">
                   <Link to="/features" className="hover:text-ink">Features</Link>
+                  <Link to="/industries" className="hover:text-ink">Industries</Link>
                   <Link to="/pricing" className="hover:text-ink">Pricing</Link>
+                  <Link to="/trust" className="hover:text-ink">Trust &amp; Safety</Link>
+                  <Link to="/for-shippers" className="hover:text-ink">For Shippers</Link>
+                  <Link to="/for-transporters" className="hover:text-ink">For Transporters</Link>
                   <Link to="/about" className="hover:text-ink">About</Link>
                   <Link to="/blog" className="hover:text-ink">Blog</Link>
                   <Link to="/security" className="hover:text-ink">Security</Link>
@@ -683,7 +687,7 @@ function ShellInner({ children }) {
                 </div>
                 <div className="text-xs leading-relaxed text-ink-muted" dir="ltr">
                   <p>© {new Date().getFullYear()} Loadbyton Freight Technologies FZ-LLC. All rights reserved.</p>
-                  <p className="mt-1">Road freight marketplace software for the UAE — Dubai, Abu Dhabi, Sharjah &amp; Fujairah.</p>
+                  <p className="mt-1">Road freight marketplace software, built for businesses across the UAE.</p>
                   <p className="mt-1">Registered in Dubai, United Arab Emirates · <a href="mailto:support@loadbyton.ae" className="hover:text-ink">support@loadbyton.ae</a></p>
                 </div>
               </div>

@@ -37,6 +37,10 @@ const ROUTES = [
   { path: '/blog', slug: 'blog' },
   { path: '/terms', slug: 'terms' },
   { path: '/privacy', slug: 'privacy' },
+  { path: '/industries', slug: 'industries' },
+  { path: '/trust', slug: 'trust' },
+  { path: '/for-transporters', slug: 'for-transporters' },
+  { path: '/for-shippers', slug: 'for-shippers' },
 ];
 
 async function main() {
