@@ -903,10 +903,10 @@ export default function JobDetail() {
                 </Button>
               )}
               {isShipper && ['OPEN', 'AWARDED', 'DRAFT'].includes(job.status) && (
-                <CancelJobPanel jobId={job.id} label="Cancel job" variant="danger" onDone={load} />
+                <CancelJobPanel job={job} actorRole="SHIPPER" pendingBidCount={bids.filter((b) => b.status === 'PENDING').length} label="Cancel job" variant="danger" onDone={load} />
               )}
               {isAwardedCarrier && job.status === 'AWARDED' && (
-                <CancelJobPanel jobId={job.id} label="Cancel before pickup" variant="ghost" onDone={load} />
+                <CancelJobPanel job={job} actorRole="CARRIER" label="Cancel before pickup" variant="ghost" onDone={load} />
               )}
               {!isAwardedCarrier && !isShipper && !myBid && job.status !== 'OPEN' && (
                 <p className="text-xs text-ink-muted">No actions available.</p>
