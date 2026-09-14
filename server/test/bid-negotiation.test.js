@@ -252,6 +252,46 @@ test('only the party who proposed an ancillary charge can withdraw it, and no ne
   assert.match(lateCharge.raw, /already confirmed/);
 });
 
+test('post-award, no new ancillary charge can be proposed, agreed, or removed — even when award used skipNegotiation and never set terms_confirmed_at', async () => {
+  // Commercial-logic audit finding: the confirm-terms lock above only
+  // fires when terms_confirmed_at is actually set. award.service.js also
+  // allows an award via skipNegotiation without ever setting it, and
+  // none of the three ancillary-charge endpoints checked bid.status —
+  // so a charge could still be proposed (with a "New charge proposed"
+  // notification implying it mattered) on a bid that was already
+  // AWARDED, IN_TRANSIT, or DELIVERED, even though award.service.js only
+  // ever sums agreed charges once, at award time. Proposing/agreeing/
+  // removing one after that point has zero financial effect — it should
+  // be rejected outright, not silently accepted and ignored.
+  //
+  // Uses `outsider` as the bidding carrier (not the shared `carrier`
+  // client) purely to spread this file's bid-creation calls across two
+  // accounts — job-lifecycle.routes.js's bidLimiter caps bids at 10/min
+  // per carrier account, and this file's other tests already use most of
+  // that budget on `carrier`. `outsider` is otherwise only used elsewhere
+  // in this file to verify a non-participant gets 403'd; here it's
+  // legitimately the bid's own carrier, not a third party.
+  const { jobId, bidId } = await postJobAndBid(shipper, outsider);
+  const preAwardCharge = await outsider.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'SALIK', amountAed: 25 });
+  assert.equal(preAwardCharge.status, 201, preAwardCharge.raw);
+  const chargeId = preAwardCharge.body.charge.id;
+
+  const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
+  assert.equal(award.status, 200, award.raw);
+
+  const proposeAfter = await outsider.post(`/api/bids/${bidId}/ancillary-charges`, { chargeType: 'DEMURRAGE', amountAed: 100 });
+  assert.equal(proposeAfter.status, 403, proposeAfter.raw);
+  assert.match(proposeAfter.raw, /no longer pending/);
+
+  const agreeAfter = await shipper.post(`/api/bids/${bidId}/ancillary-charges/${chargeId}/agree`, {});
+  assert.equal(agreeAfter.status, 403, agreeAfter.raw);
+  assert.match(agreeAfter.raw, /no longer pending/);
+
+  const deleteAfter = await outsider.delete(`/api/bids/${bidId}/ancillary-charges/${chargeId}`);
+  assert.equal(deleteAfter.status, 403, deleteAfter.raw);
+  assert.match(deleteAfter.raw, /no longer pending/);
+});
+
 test('a bid ETA after the job\'s own deadline is rejected; withdrawing a bid notifies the shipper', async () => {
   const created = await shipper.post('/api/jobs', {
     containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
