@@ -287,6 +287,31 @@ test('a broker can view (and mine=true lists) the job they personally brokered, 
   assert.equal(blocked.status, 403, 'a different broker must not be able to view a job they had no part in');
 });
 
+test('a broker sees their own freshly-posted, not-yet-direct-assigned OPEN job in their job list', async () => {
+  // Found via manual UI verification of the new "Send transport request"
+  // button (Dashboard.jsx): listJobs's BROKER branch used to be
+  // `broker_id = ?` alone. broker_id is only set INSIDE direct-assign
+  // (broker.routes.js) — so a job a broker posts under their own
+  // shipper_id but hasn't assigned to anyone yet was invisible in their
+  // own "Your jobs" list, with no way to ever reach the assign action on
+  // it. Must now match shipper_id OR broker_id.
+  // Reuses the shared seededBroker (already logged in) — same rationale
+  // as the reassignment test above, avoiding another register() against
+  // the per-IP auth rate limiter.
+  const created = await seededBroker.post('/api/jobs', {
+    containerSize: '40FT', containerType: 'DRY',
+    pickupTerminal: 'JEBEL_ALI_T2', deliveryArea: 'JAFZA_SOUTH', deliveryAddress: 'Broker pre-assignment visibility test',
+    readyAt: new Date(Date.now() + 86400000).toISOString(),
+    deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+  });
+  assert.equal(created.status, 201, created.raw);
+  const jobId = created.body.job.id;
+
+  const list = await seededBroker.get('/api/jobs');
+  assert.equal(list.status, 200, list.raw);
+  assert.ok(list.body.jobs.some((j) => j.id === jobId), 'a broker\'s own posted, not-yet-assigned OPEN job must appear in their own job list');
+});
+
 test('owner-operator registers and can bid like a carrier', async () => {
   const anon = makeClient(server.baseUrl);
   const oop = await register(anon, 'OWNER_OPERATOR');
