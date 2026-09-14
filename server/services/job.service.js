@@ -354,8 +354,14 @@ async function listJobs(query, user) {
     params.push(user.id);
     if (!mine) params.push(user.is_demo ? 1 : 0);
   } else if (user.role === 'BROKER') {
-    where = 'broker_id = ?';
-    params.push(user.id);
+    // Bug found via manual UI verification: broker_id is only set once a
+    // job is actually direct-assigned (broker.routes.js), but a broker can
+    // also post a job under their own shipper_id first and direct-assign
+    // it later (or never). `broker_id = ?` alone made a broker's own
+    // freshly-posted, not-yet-assigned OPEN job invisible in their own
+    // dashboard — with no way to ever reach the direct-assign action on it.
+    where = '(shipper_id = ? OR broker_id = ?)';
+    params.push(user.id, user.id);
   }
   if (status) {
     const statuses = String(status).split(',').map((s) => s.trim()).filter(Boolean);

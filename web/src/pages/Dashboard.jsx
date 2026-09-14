@@ -19,6 +19,7 @@ import PlaceAutocomplete from '../components/PlaceAutocomplete.jsx';
 import TimeSlotPicker from '../components/TimeSlotPicker.jsx';
 import TermsModal from '../components/TermsModal.jsx';
 import ActionRequired from '../components/ActionRequired.jsx';
+import SendTransportRequestModal from '../features/job/SendTransportRequestModal.jsx';
 
 const PAGE_SIZE = 20;
 // jobs.deadline is a required DB column (sort options, detention/demurrage
@@ -114,7 +115,9 @@ export default function Dashboard() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [offset, setOffset] = useState(0);
+  const [assignJob, setAssignJob] = useState(null);
   const { addToast } = useToasts();
+  const isBroker = user?.role === 'BROKER';
 
   // Search-as-you-type without a request per keystroke.
   useEffect(() => {
@@ -935,21 +938,29 @@ export default function Dashboard() {
               <div className="mt-3">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {jobs.map((j) => (
-                    <JobCard
-                      key={j.id}
-                      onClick={() => navigate(`/jobs/${j.id}`)}
-                      jobCode={j.job_code}
-                      topRight={<StatusBadge status={j.status} />}
-                      priceLabel={formatAED(j.agreed_price_aed || j.max_budget_aed)}
-                      origin={formatLabel(j.pickup_terminal)}
-                      destination={formatLabel(j.delivery_area)}
-                      chips={[
-                        CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
-                        ...(j.container_count > 1 ? [`×${j.container_count} containers`] : []),
-                        ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
-                      ]}
-                      meta={<span className="flex items-center justify-between"><span>Deadline {formatDate(j.deadline)}</span><RatingPill rating={j.carrier_rating} /></span>}
-                    />
+                    <div key={j.id} className="flex flex-col gap-2">
+                      <JobCard
+                        onClick={() => navigate(`/jobs/${j.id}`)}
+                        jobCode={j.job_code}
+                        topRight={<StatusBadge status={j.status} />}
+                        priceLabel={formatAED(j.agreed_price_aed || j.max_budget_aed)}
+                        origin={formatLabel(j.pickup_terminal)}
+                        destination={formatLabel(j.delivery_area)}
+                        chips={[
+                          CONTAINER_EQUIPMENT.includes(j.equipment_type) ? `${j.container_size} ${formatLabel(j.container_type)}` : equipmentLabel(j.equipment_type),
+                          ...(j.container_count > 1 ? [`×${j.container_count} containers`] : []),
+                          ...(j.truck_count > 1 ? [`×${j.truck_count} trucks`] : []),
+                        ]}
+                        meta={<span className="flex items-center justify-between"><span>Deadline {formatDate(j.deadline)}</span><RatingPill rating={j.carrier_rating} /></span>}
+                      />
+                      {/* Sibling to JobCard's own <button> wrapper, not nested
+                          inside it — a <button> can't validly contain another
+                          interactive element. api.directAssign existed with
+                          no UI ever calling it; this is that trigger. */}
+                      {isBroker && j.status === 'OPEN' && (
+                        <Button size="sm" variant="secondary" onClick={() => setAssignJob(j)}>Send transport request</Button>
+                      )}
+                    </div>
                   ))}
                 </div>
                 <Pagination total={jobsTotal} limit={PAGE_SIZE} offset={offset} onChange={setOffset} />
@@ -958,6 +969,10 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {assignJob && (
+        <SendTransportRequestModal job={assignJob} onClose={() => setAssignJob(null)} onSent={loadJobs} />
+      )}
     </div>
   );
 }
