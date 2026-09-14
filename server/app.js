@@ -108,6 +108,7 @@ const routes = [
   './routes/enterprise.routes',
   './routes/fleet.routes',
   './routes/broker.routes',
+  './routes/directory.routes',
   './routes/gcc.routes',
   './routes/stops.routes',
   './routes/insurance.routes',

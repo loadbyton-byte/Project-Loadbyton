@@ -104,6 +104,11 @@ export const api = {
   // public
   publicLanes: () => get('/public/lanes'),
   publicCarriers: () => get('/public/carriers'),
+  transporters: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== ''));
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return get(`/transporters${suffix}`);
+  },
   publicMarket: () => get('/public/market'),
 
   // jobs

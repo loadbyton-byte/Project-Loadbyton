@@ -37,6 +37,7 @@ const MyBids = lazy(() => import('./pages/MyBids.jsx'));
 const WonJobs = lazy(() => import('./pages/WonJobs.jsx'));
 const Templates = lazy(() => import('./pages/Templates.jsx'));
 const Contracts = lazy(() => import('./pages/Contracts.jsx'));
+const Transporters = lazy(() => import('./pages/Transporters.jsx'));
 const Earnings = lazy(() => import('./pages/Earnings.jsx'));
 const Drivers = lazy(() => import('./pages/Drivers.jsx'));
 const Analytics = lazy(() => import('./pages/Analytics.jsx'));
@@ -168,6 +169,7 @@ export default function App() {
           <Route path="/dashboard" element={<RequireAuth roles={['SHIPPER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Dashboard /></RequireAuth>} />
           <Route path="/templates" element={<RequireAuth roles={['SHIPPER']}><Templates /></RequireAuth>} />
           <Route path="/contracts" element={<RequireAuth roles={['SHIPPER']}><Contracts /></RequireAuth>} />
+          <Route path="/transporters" element={<RequireAuth roles={['SHIPPER', 'FORWARDER']}><Transporters /></RequireAuth>} />
 
           <Route path="/open-loads" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><OpenLoads /></RequireAuth>} />
           <Route path="/my-bids" element={<RequireAuth roles={['CARRIER', 'OWNER_OPERATOR']}><MyBids /></RequireAuth>} />
