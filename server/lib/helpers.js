@@ -222,6 +222,10 @@ async function getSettings() {
     // above) — change via POST /api/admin/settings once a real
     // fraud-review SLA is set.
     iban_change_hold_hours: Number(/** @type {any} */ (map).iban_change_hold_hours ?? 72),
+    // Commercial-logic audit finding — see server/schema.js's seedSetting
+    // call for the full reasoning. escrow.service.js's
+    // runUnpaidAwardReminderSweep reads this.
+    unpaid_award_reminder_hours: Number(/** @type {any} */ (map).unpaid_award_reminder_hours ?? 6),
   };
 }
 

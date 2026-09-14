@@ -18,7 +18,7 @@ process.env.NODE_ENV = 'test';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const db = require('../db');
-const { runAutoReleaseSweep } = require('../services/escrow.service');
+const { runAutoReleaseSweep, runUnpaidAwardReminderSweep } = require('../services/escrow.service');
 const { publishScheduledJobs } = require('../services/scheduling.service');
 const { processOutboxBatch } = require('../workers/outbox.worker');
 
@@ -83,4 +83,52 @@ test('processOutboxBatch run twice concurrently processes a pending event exactl
 
   const ev = await db.prepare('SELECT status FROM outbox_events WHERE id=?').get(evId);
   assert.equal(ev.status, 'PROCESSED');
+});
+
+test('runUnpaidAwardReminderSweep run twice concurrently reminds a stuck-unpaid job exactly once', async () => {
+  const shipperId = await seedUser('unpaid-shipper@test.local');
+  const carrierId = await seedUser('unpaid-carrier@test.local');
+  const overdue = new Date(Date.now() - 100 * 3600 * 1000).toISOString();
+  const jobRes = await db.prepare(
+    `INSERT INTO jobs (job_code, shipper_id, carrier_id, container_size, container_type, pickup_terminal, delivery_area, delivery_address, ready_at, deadline, status, escrow_status, processor_payment_status, awarded_at)
+     VALUES ('SWEEP-TEST-3', ?, ?, '20FT', 'DRY', 'JEBEL_ALI_T1', 'AL_QUOZ', 'x', ?, ?, 'AWARDED', 'HELD', 'REQUIRES_PAYMENT', ?) RETURNING id`
+  ).run(shipperId, carrierId, overdue, overdue, overdue);
+  const jobId = Number(jobRes.lastInsertRowid);
+
+  const [a, b] = await Promise.all([runUnpaidAwardReminderSweep(null), runUnpaidAwardReminderSweep(null)]);
+  assert.equal(a + b, 1, 'the same stuck-unpaid job must be claimed by exactly one of the two concurrent sweep calls, not both');
+
+  const job = await db.prepare('SELECT payment_reminder_sent_at, status, processor_payment_status FROM jobs WHERE id=?').get(jobId);
+  assert.ok(job.payment_reminder_sent_at, 'must record that a reminder was sent');
+  // Deliberately not auto-cancelled or otherwise touched — a real business
+  // decision for the platform operator, not something a reminder sweep
+  // should decide unilaterally.
+  assert.equal(job.status, 'AWARDED');
+  assert.equal(job.processor_payment_status, 'REQUIRES_PAYMENT');
+
+  // A second sweep run must not re-remind an already-reminded job.
+  const again = await runUnpaidAwardReminderSweep(null);
+  assert.equal(again, 0);
+});
+
+test('runUnpaidAwardReminderSweep ignores a job with no awarded_at (pre-migration data) and one not yet past the threshold', async () => {
+  const shipperId = await seedUser('unpaid-shipper-2@test.local');
+  const carrierId = await seedUser('unpaid-carrier-2@test.local');
+  const recent = new Date(Date.now() - 60 * 1000).toISOString();
+
+  const noAwardedAt = await db.prepare(
+    `INSERT INTO jobs (job_code, shipper_id, carrier_id, container_size, container_type, pickup_terminal, delivery_area, delivery_address, ready_at, deadline, status, escrow_status, processor_payment_status)
+     VALUES ('SWEEP-TEST-4', ?, ?, '20FT', 'DRY', 'JEBEL_ALI_T1', 'AL_QUOZ', 'x', ?, ?, 'AWARDED', 'HELD', 'REQUIRES_PAYMENT') RETURNING id`
+  ).run(shipperId, carrierId, recent, recent);
+  const recentAward = await db.prepare(
+    `INSERT INTO jobs (job_code, shipper_id, carrier_id, container_size, container_type, pickup_terminal, delivery_area, delivery_address, ready_at, deadline, status, escrow_status, processor_payment_status, awarded_at)
+     VALUES ('SWEEP-TEST-5', ?, ?, '20FT', 'DRY', 'JEBEL_ALI_T1', 'AL_QUOZ', 'x', ?, ?, 'AWARDED', 'HELD', 'REQUIRES_PAYMENT', ?) RETURNING id`
+  ).run(shipperId, carrierId, recent, recent, recent);
+
+  await runUnpaidAwardReminderSweep(null);
+
+  const j1 = await db.prepare('SELECT payment_reminder_sent_at FROM jobs WHERE id=?').get(Number(noAwardedAt.lastInsertRowid));
+  const j2 = await db.prepare('SELECT payment_reminder_sent_at FROM jobs WHERE id=?').get(Number(recentAward.lastInsertRowid));
+  assert.equal(j1.payment_reminder_sent_at, null, 'a job with no awarded_at must never be reminded — no reliable timestamp to judge staleness from');
+  assert.equal(j2.payment_reminder_sent_at, null, 'a job awarded well within the threshold must not be reminded yet');
 });

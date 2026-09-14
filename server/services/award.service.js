@@ -178,8 +178,8 @@ async function awardJob(req, res, jobId, bidId) {
       const isInstant = job.payment_tier === 'INSTANT' || job.payment_tier === 'SPOT_ESCROW' || !job.payment_tier;
       await trx.query(
         isInstant
-          ? `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', updated_at=datetime('now') WHERE id=?`
-          : `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, updated_at=datetime('now') WHERE id=?`,
+          ? `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, escrow_status='HELD', processor_payment_status='REQUIRES_PAYMENT', awarded_at=datetime('now'), updated_at=datetime('now') WHERE id=?`
+          : `UPDATE jobs SET status='AWARDED', carrier_id=?, agreed_price_aed=?, awarded_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
         [bid.carrier_id, agreedPrice, jobId]
       );
 

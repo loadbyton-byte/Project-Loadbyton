@@ -731,7 +731,7 @@ router.get('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
 });
 
 router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
-  const { commission_rate_bps, auto_release_hours, cancellation_fee_bps_after_award, two_person_approval_required, iban_change_hold_hours } = req.body || {};
+  const { commission_rate_bps, auto_release_hours, cancellation_fee_bps_after_award, two_person_approval_required, iban_change_hold_hours, unpaid_award_reminder_hours } = req.body || {};
   if (commission_rate_bps !== undefined) {
     // Number.isFinite (not just a bounds comparison) rejects non-numeric
     // input outright — "abc" < 0 and "abc" > 10000 are both false for a
@@ -762,6 +762,12 @@ router.patch('/api/admin/settings', auth(['ADMIN']), async (req, res) => {
       return sendError(res, 400, 'iban_change_hold_hours must be a number between 0 and 720');
     }
     await db.prepare('UPDATE settings SET value=? WHERE key=\'iban_change_hold_hours\'').run(String(Number(iban_change_hold_hours)));
+  }
+  if (unpaid_award_reminder_hours !== undefined) {
+    if (!Number.isFinite(Number(unpaid_award_reminder_hours)) || Number(unpaid_award_reminder_hours) < 1 || Number(unpaid_award_reminder_hours) > 168) {
+      return sendError(res, 400, 'unpaid_award_reminder_hours must be a number between 1 and 168');
+    }
+    await db.prepare('UPDATE settings SET value=? WHERE key=\'unpaid_award_reminder_hours\'').run(String(Number(unpaid_award_reminder_hours)));
   }
   await writeAudit(req, { userId: req.actorId, action: 'SETTINGS_UPDATE', details: JSON.stringify(req.body) });
   res.json({ settings: await getSettings() });
