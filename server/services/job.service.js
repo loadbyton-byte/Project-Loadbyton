@@ -103,6 +103,24 @@ async function updateJobStatus(jobId, nextStatus, req) {
   // Primary status update via repository (uses repository to satisfy modularization)
   await jobRepository.updateStatus(id, { status: nextStatus });
 
+  // Commercial-logic audit finding — record WHO cancelled and WHY, for
+  // every cancellation (pre- or post-award), not just the post-award ones
+  // the fee block below cares about. This is deliberately just a record,
+  // not a decision: it does NOT change who gets charged what (see that
+  // block's own comment on the actual, still-unresolved fairness gap —
+  // the fee below is charged to the shipper regardless of which role is
+  // recorded here) and it does NOT require a reason (optional `reason` in
+  // the request body; existing callers that don't send one keep working).
+  // A real actor-aware compensation model (e.g. a carrier-caused
+  // cancellation costing the carrier something, not just a reliability
+  // strike) is a pricing decision for the platform operator, not
+  // something this fix invents.
+  if (nextStatus === 'CANCELLED') {
+    await db.prepare(
+      `UPDATE jobs SET cancelled_by_role=?, cancellation_reason=?, cancelled_at=datetime('now') WHERE id=?`
+    ).run(role, (req.body && req.body.reason) ? String(req.body.reason).slice(0, 1000) : null, id);
+  }
+
   // Escrow / payout side-effects — preserve exact original behavior
   // Use direct db for multi-column updates that repository.updateStatus also supports,
   // but keep explicit SQL to match original routes byte-for-byte semantics.

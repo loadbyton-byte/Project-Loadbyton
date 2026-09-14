@@ -26,6 +26,7 @@ import HaulierCodeToken from '../features/job/HaulierCodeToken.jsx';
 import BackloadMatches from '../features/job/BackloadMatches.jsx';
 import PodForm from '../features/job/PodForm.jsx';
 import DisputePanel from '../features/job/DisputePanel.jsx';
+import CancelJobPanel from '../features/job/CancelJobPanel.jsx';
 
 const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'OTHER'];
 
@@ -735,7 +736,7 @@ export default function JobDetail() {
                     <span>Auto-releases {formatDateTime(track.autoReleaseAt)}</span>
                   </div>
                 )}
-                {job.status === 'CANCELLED' && job.agreed_price_aed ? (
+                {job.status === 'CANCELLED' ? (
                   // A cancelled job's payouts row still exists (flipped to
                   // status='CANCELLED', not deleted — job.service.js) so
                   // `payout` below is still truthy here, but its gross/net/
@@ -748,13 +749,25 @@ export default function JobDetail() {
                   // just never surfaced here before.
                   <div className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
                     <p className="text-ink-muted">Cancelled</p>
-                    <p className="tabular font-display text-lg font-semibold text-ink">
-                      {formatMoney(job.agreed_price_aed - (job.cancellation_fee_aed || 0), job.currency)} refunded
-                    </p>
-                    <p className="text-xs text-ink-muted">
-                      Agreed price {formatMoney(job.agreed_price_aed, job.currency)}
-                      {job.cancellation_fee_aed > 0 ? ` − cancellation fee ${formatMoney(job.cancellation_fee_aed, job.currency)}` : ' — no cancellation fee applied'}
-                    </p>
+                    {job.agreed_price_aed ? (
+                      <>
+                        <p className="tabular font-display text-lg font-semibold text-ink">
+                          {formatMoney(job.agreed_price_aed - (job.cancellation_fee_aed || 0), job.currency)} refunded
+                        </p>
+                        <p className="text-xs text-ink-muted">
+                          Agreed price {formatMoney(job.agreed_price_aed, job.currency)}
+                          {job.cancellation_fee_aed > 0 ? ` − cancellation fee ${formatMoney(job.cancellation_fee_aed, job.currency)}` : ' — no cancellation fee applied'}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-ink-muted">Cancelled before award — nothing was charged.</p>
+                    )}
+                    {job.cancelled_by_role && (
+                      <p className="mt-1 text-xs text-ink-muted">Cancelled by {job.cancelled_by_role.toLowerCase()}{job.cancelled_at ? ` · ${formatDateTime(job.cancelled_at)}` : ''}</p>
+                    )}
+                    {job.cancellation_reason && (
+                      <p className="mt-1 text-xs italic text-ink-muted">"{job.cancellation_reason}"</p>
+                    )}
                   </div>
                 ) : payout && (
                   <div className="border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -890,10 +903,10 @@ export default function JobDetail() {
                 </Button>
               )}
               {isShipper && ['OPEN', 'AWARDED', 'DRAFT'].includes(job.status) && (
-                <Button className="w-full" variant="danger" onClick={() => act(() => api.setStatus(job.id, 'CANCELLED'))} loading={busy}>Cancel job</Button>
+                <CancelJobPanel jobId={job.id} label="Cancel job" variant="danger" onDone={load} />
               )}
               {isAwardedCarrier && job.status === 'AWARDED' && (
-                <Button className="w-full" variant="ghost" onClick={() => act(() => api.setStatus(job.id, 'CANCELLED'))} loading={busy}>Cancel before pickup</Button>
+                <CancelJobPanel jobId={job.id} label="Cancel before pickup" variant="ghost" onDone={load} />
               )}
               {!isAwardedCarrier && !isShipper && !myBid && job.status !== 'OPEN' && (
                 <p className="text-xs text-ink-muted">No actions available.</p>
