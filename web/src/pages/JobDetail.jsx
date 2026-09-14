@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, EscrowBadge, RatingPill, ErrorState, Skeleton } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, PaymentStatusBadge, RatingPill, ErrorState, Skeleton } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
@@ -118,7 +118,7 @@ export default function JobDetail() {
   // surface that once, then clean the URL so a refresh doesn't re-show it.
   const [payNotice, setPayNotice] = useState(() => {
     const v = new URLSearchParams(window.location.search).get('pay');
-    if (v === 'ok') return 'Payment received — escrow is now funded.';
+    if (v === 'ok') return 'Payment received — funds are now held for this transport.';
     if (v === 'cancel' || v === 'declined') return 'Payment was cancelled or declined. You can retry from the payment panel below.';
     return null;
   });
@@ -339,7 +339,7 @@ export default function JobDetail() {
                       ? <>Final price locks at <strong className="text-ink">{formatMoney(finalAwardTotal, job.currency)}</strong> ({formatMoney(awardConfirm.amount_aed, job.currency)} bid + {formatMoney(agreedChargesTotal, job.currency)} agreed extras) — nothing can be changed after this</>
                       : <>The price is locked at {formatMoney(awardConfirm.amount_aed, job.currency)} — bids can't be changed after this</>}
                   </li>
-                  <li>{(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Funds move into escrow and the job moves to "Awarded"' : `The job moves to "Awarded" — ${paymentTermLabel(job.payment_tier)}`}</li>
+                  <li>{(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Payment is held for this transport and the job moves to "Awarded"' : `The job moves to "Awarded" — ${paymentTermLabel(job.payment_tier)}`}</li>
                 </ul>
 
                 {isLowCapacity && (
@@ -454,7 +454,7 @@ export default function JobDetail() {
                 "Escrow: PENDING forever" the badge used to render for
                 every tier. The credit-due/overdue/settled badge just below
                 is the accurate status for those instead. */}
-            {(!job.payment_tier || job.payment_tier === 'INSTANT') && <EscrowBadge status={job.escrow_status} jobStatus={job.status} />}
+            {(!job.payment_tier || job.payment_tier === 'INSTANT') && <PaymentStatusBadge status={job.escrow_status} jobStatus={job.status} />}
             <Badge color={job.payment_tier && job.payment_tier !== 'INSTANT' ? 'accent' : 'neutral'}>{paymentTermLabel(job.payment_tier || 'INSTANT')}</Badge>
             {DEFERRED_PAYMENT_TERMS.includes(job.payment_tier) && job.credit_due_at && (() => {
               // Matches admin/CreditTab.jsx's overdue calculation exactly —
@@ -899,7 +899,7 @@ export default function JobDetail() {
               )}
               {isShipper && job.status === 'DELIVERED' && (
                 <Button className="w-full" variant="accent" onClick={() => act(() => api.setStatus(job.id, 'COMPLETED'))} loading={busy}>
-                  {(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Confirm delivery & release escrow' : 'Confirm delivery'}
+                  {(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Confirm delivery & release payment' : 'Confirm delivery'}
                 </Button>
               )}
               {isShipper && ['OPEN', 'AWARDED', 'DRAFT'].includes(job.status) && (

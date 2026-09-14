@@ -45,7 +45,7 @@ export default function FuelAdvancePanel({ job, onDone }) {
           {taken ? (
             <>
               <p className="font-medium text-ink">{formatAED(taken.amount_aed)} {taken.type === 'FUEL' ? 'fuel' : 'Salik'} advance issued</p>
-              <p className="text-xs text-ink-muted">Deducted from your payout when this job's escrow is released.</p>
+              <p className="text-xs text-ink-muted">Deducted from your payout when this job's payment is released.</p>
             </>
           ) : (
             <p className="font-medium text-ink">Up to {formatAED(estimatedAmount)} available now — 20% of the agreed price, deducted from your final payout</p>

@@ -121,9 +121,9 @@ export default function Landing() {
           <div className="mt-10 grid gap-8 md:grid-cols-4">
             {[
               { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, target price — one form, structured instantly. No back-and-forth to get a job in front of carriers.', icon: <IconPackage size={20} /> },
-              { n: '02', title: 'Carriers bid', body: 'Verified carriers only — TRN, trade licence, and insurance checked before they ever see a load. Every bid is priced against the live Lane Index.', icon: <IconTruck size={20} /> },
-              { n: '03', title: 'Award & escrow', body: 'Accept a bid and the price locks. Funds move into escrow automatically — no invoice to chase, no transfer to confirm by phone.', icon: <IconShield size={20} /> },
-              { n: '04', title: 'Deliver & release', body: "POD goes up, escrow releases — confirm it yourself or let the 24-hour auto-release handle it. Either way, you're not calling anyone to get paid.", icon: <IconClock size={20} /> },
+              { n: '02', title: 'Transporters bid', body: 'Verified transporters only — TRN, trade licence, and insurance checked before they ever see a load. Every bid is priced against the live Lane Index.', icon: <IconTruck size={20} /> },
+              { n: '03', title: 'Agree the terms', body: 'Accept a bid and the price locks. Payment is held for the transport automatically — no invoice to chase, no transfer to confirm by phone.', icon: <IconShield size={20} /> },
+              { n: '04', title: 'Deliver & release', body: "POD goes up, payment releases — confirm it yourself or let the 24-hour auto-release handle it. Either way, you're not calling anyone to get paid.", icon: <IconClock size={20} /> },
             ].map((step, i) => (
               <Reveal key={step.n} delay={i * 70}>
                 <div className="flex h-10 w-10 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}>
@@ -168,7 +168,7 @@ export default function Landing() {
           <div className="grid items-center gap-8 lg:grid-cols-[1.1fr,0.9fr]">
             <div>
               <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">Built for the whole UAE <span style={{ color: 'var(--brand-accent)' }}>— not just Dubai.</span></Reveal>
-              <Reveal as="p" delay={40} className="mt-2 max-w-md text-sm text-ink-muted">Post a job from Fujairah Port the same way you'd post one from Jebel Ali — same escrow, same bidding, same rules.</Reveal>
+              <Reveal as="p" delay={40} className="mt-2 max-w-md text-sm text-ink-muted">Post a job from Fujairah Port the same way you'd post one from Jebel Ali — same payment protection, same bidding, same rules.</Reveal>
             </div>
             <div className="grid grid-cols-3 gap-4">
               {[

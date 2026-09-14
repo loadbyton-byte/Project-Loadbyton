@@ -5,14 +5,14 @@ import { Reveal } from '../components/Reveal.jsx';
 import { IconShield, IconLayers, IconClock, IconArrowRight } from '../components/icons.jsx';
 
 const PRINCIPLES = [
-  { icon: <IconShield size={20} />, title: 'Enforced server-side', body: 'Carrier verification, the escrow gate, and the forward-only status flow aren\'t UI hints — every one of them is checked on the server, on every request.' },
+  { icon: <IconShield size={20} />, title: 'Enforced server-side', body: 'Transporter verification, the payment-hold gate, and the forward-only status flow aren\'t UI hints — every one of them is checked on the server, on every request.' },
   { icon: <IconLayers size={20} />, title: 'A record that survives the job', body: 'Every bid, award, and status change writes to an append-only audit log. Documents and proof of delivery stay attached to the job permanently, not to whichever chat thread happened to carry them.' },
   { icon: <IconClock size={20} />, title: 'Built for the repeat shipment', body: 'A shipper who posts once and goes back to their usual broker is a cost paid for nothing — so the product is built around what makes the second and fiftieth shipment easier, not just the first.' },
 ];
 
 export default function About() {
   usePageTitle('About');
-  useMeta('Loadbyton is a UAE road freight & container drayage marketplace built to make the second shipment happen on-platform, with an accountable, escrow-backed system in place of an off-platform chat.');
+  useMeta('Loadbyton is a UAE road freight & container drayage marketplace built to make the second shipment happen on-platform, with an accountable, payment-protected system in place of an off-platform chat.');
   return (
     <div dir="ltr">
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
@@ -47,7 +47,7 @@ export default function About() {
         <div className="container-page max-w-2xl">
           <Reveal className="space-y-5 text-base leading-relaxed text-ink-secondary">
             <p>
-              Loadbyton exists to change what happens after the first job. The product is built around the second shipment: recurring templates, committed contract lanes, a personal rate benchmark, and an escrow flow real enough that carriers and shippers can trust it with money.
+              Loadbyton exists to change what happens after the first job. The product is built around the second shipment: recurring templates, committed contract lanes, a personal rate benchmark, and a payment-protection flow real enough that transporters and shippers can trust it with money.
             </p>
             <p>
               It's a working system, not a slide deck — payouts on the current deployment are a database status flip rather than a licensed money-transfer rail, and that's stated plainly on the <Link to="/security" className="text-brand-secondary hover:underline">Security</Link> and <Link to="/compliance" className="text-brand-secondary hover:underline">Compliance</Link> pages rather than glossed over. But the logic underneath — the state machine, the verification gate, the audit trail — is the logic a real freight marketplace needs to run on, and swapping in a licensed payout rail is a change to the execution layer, not a rewrite of the product.

@@ -6,7 +6,7 @@ import { Reveal } from '../components/Reveal.jsx';
 import { IconCheck, IconArrowRight, IconShield } from '../components/icons.jsx';
 
 const TIERS = [
-  { name: 'Bronze', desc: 'Every account starts here.', fee: 'Standard take rate', perks: ['Post or bid on any open load', 'Escrow + live tracking', 'Standard 24h payout'] },
+  { name: 'Bronze', desc: 'Every account starts here.', fee: 'Standard take rate', perks: ['Post or bid on any open load', 'Payment protection + live tracking', 'Standard 24h payout'] },
   { name: 'Silver', desc: 'Unlocked by volume.', fee: 'Reduced take rate', perks: ['Everything in Bronze', 'Priority support', 'Personal rate benchmark'], recommended: true },
   { name: 'Gold', desc: 'Committed lane volume.', fee: 'Lowest take rate', perks: ['Everything in Silver', 'Contract-lane priority visibility', 'Fastest payout on POD'] },
 ];
@@ -70,7 +70,7 @@ export default function Pricing() {
               <p className="mt-4 font-display text-lg font-semibold text-ink">Where the fee actually goes</p>
             </div>
             <p className="text-sm leading-relaxed text-ink-secondary">
-              The take rate funds carrier verification, escrow administration, dispute resolution, and the Lane Index data product — not a sales team cold-calling shippers. Freight amount passes through to the carrier; the platform only ever holds the fee.
+              The take rate funds transporter verification, payment administration, dispute resolution, and the Lane Index data product — not a sales team cold-calling shippers. Freight amount passes through to the transporter; the platform only ever holds the fee.
             </p>
           </Reveal>
         </div>
