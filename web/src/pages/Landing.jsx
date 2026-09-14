@@ -120,7 +120,7 @@ export default function Landing() {
           <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Post, bid, award, deliver — the same sequence every time, whether it's one container or a fifty-truck contract lane.</Reveal>
           <div className="mt-10 grid gap-8 md:grid-cols-4">
             {[
-              { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, target price — one form, structured instantly. No back-and-forth to get a job in front of carriers.', icon: <IconPackage size={20} /> },
+              { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, target price — one form, structured instantly. No back-and-forth to get a job in front of transporters.', icon: <IconPackage size={20} /> },
               { n: '02', title: 'Transporters bid', body: 'Verified transporters only — TRN, trade licence, and insurance checked before they ever see a load. Every bid is priced against the live Lane Index.', icon: <IconTruck size={20} /> },
               { n: '03', title: 'Agree the terms', body: 'Accept a bid and the price locks. Payment is held for the transport automatically — no invoice to chase, no transfer to confirm by phone.', icon: <IconShield size={20} /> },
               { n: '04', title: 'Deliver & release', body: "POD goes up, payment releases — confirm it yourself or let the 24-hour auto-release handle it. Either way, you're not calling anyone to get paid.", icon: <IconClock size={20} /> },
@@ -221,7 +221,7 @@ export default function Landing() {
             <div className="relative">
               <span className="badge" style={{ background: 'color-mix(in srgb, var(--brand-accent) 16%, transparent)', color: 'var(--brand-accent-on-tint)' }}>Volume inquiry</span>
               <p className="mt-3 font-display text-xl font-semibold text-ink">Ten containers or five trucks — one job, not ten conversations.</p>
-              <p className="mt-1 max-w-lg text-sm text-ink-muted">State the count once. Carriers bid to cover the whole batch at one agreed price — no unit-by-unit negotiation, no separate thread per truck.</p>
+              <p className="mt-1 max-w-lg text-sm text-ink-muted">State the count once. Transporters bid to cover the whole batch at one agreed price — no unit-by-unit negotiation, no separate thread per truck.</p>
             </div>
             <Link to="/register" className="btn-accent relative shrink-0 rounded-full px-6 py-3 text-base transition-transform duration-200 group-hover:scale-[1.03]">
               Post a volume inquiry <IconArrowRight size={18} />
@@ -230,12 +230,12 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Carrier directory */}
+      {/* Transporter directory */}
       <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page">
           <div className="flex items-end justify-between">
             <div>
-              <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">Carriers who show up — verified, rated, accountable.</Reveal>
+              <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">Transporters who show up — verified, rated, accountable.</Reveal>
               <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Trade licence, TRN, and insurance checked before their first bid. Ratings and job counts come from delivery history on the platform — not a phone reference.</Reveal>
             </div>
           </div>
