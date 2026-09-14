@@ -138,4 +138,20 @@ test('a full job lifecycle over real HTTP records the expected ordered event_typ
     'DISPUTE_OPENED',
     'DISPUTE_RESOLVED',
   ], `unexpected event_type sequence for the full lifecycle: ${JSON.stringify(events)}`);
+
+  // This ledger existed since Phase 1 with nothing ever reading it back —
+  // GET /api/jobs/:id (job.service.js's getJob) now surfaces it as
+  // `events`, the data the "Transaction Case File" timeline UI needed.
+  const jobDetail = await shipper.get(`/api/jobs/${jobId}`);
+  assert.equal(jobDetail.status, 200, jobDetail.raw);
+  assert.deepEqual(
+    jobDetail.body.events.map((e) => e.event_type),
+    events,
+    'GET /api/jobs/:id must return the same event sequence, in the same order, as the raw table'
+  );
+  assert.ok(jobDetail.body.events.every((e) => e.summary && e.created_at), 'each event must carry a human-readable summary and a timestamp');
+
+  const carrierDetail = await carrier.get(`/api/jobs/${jobId}`);
+  assert.equal(carrierDetail.status, 200, carrierDetail.raw);
+  assert.equal(carrierDetail.body.events.length, events.length, 'the awarded carrier must see the same event history as the shipper');
 });

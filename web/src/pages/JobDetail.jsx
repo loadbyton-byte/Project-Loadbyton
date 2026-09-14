@@ -14,6 +14,7 @@ import { EirChecklist } from '../components/EirChecklist.jsx';
 import { DetentionAlarm } from '../components/DetentionAlarm.jsx';
 import JobHeader from '../features/job/JobHeader.jsx';
 import JobTimeline from '../features/job/JobTimeline.jsx';
+import EventHistory from '../features/job/EventHistory.jsx';
 import ChatPopup from '../features/job/ChatPopup.jsx';
 import DriverPanel from '../features/job/DriverPanel.jsx';
 import FuelAdvancePanel from '../features/job/FuelAdvancePanel.jsx';
@@ -177,7 +178,7 @@ export default function JobDetail() {
     );
   }
 
-  const { job, bids, documents, payout, myRating } = data;
+  const { job, bids, documents, payout, myRating, events } = data;
   const isShipper = user.id === job.shipper_id;
   const isCarrier = user.role === 'CARRIER';
   const isAwardedCarrier = user.id === job.carrier_id;
@@ -684,6 +685,10 @@ export default function JobDetail() {
 
           <Section title="Documents">
             <DocumentList documents={documents} jobId={job.id} onAdd={load} isShipperParty={isShipper} isCarrierParty={isAwardedCarrier} />
+          </Section>
+
+          <Section title="Event history">
+            <EventHistory events={events} />
           </Section>
 
           {/* Haulier Code / Token — import/export only, and only once a
