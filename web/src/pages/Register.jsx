@@ -197,7 +197,7 @@ export default function Register() {
             </div>
             {role === 'CARRIER' && (
               <p className="rounded-md px-3 py-2 text-xs" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
-                New accounts are read-only until an admin approves them; carrier verification (TRN, trade licence, insurance) happens separately before bidding — usually within a day.
+                New accounts are read-only until an admin approves them; transporter verification (TRN, trade licence, insurance) happens separately before bidding — usually within a day.
               </p>
             )}
             <div className="flex gap-2">
