@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
+import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, ltrIsolate, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, PaymentStatusBadge, RatingPill, ErrorState, Skeleton } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -561,7 +561,7 @@ export default function JobDetail() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Loading location</p>
                     <p className="font-medium text-ink">{formatLabel(job.loading_location || job.pickup_terminal)}</p>
-                    {job.ready_at && <p className="text-sm text-ink-secondary">Loading {formatDateTime(job.ready_at)}</p>}
+                    {job.ready_at && <p className="text-sm text-ink-secondary" dir="ltr">Loading {formatDateTime(job.ready_at)}</p>}
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -661,8 +661,17 @@ export default function JobDetail() {
                       )}
                       {!b.masked && b.carrier_available_units != null && (
                         <p className="mt-0.5 text-xs" style={{ color: b.carrier_available_units <= 0 ? 'var(--status-danger)' : 'var(--ink-muted)' }}>
-                          {b.carrier_available_units <= 0 ? '⚠ 0 declared available units' : `${b.carrier_available_units} unit(s) available`}
-                          {b.carrier_reliability_score != null && ` · reliability ${Number(b.carrier_reliability_score).toFixed(1)}`}
+                          {/* One ltrIsolate around the WHOLE combined string, not
+                              one per fragment — two separately-isolated LTR runs
+                              placed next to each other inside an RTL paragraph
+                              still get their relative order reversed by the bidi
+                              algorithm (isolation fixes each run's own internal
+                              order, not the order runs appear in relative to
+                              each other), so this must isolate as one unit. */}
+                          {ltrIsolate(
+                            (b.carrier_available_units <= 0 ? '⚠ 0 declared available units' : `${b.carrier_available_units} unit(s) available`) +
+                            (b.carrier_reliability_score != null ? ` · reliability ${Number(b.carrier_reliability_score).toFixed(1)}` : '')
+                          )}
                         </p>
                       )}
                     </div>
