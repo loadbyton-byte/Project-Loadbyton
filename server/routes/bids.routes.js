@@ -154,6 +154,17 @@ router.post('/api/bids/:id/ancillary-charges', auth(), requireSeatRole(['OPS']),
   // charge could be added AFTER confirm-terms recorded both sides agreeing
   // to the terms as they stood, silently invalidating that confirmation.
   if (ctx.bid.terms_confirmed_at) return apiResponse.error(req, res, 'FORBIDDEN', 'Terms are already confirmed — this bid\'s charges are locked and no new ones can be proposed.');
+  // Commercial-logic audit finding: terms_confirmed_at alone missed the
+  // skipNegotiation award path (award.service.js lets a shipper award
+  // without ever setting it) — a charge proposed on an already-AWARDED (or
+  // later) bid was accepted with a "New charge proposed" notification to
+  // the other party, implying it could still change what's owed, when
+  // award.service.js only ever sums agreed charges ONCE, at award time
+  // (see its agreedCharges query) — nothing post-award re-reads this
+  // table into any payment/invoice calculation. Proposing one after award
+  // is not a smaller mistake than after terms-confirm, it's a bigger one:
+  // it looks actionable and isn't.
+  if (ctx.bid.status !== 'PENDING') return apiResponse.error(req, res, 'FORBIDDEN', 'This bid is no longer pending — the price is locked and new charges can\'t be proposed on it.');
   const { chargeType, amountAed, notes } = req.body || {};
   if (!ANCILLARY_CHARGE_TYPES.includes(chargeType)) return apiResponse.error(req, res, 'VALIDATION_FAILED', `chargeType must be one of: ${ANCILLARY_CHARGE_TYPES.join(', ')}`);
   const amount = Number(amountAed);
@@ -177,6 +188,11 @@ router.post('/api/bids/:id/ancillary-charges/:chargeId/agree', auth(), requireSe
   if (!ctx) return;
   const charge = await db.prepare('SELECT * FROM bid_ancillary_charges WHERE id=? AND bid_id=?').get(req.params.chargeId, ctx.bid.id);
   if (!charge) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'Charge not found', { status: 404 });
+  // Same skipNegotiation gap as the POST/DELETE handlers above — agreeing
+  // to a stale, never-agreed charge after the bid is no longer PENDING
+  // would flip a flag with no actual financial effect (award.service.js
+  // already summed agreed charges once, at award time).
+  if (ctx.bid.status !== 'PENDING') return apiResponse.error(req, res, 'FORBIDDEN', 'This bid is no longer pending — charges on it can no longer be changed.');
   const isShipper = req.user.role === 'SHIPPER';
   await db.prepare(`UPDATE bid_ancillary_charges SET ${isShipper ? 'agreed_by_shipper' : 'agreed_by_carrier'}=1 WHERE id=?`).run(charge.id);
   const updated = await db.prepare('SELECT * FROM bid_ancillary_charges WHERE id=?').get(charge.id);
@@ -189,6 +205,8 @@ router.delete('/api/bids/:id/ancillary-charges/:chargeId', auth(), requireSeatRo
   const charge = await db.prepare('SELECT * FROM bid_ancillary_charges WHERE id=? AND bid_id=?').get(req.params.chargeId, ctx.bid.id);
   if (!charge) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'Charge not found', { status: 404 });
   if (ctx.bid.terms_confirmed_at) return apiResponse.error(req, res, 'FORBIDDEN', 'Terms are already confirmed — this charge can no longer be removed');
+  // Same skipNegotiation gap as the POST handler above.
+  if (ctx.bid.status !== 'PENDING') return apiResponse.error(req, res, 'FORBIDDEN', 'This bid is no longer pending — charges on it can no longer be changed.');
   // Only the party who proposed a charge may withdraw it — this endpoint
   // previously let either side delete the other's proposal outright (no
   // ownership check at all), which meant a shipper could unilaterally
