@@ -60,7 +60,7 @@ export default function PaymentPanel({ job, load }) {
           </div>
         )}
         {job.processor_payment_status === 'PAID' && (
-          <p className="text-sm text-ink-secondary">Escrow is funded. The carrier can now proceed with pickup.</p>
+          <p className="text-sm text-ink-secondary">Payment is confirmed. The carrier can now proceed with pickup.</p>
         )}
         {!isShipper && job.processor_payment_status === 'REQUIRES_PAYMENT' && (
           <p className="text-sm text-ink-secondary">Waiting for the shipper to complete payment before pickup.</p>

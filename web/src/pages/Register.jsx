@@ -17,7 +17,7 @@ const STEPS = ['Role', 'Business', 'Account'];
   const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
 
   const ROLES = [
-    { label: 'SHIPPER', desc: 'Post freight jobs, get carrier bids, track under escrow' },
+    { label: 'SHIPPER', desc: 'Post freight jobs, get transporter bids, track with payment protection' },
     { label: 'CARRIER', desc: 'Browse open loads, bid, get paid on delivery' },
     { label: 'FORWARDER', desc: 'Manage freight forwarding, client roster, assign loads' },
     { label: 'BROKER', desc: 'Broker jobs, direct-assign carriers, earn broker spread' },

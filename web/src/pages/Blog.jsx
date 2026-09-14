@@ -17,10 +17,10 @@ const POSTS = [
     body: 'The instant a shipper and carrier can text each other directly, the second job happens off-platform — at which point the marketplace only ever sees the first transaction from any given pair. Contact gating isn\'t friction for its own sake; it\'s the difference between a marketplace and a one-time introduction service.',
   },
   {
-    title: 'An escrow state machine is not optional, even for a demo',
+    title: 'A payment-holding state machine is not optional, even for a demo',
     date: '2026-06-05',
     tag: 'Engineering',
-    body: 'PENDING, HELD, FUNDED, RELEASED, DISPUTED — five states, and every transition has to be enforced server-side or the escrow story is fiction. Building it as a real state machine from day one, even before a licensed payment rail exists, is what makes the eventual real-money version a swap of the execution layer, not a rewrite.',
+    body: 'PENDING, HELD, FUNDED, RELEASED, DISPUTED — five states, and every transition has to be enforced server-side or the payment protection story is fiction. Building it as a real state machine from day one, even before a licensed payment rail exists, is what makes the eventual real-money version a swap of the execution layer, not a rewrite.',
   },
 ];
 
