@@ -5,7 +5,7 @@ import { Shell } from './components/Shell.jsx';
 import { Spinner } from './components/ui.jsx';
 
 // The public marketing pages stay eager imports: scripts/prerender.mjs
-// server-renders exactly these nine routes synchronously
+// server-renders exactly these thirteen routes synchronously
 // (renderToStaticMarkup, no Suspense support), so entry-server.jsx must be
 // able to render them without hitting a lazy() boundary.
 import Landing from './pages/Landing.jsx';
@@ -17,6 +17,10 @@ import Security from './pages/Security.jsx';
 import Compliance from './pages/Compliance.jsx';
 import Terms from './pages/Terms.jsx';
 import Privacy from './pages/Privacy.jsx';
+import Industries from './pages/Industries.jsx';
+import Trust from './pages/Trust.jsx';
+import ForTransporters from './pages/ForTransporters.jsx';
+import ForShippers from './pages/ForShippers.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 // Everything behind a login (or login itself) is never part of that
@@ -158,6 +162,10 @@ export default function App() {
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/industries" element={<Industries />} />
+          <Route path="/trust" element={<Trust />} />
+          <Route path="/for-transporters" element={<ForTransporters />} />
+          <Route path="/for-shippers" element={<ForShippers />} />
 
           <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
           <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
