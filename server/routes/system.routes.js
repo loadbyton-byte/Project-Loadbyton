@@ -33,6 +33,7 @@ const _auth = /** @type {any} */ (require('../middleware/auth'));
 const auth = _auth.auth;
 const _escrow = /** @type {any} */ (require('../services/escrow.service'));
 const runAutoReleaseSweep = _escrow.runAutoReleaseSweep;
+const runUnpaidAwardReminderSweep = _escrow.runUnpaidAwardReminderSweep;
 const _scheduling = /** @type {any} */ (require('../services/scheduling.service'));
 const publishScheduledJobs = _scheduling.publishScheduledJobs;
 const _complianceSweep = /** @type {any} */ (require('../services/compliance-sweep.service'));
@@ -120,6 +121,26 @@ router.post('/api/system/auto-release', async (/** @type {any} */ req, /** @type
 });
 
 setInterval(() => runAutoReleaseSweep(null).catch(() => {}), 10 * 60 * 1000).unref();
+
+router.post('/api/system/unpaid-award-reminder', async (/** @type {any} */ req, /** @type {any} */ res) => {
+  const key = req.headers['x-internal-key'];
+  let authorized = typeof key === 'string' && timingSafeEqualStr(key, INTERNAL_KEY);
+  if (!authorized) {
+    const token = req.cookies.lb_session;
+    const session = token && await db.prepare('SELECT * FROM sessions WHERE session_token=?').get(token);
+    const user = session && await db.prepare('SELECT * FROM users WHERE id=?').get(session.user_id);
+    if (user && user.role === 'ADMIN') authorized = true;
+  }
+  if (!authorized) return sendError(res, 403, 'Admin session or x-internal-key required');
+  const reminded = await runUnpaidAwardReminderSweep(req);
+  res.json({ ok: true, reminded, message: `Unpaid-award reminder sweep complete: ${reminded} job(s) reminded.` });
+});
+
+// Not money-critical like the auto-release sweep above, but more
+// time-sensitive than the once-a-day compliance check below — 30 minutes
+// keeps a stuck-unpaid job from sitting silently for too much longer than
+// the configured threshold before either side gets nudged.
+setInterval(() => runUnpaidAwardReminderSweep(null).catch(() => {}), 30 * 60 * 1000).unref();
 
 router.post('/api/system/publish-scheduled', async (/** @type {any} */ req, /** @type {any} */ res) => {
   const key = req.headers['x-internal-key'];

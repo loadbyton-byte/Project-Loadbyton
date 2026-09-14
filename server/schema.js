@@ -1030,6 +1030,15 @@ module.exports = function initSchema(db) {
   // above. Change via POST /api/admin/settings once a real fraud-review
   // SLA is set, not by editing this default.
   seedSetting.run('iban_change_hold_hours', '72');
+  // Commercial-logic audit finding: an AWARDED, INSTANT-tier job's
+  // processor_payment_status can sit at REQUIRES_PAYMENT indefinitely if
+  // the shipper never pays — award.service.js already decremented the
+  // carrier's available_units at award time, so that capacity stays tied
+  // up with no automatic resolution (either party CAN cancel manually,
+  // but nothing prompts them to). 6h placeholder — same "mechanism real,
+  // policy owned by the operator" pattern as the settings above. See
+  // escrow.service.js's runUnpaidAwardReminderSweep.
+  seedSetting.run('unpaid_award_reminder_hours', '6');
 
   // ---------------------------------------------------------------------------
   // Equipment capacity tracking — profiles.fleet_size was a static,
@@ -1289,6 +1298,20 @@ module.exports = function initSchema(db) {
   // Map — doesn't survive a restart or exist on another instance), to
   // decide whether the carrier still needs a manual transfer.
   addColumn('jobs', 'telr_split_applied', 'telr_split_applied INTEGER NOT NULL DEFAULT 0');
+  // Idempotency marker for escrow.service.js's runUnpaidAwardReminderSweep
+  // — an AWARDED job stuck at processor_payment_status='REQUIRES_PAYMENT'
+  // gets exactly one reminder notification, not one every sweep interval
+  // for as long as it stays unpaid.
+  addColumn('jobs', 'payment_reminder_sent_at', 'payment_reminder_sent_at TEXT');
+  // Precise "time of award," filling an obvious gap in the same family as
+  // delivered_at/cancelled_at/payout_released_at above. Needed because
+  // jobs.updated_at is NOT a safe proxy for this: a shipper opening
+  // checkout (POST /api/jobs/:id/pay) updates the job row while staying
+  // at processor_payment_status='REQUIRES_PAYMENT' (stripe.routes.js),
+  // which would keep resetting a naive "time since award" measurement —
+  // exactly the stuck-unpaid case runUnpaidAwardReminderSweep exists to
+  // catch.
+  addColumn('jobs', 'awarded_at', 'awarded_at TEXT');
 
   // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.

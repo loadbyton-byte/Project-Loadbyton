@@ -66,4 +66,42 @@ async function runAutoReleaseSweep(req) {
   return released;
 }
 
-module.exports = { runAutoReleaseSweep };
+// Commercial-logic audit finding: an AWARDED, INSTANT-tier job's
+// processor_payment_status can sit at REQUIRES_PAYMENT indefinitely if the
+// shipper never actually pays — award.service.js already decremented the
+// carrier's available_units at award time, so that capacity stays tied up
+// with nothing forcing a resolution. Either party CAN already cancel
+// manually (CancelJobPanel.jsx), and the carrier already sees a passive
+// "waiting for payment" message (PaymentPanel.jsx) — this sweep doesn't
+// change either of those, it just makes the staleness something both
+// sides get proactively told about instead of only seeing if they happen
+// to look. Deliberately does NOT auto-cancel the job or touch capacity/
+// escrow — a real business decision (how long is genuinely too long, and
+// what should happen then) for the platform operator, not something a
+// reminder sweep should decide unilaterally.
+async function runUnpaidAwardReminderSweep(req) {
+  const { unpaid_award_reminder_hours } = await getSettings();
+  const cutoff = new Date(Date.now() - unpaid_award_reminder_hours * 3600 * 1000).toISOString();
+  const jobs = await db.prepare(
+    `SELECT * FROM jobs WHERE status='AWARDED' AND processor_payment_status='REQUIRES_PAYMENT'
+     AND payment_reminder_sent_at IS NULL AND awarded_at IS NOT NULL AND awarded_at < ?`
+  ).all(cutoff);
+
+  let reminded = 0;
+  for (const job of jobs) {
+    // Atomic claim, same pattern as runAutoReleaseSweep above — the
+    // payment_reminder_sent_at IS NULL repeated in the WHERE clause means
+    // a second sweep tick (or server instance) that raced this one and
+    // already claimed it updates zero rows here.
+    const claim = await db.prepare(
+      `UPDATE jobs SET payment_reminder_sent_at=datetime('now') WHERE id=? AND processor_payment_status='REQUIRES_PAYMENT' AND payment_reminder_sent_at IS NULL`
+    ).run(job.id);
+    if (!claim.changes) continue;
+    await notify(job.shipper_id, 'Payment still needed', `${job.job_code} was awarded ${unpaid_award_reminder_hours}h ago and is still waiting on your payment before the transporter can proceed.`, job.id, 'status');
+    await notify(job.carrier_id, 'Still waiting on shipper payment', `${job.job_code} has been awaiting payment for ${unpaid_award_reminder_hours}h. You can cancel from the job page if you need this capacity back.`, job.id, 'status');
+    reminded++;
+  }
+  return reminded;
+}
+
+module.exports = { runAutoReleaseSweep, runUnpaidAwardReminderSweep };
