@@ -537,7 +537,17 @@ async function getJob(jobId, user) {
   const myRating = (job.shipper_id === user.id || job.carrier_id === user.id)
     ? (await db.prepare('SELECT score, comment FROM ratings WHERE job_id=? AND rater_id=?').get(job.id, user.id)) || null
     : null;
-  return { job: jobWithRating, bids, documents, payout, myRating };
+  // shipment_events (schema.js) — an append-only, hash-chained record of
+  // every meaningful thing that happened on this job (award, status
+  // changes, POD, driver assignment, payout, disputes) has existed since
+  // Phase 1 of the architecture review, with nothing anywhere ever reading
+  // it back. This is the "Transaction Case File" timeline data that work
+  // was blocked on — same view permission as the job itself (canViewJob
+  // above), not a separate access check.
+  const events = await db.prepare(
+    'SELECT id, event_type, actor_role, summary, created_at FROM shipment_events WHERE job_id=? ORDER BY id ASC'
+  ).all(job.id);
+  return { job: jobWithRating, bids, documents, payout, myRating, events };
 }
 
 /**
