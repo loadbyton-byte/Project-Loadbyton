@@ -46,6 +46,21 @@ async function awardJob(req, res, jobId, bidId) {
   const preBid = await db.prepare('SELECT * FROM bids WHERE id=? AND job_id=?').get(bidId, jobId);
   if (!preBid) { res.status(404).json({ error: 'Bid not found' }); return; }
 
+  // Commercial-logic audit finding: a bid requires the carrier to be
+  // is_verified at the moment it's PLACED (job-lifecycle.routes.js), but
+  // nothing re-checked that at AWARD time — a carrier whose verification
+  // was revoked (licence/insurance expired, admin action) after bidding
+  // but before the shipper awarded could still be awarded the job, with
+  // no signal to the shipper that the carrier bidding is no longer the
+  // carrier they'd be awarding. Hard block, not a warning: an unverified
+  // carrier is already disallowed from bidding at all, so this is invalid
+  // state to award into, not a judgment call for the shipper to override.
+  const carrierUser = await db.prepare('SELECT is_verified FROM users WHERE id=?').get(preBid.carrier_id);
+  if (!carrierUser?.is_verified) {
+    res.status(409).json({ error: 'This carrier’s verification is no longer active — their bid can’t be awarded until they’re re-verified.' });
+    return;
+  }
+
   // Confirm-terms gate — a real pre-award negotiation/ancillary-charges
   // workflow now exists (bid_negotiations, bid_ancillary_charges,
   // POST /api/bids/:id/confirm-terms, all in server/routes/bids.routes.js).

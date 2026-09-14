@@ -151,3 +151,44 @@ test('awarding a bid from a zero-capacity carrier is blocked until the shipper e
   assert.equal(release.status, 200, release.raw);
   assert.equal(release.body.available_units, startUnits);
 });
+
+test('award is blocked if the bidding carrier\'s verification was revoked after they bid', async () => {
+  // Commercial-logic audit finding: is_verified is checked at bid time
+  // (job-lifecycle.routes.js) but nothing re-checked it at award time — a
+  // carrier who bids while verified, then has verification revoked before
+  // the shipper awards, could still be awarded the job.
+  const { DatabaseSync } = require('node:sqlite');
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+
+  const created = await shipper.post('/api/jobs', {
+    containerSize: '20FT', containerType: 'DRY', pickupTerminal: 'JEBEL_ALI_T1', deliveryArea: 'AL_QUOZ',
+    deliveryAddress: 'Test Warehouse — verification-revoked award gate',
+    readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
+    maxBudgetAed: 500,
+  });
+  assert.equal(created.status, 201, created.raw);
+  const jobId = created.body.job.id;
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+    amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
+  });
+  assert.equal(bid.status, 201, bid.raw);
+
+  const db = new DatabaseSync(server.dbPath);
+  const carrierId = db.prepare('SELECT id FROM users WHERE email=?').get('carrier@dubaidrayage.com').id;
+  db.prepare('UPDATE users SET is_verified=0 WHERE id=?').run(carrierId);
+  db.close();
+
+  const blocked = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });
+  assert.equal(blocked.status, 409, blocked.raw);
+  assert.match(blocked.body.error, /verification/i);
+
+  const db2 = new DatabaseSync(server.dbPath);
+  db2.prepare('UPDATE users SET is_verified=1 WHERE id=?').run(carrierId);
+  db2.close();
+
+  const awarded = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });
+  assert.equal(awarded.status, 200, awarded.raw);
+});
