@@ -98,6 +98,13 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   const etaMs = /** @type {any} */ (etaAt).getTime() - Date.now();
   if (etaMs < -3600000) return sendError(res, 400, 'etaAt cannot be more than an hour in the past');
   if (etaMs > 90 * 86400000) return sendError(res, 400, 'etaAt cannot be more than 90 days out');
+  // Commercial-logic audit finding: nothing checked a bid's ETA against
+  // the job's own deadline — a bid proposing delivery after the shipper's
+  // stated deadline could still be submitted and awarded with no signal
+  // to either side that it doesn't actually meet the job's requirement.
+  if (job.deadline && /** @type {any} */ (etaAt).getTime() > new Date(job.deadline).getTime()) {
+    return sendError(res, 400, `etaAt (${/** @type {any} */ (etaAt).toISOString()}) is after this job's deadline (${job.deadline}) — bid an ETA that actually meets it`);
+  }
   const legacyEtaMinutes = Math.max(0, Math.round(etaMs / 60000));
 
   const alreadyBidding = /** @type {any} */ (await db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND carrier_id=? AND status='PENDING'`).get(job.id, req.user.id));

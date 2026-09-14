@@ -64,7 +64,13 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   assert.ok(job, 'a carrier must see OPEN jobs');
 
   // …but every workflow action is blocked server-side by the approval gate.
-  const bid = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
+  // `job` is shared seed data (LB-1001, deadline = seed-boot-time + 24h) —
+  // a bid ETA of "+24h from now" (now being however long after seed-boot
+  // this line actually runs) can land AFTER that deadline and get rejected
+  // by the etaAt-vs-deadline check (job-lifecycle.routes.js), unrelated to
+  // what this test is actually checking (the approval gate). A short,
+  // safely-before-any-seeded-deadline ETA avoids the race entirely.
+  const bid = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 30 * 60000).toISOString() });
   assert.equal(bid.status, 403, 'a pending account must not be able to bid');
 
   const createJob = await client.post('/api/jobs', {
@@ -93,7 +99,7 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   const verified = await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
   assert.equal(verified.status, 200, verified.raw);
 
-  const bidAfter = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
+  const bidAfter = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 30 * 60000).toISOString() });
   assert.equal(bidAfter.status, 201, bidAfter.raw);
 });
 

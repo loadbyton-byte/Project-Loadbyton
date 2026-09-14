@@ -65,6 +65,11 @@ router.post('/api/bids/:id/withdraw', auth(['CARRIER']), requireSeatRole(['OPS']
   if (bid.status !== 'PENDING') return apiResponse.error(req, res, 'BID_NOT_PENDING', 'Only a pending bid can be withdrawn', { status: 400 });
   await db.prepare(`UPDATE bids SET status='WITHDRAWN', updated_at=datetime('now') WHERE id=?`).run(bid.id);
   await writeAudit(req, { userId: req.actorId, action: 'BID_WITHDRAW', details: `Withdrew bid #${bid.id}`, entityType: 'bid', entityId: bid.id, beforeState: 'PENDING', afterState: 'WITHDRAWN' });
+  // Commercial-logic audit finding: a withdrawn bid never told the shipper
+  // — the bid just silently vanished from their consideration set, with
+  // no way to know it happened short of noticing a stale list on refresh.
+  const job = await db.prepare('SELECT id, job_code, shipper_id FROM jobs WHERE id=?').get(bid.job_id);
+  if (job) await notify(job.shipper_id, 'A bid was withdrawn', `A carrier withdrew their bid on ${job.job_code}.`, job.id, 'bid');
   const updated = await db.prepare('SELECT * FROM bids WHERE id=?').get(bid.id);
   res.json({ ok: true, bid: updated });
 });
