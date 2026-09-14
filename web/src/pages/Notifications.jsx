@@ -16,7 +16,7 @@ const TYPE_LABELS = {
   status: 'Shipment status updates',
   payout: 'Payouts',
   dispute: 'Disputes',
-  verification: 'Carrier verification',
+  verification: 'Transporter verification',
   message: 'Messages',
 };
 

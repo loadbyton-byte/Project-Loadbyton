@@ -245,7 +245,7 @@ function navByRole(t) {
     ],
     BROKER: [
       { to: '/dashboard', label: t('nav.dashboard', 'Dashboard'), icon: <IconHome size={20} />, group: 'Workspace' },
-      { to: '/broker/carriers', label: t('nav.brokerCarriers', 'Carrier roster'), icon: <IconTruck size={20} />, group: 'Workspace' },
+      { to: '/broker/carriers', label: t('nav.brokerCarriers', 'Transporter roster'), icon: <IconTruck size={20} />, group: 'Workspace' },
       { to: '/messages', label: t('nav.messages', 'Messages'), icon: <IconMessage size={20} />, group: 'Communication' },
       { to: '/documents', label: t('nav.documents', 'Documents'), icon: <IconFile size={20} />, group: 'Communication' },
       { to: '/history', label: t('nav.history', 'Job History'), icon: <IconHistory size={20} />, group: 'Insights' },
@@ -694,8 +694,8 @@ function ShellInner({ children }) {
 }
 
 const WALKTHROUGH_STEPS = [
-  { title: 'Post your first requirement', body: 'Create a job post that verified carriers can bid on.', cta: "Let's start" },
-  { title: 'Review carrier bids', body: 'Compare price, ETA, and ratings from competing carriers.', cta: 'Next' },
+  { title: 'Post your first requirement', body: 'Create a job post that verified transporters can bid on.', cta: "Let's start" },
+  { title: 'Review transporter bids', body: 'Compare price, ETA, and ratings from competing transporters.', cta: 'Next' },
   { title: 'Award and track', body: 'Accept a bid, mark status updates, and release payouts.', cta: 'Got it' },
 ];
 

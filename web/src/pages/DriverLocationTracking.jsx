@@ -178,7 +178,7 @@ export default function DriverLocationTracking() {
           <IconCheckCircle size={20} className="text-brand-secondary mt-0.5" />
           <div className="text-sm text-ink-secondary space-y-1">
             <p>Live tracking sends your GPS position to the server every few seconds while active.</p>
-            <p>Carriers and shippers can see your real-time location on the job map.</p>
+            <p>Transporters and shippers can see your real-time location on the job map.</p>
             <p>Tracking automatically stops when the job reaches COMPLETED status.</p>
             <p>Battery usage: moderate — enable high accuracy for best results.</p>
           </div>

@@ -522,13 +522,13 @@ export default function Dashboard() {
                     <div>
                       <Label>No. of containers</Label>
                       <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
-                      <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                      <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a transporter fulfils as a batch.</p>
                     </div>
                   ) : (
                     <div>
                       <Label>No. of trucks required</Label>
                       <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
-                      <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a carrier fulfils as a batch.</p>
+                      <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a transporter fulfils as a batch.</p>
                     </div>
                   )}
                   <div className="sm:col-span-2">
@@ -536,7 +536,7 @@ export default function Dashboard() {
                     <Select value={form.cargoType} onChange={(e) => setForm({ ...form, cargoType: e.target.value })}>
                       {CARGO_TYPES.map((t) => <option key={t} value={t}>{cargoTypeLabel(t)}</option>)}
                     </Select>
-                    <p className="mt-1 text-xs text-ink-muted">What's inside the load — helps carriers judge handling requirements before bidding.</p>
+                    <p className="mt-1 text-xs text-ink-muted">What's inside the load — helps transporters judge handling requirements before bidding.</p>
                   </div>
                   {CONTAINER_EQUIPMENT.includes(form.equipmentType) ? (
                     <>
@@ -614,7 +614,7 @@ export default function Dashboard() {
                         onChange={(e) => setForm({ ...form, customRequirement: e.target.value })}
                         placeholder='e.g. "Double-deck trailer with 20 ft deck, load securement harness included"'
                       />
-                      <p className="mt-1 text-xs text-ink-muted">Carriers see this as the job's requirement and bid with their own matching equipment.</p>
+                      <p className="mt-1 text-xs text-ink-muted">Transporters see this as the job's requirement and bid with their own matching equipment.</p>
                     </div>
                   ) : LOCAL_LENGTH_TYPES.includes(form.equipmentType) ? (
                     <>
@@ -756,7 +756,7 @@ export default function Dashboard() {
                   <div>
                     <Label>Cargo weight (tons)</Label>
                     <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
-                    <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps carriers pick the right equipment.</p>
+                    <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps transporters pick the right equipment.</p>
                   </div>
                   )}
                   <div className="sm:col-span-2">
@@ -767,7 +767,7 @@ export default function Dashboard() {
                       onChange={(v) => setForm({ ...form, readyAt: v })}
                     />
                     <p className="mt-1 text-xs text-ink-muted">
-                      No separate deadline to set — carriers see this job as open for {DEFAULT_DEADLINE_HOURS} hours from the start of your slot.
+                      No separate deadline to set — transporters see this job as open for {DEFAULT_DEADLINE_HOURS} hours from the start of your slot.
                     </p>
                   </div>
                   <div>
@@ -784,7 +784,7 @@ export default function Dashboard() {
                         onChange={(e) => setForm({ ...form, packingList: e.target.files && e.target.files[0] ? e.target.files[0] : null })}
                         className="mt-1 block w-full text-sm text-ink-secondary file:mr-3 file:rounded-md file:border-0 file:bg-[var(--brand-accent)] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
                       />
-                      <p className="mt-1 text-xs text-ink-muted">Attached to this job; the awarded carrier sees it once you confirm their bid.</p>
+                      <p className="mt-1 text-xs text-ink-muted">Attached to this job; the awarded transporter sees it once you confirm their bid.</p>
                     </div>
                     <label className="flex items-center gap-2 text-sm text-ink-secondary">
                       <input type="checkbox" checked={form.scheduleForLater} onChange={(e) => setForm({ ...form, scheduleForLater: e.target.checked })} /> Post later (schedule publishing)
@@ -797,7 +797,7 @@ export default function Dashboard() {
                           value={form.scheduledPostAt}
                           onChange={(v) => setForm({ ...form, scheduledPostAt: v })}
                         />
-                        <p className="mt-1 text-xs text-ink-muted">Job stays a private draft until this time, then goes live to carriers automatically.</p>
+                        <p className="mt-1 text-xs text-ink-muted">Job stays a private draft until this time, then goes live to transporters automatically.</p>
                       </div>
                     )}
                   </div>
@@ -891,7 +891,7 @@ export default function Dashboard() {
         ) : jobsError ? (
           <ErrorState className="mt-3" title="Couldn't load your jobs" description={jobsError} onRetry={loadJobs} />
         ) : jobs.length === 0 && filter === 'all' && !debouncedSearch ? (
-          <EmptyState className="mt-3" title="No jobs yet" description="Post your first drayage job to start getting carrier bids." action={<Button onClick={() => setShowForm(true)}>Post a job</Button>} />
+          <EmptyState className="mt-3" title="No jobs yet" description="Post your first drayage job to start getting transporter bids." action={<Button onClick={() => setShowForm(true)}>Post a job</Button>} />
         ) : (
           <div className="mt-3">
             {/* Sticky filter bar (Change 1 mockup §2) — top-14 clears
