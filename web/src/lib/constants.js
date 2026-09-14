@@ -173,9 +173,22 @@ export function formatLabel(value) {
   return value ? value.replaceAll('_', ' ') : '';
 }
 
+// RTL bug found via a real Playwright pass over the Arabic locale: a plain
+// "18 Sep, 07:43 PM"-style string embedded with no isolation in RTL-flowing
+// text renders visually reordered by the browser's bidi algorithm — e.g.
+// "Sep, 07:43 PM 18" — because the string itself carries no directional
+// hint and inherits its RTL-context ambiguity. Wrapping the numeric/Latin
+// output in Unicode LRI (U+2066) / PDI (U+2069) isolates it as its own
+// left-to-right run regardless of surrounding text direction, with no JSX
+// or call-site changes needed — every existing {formatDate(...)} etc. call
+// across the app is fixed by this alone.
+export function ltrIsolate(s) {
+  return `⁦${s}⁩`;
+}
+
 export function formatAED(amount) {
   if (amount === null || amount === undefined) return '—';
-  return `AED ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+  return ltrIsolate(`AED ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`);
 }
 
 // A job's price columns are still literally named _aed (server never
@@ -191,21 +204,21 @@ export function formatAED(amount) {
 export function formatMoney(amount, currencyCode) {
   if (amount === null || amount === undefined) return '—';
   const code = (currencyCode || 'AED').toUpperCase();
-  return `${code} ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
+  return ltrIsolate(`${code} ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`);
 }
 
 export function formatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso.includes('T') || iso.includes('Z') ? iso : iso.replace(' ', 'T') + 'Z');
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' });
+  return ltrIsolate(d.toLocaleDateString('en-AE', { day: 'numeric', month: 'short', year: 'numeric' }));
 }
 
 export function formatDateTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso.includes('T') || iso.includes('Z') ? iso : iso.replace(' ', 'T') + 'Z');
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-AE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return ltrIsolate(d.toLocaleString('en-AE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }));
 }
 
 export const ANCILLARY_CHARGE_LABELS = { SALIK: 'Salik', ETOKEN: 'E-Token', DEMURRAGE: 'Demurrage/Waiting', INSPECTION_WAITING: 'Inspection waiting', OTHER: 'Other' };

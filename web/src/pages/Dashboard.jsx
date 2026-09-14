@@ -905,7 +905,7 @@ export default function Dashboard() {
                 cards from showing through underneath it. */}
             <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-end gap-3 px-4 py-3 sm:mx-0 sm:px-0" style={{ background: 'var(--bg-canvas)' }}>
               <div className="min-w-[140px]">
-                <Label htmlFor="dashboard-filter-status">Filter by status</Label>
+                <Label htmlFor="dashboard-filter-status">{t('dashboard.filterByStatus', 'Filter by status')}</Label>
                 <Select id="dashboard-filter-status" value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full">
                   <option value="all">All statuses</option>
                   {STATUS_FLOW.map((s) => <option key={s} value={s}>{formatLabel(s)}</option>)}
@@ -914,7 +914,7 @@ export default function Dashboard() {
                 </Select>
               </div>
               <div className="min-w-[140px]">
-                <Label htmlFor="dashboard-sort">Sort</Label>
+                <Label htmlFor="dashboard-sort">{t('dashboard.sort', 'Sort')}</Label>
                 <Select id="dashboard-sort" value={sort} onChange={(e) => setSort(e.target.value)} className="w-full">
                   {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </Select>
