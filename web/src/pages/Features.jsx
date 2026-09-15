@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
+import { MediaBackground } from '../components/MediaBackground.jsx';
 import { IconShield, IconClock, IconMapPin, IconFile, IconStar, IconPackage, IconTruck, IconArrowRight, IconLayers, IconCompass } from '../components/icons.jsx';
 
 const FEATURES = [
@@ -21,6 +22,7 @@ export default function Features() {
   useMeta('Payment-protected freight jobs across the UAE, 12 equipment types, volume inquiries, live tracking, contract lanes and a verified transporter network — everything Loadbyton ships.');
   return (
     <div dir="ltr">
+      <MediaBackground src="https://images.pexels.com/photos/28438301/pexels-photo-28438301.jpeg?cs=srgb&fm=jpg&w=1600" overlay="fade-bottom" className="h-40 md:h-56" />
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
