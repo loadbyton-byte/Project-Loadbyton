@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
+import { MediaBackground } from '../components/MediaBackground.jsx';
 import { IconShield, IconLayers, IconClock, IconArrowRight } from '../components/icons.jsx';
 
 const PRINCIPLES = [
@@ -15,6 +16,7 @@ export default function About() {
   useMeta('Loadbyton is a UAE road freight & container drayage marketplace built to make the second shipment happen on-platform, with an accountable, payment-protected system in place of an off-platform chat.');
   return (
     <div dir="ltr">
+      <MediaBackground src="https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=1600" overlay="fade-bottom" className="h-40 md:h-56" />
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">

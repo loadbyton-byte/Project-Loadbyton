@@ -2,38 +2,48 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
+import { MediaBackground } from '../components/MediaBackground.jsx';
 import { IconArrowRight, IconStorefront, IconAcUnit, IconBoat, IconWarehouse, IconRuler, IconInventory } from '../components/icons.jsx';
 
+// Sector photography, hotlinked from Pexels — verified live and checked for
+// unwanted third-party branding before use (see the marketing-media-refresh
+// PR description for the sourcing note).
 const INDUSTRIES = [
   {
     icon: <IconStorefront size={20} />,
     title: 'Retail & FMCG',
     body: 'Restocking a warehouse or distribution centre on a schedule the shelves can\'t wait on. Volume inquiries cover a recurring container count at one agreed rate, so a weekly restock doesn\'t mean re-negotiating a price every time.',
+    photo: 'https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=800',
   },
   {
     icon: <IconRuler size={20} />,
     title: 'Construction & building materials',
     body: 'Steel, cement, tiles, fittings — heavy, awkward, or just bulky freight moving from a port or supplier straight to a site. Equipment posted by type (flatbed, lowbed, tripper) so a transporter can see what the job actually needs before bidding.',
+    photo: 'https://images.pexels.com/photos/36656998/pexels-photo-36656998.jpeg?cs=srgb&fm=jpg&w=800',
   },
   {
     icon: <IconAcUnit size={20} />,
     title: 'F&B & cold chain',
     body: 'Temperature matters more than almost anything else in the move. Post the requirement as a reefer container or reefer truck, state the cargo type, and only transporters with the right equipment ever see the job.',
+    photo: 'https://images.pexels.com/photos/27099094/pexels-photo-27099094.jpeg?cs=srgb&fm=jpg&w=800',
   },
   {
     icon: <IconBoat size={20} />,
     title: 'General trading & re-export',
     body: 'Import, export, and local moves all live on one platform with the same documentation trail — customs paperwork, proof of delivery, and payment status attached to the job permanently, not scattered across a dozen WhatsApp threads with different transporters.',
+    photo: 'https://images.pexels.com/photos/28438301/pexels-photo-28438301.jpeg?cs=srgb&fm=jpg&w=800',
   },
   {
     icon: <IconWarehouse size={20} />,
     title: 'Manufacturing & industrial',
     body: 'Inbound raw materials and outbound finished goods, often on a fixed production schedule where a missed pickup window has a real cost. Committed delivery dates and times are part of every bid, not a verbal promise.',
+    photo: 'https://images.pexels.com/photos/31361164/pexels-photo-31361164.jpeg?cs=srgb&fm=jpg&w=800',
   },
   {
     icon: <IconInventory size={20} />,
     title: 'E-commerce fulfillment',
     body: 'Container-to-warehouse moves feeding a fulfillment operation that runs on inventory arriving when it says it will. Live tracking and a delivery commitment on every job, visible to whoever\'s managing the warehouse side.',
+    photo: 'https://images.pexels.com/photos/36652827/pexels-photo-36652827.jpeg?cs=srgb&fm=jpg&w=800',
   },
 ];
 
@@ -42,26 +52,31 @@ export default function Industries() {
   useMeta('How different UAE industries — retail, construction, cold chain, trading, manufacturing, e-commerce — use Loadbyton for road freight and container drayage.');
   return (
     <div dir="ltr">
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
+      <MediaBackground src="https://images.pexels.com/photos/36656998/pexels-photo-36656998.jpeg?cs=srgb&fm=jpg&w=1600" overlay="dark">
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Industries</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Different freight, the same accountable process.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
+            <span className="badge" style={{ background: 'rgba(229,57,53,0.16)', color: '#FF8A80' }}>Industries</span>
+            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-white md:text-4xl">Different freight, the same accountable process.</h1>
+            <p className="mt-4 text-lg leading-relaxed text-white/80">
               A cold-chain move and a construction-materials move need different equipment and different urgency — but the same verified transporters, the same payment protection, and the same paper trail underneath either one.
             </p>
           </Reveal>
         </div>
-      </section>
+      </MediaBackground>
 
       <section className="py-16 md:py-20">
         <div className="container-page">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {INDUSTRIES.map((ind, i) => (
-              <Reveal key={ind.title} delay={(i % 3) * 70} className="card card-hover p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}>{ind.icon}</div>
-                <p className="mt-4 font-display text-base font-semibold text-ink">{ind.title}</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{ind.body}</p>
+              <Reveal key={ind.title} delay={(i % 3) * 70} className="card card-hover overflow-hidden">
+                <div className="relative aspect-[16/9] overflow-hidden">
+                  <img src={ind.photo} alt="" loading="lazy" className="h-full w-full object-cover" />
+                </div>
+                <div className="p-6">
+                  <div className="-mt-11 mb-3 flex h-10 w-10 items-center justify-center rounded-md border-2 shadow-sm" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)', borderColor: 'var(--bg-surface)' }}>{ind.icon}</div>
+                  <p className="font-display text-base font-semibold text-ink">{ind.title}</p>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{ind.body}</p>
+                </div>
               </Reveal>
             ))}
           </div>
@@ -75,7 +90,7 @@ export default function Industries() {
             style={{ background: 'var(--lb-ink-900)' }}
           >
             <p className="font-display text-xl font-semibold text-white">Don't see your exact freight type listed?</p>
-            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Post a load and describe it <IconArrowRight size={18} /></Link>
+            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Post a load and describe it <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
           </Reveal>
         </div>
       </section>
