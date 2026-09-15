@@ -2,6 +2,7 @@ import React from 'react';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { formatDate } from '../lib/constants.js';
 import { Reveal } from '../components/Reveal.jsx';
+import { MediaBackground } from '../components/MediaBackground.jsx';
 
 const POSTS = [
   {
@@ -9,18 +10,21 @@ const POSTS = [
     date: '2026-07-18',
     tag: 'Operations',
     body: 'A container sitting uncollected at the terminal for two extra days quietly outspends the truck that moved it. The fix isn\'t a faster truck — it\'s a committed delivery date and time attached to every job, not a separate spreadsheet someone forgets to check.',
+    photo: 'https://images.pexels.com/photos/36652827/pexels-photo-36652827.jpeg?cs=srgb&fm=jpg&w=800',
   },
   {
     title: 'Why "just add a phone number field" breaks a freight marketplace',
     date: '2026-06-30',
     tag: 'Product',
     body: 'The moment a shipper and transporter can text each other directly, the second job happens off-platform — at which point the marketplace only ever sees the first transaction from any given pair. Contact gating isn\'t friction for its own sake; it\'s the difference between a marketplace and a one-time introduction service.',
+    photo: 'https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=800',
   },
   {
     title: 'A payment-holding state machine is not optional, even for a demo',
     date: '2026-06-05',
     tag: 'Engineering',
     body: 'PENDING, HELD, FUNDED, RELEASED, DISPUTED — five states, and every transition has to be enforced server-side or the payment protection story is fiction. Building it as a real state machine from day one, even before a licensed payment rail exists, is what makes the eventual real-money version a swap of the execution layer, not a rewrite.',
+    photo: 'https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=800',
   },
 ];
 
@@ -29,6 +33,7 @@ export default function Blog() {
   useMeta('Notes on UAE drayage logistics and building a freight marketplace that survives past the first job.');
   return (
     <div dir="ltr">
+      <MediaBackground src="https://images.pexels.com/photos/31361164/pexels-photo-31361164.jpeg?cs=srgb&fm=jpg&w=1600" overlay="fade-bottom" className="h-40 md:h-56" />
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
@@ -43,13 +48,18 @@ export default function Blog() {
         <div className="container-page max-w-2xl">
           <div className="space-y-10">
             {POSTS.map((p, i) => (
-              <Reveal key={p.title} delay={i * 70} as="article" className="card p-6 md:p-8">
-                <div className="flex items-center gap-3">
-                  <span className="badge" style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)' }}>{p.tag}</span>
-                  <p className="text-xs text-ink-muted">{formatDate(p.date)}</p>
+              <Reveal key={p.title} delay={i * 70} as="article" className="card overflow-hidden md:flex md:flex-row-reverse">
+                <div className="aspect-[16/9] overflow-hidden md:aspect-auto md:w-56 md:shrink-0">
+                  <img src={p.photo} alt="" loading="lazy" className="h-full w-full object-cover" />
                 </div>
-                <h2 className="mt-3 font-display text-xl font-semibold text-ink">{p.title}</h2>
-                <p className="mt-2.5 text-sm leading-relaxed text-ink-secondary">{p.body}</p>
+                <div className="p-6 md:p-8">
+                  <div className="flex items-center gap-3">
+                    <span className="badge" style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)' }}>{p.tag}</span>
+                    <p className="text-xs text-ink-muted">{formatDate(p.date)}</p>
+                  </div>
+                  <h2 className="mt-3 font-display text-xl font-semibold text-ink">{p.title}</h2>
+                  <p className="mt-2.5 text-sm leading-relaxed text-ink-secondary">{p.body}</p>
+                </div>
               </Reveal>
             ))}
           </div>
