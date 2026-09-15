@@ -2,7 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
 import { IconArrowRight, IconGavel, IconWallet, IconTruck, IconShield, IconClock, IconStar } from '../components/icons.jsx';
 
 const STEPS = [
@@ -26,21 +25,21 @@ export default function ForTransporters() {
   useMeta('Join Loadbyton as a transporter, fleet owner, or owner-operator — bid on verified UAE freight jobs, get paid without chasing invoices.');
   return (
     <div dir="ltr">
-      <MediaBackground src="https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=1600" overlay="dark">
+      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'rgba(229,57,53,0.16)', color: '#FF8A80' }}>For transporters</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-white md:text-4xl">Bid on real freight jobs, get paid without chasing anyone.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-white/80">
+            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>For transporters</span>
+            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Bid on real freight jobs, get paid without chasing anyone.</h1>
+            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
               Whether you run one truck or a fifty-vehicle fleet, verification happens once and bidding is open after that — on jobs from shippers whose payment is already held before you ever load a container.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/register?role=CARRIER" className="btn-accent rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
-              <Link to="/pricing" className="btn rounded-full px-6 py-3 text-base" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff' }}>See the take rate</Link>
+              <Link to="/register?role=CARRIER" className="btn-accent rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} /></Link>
+              <Link to="/pricing" className="btn-secondary rounded-full px-6 py-3 text-base">See the take rate</Link>
             </div>
           </Reveal>
         </div>
-      </MediaBackground>
+      </section>
 
       <section className="border-b py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page">
@@ -78,7 +77,7 @@ export default function ForTransporters() {
               <p className="font-display text-xl font-semibold text-white">Verification usually clears within a day.</p>
               <p className="mt-1 text-sm text-white/60">Trade licence, TRN, and insurance — that's it to get started.</p>
             </div>
-            <Link to="/register?role=CARRIER" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
+            <Link to="/register?role=CARRIER" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} /></Link>
           </Reveal>
         </div>
       </section>

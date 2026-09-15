@@ -5,18 +5,8 @@ import { EQUIPMENT_TYPES, equipmentLabel, formatAED, formatLabel } from '../lib/
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
 import HeroLoadSnapshot from '../components/HeroLoadSnapshot.jsx';
 import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
-
-// Sector photography, hotlinked from Pexels (verified live, checked for
-// unwanted third-party branding before use — see the marketing-media-refresh
-// PR description for the full sourcing note).
-const PHOTO = {
-  heroTruck: 'https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=1920',
-  port: 'https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=1600',
-  warehouse: 'https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=1600',
-};
 
 const EQUIPMENT_ICONS = {
   CONTAINER_CHASSIS: IconPackage, TRAILER_WITH_GENSET: IconPackage, LOWBED_TRAILER: IconTrailer, FLATBED_TRAILER: IconTrailer,
@@ -45,35 +35,29 @@ export default function Landing() {
 
   return (
     <div>
-      {/* Hero — split, not centered. Left: thesis, now set over a real photo
-          of the sector instead of the plain canvas background. Right: a
-          static example of a shipper's actual first moment of value
-          (comparing bids on a posted load) — the photo backdrop is new, but
-          the "no hero animation, no motion, no instant-matching framing"
-          product direction stays: the image doesn't move. See
+      {/* Hero — split, not centered. Left: thesis. Right: a static example
+          of a shipper's actual first moment of value (comparing bids on a
+          posted load) — product direction is explicitly no hero
+          animation, no motion, no "instant matching" framing. See
           HeroLoadSnapshot.jsx. */}
-      <MediaBackground src={PHOTO.heroTruck} overlay="side" alt="">
+      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
           <div className="flex flex-col justify-center">
-            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white md:text-5xl">
+            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-ink md:text-5xl">
               {t('landing.hero.title')}
             </h1>
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-white/80 md:text-lg">
+            <p className="mt-5 max-w-lg text-base leading-relaxed text-ink-secondary md:text-lg">
               {t('landing.hero.subtitle')}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link to="/register" className="btn-accent rounded-full px-6 py-3 text-base">
-                {t('landing.hero.ctaShipper')} <IconArrowRight size={18} className="btn-arrow-nudge" />
+                {t('landing.hero.ctaShipper')} <IconArrowRight size={18} />
               </Link>
-              <Link
-                to="/register?role=CARRIER"
-                className="btn rounded-full px-6 py-3 text-base"
-                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff' }}
-              >
+              <Link to="/register?role=CARRIER" className="btn-secondary rounded-full px-6 py-3 text-base">
                 {t('landing.hero.ctaCarrier')}
               </Link>
             </div>
-            <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-white/70">
+            <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-ink-muted">
               <span className="inline-flex items-center gap-1.5"><IconShield size={16} /> {t('landing.hero.verified')}</span>
               <span className="inline-flex items-center gap-1.5"><IconClock size={16} /> {t('landing.hero.autoRelease', 'Payment releases automatically in {hours}h', { hours: 24 })}</span>
               <span className="inline-flex items-center gap-1.5"><IconCompass size={16} /> {t('landing.hero.coverage')}</span>
@@ -121,7 +105,7 @@ export default function Landing() {
             </div>
           </div>
         </div>
-      </MediaBackground>
+      </section>
 
       {/* Everything below is still English-only (see lib/i18n.jsx's scope
           note) — wrapped in dir="ltr" so untranslated sentences read
@@ -129,18 +113,6 @@ export default function Landing() {
           terminal punctuation flip to the front of the line, the way
           plain RTL inheritance does to unmarked English text. */}
       <div dir="ltr">
-      {/* Sector photo band — a real port shot, not another icon row. Short,
-          fades into the page's own background at the bottom (fade-bottom
-          overlay) so it reads as a visual break between the hero and the
-          content sections, not another full section competing for weight. */}
-      <MediaBackground src={PHOTO.port} overlay="fade-bottom" className="h-56 md:h-72">
-        <div className="container-page flex h-full items-end pb-6">
-          <Reveal as="p" className="font-display text-sm font-semibold uppercase tracking-wide text-white/90">
-            Real UAE lanes. Real terminals. Not a diagram.
-          </Reveal>
-        </div>
-      </MediaBackground>
-
       {/* How it works — a real sequence, numbering earns its place here. */}
       <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page">

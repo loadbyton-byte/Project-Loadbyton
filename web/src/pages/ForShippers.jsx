@@ -2,7 +2,6 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
 import { IconArrowRight, IconPackage, IconGavel, IconShield, IconFile, IconClock, IconLayers } from '../components/icons.jsx';
 
 const STEPS = [
@@ -26,21 +25,21 @@ export default function ForShippers() {
   useMeta('Post a road freight or container drayage requirement in the UAE, review bids from verified transporters, and manage the move from one place.');
   return (
     <div dir="ltr">
-      <MediaBackground src="https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=1600" overlay="dark">
+      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'rgba(229,57,53,0.16)', color: '#FF8A80' }}>For shippers</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-white md:text-4xl">Post a requirement. Review real bids. Track it to delivery.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-white/80">
+            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>For shippers</span>
+            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Post a requirement. Review real bids. Track it to delivery.</h1>
+            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
               Post your transport requirement once, receive bids from verified transporters across the UAE, and manage the agreed move — documents, updates, payment status — from one place. No broker calls, no chasing proof of delivery.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/register" className="btn-accent rounded-full px-6 py-3 text-base">Post a load <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
-              <Link to="/pricing" className="btn rounded-full px-6 py-3 text-base" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff' }}>See pricing</Link>
+              <Link to="/register" className="btn-accent rounded-full px-6 py-3 text-base">Post a load <IconArrowRight size={18} /></Link>
+              <Link to="/pricing" className="btn-secondary rounded-full px-6 py-3 text-base">See pricing</Link>
             </div>
           </Reveal>
         </div>
-      </MediaBackground>
+      </section>
 
       <section className="border-b py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page">
@@ -75,7 +74,7 @@ export default function ForShippers() {
         <div className="container-page">
           <Reveal className="flex flex-col items-start justify-between gap-6 rounded-xl px-8 py-10 sm:flex-row sm:items-center" style={{ background: 'var(--lb-ink-900)' }}>
             <p className="font-display text-xl font-semibold text-white">No card required to browse open bids on your first post.</p>
-            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
+            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} /></Link>
           </Reveal>
         </div>
       </section>
