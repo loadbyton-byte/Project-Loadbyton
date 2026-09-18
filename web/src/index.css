@@ -192,6 +192,23 @@
      the sidebar still reads as a distinct raised panel against the
      already-dark canvas/surface tones, rather than blending into them. */
   --sidebar-bg: var(--lb-ink-900);
+
+  /* Motion tokens — the named duration/easing scale referenced by every
+     @keyframes/transition below (and by lib/motion.js's hooks). Was ad hoc
+     per-component durations before this pass; consolidating here is a
+     real, previously-identified gap, not new scope invented for its own
+     sake. Four tiers, matching the scale already described in the motion
+     brief: micro (tap/press feedback), standard (menus/panels/most UI),
+     emphasis (modals/drawers, anything that reorients the screen), hero
+     (narrative/storytelling only — used sparingly, justified use only).
+     One shared easing curve (the house "ease-out-expo"-ish curve already
+     in use everywhere) rather than a curve per tier — this system doesn't
+     need per-tier easing variation to read as coherent. */
+  --motion-micro: 120ms;
+  --motion-standard: 200ms;
+  --motion-emphasis: 320ms;
+  --motion-hero: 700ms;
+  --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -359,7 +376,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
 .reveal {
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity var(--motion-emphasis) var(--motion-ease), transform var(--motion-emphasis) var(--motion-ease);
 }
 .reveal-visible {
   opacity: 1;
@@ -375,7 +392,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .animate-menu-in {
-  animation: menu-in 0.16s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: menu-in var(--motion-micro) var(--motion-ease) both;
   transform-origin: top right;
 }
 
@@ -384,7 +401,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-panel-in {
-  animation: panel-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: panel-in var(--motion-standard) var(--motion-ease) both;
 }
 
 /* ChatPopup.jsx — same mount-triggered-entrance-only convention as
@@ -395,7 +412,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .animate-chat-in {
-  animation: chat-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: chat-in var(--motion-standard) var(--motion-ease) both;
   transform-origin: bottom right;
 }
 
@@ -412,14 +429,14 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   to { opacity: 1; }
 }
 .animate-fade-in {
-  animation: fade-in 0.2s ease-out both;
+  animation: fade-in var(--motion-standard) ease-out both;
 }
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(16px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-slide-up {
-  animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: slide-up var(--motion-emphasis) var(--motion-ease) both;
 }
 
 /* Unread-message cue on the chat FAB — a soft expanding ring, not a harsh
@@ -441,7 +458,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .animate-message-in {
-  animation: message-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: message-in var(--motion-standard) var(--motion-ease) both;
   animation-delay: var(--msg-delay, 0ms);
 }
 
@@ -451,7 +468,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   to { opacity: 1; transform: translateX(0); }
 }
 .animate-thread-row-in {
-  animation: thread-row-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: thread-row-in var(--motion-standard) var(--motion-ease) both;
   animation-delay: var(--msg-delay, 0ms);
 }
 
@@ -478,7 +495,7 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   to { transform: translateX(0); }
 }
 .animate-drawer-in {
-  animation: drawer-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: drawer-in var(--motion-emphasis) var(--motion-ease) both;
 }
 html[dir="rtl"] .animate-drawer-in {
   animation-name: drawer-in-rtl;
@@ -895,4 +912,66 @@ html[dir="rtl"] .animate-drawer-in {
   [dir="rtl"] .btn:focus-visible .btn-arrow-nudge {
     transform: translateX(-3px);
   }
+
+  /* Diagonal shine sweep on hover/focus — one-shot per hover, not looping
+     (a looping shine reads as "loading", not "premium"). Opt-in via
+     .btn-shine paired with .btn-accent in JSX, same convention as
+     .btn-arrow-nudge above: a small, reusable rule, not a second button
+     system. Collapses to an imperceptible instant sweep under
+     prefers-reduced-motion via the global duration collapse already at
+     the top of this file — no separate reduced-motion check needed. */
+  .btn-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shine::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.35) 50%, transparent 65%);
+    transform: translateX(-120%);
+    pointer-events: none;
+  }
+  .btn-shine:hover::after,
+  .btn-shine:focus-visible::after {
+    animation: btn-shine-sweep var(--motion-emphasis) var(--motion-ease) both;
+  }
+
+  /* Cursor-follow spotlight glow, paired with useSpotlight() (lib/motion.js)
+     writing --spot-x/--spot-y onto the element as the pointer moves.
+     Position updates are instant (no transition on the custom properties
+     themselves — animating background-position per frame is what makes
+     spotlight effects feel laggy); only the reveal/hide opacity transitions,
+     which is what needs to feel smooth. Opt-in per interactive card (Lane
+     Index, transporter directory, pricing tiers) — not baked into .card,
+     matching .card-hover's own opt-in convention above. Falls back to a
+     centered glow with no JS (--spot-x/--spot-y default to 50%), which is
+     also what happens on touch, where there's no hover-tracking pointer. */
+  .card-spotlight {
+    position: relative;
+    overflow: hidden;
+  }
+  .card-spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity var(--motion-standard) var(--motion-ease);
+    background: radial-gradient(220px circle at var(--spot-x, 50%) var(--spot-y, 50%), color-mix(in srgb, var(--brand-accent) 12%, transparent), transparent 70%);
+    pointer-events: none;
+  }
+  .card-spotlight:hover::before,
+  .card-spotlight:focus-within::before {
+    opacity: 1;
+  }
+  .card-spotlight > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+@keyframes btn-shine-sweep {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
 }
