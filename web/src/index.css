@@ -1383,7 +1383,8 @@ body { letter-spacing: -.006em; }
 
 .app-main { position: relative; min-width: 0; }
 .app-main:not([data-route="/"]) { background-image: radial-gradient(circle at 96% 0%, color-mix(in srgb,var(--brand-accent) 5%,transparent), transparent 28rem); }
-.app-main:not([data-route="/"]) > div:not(.lb-home) { animation: app-page-in var(--motion-emphasis) var(--motion-ease) both; }
+.route-stage { min-height: 100%; }
+.route-stage > * { min-width: 0; }
 @keyframes app-page-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 
 /* Shared page hierarchy: every utility page gets the same editorial header rhythm. */
@@ -1462,6 +1463,15 @@ input[type="checkbox"],input[type="radio"] { accent-color: var(--brand-accent); 
 .empty-state { background: color-mix(in srgb,var(--bg-surface) 52%,transparent); border-style: dashed !important; }
 .empty-state-icon { display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--bg-raised); }
 .toast { border-radius: 9px; border-left: 3px solid var(--brand-accent); box-shadow: 0 22px 65px rgba(5,22,29,.18); }
+.skeleton-shimmer { position:relative;overflow:hidden; }
+.skeleton-shimmer::after { content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(255,255,255,.62) 48%,transparent 66%);transform:translateX(-120%);animation:skeleton-shine 1.45s ease-in-out infinite; }
+@keyframes skeleton-shine { to { transform:translateX(120%); } }
+
+/* Horizontal collections become touch carousels without changing data logic. */
+.app-main .overflow-x-auto > .flex { scroll-snap-type:x mandatory;scroll-padding-inline:16px;overscroll-behavior-inline:contain; }
+.app-main .overflow-x-auto > .flex > * { scroll-snap-align:start; }
+.app-main .overflow-x-auto { scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--brand-accent) 42%,transparent) transparent; }
+.app-main .overflow-x-auto::-webkit-scrollbar{height:4px}.app-main .overflow-x-auto::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--brand-accent) 42%,transparent);border-radius:999px}
 
 /* Dialogs, drawers and command surfaces. */
 [role="dialog"] > div:not(.absolute),[role="dialog"] .bg-surface { border-radius: var(--lb-radius-lg); }
@@ -1496,6 +1506,6 @@ input[type="checkbox"],input[type="radio"] { accent-color: var(--brand-accent); 
   .app-mobile-bar { box-shadow:0 10px 30px rgba(7,25,34,.08); }
 }
 @media (prefers-reduced-motion:reduce) {
-  .app-main:not([data-route="/"]) > div:not(.lb-home) { animation:none; }
+  .skeleton-shimmer::after { animation:none;display:none; }
   .card-hover:hover,.card-interactive:hover,.app-main a.card:hover { transform:none; }
 }
