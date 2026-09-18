@@ -5,6 +5,7 @@ import { ApiError } from '../lib/api.js';
 import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
+import AuthFrame from '../components/AuthFrame.jsx';
 
 export default function Login() {
   usePageTitle('Log in');
@@ -37,7 +38,7 @@ export default function Login() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-16">
+    <AuthFrame title="Return to the operating record." body="Your loads, bids, drivers, documents and delivery state remain connected in one freight workspace.">
       <Card className="w-full max-w-md p-8">
         <p className="font-display text-xl font-semibold text-ink">Log in to Loadbyton</p>
         <p className="mt-1 text-sm text-ink-muted">Post loads, bid on freight, or run the ops console.</p>
@@ -72,6 +73,6 @@ export default function Login() {
           New to Loadbyton? <Link to="/register" className="font-medium text-brand-secondary hover:underline">Create an account</Link>
         </p>
       </Card>
-    </div>
+    </AuthFrame>
   );
 }

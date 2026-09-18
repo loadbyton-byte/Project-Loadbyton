@@ -461,7 +461,7 @@ function ShellInner({ children }) {
   ];
 
   return (
-    <div className="flex min-h-dvh flex-col bg-canvas">
+    <div className={cx('lb-shell flex min-h-dvh flex-col bg-canvas', user ? 'lb-app-shell' : 'lb-public-shell')}>
       {user && <CommandPalette navItems={navItems} />}
       {user?.impersonating && (
         <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-center text-xs font-medium text-white" style={{ background: 'var(--status-danger)' }}>

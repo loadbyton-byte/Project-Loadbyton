@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import { Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
+import AuthFrame from '../components/AuthFrame.jsx';
 
 export default function VerifyEmail() {
   usePageTitle('Verify your email');
@@ -21,7 +22,7 @@ export default function VerifyEmail() {
   }, [token, refresh]);
 
   return (
-    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-16">
+    <AuthFrame eyebrow="Identity checkpoint" title="Verified people create accountable movements." body="Confirm your email so every action in the load record remains attached to a known operating identity.">
       <Card className="w-full max-w-md p-8 text-center">
         <p className="font-display text-xl font-semibold text-ink">Verify your email</p>
         {status === 'checking' && <p className="mt-3 text-sm text-ink-muted">Confirming…</p>}
@@ -39,6 +40,6 @@ export default function VerifyEmail() {
           <Link to="/" className="font-medium text-brand-secondary hover:underline">Back to Loadbyton</Link>
         </p>
       </Card>
-    </div>
+    </AuthFrame>
   );
 }
