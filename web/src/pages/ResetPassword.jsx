@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
+import AuthFrame from '../components/AuthFrame.jsx';
 
 export default function ResetPassword() {
   usePageTitle('Set a new password');
@@ -29,7 +30,7 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-16">
+    <AuthFrame eyebrow="Secure credential update" title="A clean credential. The same operating history." body="Update access securely while preserving your company, load and document records.">
       <Card className="w-full max-w-md p-8">
         <p className="font-display text-xl font-semibold text-ink">Set a new password</p>
 
@@ -59,6 +60,6 @@ export default function ResetPassword() {
           </form>
         )}
       </Card>
-    </div>
+    </AuthFrame>
   );
 }

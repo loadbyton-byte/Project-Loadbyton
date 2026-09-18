@@ -9,6 +9,7 @@ import { initSentry, SentryErrorBoundary } from './lib/sentry.js';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient.js';
 import './index.css';
+import './styles/operations-system.css';
 
 // Initialize Sentry as early as possible
 initSentry();

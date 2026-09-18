@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
+import AuthFrame from '../components/AuthFrame.jsx';
 
 export default function ForgotPassword() {
   usePageTitle('Reset your password');
@@ -25,7 +26,7 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-16">
+    <AuthFrame eyebrow="Account recovery" title="Restore access. Keep the record intact." body="Reset access securely without losing the operational history attached to your company account.">
       <Card className="w-full max-w-md p-8">
         <p className="font-display text-xl font-semibold text-ink">Reset your password</p>
         <p className="mt-1 text-sm text-ink-muted">We'll email you a link to set a new one.</p>
@@ -48,6 +49,6 @@ export default function ForgotPassword() {
           <Link to="/login" className="font-medium text-brand-secondary hover:underline">Back to log in</Link>
         </p>
       </Card>
-    </div>
+    </AuthFrame>
   );
 }

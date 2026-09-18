@@ -6,6 +6,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { IconTruck, IconPackage, IconArrowLeft, IconArrowRight, IconCheckCircle, IconCompass, IconLayers, IconTrailer } from '../components/icons.jsx';
 import TermsModal from '../components/TermsModal.jsx';
+import AuthFrame from '../components/AuthFrame.jsx';
 
 const STEPS = ['Role', 'Business', 'Account'];
 
@@ -121,7 +122,7 @@ export default function Register() {
   }
 
   return (
-    <div className="container-page flex min-h-[calc(100dvh-4rem)] items-center justify-center py-10">
+    <AuthFrame eyebrow="Join the verified freight network" title="Start with your real operating role." body="A shipper, transporter, forwarder, broker and owner-operator need different controls—but they all contribute to the same accountable load record.">
       <Card className="w-full max-w-lg p-6 sm:p-8">
         <p className="font-display text-xl font-bold text-ink">Create your account</p>
         <p className="mt-1 text-sm text-ink-muted">Post drayage jobs, or bid on them — pick which one you are.</p>
@@ -265,6 +266,6 @@ export default function Register() {
           Already have an account? <Link to="/login" className="font-medium text-brand-secondary hover:underline">Log in</Link>
         </p>
       </Card>
-    </div>
+    </AuthFrame>
   );
 }
