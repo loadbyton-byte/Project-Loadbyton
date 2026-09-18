@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
 import { SpotlightCard } from '../components/SpotlightCard.jsx';
+import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconCheck, IconArrowRight, IconShield } from '../components/icons.jsx';
 
@@ -20,9 +21,11 @@ export default function Pricing() {
   const [takeRate, setTakeRate] = useState('6%');
   useEffect(() => { api.publicMarket().then((d) => setTakeRate(d.market.takeRate)).catch(() => {}); }, []);
   const bottomCtaRef = useMagnetic();
+  const heroSectionRef = useRef(null);
 
   return (
     <div dir="ltr">
+      <div ref={heroSectionRef}>
       <MediaBackground src="https://images.pexels.com/photos/27099094/pexels-photo-27099094.jpeg?cs=srgb&fm=jpg&w=1600" overlay="fade-bottom" className="h-40 md:h-56" />
       <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page py-16 md:py-20">
@@ -35,6 +38,7 @@ export default function Pricing() {
           </Reveal>
         </div>
       </section>
+      </div>
 
       <section className="py-16 md:py-20">
         <div className="container-page">
@@ -89,6 +93,7 @@ export default function Pricing() {
           </Reveal>
         </div>
       </section>
+      <StickyMobileCta heroRef={heroSectionRef} to="/register" label="Create a free account" />
     </div>
   );
 }
