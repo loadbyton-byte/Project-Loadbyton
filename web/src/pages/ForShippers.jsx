@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
 import { ScrollSteps } from '../components/ScrollSteps.jsx';
+import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconArrowRight, IconPackage, IconGavel, IconShield, IconFile, IconClock, IconLayers } from '../components/icons.jsx';
 
@@ -28,8 +29,10 @@ export default function ForShippers() {
   useMeta('Post a road freight or container drayage requirement in the UAE, review bids from verified transporters, and manage the move from one place.');
   const heroCtaRef = useMagnetic();
   const bottomCtaRef = useMagnetic();
+  const heroSectionRef = useRef(null);
   return (
     <div dir="ltr">
+      <div ref={heroSectionRef}>
       <MediaBackground src="https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=1600" overlay="dark">
         <div className="container-page py-16 md:py-20">
           <Reveal className="max-w-2xl">
@@ -45,6 +48,7 @@ export default function ForShippers() {
           </Reveal>
         </div>
       </MediaBackground>
+      </div>
 
       <section className="border-b py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page">
@@ -85,6 +89,7 @@ export default function ForShippers() {
           </Reveal>
         </div>
       </section>
+      <StickyMobileCta heroRef={heroSectionRef} to="/register" label="Post a load" />
     </div>
   );
 }

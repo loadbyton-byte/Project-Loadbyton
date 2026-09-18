@@ -766,6 +766,29 @@ html[dir="rtl"] .animate-drawer-in {
   width: 100%;
 }
 
+/* StickyMobileCta.jsx — a persistent conversion bar, mobile only, that
+   slides up once the hero has scrolled out of view. z-index sits below
+   Shell.jsx's mobile TopAppBar (z-40) and its drawer (z-50) — both stay
+   on top of this if opened while it's visible, no extra coordination
+   needed since z-index ordering alone handles it. */
+.sticky-mobile-cta {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border-subtle);
+  transform: translateY(100%);
+  transition: transform var(--motion-emphasis) var(--motion-ease);
+}
+.sticky-mobile-cta.is-visible {
+  transform: translateY(0);
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Component classes — in @layer components so plain Tailwind utility  */

@@ -300,6 +300,8 @@ function ShellInner({ children }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [endingImpersonation, setEndingImpersonation] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const drawerPanelRef = useRef(null);
+  const swipeRef = useRef({ active: false, axis: null, startX: 0, startY: 0 });
   // A DRIVER seat's user.role is still its owner's role (CARRIER — see
   // auth.jsx's session model), so it would otherwise get the full carrier
   // nav despite RequireAuth (App.jsx) redirecting every one of those routes
@@ -309,6 +311,88 @@ function ShellInner({ children }) {
 
   function closeDrawer() {
     setDrawerOpen(false);
+  }
+
+  // Swipe-to-dismiss — the "closing" direction mirrors .animate-drawer-in's
+  // own RTL awareness (index.css): LTR's drawer slides in from the left, so
+  // dragging it back left closes it; RTL's slides in from the right (see
+  // drawer-in-rtl), so dragging right closes it. Reads document.dir at
+  // gesture start rather than trusting a prop, since that's the same
+  // source of truth the CSS itself keys off.
+  //
+  // Axis is decided once, after a small dead zone, by whichever direction
+  // moved further first — committing to "horizontal drag" only if the
+  // gesture actually reads as horizontal, so scrolling the nav list
+  // vertically (or just tapping a link, which never clears the dead zone)
+  // is never hijacked as a swipe.
+  function handleDrawerTouchStart(e) {
+    const panel = drawerPanelRef.current;
+    // .animate-drawer-in is a CSS animation with fill-mode: both, which
+    // keeps its own computed transform in force even after it finishes —
+    // that wins over any inline style.transform written from JS for as
+    // long as the animation is still attached to the element. Detaching
+    // it up front (idempotent; harmless if the entrance animation has
+    // already finished, which by the time a user can touch the drawer,
+    // it always has) is what lets the drag transforms below actually
+    // take visual effect instead of being silently overridden.
+    if (panel) panel.style.animation = 'none';
+    const t0 = e.touches[0];
+    swipeRef.current = { active: false, axis: null, startX: t0.clientX, startY: t0.clientY };
+  }
+  function handleDrawerTouchMove(e) {
+    const panel = drawerPanelRef.current;
+    if (!panel) return;
+    const t0 = e.touches[0];
+    const dx = t0.clientX - swipeRef.current.startX;
+    const dy = t0.clientY - swipeRef.current.startY;
+    const state = swipeRef.current;
+
+    if (!state.axis) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      state.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (state.axis !== 'x') return;
+
+    const isRtl = document.documentElement.dir === 'rtl';
+    const closingDelta = isRtl ? dx : -dx;
+    if (closingDelta <= 0) {
+      // Dragging the "wrong" way (back toward fully open) — snap to open
+      // rather than allowing an over-drag past the resting position.
+      panel.style.transition = 'none';
+      panel.style.transform = 'translateX(0)';
+      state.active = false;
+      return;
+    }
+    state.active = true;
+    panel.style.transition = 'none';
+    panel.style.transform = `translateX(${isRtl ? closingDelta : -closingDelta}px)`;
+  }
+  function handleDrawerTouchEnd() {
+    const panel = drawerPanelRef.current;
+    const state = swipeRef.current;
+    if (!panel || !state.active) {
+      swipeRef.current = { active: false, axis: null, startX: 0, startY: 0 };
+      return;
+    }
+    const isRtl = document.documentElement.dir === 'rtl';
+    const dx = Math.abs(parseFloat(panel.style.transform.replace(/[^-\d.]/g, '')) || 0);
+    const closeThreshold = panel.offsetWidth * 0.35;
+    // animation is already 'none' (set at touchstart); this needs its own
+    // explicit transition now — with the CSS animation detached, there is
+    // no other rule left that would animate a transform change on this
+    // element. Same duration/easing as .animate-drawer-in itself, so a
+    // released swipe reads as the same motion as the drawer's own
+    // entrance/exit, not a separate, differently-timed effect.
+    panel.style.transition = 'transform var(--motion-emphasis) var(--motion-ease)';
+    if (dx > closeThreshold) {
+      panel.style.transform = `translateX(${isRtl ? '100%' : '-100%'})`;
+      // closeDrawer() unmounts the panel once the swipe's own transition
+      // has had time to visually finish, not before.
+      window.setTimeout(closeDrawer, 220);
+    } else {
+      panel.style.transform = 'translateX(0)';
+    }
+    swipeRef.current = { active: false, axis: null, startX: 0, startY: 0 };
   }
 
   async function handleResendVerification() {
@@ -430,7 +514,14 @@ function ShellInner({ children }) {
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
           <button aria-label="Close menu" className="animate-fade-in absolute inset-0 bg-black/50" onClick={closeDrawer} />
-          <div className="animate-drawer-in relative flex h-full w-[84%] max-w-xs flex-col bg-surface" style={{ boxShadow: 'var(--lb-shadow-lg)' }}>
+          <div
+            ref={drawerPanelRef}
+            className="animate-drawer-in relative flex h-full w-[84%] max-w-xs flex-col bg-surface"
+            style={{ boxShadow: 'var(--lb-shadow-lg)' }}
+            onTouchStart={handleDrawerTouchStart}
+            onTouchMove={handleDrawerTouchMove}
+            onTouchEnd={handleDrawerTouchEnd}
+          >
             {/* Sticky header — a short phone's drawer content (5 nav items +
                 toggles + account block + logout) can exceed the visible
                 viewport height; pinning this keeps the close button reachable

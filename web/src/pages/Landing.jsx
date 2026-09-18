@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { EQUIPMENT_TYPES, equipmentLabel, formatAED, formatLabel } from '../lib/constants.js';
@@ -8,6 +8,7 @@ import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
 import { ScrollSteps } from '../components/ScrollSteps.jsx';
 import { SpotlightCard } from '../components/SpotlightCard.jsx';
+import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import HeroNarrative from '../components/HeroNarrative.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
@@ -48,6 +49,7 @@ export default function Landing() {
   const heroCtaRef = useMagnetic();
   const volumeCtaRef = useMagnetic();
   const bottomCtaRef = useMagnetic();
+  const heroSectionRef = useRef(null);
 
   useEffect(() => {
     api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 4))).catch(() => {});
@@ -70,6 +72,7 @@ export default function Landing() {
           HeroNarrative.jsx. The "no instant-matching framing" direction
           stays: every step is a real, distinct stage the product actually
           has, never a single "matched instantly" moment. */}
+      <div ref={heroSectionRef}>
       <MediaBackground src={PHOTO.heroTruck} overlay="side" alt="">
         <div className="container-page grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
           <div className="flex flex-col justify-center">
@@ -140,6 +143,7 @@ export default function Landing() {
           </div>
         </div>
       </MediaBackground>
+      </div>
 
       {/* Everything below is still English-only (see lib/i18n.jsx's scope
           note) — wrapped in dir="ltr" so untranslated sentences read
@@ -316,6 +320,7 @@ export default function Landing() {
         </div>
       </section>
       </div>
+      <StickyMobileCta heroRef={heroSectionRef} to="/register" label={t('landing.hero.ctaShipper')} />
     </div>
   );
 }
