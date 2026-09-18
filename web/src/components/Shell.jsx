@@ -9,7 +9,7 @@ import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
   IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt,
-  IconCompass, IconShield, IconSearch,
+  IconCompass, IconShield, IconSearch, IconArrowRight,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 import CommandPalette from './CommandPalette.jsx';
@@ -109,14 +109,14 @@ function NotificationBell() {
       <button
         type="button"
         onClick={toggle}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+        className="lb-icon-btn"
         aria-label="Notifications"
         aria-haspopup="true"
         aria-expanded={open}
       >
         <IconBell size={20} />
         {hasUnread && (
-          <span data-testid="notification-unread-dot" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)' }} />
+          <span data-testid="notification-unread-dot" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full" style={{ background: 'var(--brand-accent)', boxShadow: '0 0 0 3px color-mix(in srgb, var(--brand-accent) 25%, transparent)' }} />
         )}
       </button>
       {open && (
@@ -175,7 +175,7 @@ function TrnQuickLink() {
   return (
     <Link
       to="/verify/trn"
-      className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+      className="lb-icon-btn"
       aria-label="TRN Verification"
       title="TRN Verification"
     >
@@ -186,12 +186,28 @@ function TrnQuickLink() {
 
 // Visible entry point for CommandPalette.jsx — the Cmd/Ctrl+K shortcut
 // alone has no discoverability and doesn't exist on a touch device.
-function CommandPaletteHint() {
+function CommandPaletteHint({ pill = false }) {
+  if (pill) {
+    return (
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new CustomEvent('command-palette:open'))}
+        className="hidden items-center gap-2.5 rounded-full border py-2 pl-3.5 pr-2 text-sm text-ink-muted transition-all hover:border-[var(--brand-accent)] hover:text-ink hover:shadow-md lg:flex"
+        style={{ borderColor: 'var(--border-strong)', background: 'var(--bg-raised)', minWidth: 220 }}
+        aria-label="Search"
+        title="Search (Ctrl/Cmd+K)"
+      >
+        <IconSearch size={15} />
+        <span className="flex-1 text-left text-[13px]">Search loads, jobs…</span>
+        <span className="lb-cmd-kbd">⌘K</span>
+      </button>
+    );
+  }
   return (
     <button
       type="button"
       onClick={() => window.dispatchEvent(new CustomEvent('command-palette:open'))}
-      className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+      className="lb-icon-btn"
       aria-label="Search"
       title="Search (Ctrl/Cmd+K)"
     >
@@ -288,6 +304,15 @@ function groupNavItems(items) {
   }
   return order.map((g) => ({ group: g, items: byGroup.get(g) }));
 }
+
+const FOOTER_TICKER = [
+  'JEBEL ALI → MUSSAFAH',
+  'KHOR FAKKAN → JEBEL ALI',
+  'FUJAIRAH PORT → DIP',
+  'SHARJAH → ABU DHABI',
+  'JEBEL ALI → RUWAIS',
+  'DIP → KHALIFA PORT',
+];
 
 export function Shell({ children }) {
   return <ShellInner>{children}</ShellInner>;
@@ -466,22 +491,20 @@ function ShellInner({ children }) {
         </div>
       )}
 
-      {/* TopAppBar — mobile only (md:hidden). Desktop replaces this with a
-          persistent sidebar + slim top bar below, per the enterprise-layout
-          restructure; this stays the nav for narrow widths since it already
-          works well there. */}
+      {/* TopAppBar — mobile only (md:hidden). Floating glass bar with the
+          route-line accent; logo acts as role-aware home gesture. */}
       <header
-        className="sticky top-0 z-40 border-b backdrop-blur-md md:hidden"
+        className="lb-chrome-veil sticky top-0 z-40 border-b md:hidden"
         style={{
           borderColor: 'var(--border-subtle)',
-          backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)',
           paddingTop: 'env(safe-area-inset-top)',
         }}
       >
+        <div className="lb-top-route-line" aria-hidden="true" />
         <div className="flex h-14 items-center justify-between px-3" style={{ paddingLeft: 'max(0.75rem, env(safe-area-inset-left))', paddingRight: 'max(0.75rem, env(safe-area-inset-right))' }}>
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container"
+            className="lb-icon-btn"
             aria-label="Open menu"
           >
             <IconMenu size={22} />
@@ -502,21 +525,21 @@ function ShellInner({ children }) {
               {/* Desktop's slim header already had both Log in and Get
                   started (below) — mobile's compact TopAppBar had only
                   Log in, no primary conversion action at all. */}
-              <Link to="/register" className="btn-accent px-3 py-1.5 text-sm">{t('nav.register', 'Get started')}</Link>
+              <Link to="/register" className="btn-accent btn-shine px-3 py-1.5 text-sm">{t('nav.register', 'Get started')}</Link>
             </div>
           )}
         </div>
       </header>
 
       {/* Drawer — mobile nav (only reachable via the hamburger above, which
-          is itself md:hidden). Carries the full role nav, account actions,
-          and the theme/locale toggles. */}
+          is itself md:hidden). Full ops-drawer: numbered wayfinding, role
+          entry points, persistent conversion. Swipe-to-dismiss preserved. */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
-          <button aria-label="Close menu" className="animate-fade-in absolute inset-0 bg-black/50" onClick={closeDrawer} />
+          <button aria-label="Close menu" className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={closeDrawer} />
           <div
             ref={drawerPanelRef}
-            className="animate-drawer-in relative flex h-full w-[84%] max-w-xs flex-col bg-surface"
+            className="lb-drawer-panel animate-drawer-in relative flex h-full w-[86%] max-w-xs flex-col"
             style={{ boxShadow: 'var(--lb-shadow-lg)' }}
             onTouchStart={handleDrawerTouchStart}
             onTouchMove={handleDrawerTouchMove}
@@ -526,26 +549,33 @@ function ShellInner({ children }) {
                 toggles + account block + logout) can exceed the visible
                 viewport height; pinning this keeps the close button reachable
                 without scrolling back to the top. */}
-            <div className="sticky top-0 z-10 flex items-center justify-between bg-surface px-5 pb-3 pt-5">
-              <Logo />
-              <button onClick={closeDrawer} className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-container" aria-label="Close menu">
+            <div className="sticky top-0 z-10 flex items-center justify-between px-5 pb-3 pt-5">
+              <Link to={user ? homePath(user, actingAs) : '/'} aria-label="Loadbyton home" onClick={closeDrawer}>
+                <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
+              </Link>
+              <button onClick={closeDrawer} className="flex h-10 w-10 items-center justify-center rounded-full text-white/80 hover:bg-white/10 hover:text-white" aria-label="Close menu">
                 <IconClose size={18} />
               </button>
             </div>
+            <div className="px-5 pb-2">
+              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">UAE road freight · one shared load record</p>
+              <div className="lb-top-route-line mt-2 opacity-70" aria-hidden="true" />
+            </div>
 
-            <div className="flex-1 overflow-y-auto px-5 pb-5">
+            <div className="relative flex-1 overflow-y-auto px-5 pb-5">
             <nav className="flex flex-col gap-1.5">
               {user ? (
                 groupNavItems(navItems).map(({ group, items }) => (
                   <div key={group}>
-                    <p className="px-3 pb-1 pt-3 font-mono text-[10px] font-bold uppercase tracking-widest text-ink-muted first:pt-0">{group}</p>
-                    {items.map((item) => (
+                    <p className="lb-sidebar-group">{group}</p>
+                    {items.map((item, idx) => (
                       <NavLink
                         key={item.to}
                         to={item.to}
                         onClick={closeDrawer}
-                        className={({ isActive }) => cx('flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
+                        className={({ isActive }) => cx('lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all', isActive ? 'bg-white/10 text-white shadow-inner' : 'text-white/70 hover:bg-white/5 hover:text-white')}
                       >
+                        <span className="lb-drawer-waypoint">{String(idx + 1).padStart(2, '0')}</span>
                         {item.icon}
                         {item.label}
                       </NavLink>
@@ -553,27 +583,38 @@ function ShellInner({ children }) {
                   </div>
                 ))
               ) : (
-                guestLinks.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onClick={closeDrawer}
-                    className={({ isActive }) => cx('rounded-lg px-3 py-2.5 text-sm font-semibold', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
-                  >
-                    {item.label}
+                <>
+                  <p className="lb-sidebar-group">Explore</p>
+                  {guestLinks.map((item, idx) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={closeDrawer}
+                      className={({ isActive }) => cx('lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all', isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white')}
+                    >
+                      <span className="lb-drawer-waypoint">{String(idx + 1).padStart(2, '0')}</span>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                  <p className="lb-sidebar-group">By role</p>
+                  <NavLink to="/for-shippers" onClick={closeDrawer} className="lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
+                    <span className="lb-drawer-waypoint">07</span> For shippers <IconArrowRight size={14} />
                   </NavLink>
-                ))
+                  <NavLink to="/for-transporters" onClick={closeDrawer} className="lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
+                    <span className="lb-drawer-waypoint">08</span> For transporters <IconArrowRight size={14} />
+                  </NavLink>
+                </>
               )}
             </nav>
 
-            <div className="my-4 border-t" style={{ borderColor: 'var(--border-subtle)' }} />
+            <div className="my-4 border-t border-white/10" />
 
             <div className="flex flex-col gap-1.5">
-              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-secondary hover:bg-surface-container">
+              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
                 {theme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />}
                 {theme === 'dark' ? 'Light mode' : 'Dark mode'}
               </button>
-              <button onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')} className="rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-secondary hover:bg-surface-container">
+              <button onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
                 {locale === 'ar' ? 'English' : 'العربية'}
               </button>
             </div>
@@ -581,21 +622,25 @@ function ShellInner({ children }) {
             <div className="mt-4 pt-4">
               {user ? (
                 <>
-                  <div className="mb-3 rounded-lg px-3 py-2.5" style={{ background: 'var(--surface-container)' }}>
-                    <p className="truncate text-sm font-semibold text-ink">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
-                    <p className="text-xs text-ink-muted">{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+                  <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+                    <span className="lb-status-dot" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-white/55">{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+                    </div>
                   </div>
-                  <Link to="/profile" onClick={closeDrawer} className="mb-1.5 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink-secondary hover:bg-surface-container">
+                  <Link to="/profile" onClick={closeDrawer} className="mb-1.5 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
                     <IconUser size={16} /> Profile &amp; settings
                   </Link>
-                  <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-semibold hover:bg-surface-container" style={{ color: 'var(--status-danger)' }}>
+                  <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-[#FF8A80] hover:bg-white/5">
                     <IconLogOut size={16} /> Log out
                   </button>
                 </>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <Link to="/register" onClick={closeDrawer} className="btn-accent w-full justify-center">{t('nav.register', 'Get started')}</Link>
-                  <Link to="/login" onClick={closeDrawer} className="btn-secondary w-full justify-center">{t('nav.login', 'Log in')}</Link>
+                  <Link to="/register" onClick={closeDrawer} className="btn-accent btn-shine w-full justify-center">Start with one load <IconArrowRight size={16} /></Link>
+                  <Link to="/login" onClick={closeDrawer} className="flex w-full items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm font-bold text-white hover:bg-white/10">Log in</Link>
+                  <p className="mt-1 text-center font-mono text-[10px] uppercase tracking-widest text-white/40">Verified TRN · Secured payout · POD release</p>
                 </div>
               )}
             </div>
@@ -613,15 +658,13 @@ function ShellInner({ children }) {
       )}
 
       <div className="flex flex-1 md:flex-row">
-        {/* Sidebar — persistent, desktop only (md:flex). Replaces the
-            drawer as the primary nav surface at wide widths; reuses
-            navByRole's per-role link data, no new routing logic. */}
+        {/* Sidebar — persistent, desktop only (md:flex). Dark terminal rail
+            with route grid, grouped wayfinding and live session footer. */}
         {user && (
           <aside
-            className="hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
-            style={{ background: 'var(--sidebar-bg)' }}
+            className="lb-sidebar hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
           >
-            <div className="flex h-14 items-center px-5">
+            <div className="relative flex h-16 items-center justify-between px-5">
               {/* Sidebar chrome is always dark (--sidebar-bg) but shifts
                   shade between light/dark app theme (--lb-ink-900 vs
                   --lb-ink-800) — the transparent-background wordmark lets
@@ -631,9 +674,12 @@ function ShellInner({ children }) {
               <Link to={homePath(user, actingAs)} aria-label="Loadbyton home">
                 <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
               </Link>
+              <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-widest text-white/60">
+                <span className="lb-status-dot" style={{ width: 6, height: 6 }} aria-hidden="true" /> Live
+              </span>
             </div>
 
-            <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
+            <nav className="relative flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
               {groupNavItems(navItems).map(({ group, items }) => (
                 <div key={group}>
                   {/* var(--lb-slate-400), not the fixed --text-muted token — the
@@ -645,7 +691,7 @@ function ShellInner({ children }) {
                       wiring axe-core into e2e/accessibility.spec.js; this
                       already-defined primitive measures 5.71:1 against the same
                       background. */}
-                  <p className="px-2.5 pb-1.5 pt-4 font-mono text-[10px] font-bold uppercase tracking-widest first:pt-1" style={{ color: 'var(--lb-slate-400)' }}>
+                  <p className="lb-sidebar-group">
                     {group}
                   </p>
                   {items.map((item) => (
@@ -654,13 +700,15 @@ function ShellInner({ children }) {
                       to={item.to}
                       className={({ isActive }) =>
                         cx(
-                          'relative flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-[13.5px] font-medium transition-colors',
+                          'lb-sidebar-link relative flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-[13.5px] font-medium transition-all',
                           isActive ? 'text-white' : 'hover:text-white'
                         )
                       }
                       style={({ isActive }) => ({
                         color: isActive ? '#fff' : '#C7D6DD',
-                        background: isActive ? 'rgba(255,255,255,.08)' : 'transparent',
+                        background: isActive ? 'rgba(255,255,255,.09)' : 'transparent',
+                        boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 20px -12px rgba(0,0,0,0.6)' : 'none',
+                        border: isActive ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent',
                       })}
                     >
                       {({ isActive }) => (
@@ -670,7 +718,7 @@ function ShellInner({ children }) {
                               nav state and the stat cards read as one visual
                               system rather than two unrelated treatments. */}
                           {isActive && (
-                            <span className="absolute inset-y-1 -left-0.5 w-[3px] rounded-full" style={{ background: 'var(--brand-accent)' }} />
+                            <span className="absolute inset-y-1.5 -left-0.5 w-[3px] rounded-full" style={{ background: 'var(--brand-accent)', boxShadow: '0 0 12px var(--brand-accent)' }} />
                           )}
                           <span style={{ color: isActive ? 'var(--brand-accent)' : 'inherit', opacity: isActive ? 1 : 0.85 }}>{item.icon}</span>
                           {item.label}
@@ -682,13 +730,13 @@ function ShellInner({ children }) {
               ))}
             </nav>
 
-            <div className="flex items-center gap-2.5 px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,.08)' }}>
+            <div className="relative flex items-center gap-2.5 px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,.08)', background: 'rgba(0,0,0,0.18)' }}>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: 'var(--brand-secondary)' }}>
                 {(actingAs ? actingAs.displayName || actingAs.email : user.email)?.[0]?.toUpperCase() || '?'}
               </span>
               <div className="min-w-0 flex-1 text-xs">
                 <p className="truncate font-semibold text-white">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
-                <p className="truncate" style={{ color: '#8FA6B3' }}>{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+                <p className="truncate font-mono text-[10px] uppercase tracking-widest" style={{ color: '#8FA6B3' }}>{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
@@ -709,49 +757,49 @@ function ShellInner({ children }) {
         )}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          {/* Desktop slim top bar (md:flex, hidden on mobile — the
-              TopAppBar above covers mobile). Guests get a traditional
-              horizontal marketing nav here; signed-in users get just the
-              notifications bell, since role nav already lives in the
-              sidebar. */}
+          {/* Desktop header: floating ops bar. Guests get the pill marketing
+              nav; signed-in users get command search + TRN + bell, since role
+              nav already lives in the sidebar. */}
           <header
-            className="sticky top-0 z-30 hidden h-14 items-center justify-between border-b px-6 backdrop-blur-md md:flex"
-            style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)' }}
+            className="lb-chrome-veil sticky top-0 z-30 hidden border-b md:block"
+            style={{ borderColor: 'var(--border-subtle)' }}
           >
+            <div className="lb-top-route-line" aria-hidden="true" />
             {user ? (
-              <div />
+              <div className="flex h-16 items-center justify-between gap-4 px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="lb-section-label">Ops console</span>
+                  <span className="hidden font-mono text-[11px] text-ink-muted xl:inline">post → discover → award → move → close</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CommandPaletteHint pill />
+                  <TrnQuickLink />
+                  <NotificationBell />
+                </div>
+              </div>
             ) : (
-              <div className="flex items-center gap-6">
+              <div className="mx-auto flex max-w-content items-center justify-between gap-4 px-5 py-3 sm:px-6 lg:px-8">
                 <Logo />
-                <nav className="flex items-center gap-1">
+                <nav className="lb-guest-pill lb-chrome-veil hidden items-center gap-0.5 px-1.5 py-1 lg:flex" aria-label="Primary">
                   {guestLinks.map((item) => (
                     <NavLink
                       key={item.to}
                       to={item.to}
-                      className={({ isActive }) => cx('rounded-md px-3 py-1.5 text-sm font-semibold transition-colors', isActive ? 'bg-surface-container text-ink' : 'text-ink-secondary hover:bg-surface-container')}
+                      className={({ isActive }) => cx('rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-all', isActive ? 'lb-nav-pill-active' : 'text-ink-secondary hover:bg-raised hover:text-ink')}
                     >
                       {item.label}
                     </NavLink>
                   ))}
                 </nav>
-              </div>
-            )}
-
-            {user ? (
-              <div className="flex items-center">
-                <CommandPaletteHint />
-                <TrnQuickLink />
-                <NotificationBell />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-10 w-10 items-center justify-center rounded-full text-ink transition-colors hover:bg-surface-container" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-                  {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
-                </button>
-                <Link to="/login" className="rounded-md px-3.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
-                  {t('nav.login', 'Log in')}
-                </Link>
-                <Link to="/register" className="btn-accent px-4 py-1.5 text-sm">{t('nav.register', 'Get started')}</Link>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="lb-icon-btn" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                    {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+                  </button>
+                  <Link to="/login" className="hidden rounded-full px-3.5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-raised sm:block">
+                    {t('nav.login', 'Log in')}
+                  </Link>
+                  <Link to="/register" className="btn-accent btn-shine px-4 py-2 text-sm">{t('nav.register', 'Get started')}</Link>
+                </div>
               </div>
             )}
           </header>
@@ -759,28 +807,79 @@ function ShellInner({ children }) {
           <main className="flex-1">{children}</main>
 
           {!user && (
-            <footer className="border-t" style={{ borderColor: 'var(--border-default)' }}>
-              <div className="container-page flex flex-col gap-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-                <Logo />
-                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-muted">
-                  <Link to="/features" className="hover:text-ink">Features</Link>
-                  <Link to="/industries" className="hover:text-ink">Industries</Link>
-                  <Link to="/pricing" className="hover:text-ink">Pricing</Link>
-                  <Link to="/trust" className="hover:text-ink">Trust &amp; Safety</Link>
-                  <Link to="/for-shippers" className="hover:text-ink">For Shippers</Link>
-                  <Link to="/for-transporters" className="hover:text-ink">For Transporters</Link>
-                  <Link to="/about" className="hover:text-ink">About</Link>
-                  <Link to="/blog" className="hover:text-ink">Blog</Link>
-                  <Link to="/security" className="hover:text-ink">Security</Link>
-                  <Link to="/compliance" className="hover:text-ink">Compliance</Link>
-                  <Link to="/terms" className="hover:text-ink">Terms</Link>
-                  <Link to="/privacy" className="hover:text-ink">Privacy</Link>
+            <footer className="lb-footer" dir="ltr">
+              <div className="lb-top-route-line" aria-hidden="true" />
+              <div className="mx-auto w-full max-w-content px-5 pb-8 pt-12 sm:px-6 lg:px-8">
+                <div className="grid gap-10 lg:grid-cols-[1.2fr,2fr]">
+                  <div>
+                    <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-7 w-auto" />
+                    <p className="mt-4 max-w-sm font-display text-xl font-semibold leading-snug text-white">
+                      The load exists everywhere. So the truth exists nowhere — <span style={{ color: 'var(--lb-ember-bright)' }}>until it lives on Loadbyton.</span>
+                    </p>
+                    <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/60">
+                      One shared load record from post to settlement — across web, mobile and WhatsApp. Road freight marketplace software, built for businesses across the UAE.
+                    </p>
+                    <div className="mt-6 flex flex-wrap gap-2.5">
+                      <Link to="/register" className="btn-accent btn-shine px-5 py-2.5 text-sm">Start with one load <IconArrowRight size={15} /></Link>
+                      <Link to="/for-shippers" className="rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/10">Talk to sales</Link>
+                    </div>
+                    <p className="mt-5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
+                      <span className="lb-status-dot" aria-hidden="true" /> All corridors operational
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+                    <div className="lb-footer-col">
+                      <h3>Platform</h3>
+                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
+                        <Link to="/features">Features</Link>
+                        <Link to="/industries">Industries</Link>
+                        <Link to="/pricing">Pricing</Link>
+                        <Link to="/trust">Trust &amp; Safety</Link>
+                      </div>
+                    </div>
+                    <div className="lb-footer-col">
+                      <h3>By role</h3>
+                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
+                        <Link to="/for-shippers">For Shippers</Link>
+                        <Link to="/for-transporters">For Transporters</Link>
+                        <Link to="/about">About</Link>
+                        <Link to="/blog">Blog</Link>
+                      </div>
+                    </div>
+                    <div className="lb-footer-col">
+                      <h3>Assurance</h3>
+                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
+                        <Link to="/security">Security</Link>
+                        <Link to="/compliance">Compliance</Link>
+                        <Link to="/terms">Terms</Link>
+                        <Link to="/privacy">Privacy</Link>
+                      </div>
+                    </div>
+                    <div className="lb-footer-col">
+                      <h3>Terminal</h3>
+                      <div className="flex flex-col gap-2.5 font-mono text-[11px] text-white/55">
+                        <span>JEBEL ALI · 25.01°N</span>
+                        <span>MUSSAFAH · 24.35°N</span>
+                        <span>KHOR FAKKAN · 25.33°N</span>
+                        <span>FUJAIRAH · 25.12°N</span>
+                        <a href="mailto:support@loadbyton.ae" className="mt-1 font-sans text-sm font-semibold text-white/80 hover:text-white">support@loadbyton.ae</a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-xs leading-relaxed text-ink-muted" dir="ltr">
-                  <p>© {new Date().getFullYear()} Loadbyton Freight Technologies FZ-LLC. All rights reserved.</p>
-                  <p className="mt-1">Road freight marketplace software, built for businesses across the UAE.</p>
-                  <p className="mt-1">Registered in Dubai, United Arab Emirates · <a href="mailto:support@loadbyton.ae" className="hover:text-ink">support@loadbyton.ae</a></p>
+              </div>
+              <div className="lb-footer-ticker overflow-hidden py-2.5" aria-hidden="true">
+                <div className="lb-ticker-track font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">
+                  {[...FOOTER_TICKER, ...FOOTER_TICKER].map((lane, i) => (
+                    <span key={i} className="flex items-center gap-8 whitespace-nowrap">
+                      {lane} <span style={{ color: 'var(--lb-ember-bright)' }}>●</span>
+                    </span>
+                  ))}
                 </div>
+              </div>
+              <div className="mx-auto flex w-full max-w-content flex-col gap-2 px-5 py-5 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+                <p>© {new Date().getFullYear()} Loadbyton Freight Technologies FZ-LLC. All rights reserved.</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em]">Registered in Dubai, UAE · LBT-OPS/2026</p>
               </div>
             </footer>
           )}
@@ -801,29 +900,33 @@ function WalkthroughModal({ step, onStep, onFinish }) {
   const isLast = step >= WALKTHROUGH_STEPS.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" role="dialog" aria-modal="true" aria-label="Welcome walkthrough">
-      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-lg border bg-surface p-5 shadow-2xl sm:p-8" style={{ borderColor: 'var(--border-default)' }}>
-        <h2 className="font-display text-xl font-bold text-ink">Welcome to Loadbyton</h2>
-        <p className="mt-1 mb-6 text-sm text-ink-muted">Step {step + 1} of {WALKTHROUGH_STEPS.length}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label="Welcome walkthrough">
+      <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-[20px] border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)' }}>
+        <div className="lb-top-route-line" aria-hidden="true" />
+        <div className="p-5 sm:p-8">
+          <p className="lb-section-label">Welcome aboard</p>
+          <h2 className="mt-2 font-display text-xl font-bold text-ink">Welcome to Loadbyton</h2>
+          <p className="mt-1 mb-6 text-sm text-ink-muted">Step {step + 1} of {WALKTHROUGH_STEPS.length}</p>
 
-        <div className="mb-1 flex gap-1.5">
-          {WALKTHROUGH_STEPS.map((_, i) => (
-            <span key={i} className="h-1 flex-1 rounded-full" style={{ background: i <= step ? 'var(--brand-accent)' : 'var(--border-default)' }} />
-          ))}
-        </div>
+          <div className="mb-1 flex gap-1.5">
+            {WALKTHROUGH_STEPS.map((_, i) => (
+              <span key={i} className="h-1 flex-1 rounded-full transition-all" style={{ background: i <= step ? 'var(--brand-accent)' : 'var(--border-default)' }} />
+            ))}
+          </div>
 
-        <div className="mt-6">
-          <h3 className="font-semibold text-ink">{current.title}</h3>
-          <p className="mt-1 text-sm text-ink-muted">{current.body}</p>
-          <button onClick={() => (isLast ? onFinish() : onStep(step + 1))} className="btn-accent mt-4 w-full">
-            {current.cta}
-          </button>
-        </div>
+          <div className="mt-6">
+            <h3 className="font-semibold text-ink">{current.title}</h3>
+            <p className="mt-1 text-sm text-ink-muted">{current.body}</p>
+            <button onClick={() => (isLast ? onFinish() : onStep(step + 1))} className="btn-accent btn-shine mt-4 w-full">
+              {current.cta}
+            </button>
+          </div>
 
-        <div className="mt-6 border-t pt-4 text-center" style={{ borderColor: 'var(--border-subtle)' }}>
-          <button onClick={onFinish} className="text-xs font-medium text-ink-muted hover:text-ink">
-            Skip — don't show this again
-          </button>
+          <div className="mt-6 border-t pt-4 text-center" style={{ borderColor: 'var(--border-subtle)' }}>
+            <button onClick={onFinish} className="text-xs font-medium text-ink-muted hover:text-ink">
+              Skip — don't show this again
+            </button>
+          </div>
         </div>
       </div>
     </div>
