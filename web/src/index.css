@@ -738,6 +738,34 @@ html[dir="rtl"] .animate-drawer-in {
   to { width: 100%; }
 }
 
+/* ScrollSteps.jsx's progress rail — fills left-to-right once, the moment
+   the "how it works" row scrolls into view (see ScrollSteps.jsx's own
+   comment for why this is a single fill rather than a per-step scroll
+   tracker: the four steps sit in one horizontal row, all at the same
+   scroll position, so there's no real "step 2 of 4" scroll depth to
+   track). A slower duration than the standard/emphasis tiers — slow
+   enough to read as a deliberate fill alongside the steps' own fade-in
+   stagger below it, not an instant snap. */
+.scroll-steps-rail {
+  position: relative;
+  height: 3px;
+  margin-bottom: 28px;
+  border-radius: var(--lb-radius-full);
+  background: var(--border-default);
+  overflow: hidden;
+}
+.scroll-steps-rail-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--brand-accent);
+  border-radius: inherit;
+  transition: width 900ms var(--motion-ease);
+}
+.scroll-steps-rail-fill.is-filled {
+  width: 100%;
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Component classes — in @layer components so plain Tailwind utility  */
