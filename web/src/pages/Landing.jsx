@@ -73,9 +73,15 @@ export default function Landing() {
           stays: every step is a real, distinct stage the product actually
           has, never a single "matched instantly" moment. */}
       <div ref={heroSectionRef}>
-      <MediaBackground src={PHOTO.heroTruck} overlay="side" alt="">
-        <div className="container-page grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
+      <MediaBackground src={PHOTO.heroTruck} overlay="side" alt="" className="landing-hero">
+        <div className="landing-hero-grid" aria-hidden="true" />
+        <div className="container-page relative grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
           <div className="flex flex-col justify-center">
+            <div className="landing-eyebrow">
+              <span className="landing-eyebrow-signal" aria-hidden="true" />
+              UAE freight, in motion
+              <span className="landing-eyebrow-code">DXB / AUH / SHJ / FUJ</span>
+            </div>
             <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white md:text-5xl">
               {t('landing.hero.title')}
             </h1>
@@ -94,7 +100,7 @@ export default function Landing() {
                 {t('landing.hero.ctaCarrier')}
               </Link>
             </div>
-            <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-white/70">
+            <div className="landing-proof-rail mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-white/70">
               <span className="inline-flex items-center gap-1.5"><IconShield size={16} /> {t('landing.hero.verified')}</span>
               <span className="inline-flex items-center gap-1.5"><IconClock size={16} /> {t('landing.hero.autoRelease', 'Payment releases automatically in {hours}h', { hours: 24 })}</span>
               <span className="inline-flex items-center gap-1.5"><IconCompass size={16} /> {t('landing.hero.coverage')}</span>
@@ -102,7 +108,7 @@ export default function Landing() {
           </div>
 
           <div className="flex items-center">
-            <div className="w-full overflow-hidden rounded-xl border shadow-lg" style={{ borderColor: 'var(--border-default)', background: 'var(--lb-ink-900)' }}>
+            <div className="hero-command-card w-full overflow-hidden border shadow-lg" style={{ borderColor: 'rgba(255,255,255,.15)', background: 'rgba(6,22,31,.88)' }}>
               <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
                 <p className="font-display text-sm font-semibold text-white">Example load, open for bids</p>
                 {/* #FF7A70 literal, not a semantic token — this badge sits

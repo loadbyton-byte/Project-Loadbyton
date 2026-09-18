@@ -80,14 +80,14 @@
   /* Sharper, more geometric shape language — matches the navy/red/Geist
      "corporate enterprise" register (confirmed with the user), replacing
      Industrial Trust's rounder 8/12/16/24 scale. */
-  --lb-radius-sm: 4px;
-  --lb-radius-md: 6px;
-  --lb-radius-lg: 8px;
-  --lb-radius-xl: 12px;
+  --lb-radius-sm: 6px;
+  --lb-radius-md: 10px;
+  --lb-radius-lg: 16px;
+  --lb-radius-xl: 24px;
   --lb-radius-full: 999px;
-  --lb-shadow-sm: 0 1px 2px rgba(15,43,61,0.08);
-  --lb-shadow-md: 0 2px 6px rgba(15,43,61,0.10);
-  --lb-shadow-lg: 0 4px 12px rgba(15,43,61,0.14);
+  --lb-shadow-sm: 0 1px 2px rgba(15,43,61,0.07), 0 8px 24px rgba(15,43,61,0.04);
+  --lb-shadow-md: 0 2px 8px rgba(15,43,61,0.08), 0 18px 44px rgba(15,43,61,0.08);
+  --lb-shadow-lg: 0 8px 18px rgba(15,43,61,0.11), 0 34px 80px rgba(15,43,61,0.15);
   --lb-shadow-focus: 0 0 0 3px rgba(229,57,53,0.35);
 
   /* "Warm White" / "Light Gray" from the brand kit, replacing Industrial
@@ -311,6 +311,43 @@ body {
   font-family: 'Inter', ui-sans-serif, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--border-subtle) 42%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--border-subtle) 42%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: center top;
+}
+
+/* The product now uses a quiet logistics grid as its common canvas. Large
+   surfaces paint over it, while page gutters retain just enough structure to
+   feel like an operations map rather than a generic SaaS backdrop. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(circle at 76% 8%, color-mix(in srgb, var(--brand-secondary) 8%, transparent), transparent 31rem);
+}
+
+.app-sidebar {
+  border-inline-end: 1px solid rgba(255,255,255,.08);
+  box-shadow: 18px 0 70px rgba(6,22,31,.12);
+  background-image:
+    radial-gradient(circle at 15% 12%, rgba(59,130,246,.16), transparent 14rem),
+    linear-gradient(180deg, rgba(255,255,255,.025), transparent 28%);
+}
+.app-topbar::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--brand-accent), var(--brand-secondary) 20%, transparent 48%);
+  opacity: .65;
+}
+.app-main {
+  min-width: 0;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--bg-canvas) 96%, transparent), color-mix(in srgb, var(--bg-surface) 92%, transparent));
 }
 
 /* iOS Safari: removes the grey flash on tap for every interactive element —
@@ -789,6 +826,105 @@ html[dir="rtl"] .animate-drawer-in {
   transform: translateY(0);
 }
 
+/* ------------------------------------------------------------------ */
+/* Landing command deck                                               */
+/* ------------------------------------------------------------------ */
+.landing-hero {
+  position: relative;
+  min-height: min(760px, calc(100dvh - 56px));
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+}
+.landing-hero::after {
+  content: '';
+  position: absolute;
+  inset: auto -12% -42% 36%;
+  height: 72%;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand-accent) 16%, transparent);
+  filter: blur(90px);
+  pointer-events: none;
+}
+.landing-hero-grid {
+  position: absolute;
+  inset: 0;
+  opacity: .14;
+  background-image:
+    linear-gradient(rgba(255,255,255,.32) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.32) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(90deg, #000, transparent 76%);
+  pointer-events: none;
+}
+.landing-eyebrow {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 22px;
+  padding: 7px 10px 7px 8px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: var(--lb-radius-full);
+  background: rgba(7,25,35,.5);
+  backdrop-filter: blur(12px);
+  color: rgba(255,255,255,.82);
+  font-family: 'Geist', ui-sans-serif, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.landing-eyebrow-signal {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #69e47d;
+  box-shadow: 0 0 0 4px rgba(105,228,125,.13);
+}
+.landing-eyebrow-code {
+  padding-inline-start: 9px;
+  border-inline-start: 1px solid rgba(255,255,255,.2);
+  color: rgba(255,255,255,.48);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .04em;
+}
+.landing-proof-rail {
+  padding-top: 18px;
+  border-top: 1px solid rgba(255,255,255,.16);
+}
+.hero-command-card {
+  position: relative;
+  border-radius: var(--lb-radius-xl);
+  box-shadow: 0 36px 90px rgba(0,0,0,.36), inset 0 1px rgba(255,255,255,.08);
+  backdrop-filter: blur(20px);
+  transform: perspective(1200px) rotateY(-2deg) rotateX(1deg);
+  transition: transform var(--motion-hero) var(--motion-ease), box-shadow var(--motion-emphasis) var(--motion-ease);
+}
+.hero-command-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand-accent) 0 28%, #f5b342 28% 45%, transparent 70%);
+}
+.hero-command-card:hover,
+.hero-command-card:focus-within {
+  transform: perspective(1200px) rotateY(0) rotateX(0) translateY(-4px);
+  box-shadow: 0 44px 110px rgba(0,0,0,.44), inset 0 1px rgba(255,255,255,.1);
+}
+@media (max-width: 767px) {
+  .landing-hero { min-height: auto; }
+  .landing-eyebrow-code { display: none; }
+  .hero-command-card { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-command-card,
+  .hero-command-card:hover,
+  .hero-command-card:focus-within { transform: none; }
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Component classes — in @layer components so plain Tailwind utility  */
@@ -815,6 +951,19 @@ html[dir="rtl"] .animate-drawer-in {
   .card {
     @apply rounded-lg bg-surface shadow-sm transition-shadow duration-300 ease-out;
     border: 1px solid var(--border-subtle);
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 2px;
+    z-index: 2;
+    opacity: .7;
+    background: linear-gradient(90deg, var(--brand-accent) 0 48px, var(--brand-secondary) 48px 86px, transparent 86px);
+    pointer-events: none;
   }
 
   /* Elevation, not hairlines, is the primary way interactive surfaces read as
@@ -845,6 +994,7 @@ html[dir="rtl"] .animate-drawer-in {
     @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-bold
       transition-[transform,background-color,box-shadow,border-color] duration-200 ease-out
       active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 whitespace-nowrap;
+    letter-spacing: -0.01em;
   }
   .btn-primary {
     @apply btn text-ink-inverse;
@@ -854,8 +1004,9 @@ html[dir="rtl"] .animate-drawer-in {
 
   .btn-accent {
     @apply btn;
-    background: var(--brand-accent);
+    background: linear-gradient(135deg, var(--brand-accent), var(--lb-orange-700));
     color: var(--text-on-accent);
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--brand-accent) 24%, transparent);
   }
   .btn-accent:hover { background: var(--brand-accent-hover); box-shadow: var(--lb-shadow-md); transform: translateY(-1px); }
 
