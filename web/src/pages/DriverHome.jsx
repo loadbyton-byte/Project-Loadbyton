@@ -43,7 +43,7 @@ function TripOfferCard({ onResolved }) {
   if (!offer) return null;
   const job = offer.job;
   return (
-    <Card className="mb-4" style={{ borderColor: 'var(--brand-accent)' }}>
+    <Card className="mb-4 animate-slide-up" style={{ borderColor: 'var(--brand-accent)' }}>
       <Card.Content>
         <div className="flex items-center justify-between gap-2">
           <p className="font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">{job?.job_code}</p>

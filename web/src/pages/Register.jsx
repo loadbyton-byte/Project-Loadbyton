@@ -133,21 +133,31 @@ export default function Register() {
             <React.Fragment key={s}>
               <div className="flex items-center gap-1.5">
                 <span
-                  className="flex h-6 w-6 items-center justify-center rounded-full font-mono text-[11px] font-bold"
-                  style={i <= step ? { background: 'var(--brand-accent)', color: 'var(--text-on-accent)' } : { background: 'var(--surface-container-high)', color: 'var(--text-muted)' }}
+                  className="flex h-6 w-6 items-center justify-center rounded-full font-mono text-[11px] font-bold transition-colors"
+                  style={{
+                    background: i <= step ? 'var(--brand-accent)' : 'var(--surface-container-high)',
+                    color: i <= step ? 'var(--text-on-accent)' : 'var(--text-muted)',
+                    transitionDuration: 'var(--motion-standard)',
+                    transitionTimingFunction: 'var(--motion-ease)',
+                  }}
                 >
                   {i < step ? <IconCheckCircle size={13} /> : i + 1}
                 </span>
                 <span className={i <= step ? 'text-xs font-semibold text-ink' : 'text-xs text-ink-muted'}>{s}</span>
               </div>
-              {i < STEPS.length - 1 && <span className="h-0.5 flex-1" style={{ background: i < step ? 'var(--brand-accent)' : 'var(--outline-variant)' }} />}
+              {i < STEPS.length - 1 && (
+                <span
+                  className="h-0.5 flex-1 transition-colors"
+                  style={{ background: i < step ? 'var(--brand-accent)' : 'var(--outline-variant)', transitionDuration: 'var(--motion-standard)', transitionTimingFunction: 'var(--motion-ease)' }}
+                />
+              )}
             </React.Fragment>
           ))}
         </div>
 
         {/* Step 0 — get-started role choice */}
         {step === 0 && (
-          <div className="mt-6 flex flex-col gap-3">
+          <div className="mt-6 flex flex-col gap-3 animate-slide-up">
             {ROLES.map((r) => (
               <button key={r.label} type="button" onClick={() => chooseRole(r.label)} className="card flex items-center gap-4 p-5 text-left hover:shadow-elevated">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--surface-container-high)' }}>
@@ -169,7 +179,7 @@ export default function Register() {
 
         {/* Step 1 — business details */}
         {step === 1 && (
-          <div className="mt-6 space-y-4">
+          <div className="mt-6 space-y-4 animate-slide-up">
             <div>
               <Label htmlFor="companyName">{t('auth.companyName')}</Label>
               <Input id="companyName" name="companyName" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} onBlur={handleBlur} placeholder="Al-Majid Global Freight" />
@@ -209,7 +219,7 @@ export default function Register() {
 
         {/* Step 2 — account credentials + submit */}
         {step === 2 && (
-          <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          <form onSubmit={onSubmit} className="mt-6 space-y-4 animate-slide-up">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="email">{t('auth.email')}</Label>
