@@ -6,7 +6,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
-import HeroLoadSnapshot from '../components/HeroLoadSnapshot.jsx';
+import HeroNarrative from '../components/HeroNarrative.jsx';
 import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
 
 // Sector photography, hotlinked from Pexels (verified live, checked for
@@ -45,13 +45,15 @@ export default function Landing() {
 
   return (
     <div>
-      {/* Hero — split, not centered. Left: thesis, now set over a real photo
-          of the sector instead of the plain canvas background. Right: a
-          static example of a shipper's actual first moment of value
-          (comparing bids on a posted load) — the photo backdrop is new, but
-          the "no hero animation, no motion, no instant-matching framing"
-          product direction stays: the image doesn't move. See
-          HeroLoadSnapshot.jsx. */}
+      {/* Hero — split, not centered. Left: thesis, set over a real photo of
+          the sector. Right: the actual product narrative (post -> bid ->
+          agree -> deliver), following one concrete example end to end —
+          restrained cross-fade between real UI states, not a decorative
+          animation; auto-advances, pauses on hover/focus, and falls back to
+          a single static panel under prefers-reduced-motion. See
+          HeroNarrative.jsx. The "no instant-matching framing" direction
+          stays: every step is a real, distinct stage the product actually
+          has, never a single "matched instantly" moment. */}
       <MediaBackground src={PHOTO.heroTruck} overlay="side" alt="">
         <div className="container-page grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
           <div className="flex flex-col justify-center">
@@ -97,7 +99,7 @@ export default function Landing() {
                 <span className="badge" style={{ background: 'rgba(242,96,12,0.2)', color: '#FF7A70' }}>Sample</span>
               </div>
 
-              <HeroLoadSnapshot />
+              <HeroNarrative />
 
               <div className="grid grid-cols-3 gap-px px-5 py-4" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 {[
