@@ -93,7 +93,7 @@ export default function OpenLoads() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Open loads</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Open loads</h1>
       <p className="mt-1 text-sm text-ink-muted">Verified transporters can bid price + ETA. Competitor amounts stay hidden until award.</p>
 
       <ActionRequired />

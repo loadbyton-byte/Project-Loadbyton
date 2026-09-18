@@ -76,7 +76,7 @@ export default function DocumentCompliance() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Document compliance</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Document compliance</h1>
       <p className="mt-1 text-sm text-ink-muted">What Loadbyton has on file for {p.company_name || user.email}.</p>
 
       <Card className="mt-5 p-5">

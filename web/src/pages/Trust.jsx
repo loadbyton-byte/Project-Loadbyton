@@ -36,52 +36,49 @@ export default function Trust() {
   usePageTitle('Trust & Safety');
   useMeta('How Loadbyton protects both sides of a freight job — transporter verification, payment protection, ratings, and dispute resolution — before, during, and after a move.');
   return (
-    <div dir="ltr">
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Trust & Safety</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Working with a company you've never met, without having to just hope it works out.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner">
+          <Reveal>
+            <p className="lb-kicker"><i />TRUST <span>& SAFETY</span></p>
+            <h1>Working with a company you've never met, without having to just hope it works out.</h1>
+            <p className="lb-hero-lede">
               A shipper and a transporter agreeing to a job over chat have no real recourse if one side doesn't deliver. Every one of the mechanics below exists to close that specific gap — not as a marketing claim, but as something enforced on every job.
             </p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
 
-      <section className="py-16 md:py-20">
-        <div className="container-page">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {PILLARS.map((p, i) => (
-              <Reveal key={p.title} delay={(i % 3) * 70} className="card card-hover p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}>{p.icon}</div>
-                <p className="mt-4 font-display text-base font-semibold text-ink">{p.title}</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{p.body}</p>
-              </Reveal>
-            ))}
+      <section><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / THE PILLARS</span><h2>Five mechanics. Zero hoping.</h2><p>Each one closes a specific gap that brokered freight leaves open.</p></Reveal>
+        <div className="lb-item-grid">
+          {PILLARS.map((p, i) => (
+            <Reveal key={p.title} delay={(i % 3) * 70} className="lb-item">
+              <div className="lb-item-top"><span>T-{String(i + 1).padStart(2, '0')}</span>{p.icon}</div>
+              <h3>{p.title}</h3>
+              <p>{p.body}</p>
+              <i className="lb-item-rail" />
+            </Reveal>
+          ))}
+        </div>
+      </div></section>
+
+      <section className="lb-record-section"><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">02 / HONEST LIMITS</span><h2>What this doesn't mean.</h2><p>None of the above guarantees a transporter shows up on time, or that a shipper's cargo description was accurate — those are still real business risks freight always carries. What it does mean: if something goes wrong, there's a verified counterparty, a payment that hasn't already disappeared, a rating history, and a dispute process — not just a phone number that stopped answering. For exactly how data is secured, see <Link to="/security" className="lb-quiet-link" style={{ color: '#102631' }}>Security</Link>; for the regulatory side, see <Link to="/compliance" className="lb-quiet-link" style={{ color: '#102631' }}>Compliance</Link>.</p></Reveal>
+      </div></section>
+
+      <section className="lb-final-cta"><div className="container-page">
+        <Reveal className="lb-final-card">
+          <span className="lb-section-no">BEGIN WITH THE NEXT MOVEMENT</span>
+          <h2>See the verification gate on a real job, not a slide.</h2>
+          <p>Create a free account and post a requirement both sides can trust.</p>
+          <div>
+            <Link to="/register" className="btn-accent btn-shine">Create a free account <IconArrowRight size={18} /></Link>
+            <Link to="/security" className="lb-quiet-link">How data is secured</Link>
           </div>
-        </div>
-      </section>
-
-      <section className="border-t py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page max-w-2xl">
-          <Reveal>
-            <h2 className="font-display text-2xl font-semibold text-ink">What this doesn't mean</h2>
-            <p className="mt-4 text-sm leading-relaxed text-ink-secondary">
-              None of the above guarantees a transporter shows up on time, or that a shipper's cargo description was accurate — those are still real business risks freight always carries. What it does mean: if something goes wrong, there's a verified counterparty, a payment that hasn't already disappeared, a rating history, and a dispute process — not just a phone number that stopped answering. For exactly how data is secured, see <Link to="/security" className="text-brand-secondary hover:underline">Security</Link>; for the regulatory side, see <Link to="/compliance" className="text-brand-secondary hover:underline">Compliance</Link>.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="pb-16 md:pb-20">
-        <div className="container-page">
-          <Reveal className="flex flex-col items-start justify-between gap-6 rounded-xl px-8 py-10 sm:flex-row sm:items-center" style={{ background: 'var(--lb-ink-900)' }}>
-            <p className="font-display text-xl font-semibold text-white">See the verification gate on a real job, not a slide.</p>
-            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} /></Link>
-          </Reveal>
-        </div>
-      </section>
+        </Reveal>
+      </div></section>
     </div>
   );
 }

@@ -88,7 +88,7 @@ export default function JobDispute() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-mono text-xs text-ink-muted">{job.job_code}</p>
-          <h1 className="mt-1 flex items-center gap-2 font-display text-xl font-bold text-ink">
+          <h1 className="mt-1 flex items-center gap-2 font-display text-2xl font-bold text-ink">
             <IconGavel size={20} className="text-status-danger" /> Dispute resolution
           </h1>
         </div>

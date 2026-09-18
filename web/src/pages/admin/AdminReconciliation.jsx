@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { useLocale } from '../../lib/i18n.jsx';
-import { Card, Badge, ErrorState, Stat, Button } from '../../components/ui.jsx';
+import { Card, Badge, ErrorState, Stat, Button, Spinner } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { IconSync, IconCheckCircle, IconAlert } from '../../components/icons.jsx';
 
@@ -36,7 +36,7 @@ export default function AdminReconciliation() {
     // Would call a reconciliation endpoint
   }
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
   if (error) return <div className="container-page py-10"><ErrorState title="Couldn't load reconciliation" description={error} onRetry={fetchData} /></div>;
 
   return (
@@ -46,7 +46,7 @@ export default function AdminReconciliation() {
           <h1 className="font-display text-2xl font-bold text-ink">{t('admin.reconciliation', 'Reconciliation')}</h1>
           <p className="text-ink-muted mt-1">{t('admin.reconciliationDesc', 'Cross-system financial reconciliation')}</p>
         </div>
-        <Button variant="secondary" onClick={runReconciliation}><IconSync size={16} className="mr-2" /> Run Now</Button>
+        <Button variant="secondary" onClick={runReconciliation}><IconSync size={16} className="me-2" /> Run Now</Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4 mb-6">

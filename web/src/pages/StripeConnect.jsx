@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { Button, Card, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
+import { Button, Card, Badge, EmptyState, ErrorState, Spinner } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { IconPackage, IconCheckCircle, IconArrowRight, IconAlert } from '../components/icons.jsx';
 
@@ -44,7 +44,7 @@ export default function StripeConnect() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
 
   return (
     <div className="container-page max-w-md">
@@ -80,7 +80,7 @@ export default function StripeConnect() {
             <h3 className="font-semibold text-ink">{t('stripe.notConnected', 'Not Connected')}</h3>
             <p className="text-ink-muted">{t('stripe.connectDesc', 'Connect your Stripe account to enable automated payouts for your fleet')}</p>
             <Button className="w-full" size="lg" onClick={handleOnboard} loading={onboarding}>
-              <IconArrowRight size={16} className="mr-2" /> {t('stripe.connectBtn', 'Connect Stripe')}
+              <IconArrowRight size={16} className="me-2" /> {t('stripe.connectBtn', 'Connect Stripe')}
             </Button>
             {status?.error && <p className="text-xs text-status-danger">{status.error}</p>}
           </div>

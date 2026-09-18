@@ -106,7 +106,7 @@ export default function Notifications() {
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-ink">Notifications</h1>
+        <h1 className="font-display text-2xl font-bold text-ink">Notifications</h1>
         {items && items.some((n) => !n.is_read) && <Button variant="secondary" size="sm" onClick={markRead}>Mark all read</Button>}
       </div>
 

@@ -2,8 +2,9 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
 import { IconShield, IconClock, IconMapPin, IconFile, IconStar, IconPackage, IconTruck, IconArrowRight, IconLayers, IconCompass } from '../components/icons.jsx';
+
+const PHOTO = 'https://images.pexels.com/photos/28438301/pexels-photo-28438301.jpeg?cs=srgb&fm=jpg&w=1600';
 
 const FEATURES = [
   { icon: <IconShield size={20} />, title: 'Payment held, not a promise', body: 'The agreed price is held the moment you award a bid. It releases when you confirm delivery — or automatically 24h after, so nothing sits in limbo.' },
@@ -21,44 +22,45 @@ export default function Features() {
   usePageTitle('Features');
   useMeta('Payment-protected freight jobs across the UAE, 12 equipment types, volume inquiries, live tracking, contract lanes and a verified transporter network — everything Loadbyton ships.');
   return (
-    <div dir="ltr">
-      <MediaBackground src="https://images.pexels.com/photos/28438301/pexels-photo-28438301.jpeg?cs=srgb&fm=jpg&w=1600" overlay="fade-bottom" className="h-40 md:h-56" />
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Platform capabilities</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Everything it takes to stop re-negotiating the same shipment.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">Loadbyton isn't a listings board. It's the payment protection, the state machine, and the paper trail a drayage marketplace actually needs.</p>
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <img className="lb-hero-photo" src={PHOTO} alt="" aria-hidden="true" />
+        <div className="lb-hero-wash" />
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner">
+          <Reveal>
+            <p className="lb-kicker"><i />PLATFORM <span>CAPABILITIES</span></p>
+            <h1>Everything it takes to stop re-negotiating the same shipment.</h1>
+            <p className="lb-hero-lede">Loadbyton isn't a listings board. It's the payment protection, the state machine, and the paper trail a drayage marketplace actually needs.</p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
 
-      <section className="py-16 md:py-20">
-        <div className="container-page">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f, i) => (
-              <Reveal key={f.title} delay={(i % 3) * 70} className="card card-hover p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}>{f.icon}</div>
-                <p className="mt-4 font-display text-base font-semibold text-ink">{f.title}</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{f.body}</p>
-              </Reveal>
-            ))}
+      <section><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / THE SYSTEM</span><h2>One platform, nine load-bearing mechanics.</h2><p>Each one enforced on the server — not a badge, not a promise.</p></Reveal>
+        <div className="lb-item-grid">
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={(i % 3) * 70} className="lb-item">
+              <div className="lb-item-top"><span>F-{String(i + 1).padStart(2, '0')}</span>{f.icon}</div>
+              <h3>{f.title}</h3>
+              <p>{f.body}</p>
+              <i className="lb-item-rail" />
+            </Reveal>
+          ))}
+        </div>
+      </div></section>
+
+      <section className="lb-final-cta"><div className="container-page">
+        <Reveal className="lb-final-card">
+          <span className="lb-section-no">BEGIN WITH THE NEXT MOVEMENT</span>
+          <h2>See it on a real job, not a slide.</h2>
+          <p>Post your first load and watch the mechanics work on real freight.</p>
+          <div>
+            <Link to="/register" className="btn-accent btn-shine">Post your first load <IconArrowRight size={18} /></Link>
+            <Link to="/pricing" className="lb-quiet-link">How pricing works</Link>
           </div>
-        </div>
-      </section>
-
-      <section className="pb-16 md:pb-20">
-        <div className="container-page">
-          <Reveal
-            className="relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-xl px-8 py-10 sm:flex-row sm:items-center"
-            style={{ background: 'var(--lb-ink-900)' }}
-          >
-            <IconLayers size={140} className="pointer-events-none absolute -right-4 -top-6 opacity-10" style={{ color: 'var(--lb-orange-500)' }} />
-            <p className="relative font-display text-xl font-semibold text-white">See it on a real job, not a slide.</p>
-            <Link to="/register" className="btn-accent relative shrink-0 rounded-full px-6 py-3 text-base">Post your first load <IconArrowRight size={18} /></Link>
-          </Reveal>
-        </div>
-      </section>
+        </Reveal>
+      </div></section>
     </div>
   );
 }

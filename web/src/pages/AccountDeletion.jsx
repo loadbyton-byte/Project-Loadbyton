@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { Button, Card, Input, Label, ErrorState } from '../components/ui.jsx';
+import { Button, Card, Input, Label, ErrorState, Modal } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import { IconUser, IconDownload, IconAlert, IconShield } from '../components/icons.jsx';
@@ -70,7 +70,7 @@ export default function AccountDeletion() {
             <p className="text-sm text-ink-muted mt-1">{t('account.exportDesc', 'Download a copy of all your data (jobs, bids, documents, messages, etc.) in JSON format')}</p>
           </div>
           <Button onClick={handleExport} loading={exporting}>
-            <IconDownload size={16} className="mr-2" /> {t('account.exportBtn', 'Export Data')}
+            <IconDownload size={16} className="me-2" /> {t('account.exportBtn', 'Export Data')}
           </Button>
         </div>
       </Card>
@@ -86,34 +86,27 @@ export default function AccountDeletion() {
 
         <div className="border-t pt-4" style={{ borderColor: 'var(--status-warning-bg)' }}>
           <Button variant="ghost" onClick={() => setDangerZone(true)}>
-            <IconAlert size={16} className="mr-2" /> {t('account.deleteAccount', 'Delete Account')}
+            <IconAlert size={16} className="me-2" /> {t('account.deleteAccount', 'Delete Account')}
           </Button>
         </div>
       </Card>
 
-      {dangerZone && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setDangerZone(false)} role="dialog" aria-modal="true" aria-label="Confirm account deletion">
-          <div className="animate-slide-up w-full max-w-md rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--status-danger-bg)', background: 'var(--bg-surface)' }} onClick={(e) => e.stopPropagation()}>
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <IconAlert size={24} className="text-status-danger" />
-                <h3 className="font-display text-lg font-bold text-ink">{t('account.confirmDelete', 'Confirm Account Deletion')}</h3>
-              </div>
-              <p className="text-ink-secondary mb-6">{t('account.deleteWarning', 'This action is irreversible. All your jobs, bids, documents, messages, and payment history will be permanently deleted. This cannot be undone.')}</p>
-              <div className="mb-4">
-                <Label htmlFor="confirmDelete">{t('account.typeDelete', 'Type "DELETE" to confirm')}</Label>
-                <Input id="confirmDelete" type="text" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="DELETE" className="mt-1 font-mono" />
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" className="flex-1" onClick={() => setDangerZone(false)}>{t('common.cancel', 'Cancel')}</Button>
-                <Button variant="danger" className="flex-1" onClick={handleDelete} loading={deleting} disabled={confirmText !== 'DELETE'}>
-                  <IconUser size={16} className="mr-2" /> {t('account.deleteBtn', 'Delete My Account')}
-                </Button>
-              </div>
-            </div>
-          </div>
+      <Modal open={dangerZone} onClose={() => setDangerZone(false)} title={t('account.confirmDelete', 'Confirm Account Deletion')}>
+        <div className="flex items-center gap-3 mb-4">
+          <IconAlert size={24} className="text-status-danger" />
+          <p className="font-display text-lg font-bold text-ink">{t('account.deleteWarning', 'This action is irreversible. All your jobs, bids, documents, messages, and payment history will be permanently deleted. This cannot be undone.')}</p>
         </div>
-      )}
+        <div className="mb-4">
+          <Label htmlFor="confirmDelete">{t('account.typeDelete', 'Type "DELETE" to confirm')}</Label>
+          <Input id="confirmDelete" type="text" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="DELETE" className="mt-1 font-mono" />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" className="flex-1" onClick={() => setDangerZone(false)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button variant="danger" className="flex-1" onClick={handleDelete} loading={deleting} disabled={confirmText !== 'DELETE'}>
+            <IconUser size={16} className="me-2" /> {t('account.deleteBtn', 'Delete My Account')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -121,7 +121,7 @@ function NotificationBell() {
       </button>
       {open && (
         <div
-          className="animate-panel-in card absolute right-0 top-12 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+          className="animate-panel-in card absolute right-0 top-12 z-overlay w-80 max-w-[calc(100vw-2rem)] overflow-hidden p-0"
           role="dialog"
           aria-label="Notifications"
         >
@@ -494,7 +494,7 @@ function ShellInner({ children }) {
       {/* TopAppBar — mobile only (md:hidden). Floating glass bar with the
           route-line accent; logo acts as role-aware home gesture. */}
       <header
-        className="lb-chrome-veil sticky top-0 z-40 border-b md:hidden"
+        className="lb-chrome-veil sticky top-0 z-topbar border-b md:hidden"
         style={{
           borderColor: 'var(--border-subtle)',
           paddingTop: 'env(safe-area-inset-top)',
@@ -535,7 +535,7 @@ function ShellInner({ children }) {
           is itself md:hidden). Full ops-drawer: numbered wayfinding, role
           entry points, persistent conversion. Swipe-to-dismiss preserved. */}
       {drawerOpen && (
-        <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label="Menu">
+        <div className="fixed inset-0 z-overlay flex" role="dialog" aria-modal="true" aria-label="Menu">
           <button aria-label="Close menu" className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={closeDrawer} />
           <div
             ref={drawerPanelRef}
@@ -549,7 +549,7 @@ function ShellInner({ children }) {
                 toggles + account block + logout) can exceed the visible
                 viewport height; pinning this keeps the close button reachable
                 without scrolling back to the top. */}
-            <div className="sticky top-0 z-10 flex items-center justify-between px-5 pb-3 pt-5">
+            <div className="sticky top-0 z-raised flex items-center justify-between px-5 pb-3 pt-5">
               <Link to={user ? homePath(user, actingAs) : '/'} aria-label="Loadbyton home" onClick={closeDrawer}>
                 <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
               </Link>
@@ -762,7 +762,7 @@ function ShellInner({ children }) {
               nav; signed-in users get command search + TRN + bell, since role
               nav already lives in the sidebar. */}
           <header
-            className="lb-chrome-veil app-topbar sticky top-0 z-30 hidden border-b md:block"
+            className="lb-chrome-veil app-topbar sticky top-0 z-header hidden border-b md:block"
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <div className="lb-top-route-line" aria-hidden="true" />
@@ -901,7 +901,7 @@ function WalkthroughModal({ step, onStep, onFinish }) {
   const isLast = step >= WALKTHROUGH_STEPS.length - 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label="Welcome walkthrough">
+    <div className="fixed inset-0 z-overlay flex items-center justify-center bg-black/60 px-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label="Welcome walkthrough">
       <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-[20px] border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)' }}>
         <div className="lb-top-route-line" aria-hidden="true" />
         <div className="p-5 sm:p-8">

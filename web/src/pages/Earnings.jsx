@@ -97,7 +97,7 @@ export default function Earnings() {
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-xl font-bold text-ink">Earnings &amp; Wallet</h1>
+          <h1 className="font-display text-2xl font-bold text-ink">Earnings &amp; Wallet</h1>
           <p className="mt-1 text-sm text-ink-muted">Your payout ledger — this is what the founder pays against.</p>
         </div>
         {payouts.length > 0 && (

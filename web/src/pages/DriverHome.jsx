@@ -114,7 +114,7 @@ export default function DriverHome() {
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-xl font-bold text-ink">{t('driver.myJob', 'My job')}</h1>
+        <h1 className="font-display text-2xl font-bold text-ink">{t('driver.myJob', 'My job')}</h1>
         <Button variant="secondary" size="sm" onClick={() => logout()}>{t('driver.logout', 'Log out')}</Button>
       </div>
 

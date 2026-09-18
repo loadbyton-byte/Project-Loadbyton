@@ -39,7 +39,7 @@ export default function Transporters() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Transporters</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Transporters</h1>
       <p className="mt-1 text-sm text-ink-muted">Verified transporters available across the UAE — trade licence, TRN and insurance checked before they can bid.</p>
 
       <div className="mt-4 max-w-sm">

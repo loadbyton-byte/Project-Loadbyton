@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, ltrIsolate, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, PaymentStatusBadge, RatingPill, ErrorState, Skeleton } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, PaymentStatusBadge, RatingPill, ErrorState, Skeleton, Modal } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
@@ -313,27 +313,16 @@ export default function JobDetail() {
   return (
     <div className="container-page py-10" dir={isRtl ? 'rtl' : 'ltr'}>
       {awardConfirm && (
-        <div
-          className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Confirm award"
-          onClick={(e) => { if (e.target === e.currentTarget) setAwardConfirm(null); }}
+        <Modal
+          open
+          onClose={() => setAwardConfirm(null)}
+          title={<span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>Discuss &amp; award this bid</span>}
         >
-          <div className="animate-slide-up w-full max-w-lg rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <Card className="border-0 shadow-none">
-              <Card.Header>
-                <Card.Title className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>
-                  Discuss &amp; award this bid
-                </Card.Title>
-              </Card.Header>
-              <Card.Content>
                 <p className="text-sm text-ink">
                   <strong>{formatMoney(awardConfirm.amount_aed, job.currency)}</strong> from{' '}
                   <strong>{awardConfirm.carrier_company || 'this transporter'}</strong>.
                 </p>
-                <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingLeft: '1.1rem' }}>
+                <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingInlineStart: '1.1rem' }}>
                   <li>Every other bid on this job will be rejected once assigned</li>
                   <li>
                     {agreedChargesTotal > 0
@@ -416,8 +405,7 @@ export default function JobDetail() {
                 </div>
 
                 <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
-              </Card.Content>
-              <div className="flex flex-wrap justify-end gap-2 px-6 pb-6">
+              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
                 <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
                 {ancillaryCharges.length === 0 && (
                   <Button variant="ghost" onClick={skipAndAward} loading={busy} disabled={isLowCapacity && !lowCapacityAcked}>No charges — award now</Button>
@@ -426,9 +414,7 @@ export default function JobDetail() {
                   Confirm terms &amp; assign
                 </Button>
               </div>
-            </Card>
-          </div>
-        </div>
+        </Modal>
       )}
       <button
         type="button"
@@ -444,7 +430,11 @@ export default function JobDetail() {
         <div>
           <p className="font-mono text-xs text-ink-muted">{job.job_code}</p>
           <h1 className="mt-1 font-display text-2xl font-semibold text-ink">
-            <span className="me-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-100)' : job.shipment_type === 'LOCAL' ? 'var(--status-success-bg)' : 'var(--lb-orange-100)', color: job.shipment_type === 'EXPORT' ? 'var(--lb-blue-700)' : job.shipment_type === 'LOCAL' ? 'var(--status-success)' : 'var(--lb-orange-700)' }}>{job.shipment_type || 'IMPORT'}{job.status === 'DRAFT' && job.scheduled_post_at ? ` · publishes ${formatDateTime(job.scheduled_post_at)}` : ''}</span>
+            {/* Theme-aware shipment pill — was light-mode-only pastel
+                primitives (--lb-blue-100/--lb-orange-100) with no dark
+                override, floating pale on the navy canvas. status-* and
+                brand-accent-bg/on-tint pairs exist in both themes. */}
+            <span className="me-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: job.shipment_type === 'EXPORT' ? 'var(--status-info-bg)' : job.shipment_type === 'LOCAL' ? 'var(--status-success-bg)' : 'var(--brand-accent-bg)', color: job.shipment_type === 'EXPORT' ? 'var(--status-info)' : job.shipment_type === 'LOCAL' ? 'var(--status-success)' : 'var(--brand-accent-on-tint)' }}>{job.shipment_type || 'IMPORT'}{job.status === 'DRAFT' && job.scheduled_post_at ? ` · publishes ${formatDateTime(job.scheduled_post_at)}` : ''}</span>
             {CONTAINER_EQUIPMENT.includes(job.equipment_type) ? `${job.container_size} ${formatLabel(job.container_type)}` : equipmentLabel(job.equipment_type)} · {formatLabel(job.pickup_terminal)} → {formatLabel(job.delivery_area)}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -482,7 +472,7 @@ export default function JobDetail() {
       </div>
 
       {payNotice && (
-        <div className="mb-6 flex items-start justify-between gap-3 rounded-lg border border-brand-border bg-brand-bg px-4 py-3">
+        <div className="mb-6 flex items-start justify-between gap-3 rounded-lg border px-4 py-3" style={{ borderColor: 'var(--status-info)', background: 'var(--status-info-bg)' }}>
           <p className="text-sm text-ink">{payNotice}</p>
           <button type="button" onClick={() => setPayNotice(null)} className="text-xs text-ink-muted hover:text-ink">Dismiss</button>
         </div>
@@ -661,7 +651,7 @@ export default function JobDetail() {
                         </p>
                       )}
                       {!b.masked && b.carrier_available_units != null && (
-                        <p className="mt-0.5 text-xs" style={{ color: b.carrier_available_units <= 0 ? 'var(--status-danger)' : 'var(--ink-muted)' }}>
+                        <p className="mt-0.5 text-xs" style={{ color: b.carrier_available_units <= 0 ? 'var(--status-danger)' : 'var(--text-muted)' }}>
                           {/* One ltrIsolate around the WHOLE combined string, not
                               one per fragment — two separately-isolated LTR runs
                               placed next to each other inside an RTL paragraph

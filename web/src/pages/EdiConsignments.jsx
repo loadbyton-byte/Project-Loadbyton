@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { Button, Card, Input, Label, EmptyState, ErrorState, Badge, Modal, Select } from '../components/ui.jsx';
+import { Button, Card, Input, Label, EmptyState, ErrorState, Badge, Modal, Select, Spinner } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { IconPlus, IconPackage, IconFile, IconSearch, IconArrowRight } from '../components/icons.jsx';
 
@@ -40,7 +40,7 @@ export default function EdiConsignments() {
     c.destination.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
 
   return (
     <div className="container-page max-w-5xl">
@@ -56,14 +56,14 @@ export default function EdiConsignments() {
             fetchConsignments();
           } catch (e) { addToast({ type: 'system_message', title: e.message || 'Failed' }); }
         }}>
-          <IconPlus size={16} className="mr-2" /> {t('edi.ingest', 'Ingest EDI')}
+          <IconPlus size={16} className="me-2" /> {t('edi.ingest', 'Ingest EDI')}
         </Button>
       </div>
 
       <div className="mb-4">
         <div className="relative max-w-md">
-          <IconSearch size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
-          <Input type="text" placeholder={t('edi.searchPlaceholder', 'Search consignments...')} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+          <IconSearch size={18} className="absolute start-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+          <Input type="text" placeholder={t('edi.searchPlaceholder', 'Search consignments...')} value={search} onChange={(e) => setSearch(e.target.value)} className="ps-10" />
         </div>
       </div>
 

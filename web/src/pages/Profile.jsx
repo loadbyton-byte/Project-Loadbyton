@@ -243,7 +243,7 @@ export default function Profile() {
 
   return (
     <div className="container-page max-w-2xl py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Profile &amp; settings</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Profile &amp; settings</h1>
       <p className="mt-1 font-mono text-xs text-ink-muted">{user.email} · {user.role} · Tier {user.tier}</p>
       {actingAs && (
         <p className="mt-1 text-xs text-ink-muted">
@@ -348,8 +348,8 @@ export default function Profile() {
             )}
           </Card.Content>
           <Card.Footer>
-            {saved && <span className={`${isRtl ? 'ml-auto' : 'mr-auto'} text-sm text-status-success`}>Saved.</span>}
-            {saveError && <span className={`${isRtl ? 'ml-auto' : 'mr-auto'} text-sm text-status-danger`}>{saveError}</span>}
+            {saved && <span className="ms-auto text-sm text-status-success">Saved.</span>}
+            {saveError && <span className="ms-auto text-sm text-status-danger">{saveError}</span>}
             <Button type="submit" loading={busy}>Save changes</Button>
           </Card.Footer>
         </form>

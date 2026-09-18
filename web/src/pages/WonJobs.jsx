@@ -48,7 +48,7 @@ export default function WonJobs() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Won jobs</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Won jobs</h1>
       <p className="mt-1 text-sm text-ink-muted">Your active shipments — from award through delivery. Open a job to advance its status, upload POD, or chat with the shipper.</p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">

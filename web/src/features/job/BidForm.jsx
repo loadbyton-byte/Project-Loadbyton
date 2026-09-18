@@ -79,7 +79,7 @@ export default function BidForm({ jobId, verified, defaultEquipment, paymentTier
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border bg-white p-4">
+    <form onSubmit={submit} className="space-y-4 rounded-xl border bg-surface p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-ink">Place your bid</h3>
         <Badge color="accent">{formatAED(form.amount || 0)}</Badge>

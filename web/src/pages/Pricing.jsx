@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
-import { SpotlightCard } from '../components/SpotlightCard.jsx';
 import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconCheck, IconArrowRight, IconShield } from '../components/icons.jsx';
+
+const PHOTO = 'https://images.pexels.com/photos/27099094/pexels-photo-27099094.jpeg?cs=srgb&fm=jpg&w=1600';
 
 const TIERS = [
   { name: 'Bronze', desc: 'Every account starts here.', fee: 'Standard take rate', perks: ['Post or bid on any open load', 'Payment protection + live tracking', 'Standard 24h payout'] },
@@ -24,75 +24,58 @@ export default function Pricing() {
   const heroSectionRef = useRef(null);
 
   return (
-    <div dir="ltr">
+    <div dir="ltr" className="lb-home">
       <div ref={heroSectionRef}>
-      <MediaBackground src="https://images.pexels.com/photos/27099094/pexels-photo-27099094.jpeg?cs=srgb&fm=jpg&w=1600" overlay="fade-bottom" className="h-40 md:h-56" />
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Pricing</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">One take rate. No subscription, no listing fee.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
-              Loadbyton takes <span className="tabular font-semibold text-ink">{takeRate}</span> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.
+      <section className="lb-subhero">
+        <img className="lb-hero-photo" src={PHOTO} alt="" aria-hidden="true" />
+        <div className="lb-hero-wash" />
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner">
+          <Reveal>
+            <p className="lb-kicker"><i />PRI<span>CING</span></p>
+            <h1>One take rate. No subscription, no listing fee.</h1>
+            <p className="lb-hero-lede">
+              Loadbyton takes <span className="tabular font-semibold" style={{ color: '#ff6a60' }}>{takeRate}</span> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.
             </p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
       </div>
 
-      <section className="py-16 md:py-20">
-        <div className="container-page">
-          <div className="grid gap-6 md:grid-cols-3">
-            {TIERS.map((t, i) => (
-              <Reveal key={t.name} delay={i * 70}>
-                <SpotlightCard
-                  className="card relative flex flex-col p-6"
-                  style={t.recommended ? { borderColor: 'var(--brand-accent)', boxShadow: 'var(--lb-shadow-md)' } : undefined}
-                >
-                  {t.recommended && (
-                    <span className="badge absolute -top-3 left-6" style={{ background: 'var(--brand-accent)', color: 'var(--text-on-accent)' }}>Most popular</span>
-                  )}
-                  <p className="font-display text-lg font-semibold text-ink">{t.name}</p>
-                  <p className="mt-1 text-sm text-ink-muted">{t.desc}</p>
-                  <p className="mt-4 font-display text-2xl font-semibold" style={{ color: 'var(--brand-accent)' }}>{t.fee}</p>
-                  <ul className="mt-5 flex-1 space-y-2.5">
-                    {t.perks.map((p) => (
-                      <li key={p} className="flex items-start gap-2 text-sm text-ink-secondary">
-                        <IconCheck size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-success)' }} /> {p}
-                      </li>
-                    ))}
-                  </ul>
-                </SpotlightCard>
-              </Reveal>
-            ))}
+      <section><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / LOYALTY TIERS</span><h2>Volume lowers the rate. Negotiation doesn't have to.</h2><p>Three tiers, one mechanism — committed lane volume earns the lowest take.</p></Reveal>
+        <div className="lb-item-grid">
+          {TIERS.map((t, i) => (
+            <Reveal key={t.name} delay={i * 70} className="lb-item">
+              <div className="lb-item-top"><span>TIER-{String(i + 1).padStart(2, '0')}</span>{t.recommended ? <span className="lb-item-flag">MOST POPULAR</span> : <IconShield size={18} />}</div>
+              <h3>{t.name}</h3>
+              <p>{t.desc} — <strong style={{ color: '#c83d34' }}>{t.fee}</strong></p>
+              <ul>
+                {t.perks.map((p) => (
+                  <li key={p}><IconCheck size={14} /> {p}</li>
+                ))}
+              </ul>
+              <i className="lb-item-rail" />
+            </Reveal>
+          ))}
+        </div>
+      </div></section>
+
+      <section className="lb-record-section"><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">02 / WHERE IT GOES</span><h2>Where the fee actually goes.</h2><p>The take rate funds transporter verification, payment administration, dispute resolution, and the Lane Index data product — not a sales team cold-calling shippers. Freight amount passes through to the transporter; the platform only ever holds the fee.</p></Reveal>
+      </div></section>
+
+      <section className="lb-final-cta"><div className="container-page">
+        <Reveal className="lb-final-card">
+          <span className="lb-section-no">BEGIN WITH THE NEXT MOVEMENT</span>
+          <h2>No card required to browse open loads.</h2>
+          <p>Create a free account and see live freight before you commit to anything.</p>
+          <div>
+            <Link ref={bottomCtaRef} to="/register" className="btn-accent btn-shine">Create a free account <IconArrowRight size={18} /></Link>
+            <Link to="/login" className="lb-quiet-link">Already have an account</Link>
           </div>
-        </div>
-      </section>
-
-      <section className="border-t py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page">
-          <Reveal className="grid items-start gap-8 lg:grid-cols-[0.9fr,1.1fr]">
-            <div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}>
-                <IconShield size={20} />
-              </div>
-              <p className="mt-4 font-display text-lg font-semibold text-ink">Where the fee actually goes</p>
-            </div>
-            <p className="text-sm leading-relaxed text-ink-secondary">
-              The take rate funds transporter verification, payment administration, dispute resolution, and the Lane Index data product — not a sales team cold-calling shippers. Freight amount passes through to the transporter; the platform only ever holds the fee.
-            </p>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="pb-16 md:pb-20">
-        <div className="container-page">
-          <Reveal className="flex flex-col items-start justify-between gap-6 rounded-xl px-8 py-10 sm:flex-row sm:items-center" style={{ background: 'var(--lb-ink-900)' }}>
-            <p className="font-display text-xl font-semibold text-white">No card required to browse open loads.</p>
-            <Link ref={bottomCtaRef} to="/register" className="btn-accent btn-shine shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} /></Link>
-          </Reveal>
-        </div>
-      </section>
+        </Reveal>
+      </div></section>
       <StickyMobileCta heroRef={heroSectionRef} to="/register" label="Create a free account" />
     </div>
   );

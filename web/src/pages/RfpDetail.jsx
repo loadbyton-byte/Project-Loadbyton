@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { Button, Card, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
+import { Button, Card, Badge, EmptyState, ErrorState, Spinner } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import { IconArrowLeft, IconGavel, IconPackage, IconClock, IconMapPin, IconCheckCircle } from '../components/icons.jsx';
@@ -41,7 +41,7 @@ export default function RfpDetail() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
   if (error) return <div className="container-page py-10"><ErrorState title="Couldn't load RFP" description={error} onRetry={fetchData} /></div>;
   if (!rfp) return <div className="container-page py-10 text-center"><IconPackage size={48} className="mx-auto text-ink-muted mb-4" /><h2 className="font-display text-xl font-bold text-ink mb-2">RFP not found</h2><Button onClick={() => navigate(-1)}>Go Back</Button></div>;
 

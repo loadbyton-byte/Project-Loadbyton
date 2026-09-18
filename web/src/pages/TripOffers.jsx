@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { Button, Input, Label, Card, Badge, Modal } from '../components/ui.jsx';
+import { Button, Input, Label, Card, Badge, Modal, Spinner } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
@@ -67,7 +67,7 @@ export default function TripOffers() {
   }
 
   if (loading) {
-    return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+    return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
   }
 
   if (!job) {
@@ -104,7 +104,7 @@ export default function TripOffers() {
             <div className="p-4 rounded-lg" style={{ background: 'var(--surface-container-high)' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-primary/10 text-brand-primary">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full text-brand-primary" style={{ background: 'color-mix(in srgb, var(--brand-primary) 10%, transparent)' }}>
                     <IconUser size={22} />
                   </div>
                   <div>
@@ -133,7 +133,7 @@ export default function TripOffers() {
             <p>{t('tripOffer.noOfferDesc', 'No active trip offer. Send one to a driver from your roster.')}</p>
             {!activeOffer && eligibleDrivers.length > 0 && (
               <Button onClick={() => setShowModal(true)} className="mt-4">
-                <IconPlus size={16} className="mr-2" /> {t('tripOffer.sendOffer', 'Send Trip Offer')}
+                <IconPlus size={16} className="me-2" /> {t('tripOffer.sendOffer', 'Send Trip Offer')}
               </Button>
             )}
             {!activeOffer && eligibleDrivers.length === 0 && (
@@ -181,7 +181,7 @@ export default function TripOffers() {
               eligibleDrivers.map((d) => (
                 <label key={d.id} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-surface-container-high transition-colors">
                   <input type="radio" name="driver" value={d.id} checked={selectedDriver?.id === d.id} onChange={() => setSelectedDriver(d)} className="text-brand-primary" />
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-primary/10 text-brand-primary">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full text-brand-primary" style={{ background: 'color-mix(in srgb, var(--brand-primary) 10%, transparent)' }}>
                     <IconUser size={18} />
                   </div>
                   <div className="flex-1">

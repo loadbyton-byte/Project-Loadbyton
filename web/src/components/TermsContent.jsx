@@ -67,7 +67,7 @@ export default function TermsContent({ compact = false }) {
           <span id="sec-3" className="block scroll-mt-24" aria-hidden="true" />
           <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconFile size={18} /></span>
           <h2 className="font-display text-xl font-semibold text-ink">3. Account Registration & Eligibility</h2>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
             <li>You must be at least 18 years old and have the legal capacity to enter into contracts.</li>
             <li>You must provide accurate, complete, and current registration information.</li>
             <li>Carriers must complete verification (TRN, trade licence, insurance) before bidding. Unverified accounts cannot place bids.</li>
@@ -80,7 +80,7 @@ export default function TermsContent({ compact = false }) {
           <span id="sec-4" className="block scroll-mt-24" aria-hidden="true" />
           <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconPackage size={18} /></span>
           <h2 className="font-display text-xl font-semibold text-ink">4. Marketplace Mechanics</h2>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
             <li><strong>Job Posting:</strong> Shippers post Jobs with equipment, route, schedule, target price, and cargo weight. Jobs enter <code className="px-1 rounded bg-surface-container-high font-mono text-xs">OPEN</code> status.</li>
             <li><strong>Bidding:</strong> Verified Carriers bid with price (AED) and ETA. Competitor bid amounts are masked until award.</li>
             <li><strong>Award:</strong> Shipper awards one bid. This creates a binding agreement: Job → <code className="px-1 rounded bg-surface-container-high font-mono text-xs">AWARDED</code>, Escrow → <code className="px-1 rounded bg-surface-container-high font-mono text-xs">HELD</code>, Payout row created with platform fee.</li>
@@ -95,7 +95,7 @@ export default function TermsContent({ compact = false }) {
           <span id="sec-5" className="block scroll-mt-24" aria-hidden="true" />
           <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconWallet size={18} /></span>
           <h2 className="font-display text-xl font-semibold text-ink">5. Fees & Payments</h2>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
             <li>The Platform charges a commission (take rate) on the agreed price at award. Default: 6% (600 basis points), adjustable by Admin (0–10000 bps).</li>
             <li>Gross = agreed price; Platform fee = round(gross × commission_bps / 10000); Net = gross − fee.</li>
             <li>Payouts are initiated upon release (manual, auto 24h, or dispute resolution). The Platform is not a licensed payment institution; funds move via integrated payment processors.</li>
@@ -108,7 +108,7 @@ export default function TermsContent({ compact = false }) {
           <span id="sec-6" className="block scroll-mt-24" aria-hidden="true" />
           <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconTruck size={18} /></span>
           <h2 className="font-display text-xl font-semibold text-ink">6. Carrier Verification & Obligations</h2>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
             <li>Carriers must provide valid UAE TRN, trade licence, and insurance confirmation.</li>
             <li>Admin approval is required before a Carrier can bid. Approval includes IBAN capture for payout destination.</li>
             <li>Carriers warrant they hold all necessary permits, licenses, and insurance for the Jobs they perform.</li>
@@ -121,7 +121,7 @@ export default function TermsContent({ compact = false }) {
           <span id="sec-7" className="block scroll-mt-24" aria-hidden="true" />
           <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconWarehouse size={18} /></span>
           <h2 className="font-display text-xl font-semibold text-ink">7. Shipper Obligations</h2>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
             <li>Shippers warrant Job details are accurate and they have authority to post the Job.</li>
             <li>Shippers must fund escrow promptly upon award. Failure to fund may result in Job cancellation.</li>
             <li>Shippers must confirm delivery or allow auto-release to proceed. Disputes must be raised in good faith.</li>
@@ -155,7 +155,7 @@ export default function TermsContent({ compact = false }) {
           <span id="sec-10" className="block scroll-mt-24" aria-hidden="true" />
           <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconAlert size={18} /></span>
           <h2 className="font-display text-xl font-semibold text-ink">10. Disclaimers & Limitation of Liability</h2>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
             <li>The Platform is provided "as is" and "as available" without warranties of any kind.</li>
             <li>The Company is not a party to the Shipper-Carrier contract; it provides the marketplace, escrow, and tools only.</li>
             <li>Liability for cargo loss, damage, delay, or disputes between Shipper and Carrier rests with the parties, not the Platform.</li>
@@ -178,7 +178,7 @@ export default function TermsContent({ compact = false }) {
           <span id="sec-12" className="block scroll-mt-24" aria-hidden="true" />
           <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconClose size={18} /></span>
           <h2 className="font-display text-xl font-semibold text-ink">12. Termination</h2>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
             <li>You may close your account at any time. Active Jobs must be resolved first.</li>
             <li>The Company may suspend or terminate access for breach of these Terms, fraud, or illegal activity.</li>
             <li>Upon termination, your data is handled per the Privacy Policy and PDPL retention requirements.</li>

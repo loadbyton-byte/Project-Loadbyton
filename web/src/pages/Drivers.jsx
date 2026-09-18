@@ -158,7 +158,7 @@ export default function Drivers() {
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-xl font-bold text-ink">My Drivers</h1>
+          <h1 className="font-display text-2xl font-bold text-ink">My Drivers</h1>
           <p className="mt-1 text-sm text-ink-muted">
             Register drivers once with their license and vehicle documents — pick them from here when assigning a job, instead of retyping details every time.
           </p>
@@ -191,8 +191,8 @@ export default function Drivers() {
           <form onSubmit={engageExternalUnits} className="mt-4 flex flex-col sm:flex-row gap-2">
             <Input type="number" min="1" placeholder="Units to engage" value={engageUnits} onChange={(e) => setEngageUnits(e.target.value)} className="w-full sm:w-32" />
             <Input type="text" placeholder="Note (optional)" value={engageNote} onChange={(e) => setEngageNote(e.target.value)} className="w-full sm:w-48" />
-            <Button type="submit" loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronRight size={16} className={isRtl ? 'ml-2' : 'mr-2'} /> Engage Units</Button>
-            <Button type="button" variant="secondary" onClick={releaseUnits} loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronDown size={16} className={isRtl ? 'ml-2' : 'mr-2'} /> Release Units</Button>
+            <Button type="submit" loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronRight size={16} className="me-2" /> Engage Units</Button>
+            <Button type="button" variant="secondary" onClick={releaseUnits} loading={capacityBusy} className="flex-1 sm:w-auto"><IconChevronDown size={16} className="me-2" /> Release Units</Button>
           </form>
         </Card.Content>
       </Card>

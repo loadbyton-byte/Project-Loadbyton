@@ -34,7 +34,7 @@ export default function DisputePanel({ jobId, onDone }) {
     }
   }
   return (
-    <div className="rounded-xl border bg-white p-4">
+    <div className="rounded-xl border bg-surface p-4">
       <h3 className="font-semibold text-ink mb-2">Open dispute</h3>
       <p className="text-sm text-ink-muted mb-3">This will pause payment on this job and notify both parties. An admin will review within 48 hours.</p>
       <Label>Dispute type</Label>

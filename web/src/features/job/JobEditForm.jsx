@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { useAuth } from '../../lib/auth.jsx';
 import { api } from '../../lib/api.js';
 import { CONTAINER_EQUIPMENT, TERMINALS, AREAS, EQUIPMENT_TYPES, formatLabel } from '../../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea } from '../../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, SegmentedControl } from '../../components/ui.jsx';
 
 function toDatetimeLocal(raw) {
   if (!raw) return '';
@@ -69,10 +69,13 @@ export default function JobEditForm({ job, onDone, onCancel }) {
     <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <Label>Shipment direction</Label>
-        <div className="mt-1 flex rounded-lg border p-1" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
-          <button type="button" onClick={() => setForm({ ...form, shipmentType: 'IMPORT' })} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold ${form.shipmentType === 'IMPORT' ? 'bg-white shadow text-ink' : 'text-ink-muted'}`}>Import</button>
-          <button type="button" onClick={() => setForm({ ...form, shipmentType: 'EXPORT' })} className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold ${form.shipmentType === 'EXPORT' ? 'bg-white shadow text-ink' : 'text-ink-muted'}`}>Export</button>
-        </div>
+        <SegmentedControl
+          size="sm"
+          className="mt-1"
+          value={form.shipmentType}
+          onChange={(v) => setForm({ ...form, shipmentType: v })}
+          options={[{ value: 'IMPORT', label: 'Import' }, { value: 'EXPORT', label: 'Export' }]}
+        />
       </div>
       {useSimpleLocations ? (
         <>

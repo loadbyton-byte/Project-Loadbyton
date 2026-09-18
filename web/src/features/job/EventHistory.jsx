@@ -34,7 +34,7 @@ export default function EventHistory({ events }) {
             {!isLast && (
               <span className="absolute start-[15px] top-7 h-[calc(100%+0.5rem)] w-px" style={{ background: 'var(--border-subtle)' }} />
             )}
-            <span className="z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--surface-container-high)', color: 'var(--brand-accent)' }}>
+            <span className="z-raised flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--surface-container-high)', color: 'var(--brand-accent)' }}>
               <Icon size={15} />
             </span>
             <div className="min-w-0 pb-1">

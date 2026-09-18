@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { useLocale } from '../../lib/i18n.jsx';
-import { Button, Card, Badge, ErrorState, Select, Input, Label } from '../../components/ui.jsx';
+import { Button, Card, Badge, ErrorState, Select, Input, Label, Spinner } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { IconSync, IconPackage, IconTag, IconWallet } from '../../components/icons.jsx';
 
@@ -41,7 +41,7 @@ export default function AdminPlatformFees() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
   if (error) return <div className="container-page py-10"><ErrorState title="Couldn't load fees" description={error} onRetry={fetchData} /></div>;
 
   const fees = data?.fees || {};
@@ -82,7 +82,7 @@ export default function AdminPlatformFees() {
         </div>
 
         <Card.Footer>
-          <Button variant="secondary" onClick={fetchData}><IconSync size={16} className="mr-2" /> Refresh</Button>
+          <Button variant="secondary" onClick={fetchData}><IconSync size={16} className="me-2" /> Refresh</Button>
         </Card.Footer>
       </Card>
     </div>

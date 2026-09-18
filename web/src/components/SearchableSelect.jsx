@@ -44,13 +44,13 @@ export default function SearchableSelect({ options, value, onChange, labelFn = (
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           autoComplete="off"
-          className="pr-8"
+          className="pe-8"
         />
-        <IconChevronDown size={16} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
+        <IconChevronDown size={16} className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
       </div>
       {open && matches.length > 0 && (
         <div
-          className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border py-1 shadow-lg"
+          className="absolute z-dropdown mt-1 max-h-56 w-full overflow-y-auto rounded-lg border py-1 shadow-lg"
           style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}
         >
           {matches.map((opt) => (
@@ -59,7 +59,7 @@ export default function SearchableSelect({ options, value, onChange, labelFn = (
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => select(opt)}
-              className="block w-full px-3 py-2 text-left text-sm transition hover:bg-surface-container"
+              className="block w-full px-3 py-2 text-start text-sm transition hover:bg-surface-container"
               style={opt === value ? { color: 'var(--brand-accent)', fontWeight: 600 } : undefined}
             >
               {labelFn(opt)}
@@ -69,7 +69,7 @@ export default function SearchableSelect({ options, value, onChange, labelFn = (
       )}
       {open && matches.length === 0 && (
         <div
-          className="absolute z-20 mt-1 w-full rounded-lg border px-3 py-2 text-sm text-ink-muted shadow-lg"
+          className="absolute z-dropdown mt-1 w-full rounded-lg border px-3 py-2 text-sm text-ink-muted shadow-lg"
           style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}
         >
           No match

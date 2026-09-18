@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { Card, Badge, EmptyState } from '../components/ui.jsx';
+import { Card, Badge, EmptyState, Spinner } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { IconMapPin, IconFlag, IconTruck, IconClock } from '../components/icons.jsx';
 
@@ -34,7 +34,7 @@ export default function GccCorridors() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
 
   return (
     <div className="container-page max-w-5xl">

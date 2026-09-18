@@ -2,8 +2,9 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
 import { IconArrowRight, IconStorefront, IconAcUnit, IconBoat, IconWarehouse, IconRuler, IconInventory } from '../components/icons.jsx';
+
+const PHOTO = 'https://images.pexels.com/photos/36656998/pexels-photo-36656998.jpeg?cs=srgb&fm=jpg&w=1600';
 
 // Sector photography, hotlinked from Pexels — verified live and checked for
 // unwanted third-party branding before use (see the marketing-media-refresh
@@ -51,49 +52,58 @@ export default function Industries() {
   usePageTitle('Industries');
   useMeta('How different UAE industries — retail, construction, cold chain, trading, manufacturing, e-commerce — use Loadbyton for road freight and container drayage.');
   return (
-    <div dir="ltr">
-      <MediaBackground src="https://images.pexels.com/photos/36656998/pexels-photo-36656998.jpeg?cs=srgb&fm=jpg&w=1600" overlay="dark">
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'rgba(229,57,53,0.16)', color: '#FF8A80' }}>Industries</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-white md:text-4xl">Different freight, the same accountable process.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-white/80">
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <img className="lb-hero-photo" src={PHOTO} alt="" aria-hidden="true" />
+        <div className="lb-hero-wash" />
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner">
+          <Reveal>
+            <p className="lb-kicker"><i />INDUS<span>TRIES</span></p>
+            <h1>Different freight, the same accountable process.</h1>
+            <p className="lb-hero-lede">
               A cold-chain move and a construction-materials move need different equipment and different urgency — but the same verified transporters, the same payment protection, and the same paper trail underneath either one.
             </p>
           </Reveal>
-        </div>
-      </MediaBackground>
+        </div></div>
+      </section>
 
-      <section className="py-16 md:py-20">
-        <div className="container-page">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {INDUSTRIES.map((ind, i) => (
-              <Reveal key={ind.title} delay={(i % 3) * 70} className="card card-hover overflow-hidden">
-                <div className="relative aspect-[16/9] overflow-hidden">
-                  <img src={ind.photo} alt="" loading="lazy" className="h-full w-full object-cover" />
-                </div>
-                <div className="p-6">
-                  <div className="-mt-11 mb-3 flex h-10 w-10 items-center justify-center rounded-md border-2 shadow-sm" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)', borderColor: 'var(--bg-surface)' }}>{ind.icon}</div>
-                  <p className="font-display text-base font-semibold text-ink">{ind.title}</p>
-                  <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{ind.body}</p>
-                </div>
-              </Reveal>
-            ))}
+      <section><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / SECTORS</span><h2>Six sectors. One record beneath them.</h2><p>Whatever the cargo, the job moves through the same verified, payment-held sequence.</p></Reveal>
+        <div className="lb-item-grid">
+          {INDUSTRIES.map((ind, i) => (
+            <Reveal key={ind.title} delay={(i % 3) * 70} className="lb-item" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ aspectRatio: '16/9', overflow: 'hidden' }}>
+                <img src={ind.photo} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              </div>
+              <div style={{ padding: '26px' }}>
+                <div className="lb-item-top"><span>S-{String(i + 1).padStart(2, '0')}</span>{ind.icon}</div>
+                <h3>{ind.title}</h3>
+                <p>{ind.body}</p>
+              </div>
+              <i className="lb-item-rail" />
+            </Reveal>
+          ))}
+        </div>
+      </div></section>
+
+      <section className="lb-industrial-break lb-industrial-break--band">
+        <img src={PHOTO} alt="Bulk freight operations" />
+        <div className="lb-industrial-overlay" />
+        <div className="container-page"><Reveal><span>THE FREIGHT VARIES.</span><h2 style={{ fontSize: 'clamp(30px,3.6vw,52px)' }}>The accountability doesn't.</h2></Reveal></div>
+      </section>
+
+      <section className="lb-final-cta"><div className="container-page">
+        <Reveal className="lb-final-card">
+          <span className="lb-section-no">BEGIN WITH THE NEXT MOVEMENT</span>
+          <h2>Don't see your exact freight type listed?</h2>
+          <p>Post a load and describe it — the record adapts to the cargo, not the other way round.</p>
+          <div>
+            <Link to="/register" className="btn-accent btn-shine">Post a load and describe it <IconArrowRight size={18} /></Link>
+            <Link to="/for-shippers" className="lb-quiet-link">How shippers work</Link>
           </div>
-        </div>
-      </section>
-
-      <section className="pb-16 md:pb-20">
-        <div className="container-page">
-          <Reveal
-            className="flex flex-col items-start justify-between gap-6 rounded-xl px-8 py-10 sm:flex-row sm:items-center"
-            style={{ background: 'var(--lb-ink-900)' }}
-          >
-            <p className="font-display text-xl font-semibold text-white">Don't see your exact freight type listed?</p>
-            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Post a load and describe it <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
-          </Reveal>
-        </div>
-      </section>
+        </Reveal>
+      </div></section>
     </div>
   );
 }

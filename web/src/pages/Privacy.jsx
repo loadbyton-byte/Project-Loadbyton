@@ -10,15 +10,16 @@ export default function Privacy() {
   useMeta('Loadbyton Privacy Policy — how we collect, use, protect, and share your personal data under UAE PDPL.');
 
   return (
-    <div dir="ltr">
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-3xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Legal</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Privacy Policy</h1>
-            <p className="mt-2 text-sm text-ink-muted">Last updated: {LAST_UPDATED}</p>
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner" style={{ paddingTop: 72, paddingBottom: 56 }}>
+          <Reveal>
+            <p className="lb-kicker"><i />LE<span>GAL</span></p>
+            <h1>Privacy Policy</h1>
+            <p className="mt-3 font-mono text-xs uppercase tracking-widest" style={{ color: 'rgba(255,255,255,.55)' }}>Last updated: {LAST_UPDATED}</p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
       <section className="py-12 md:py-16">
         <div className="container-page max-w-3xl">
@@ -65,7 +66,7 @@ export default function Privacy() {
               We process personal data under the UAE Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data (PDPL).
               Our lawful bases are:
             </p>
-            <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+            <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
               <li><strong>Contract performance:</strong> Operating the marketplace, escrow, and payouts (Sections 3–5).</li>
               <li><strong>Legal obligation:</strong> VAT invoicing, anti-money laundering, record retention (Section 6).</li>
               <li><strong>Legitimate interest:</strong> Fraud prevention, security, analytics, platform improvement.</li>
@@ -131,7 +132,7 @@ export default function Privacy() {
             <span id="sec-4" className="block scroll-mt-24" aria-hidden="true" />
             <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconLock size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">4. Special Category Data</h2>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
               <li><strong>TRN (Tax Registration Number):</strong> Encrypted at rest (AES-256-GCM, <code className="px-1 rounded bg-surface-container-high font-mono text-xs">enc:v1:</code> prefix). Used for carrier verification and VAT invoicing.</li>
               <li><strong>IBAN:</strong> Encrypted at rest (AES-256-GCM). Used solely for Carrier payout destination.</li>
               <li><strong>Trade Licence Number:</strong> Stored in plaintext (not classified as sensitive under PDPL) for verification display.</li>
@@ -143,7 +144,7 @@ export default function Privacy() {
             <span id="sec-5" className="block scroll-mt-24" aria-hidden="true" />
             <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconHandshake size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">5. Data Sharing & Recipients</h2>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
               <li><strong>Counterparty (on award):</strong> Shipper sees Carrier company name, rating, fleet; Carrier sees Shipper company name, rating. Phone, email, TRN, driver details revealed only after award.</li>
               <li><strong>Admins:</strong> Full access for verification, disputes, audit, impersonation (time-limited, audited).</li>
               <li><strong>Payment Processor:</strong> IBAN, company name, payout amount — only when initiating transfers.</li>
@@ -157,7 +158,7 @@ export default function Privacy() {
             <span id="sec-6" className="block scroll-mt-24" aria-hidden="true" />
             <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconClock size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">6. Retention & Deletion</h2>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
               <li><strong>Account & Profile:</strong> Retained while account is active. On deletion request: anonymized within 30 days per PDPL; financial records (invoices, payouts, audit log) retained for 5 years per UAE VAT/commercial law.</li>
               <li><strong>Job Data:</strong> Retained for 5 years from Job completion (commercial record). Disputed Jobs: retained until resolution + 5 years.</li>
               <li><strong>Audit Log:</strong> Append-only; never deleted. Immutable by DB trigger.</li>
@@ -170,7 +171,7 @@ export default function Privacy() {
             <span id="sec-7" className="block scroll-mt-24" aria-hidden="true" />
             <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconCheck size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">7. Your Rights (PDPL)</h2>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
               <li><strong>Access:</strong> Request a copy of your personal data.</li>
               <li><strong>Rectification:</strong> Correct inaccurate data (Profile page for most fields).</li>
               <li><strong>Erasure:</strong> Request deletion (subject to legal retention overrides above).</li>
@@ -188,7 +189,7 @@ export default function Privacy() {
             <span id="sec-8" className="block scroll-mt-24" aria-hidden="true" />
             <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconShield size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">8. Security Measures</h2>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
               <li>Passwords: bcrypt (cost 10), never logged.</li>
               <li>Sessions: HttpOnly, SameSite=Lax cookies; DB-backed; 7-day expiry.</li>
               <li>Field Encryption: IBAN & TRN encrypted at rest (AES-256-GCM); lazy upgrade on read.</li>
@@ -216,7 +217,7 @@ export default function Privacy() {
             <span id="sec-10" className="block scroll-mt-24" aria-hidden="true" />
             <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconTag size={18} /></span>
             <h2 className="font-display text-xl font-semibold text-ink">10. Cookies & Local Storage</h2>
-            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary pl-5 list-disc">
+            <ul className="mt-3 space-y-2 text-sm leading-relaxed text-ink-secondary ps-5 list-disc">
               <li><code className="px-1 rounded bg-surface-container-high font-mono text-xs">lb_session</code> (HttpOnly, Secure, SameSite=Lax) — session authentication.</li>
               <li><code className="px-1 rounded bg-surface-container-high font-mono text-xs">theme</code> (localStorage) — user's dark/light preference.</li>
               <li><code className="px-1 rounded bg-surface-container-high font-mono text-xs">locale</code> (localStorage) — user's language preference (en/ar).</li>

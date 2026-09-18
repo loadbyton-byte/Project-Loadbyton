@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { Button, Card, Badge, EmptyState, ErrorState } from '../components/ui.jsx';
+import { Button, Card, Badge, EmptyState, ErrorState, Spinner } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { IconArrowLeft, IconPackage, IconMapPin, IconClock, IconArrowRight } from '../components/icons.jsx';
 
@@ -59,7 +59,7 @@ export default function EdiConsignmentDetail() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
   if (error) return <div className="container-page py-10"><ErrorState title="Couldn't load consignment" description={error} onRetry={fetchConsignment} /></div>;
   if (!consignment) return <div className="container-page py-10 text-center"><IconPackage size={48} className="mx-auto text-ink-muted mb-4" /><h2 className="font-display text-xl font-bold text-ink mb-2">Consignment not found</h2><Button onClick={() => navigate(-1)}>Go Back</Button></div>;
 
@@ -112,7 +112,7 @@ export default function EdiConsignmentDetail() {
             <div className="flex flex-wrap gap-2">
               {allowed.map((status) => (
                 <Button key={status} variant="secondary" onClick={() => handleTransition(status)}>
-                  <IconArrowRight size={14} className="mr-1" /> {status}
+                  <IconArrowRight size={14} className="me-1" /> {status}
                 </Button>
               ))}
             </div>

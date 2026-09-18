@@ -78,7 +78,7 @@ function SettingsTab() {
             </label>
           </Card.Content>
           <Card.Footer>
-            {saved && <span className="mr-auto text-sm text-status-success">Saved — takes effect on the next award.</span>}
+            {saved && <span className="me-auto text-sm text-status-success">Saved — takes effect on the next award.</span>}
             <Button type="submit" loading={busy}>Save settings</Button>
           </Card.Footer>
         </form>

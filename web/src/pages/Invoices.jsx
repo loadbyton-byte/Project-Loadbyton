@@ -35,7 +35,7 @@ export default function Invoices() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Invoices</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Invoices</h1>
       <p className="mt-1 text-sm text-ink-muted">Every invoice issued on your completed jobs.</p>
 
       <Card className="mt-5 p-5">

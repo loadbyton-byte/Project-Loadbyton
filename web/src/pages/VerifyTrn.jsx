@@ -64,7 +64,7 @@ export default function VerifyTrn() {
               className="flex-1"
             />
             <Button onClick={handleCheck} loading={checking} disabled={!UAE_TRN_RE.test(trn)}>
-              <IconSearch size={16} className="mr-2" /> {t('verify.checkBtn', 'Check TRN')}
+              <IconSearch size={16} className="me-2" /> {t('verify.checkBtn', 'Check TRN')}
             </Button>
           </div>
           <p className="mt-1 text-xs text-ink-muted">{t('verify.hint', 'Enter a 15-digit UAE Tax Registration Number')}</p>
@@ -75,7 +75,7 @@ export default function VerifyTrn() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-ink">{t('verify.result', 'Verification Result')}</h3>
 <Badge color={result.valid ? 'success' : 'danger'}>
-                  {result.valid ? (<span><IconCheckCircle size={12} className="mr-1" /> Valid</span>) : (<span><IconAlert size={12} className="mr-1" /> Invalid</span>)}
+                  {result.valid ? (<span><IconCheckCircle size={12} className="me-1" /> Valid</span>) : (<span><IconAlert size={12} className="me-1" /> Invalid</span>)}
                 </Badge>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -89,7 +89,7 @@ export default function VerifyTrn() {
 
         <div className="border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
           <Button variant="secondary" onClick={handleBulkCheck}>
-            <IconCheckCircle size={16} className="mr-2" /> {t('verify.bulkCheck', 'Bulk Check')}
+            <IconCheckCircle size={16} className="me-2" /> {t('verify.bulkCheck', 'Bulk Check')}
           </Button>
         </div>
       </Card>
