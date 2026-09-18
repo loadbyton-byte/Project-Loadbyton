@@ -77,6 +77,24 @@ tbody tr{transition:background 140ms ease}tbody tr:hover{background:color-mix(in
 /* Motion is functional only. */
 .lb-app-shell .container-page>*,.ops-auth__panel{animation:none}.animate-slide-up,.animate-panel-in{animation-duration:200ms}
 .toast{border-radius:var(--corp-radius-sm);box-shadow:0 12px 32px rgba(16,42,58,.16)}
+
+/* Legacy-effect containment: prevent earlier redesign layers leaking back. */
+.app-main,body,:root[data-theme="dark"] body{background-image:none!important}
+.app-sidebar,.app-topbar,.lb-footer,.lb-role-visual{background-image:none!important}
+.lb-chrome-veil{backdrop-filter:none;-webkit-backdrop-filter:none}
+.lb-shimmer,.animate-marquee,.scanner-laser,.animate-chat-glow,.lb-ticker-track{animation:none!important}
+.scanner-laser,.card-spotlight::before,.badge span.rounded-full::after,.lb-status-dot::after{display:none!important}
+.card-spotlight{border-radius:var(--corp-radius)!important}.card-spotlight:hover{border-color:var(--corp-border-strong)}
+.hero-command-card,.hero-command-card:hover,.hero-command-card:focus-within{transform:none;box-shadow:var(--corp-shadow)}
+.lb-message--one,.lb-message--two,.lb-message--three{transform:none}
+.lb-message{box-shadow:0 8px 24px rgba(16,42,58,.08);border-left-width:2px}
+.lb-record{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(8,27,37,.97)}
+.lb-live-pill i,.lb-status-dot{box-shadow:none!important}
+.lb-role-visual::before,.lb-footer::before,.lb-sidebar-group::before,.lb-modal-panel::before{display:none}
+.lb-sidebar-link [style*="box-shadow"]{box-shadow:none!important}
+.media-card:hover .media-card__img{transform:none}.btn-arrow-nudge{transition:none}
+.btn:hover .btn-arrow-nudge,.btn:focus-visible .btn-arrow-nudge{transform:none}
+.animate-pulse{animation:none}.reveal{transition-duration:400ms}
 @media(max-width:1023px){.ops-auth{grid-template-columns:1fr}.ops-auth__context{min-height:auto;padding:48px 28px}.ops-auth__context h1{max-width:700px;font-size:clamp(2.3rem,7vw,3.7rem)}.ops-auth__proof{margin-top:36px}.ops-auth__form{padding:40px 20px 64px}}
 @media(max-width:767px){.lb-app-shell .container-page{padding-top:24px;padding-bottom:44px}.ops-auth{min-height:calc(100dvh - 56px)}.ops-auth__context{padding:36px 20px}.ops-auth__context h1{font-size:2.35rem}.ops-auth__proof{grid-template-columns:1fr;gap:14px}.ops-auth__form{padding-inline:16px}.ops-auth__panel .card{padding:24px!important}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
