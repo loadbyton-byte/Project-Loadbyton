@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
+import { ScrollSteps } from '../components/ScrollSteps.jsx';
+import { useMagnetic } from '../lib/motion.js';
 import { IconArrowRight, IconGavel, IconWallet, IconTruck, IconShield, IconClock, IconStar } from '../components/icons.jsx';
 
 const STEPS = [
@@ -24,6 +26,8 @@ const REASONS = [
 export default function ForTransporters() {
   usePageTitle('For Transporters');
   useMeta('Join Loadbyton as a transporter, fleet owner, or owner-operator — bid on verified UAE freight jobs, get paid without chasing invoices.');
+  const heroCtaRef = useMagnetic();
+  const bottomCtaRef = useMagnetic();
   return (
     <div dir="ltr">
       <MediaBackground src="https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=1600" overlay="dark">
@@ -35,7 +39,7 @@ export default function ForTransporters() {
               Whether you run one truck or a fifty-vehicle fleet, verification happens once and bidding is open after that — on jobs from shippers whose payment is already held before you ever load a container.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/register?role=CARRIER" className="btn-accent rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
+              <Link ref={heroCtaRef} to="/register?role=CARRIER" className="btn-accent btn-shine rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
               <Link to="/pricing" className="btn rounded-full px-6 py-3 text-base" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff' }}>See the take rate</Link>
             </div>
           </Reveal>
@@ -45,15 +49,17 @@ export default function ForTransporters() {
       <section className="border-b py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page">
           <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">How it works, start to payout.</Reveal>
-          <div className="mt-10 grid gap-8 md:grid-cols-4">
-            {STEPS.map((s, i) => (
-              <Reveal key={s.n} delay={i * 70}>
+          <ScrollSteps
+            className="mt-10"
+            steps={STEPS}
+            renderStep={(s) => (
+              <>
                 <p className="font-mono text-sm font-semibold" style={{ color: 'var(--brand-accent)' }}>{s.n}</p>
                 <p className="mt-2 font-display text-base font-semibold text-ink">{s.title}</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{s.body}</p>
-              </Reveal>
-            ))}
-          </div>
+              </>
+            )}
+          />
         </div>
       </section>
 
@@ -78,7 +84,7 @@ export default function ForTransporters() {
               <p className="font-display text-xl font-semibold text-white">Verification usually clears within a day.</p>
               <p className="mt-1 text-sm text-white/60">Trade licence, TRN, and insurance — that's it to get started.</p>
             </div>
-            <Link to="/register?role=CARRIER" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
+            <Link ref={bottomCtaRef} to="/register?role=CARRIER" className="btn-accent btn-shine shrink-0 rounded-full px-6 py-3 text-base">Join as a transporter <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
           </Reveal>
         </div>
       </section>

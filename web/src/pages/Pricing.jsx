@@ -4,6 +4,8 @@ import { api } from '../lib/api.js';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
+import { SpotlightCard } from '../components/SpotlightCard.jsx';
+import { useMagnetic } from '../lib/motion.js';
 import { IconCheck, IconArrowRight, IconShield } from '../components/icons.jsx';
 
 const TIERS = [
@@ -17,6 +19,7 @@ export default function Pricing() {
   useMeta('A transparent take rate, no subscription. See how Loadbyton pricing compares to broker markups.');
   const [takeRate, setTakeRate] = useState('6%');
   useEffect(() => { api.publicMarket().then((d) => setTakeRate(d.market.takeRate)).catch(() => {}); }, []);
+  const bottomCtaRef = useMagnetic();
 
   return (
     <div dir="ltr">
@@ -37,25 +40,25 @@ export default function Pricing() {
         <div className="container-page">
           <div className="grid gap-6 md:grid-cols-3">
             {TIERS.map((t, i) => (
-              <Reveal
-                key={t.name}
-                delay={i * 70}
-                className="card relative flex flex-col p-6"
-                style={t.recommended ? { borderColor: 'var(--brand-accent)', boxShadow: 'var(--lb-shadow-md)' } : undefined}
-              >
-                {t.recommended && (
-                  <span className="badge absolute -top-3 left-6" style={{ background: 'var(--brand-accent)', color: 'var(--text-on-accent)' }}>Most popular</span>
-                )}
-                <p className="font-display text-lg font-semibold text-ink">{t.name}</p>
-                <p className="mt-1 text-sm text-ink-muted">{t.desc}</p>
-                <p className="mt-4 font-display text-2xl font-semibold" style={{ color: 'var(--brand-accent)' }}>{t.fee}</p>
-                <ul className="mt-5 flex-1 space-y-2.5">
-                  {t.perks.map((p) => (
-                    <li key={p} className="flex items-start gap-2 text-sm text-ink-secondary">
-                      <IconCheck size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-success)' }} /> {p}
-                    </li>
-                  ))}
-                </ul>
+              <Reveal key={t.name} delay={i * 70}>
+                <SpotlightCard
+                  className="card relative flex flex-col p-6"
+                  style={t.recommended ? { borderColor: 'var(--brand-accent)', boxShadow: 'var(--lb-shadow-md)' } : undefined}
+                >
+                  {t.recommended && (
+                    <span className="badge absolute -top-3 left-6" style={{ background: 'var(--brand-accent)', color: 'var(--text-on-accent)' }}>Most popular</span>
+                  )}
+                  <p className="font-display text-lg font-semibold text-ink">{t.name}</p>
+                  <p className="mt-1 text-sm text-ink-muted">{t.desc}</p>
+                  <p className="mt-4 font-display text-2xl font-semibold" style={{ color: 'var(--brand-accent)' }}>{t.fee}</p>
+                  <ul className="mt-5 flex-1 space-y-2.5">
+                    {t.perks.map((p) => (
+                      <li key={p} className="flex items-start gap-2 text-sm text-ink-secondary">
+                        <IconCheck size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-success)' }} /> {p}
+                      </li>
+                    ))}
+                  </ul>
+                </SpotlightCard>
               </Reveal>
             ))}
           </div>
@@ -82,7 +85,7 @@ export default function Pricing() {
         <div className="container-page">
           <Reveal className="flex flex-col items-start justify-between gap-6 rounded-xl px-8 py-10 sm:flex-row sm:items-center" style={{ background: 'var(--lb-ink-900)' }}>
             <p className="font-display text-xl font-semibold text-white">No card required to browse open loads.</p>
-            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} /></Link>
+            <Link ref={bottomCtaRef} to="/register" className="btn-accent btn-shine shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} /></Link>
           </Reveal>
         </div>
       </section>

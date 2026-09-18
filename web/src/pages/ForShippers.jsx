@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
+import { ScrollSteps } from '../components/ScrollSteps.jsx';
+import { useMagnetic } from '../lib/motion.js';
 import { IconArrowRight, IconPackage, IconGavel, IconShield, IconFile, IconClock, IconLayers } from '../components/icons.jsx';
 
 const STEPS = [
@@ -24,6 +26,8 @@ const REASONS = [
 export default function ForShippers() {
   usePageTitle('For Shippers');
   useMeta('Post a road freight or container drayage requirement in the UAE, review bids from verified transporters, and manage the move from one place.');
+  const heroCtaRef = useMagnetic();
+  const bottomCtaRef = useMagnetic();
   return (
     <div dir="ltr">
       <MediaBackground src="https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=1600" overlay="dark">
@@ -35,7 +39,7 @@ export default function ForShippers() {
               Post your transport requirement once, receive bids from verified transporters across the UAE, and manage the agreed move — documents, updates, payment status — from one place. No broker calls, no chasing proof of delivery.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/register" className="btn-accent rounded-full px-6 py-3 text-base">Post a load <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
+              <Link ref={heroCtaRef} to="/register" className="btn-accent btn-shine rounded-full px-6 py-3 text-base">Post a load <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
               <Link to="/pricing" className="btn rounded-full px-6 py-3 text-base" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff' }}>See pricing</Link>
             </div>
           </Reveal>
@@ -45,15 +49,17 @@ export default function ForShippers() {
       <section className="border-b py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
         <div className="container-page">
           <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">How it works, post to payout release.</Reveal>
-          <div className="mt-10 grid gap-8 md:grid-cols-4">
-            {STEPS.map((s, i) => (
-              <Reveal key={s.n} delay={i * 70}>
+          <ScrollSteps
+            className="mt-10"
+            steps={STEPS}
+            renderStep={(s) => (
+              <>
                 <p className="font-mono text-sm font-semibold" style={{ color: 'var(--brand-accent)' }}>{s.n}</p>
                 <p className="mt-2 font-display text-base font-semibold text-ink">{s.title}</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{s.body}</p>
-              </Reveal>
-            ))}
-          </div>
+              </>
+            )}
+          />
         </div>
       </section>
 
@@ -75,7 +81,7 @@ export default function ForShippers() {
         <div className="container-page">
           <Reveal className="flex flex-col items-start justify-between gap-6 rounded-xl px-8 py-10 sm:flex-row sm:items-center" style={{ background: 'var(--lb-ink-900)' }}>
             <p className="font-display text-xl font-semibold text-white">No card required to browse open bids on your first post.</p>
-            <Link to="/register" className="btn-accent shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
+            <Link ref={bottomCtaRef} to="/register" className="btn-accent btn-shine shrink-0 rounded-full px-6 py-3 text-base">Create a free account <IconArrowRight size={18} className="btn-arrow-nudge" /></Link>
           </Reveal>
         </div>
       </section>

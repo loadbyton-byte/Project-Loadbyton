@@ -6,7 +6,10 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { MediaBackground } from '../components/MediaBackground.jsx';
+import { ScrollSteps } from '../components/ScrollSteps.jsx';
+import { SpotlightCard } from '../components/SpotlightCard.jsx';
 import HeroNarrative from '../components/HeroNarrative.jsx';
+import { useMagnetic } from '../lib/motion.js';
 import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
 
 // Sector photography, hotlinked from Pexels (verified live, checked for
@@ -26,12 +29,25 @@ const EQUIPMENT_ICONS = {
   PICKUP_10T: IconTruck, SIDE_LOADER_TRAILER: IconLayers, TRIPPER: IconLayers, CUSTOM: IconTruck,
 };
 
+const HOW_IT_WORKS_STEPS = [
+  { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, target price — one form, structured instantly. No back-and-forth to get a job in front of transporters.', icon: <IconPackage size={20} /> },
+  { n: '02', title: 'Transporters bid', body: 'Verified transporters only — TRN, trade licence, and insurance checked before they ever see a load. Every bid is priced against the live Lane Index.', icon: <IconTruck size={20} /> },
+  { n: '03', title: 'Agree the terms', body: 'Accept a bid and the price locks. Payment is held for the transport automatically — no invoice to chase, no transfer to confirm by phone.', icon: <IconShield size={20} /> },
+  { n: '04', title: 'Deliver & release', body: "POD goes up, payment releases — confirm it yourself or let the 24-hour auto-release handle it. Either way, you're not calling anyone to get paid.", icon: <IconClock size={20} /> },
+];
+
 export default function Landing() {
   usePageTitle('');
   const { t } = useLocale();
   const [carriers, setCarriers] = useState([]);
   const [market, setMarket] = useState(null);
   const [lanes, setLanes] = useState([]);
+  // Magnetic pull, opt-in per primary CTA (see lib/motion.js) — a hook
+  // call per element, not per .map() iteration, since these three are
+  // fixed, named CTAs, not a data-driven list.
+  const heroCtaRef = useMagnetic();
+  const volumeCtaRef = useMagnetic();
+  const bottomCtaRef = useMagnetic();
 
   useEffect(() => {
     api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 4))).catch(() => {});
@@ -64,7 +80,7 @@ export default function Landing() {
               {t('landing.hero.subtitle')}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link to="/register" className="btn-accent rounded-full px-6 py-3 text-base">
+              <Link ref={heroCtaRef} to="/register" className="btn-accent btn-shine rounded-full px-6 py-3 text-base">
                 {t('landing.hero.ctaShipper')} <IconArrowRight size={18} className="btn-arrow-nudge" />
               </Link>
               <Link
@@ -148,23 +164,20 @@ export default function Landing() {
         <div className="container-page">
           <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">One system. Zero chasing.</Reveal>
           <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Post, bid, award, deliver — the same sequence every time, whether it's one container or a fifty-truck contract lane.</Reveal>
-          <div className="mt-10 grid gap-8 md:grid-cols-4">
-            {[
-              { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, target price — one form, structured instantly. No back-and-forth to get a job in front of transporters.', icon: <IconPackage size={20} /> },
-              { n: '02', title: 'Transporters bid', body: 'Verified transporters only — TRN, trade licence, and insurance checked before they ever see a load. Every bid is priced against the live Lane Index.', icon: <IconTruck size={20} /> },
-              { n: '03', title: 'Agree the terms', body: 'Accept a bid and the price locks. Payment is held for the transport automatically — no invoice to chase, no transfer to confirm by phone.', icon: <IconShield size={20} /> },
-              { n: '04', title: 'Deliver & release', body: "POD goes up, payment releases — confirm it yourself or let the 24-hour auto-release handle it. Either way, you're not calling anyone to get paid.", icon: <IconClock size={20} /> },
-            ].map((step, i) => (
-              <Reveal key={step.n} delay={i * 70}>
+          <ScrollSteps
+            className="mt-10"
+            steps={HOW_IT_WORKS_STEPS}
+            renderStep={(step) => (
+              <>
                 <div className="flex h-10 w-10 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}>
                   {step.icon}
                 </div>
                 <p className="tabular mt-4 text-xs font-semibold text-ink-muted">{step.n}</p>
                 <p className="mt-1 font-display text-base font-semibold text-ink">{step.title}</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{step.body}</p>
-              </Reveal>
-            ))}
-          </div>
+              </>
+            )}
+          />
         </div>
       </section>
 
@@ -253,7 +266,7 @@ export default function Landing() {
               <p className="mt-3 font-display text-xl font-semibold text-ink">Ten containers or five trucks — one job, not ten conversations.</p>
               <p className="mt-1 max-w-lg text-sm text-ink-muted">State the count once. Transporters bid to cover the whole batch at one agreed price — no unit-by-unit negotiation, no separate thread per truck.</p>
             </div>
-            <Link to="/register" className="btn-accent relative shrink-0 rounded-full px-6 py-3 text-base transition-transform duration-200 group-hover:scale-[1.03]">
+            <Link ref={volumeCtaRef} to="/register" className="btn-accent btn-shine relative shrink-0 rounded-full px-6 py-3 text-base transition-transform duration-200 group-hover:scale-[1.03]">
               Post a volume inquiry <IconArrowRight size={18} />
             </Link>
           </Reveal>
@@ -271,15 +284,17 @@ export default function Landing() {
           </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {(carriers.length ? carriers : Array.from({ length: 4 })).map((c, i) => (
-              <Reveal key={c?.id || i} delay={(i % 4) * 60} className="card card-hover p-5">
-                <div className="flex items-start justify-between">
-                  <p className="font-display text-sm font-semibold text-ink">{c?.name || 'Loading…'}</p>
-                  <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>{c?.tier}</span>
-                </div>
-                <p className="mt-2 flex items-center gap-1 text-sm text-ink-secondary">
-                  <IconStar size={14} style={{ color: 'var(--brand-accent)' }} /> {c?.rating?.toFixed?.(2) ?? '—'} · {c?.completedJobs ?? 0} jobs
-                </p>
-                <p className="mt-1 text-xs text-ink-muted">{c ? `Fleet of ${c.fleetSize}` : ''}</p>
+              <Reveal key={c?.id || i} delay={(i % 4) * 60}>
+                <SpotlightCard className="card card-hover p-5">
+                  <div className="flex items-start justify-between">
+                    <p className="font-display text-sm font-semibold text-ink">{c?.name || 'Loading…'}</p>
+                    <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>{c?.tier}</span>
+                  </div>
+                  <p className="mt-2 flex items-center gap-1 text-sm text-ink-secondary">
+                    <IconStar size={14} style={{ color: 'var(--brand-accent)' }} /> {c?.rating?.toFixed?.(2) ?? '—'} · {c?.completedJobs ?? 0} jobs
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted">{c ? `Fleet of ${c.fleetSize}` : ''}</p>
+                </SpotlightCard>
               </Reveal>
             ))}
           </div>
@@ -294,7 +309,7 @@ export default function Landing() {
               <p className="font-display text-xl font-semibold text-white">Run your lanes. Stop re-running the negotiation.</p>
               <p className="mt-1 text-sm text-white/60">Save a lane's equipment, route, and terms once. Next time, it's two taps — not a new round of calls and quotes.</p>
             </div>
-            <Link to="/register" className="btn-accent rounded-full px-6 py-3 text-base">
+            <Link ref={bottomCtaRef} to="/register" className="btn-accent btn-shine rounded-full px-6 py-3 text-base">
               Get started free <IconArrowRight size={18} />
             </Link>
           </Reveal>
