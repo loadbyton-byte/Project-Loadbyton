@@ -1,35 +1,38 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { IconShield, IconMapPin, IconFile, IconInfo } from '../components/icons.jsx';
+import { IconShield, IconMapPin, IconFile, IconInfo, IconArrowRight } from '../components/icons.jsx';
 
 // Real PDPL principles, stated generally and accurately. Anything specific
 // to THIS company (trade licence number, registered address, DPO contact)
 // is a clearly marked placeholder — never a fabricated number. Filling
 // those in is a business/legal step, not a code change. This pass is a
-// presentation-only change (icons, cards, layout) — every sentence of legal
-// text below is unchanged from before.
+// presentation-only change — every sentence of legal text below is
+// unchanged from before.
 
 export default function Compliance() {
   usePageTitle('Compliance');
   useMeta('How Loadbyton handles personal data under UAE PDPL, VAT invoicing, and where account data is hosted.');
   return (
-    <div dir="ltr">
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Compliance</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Data protection, hosting, and invoicing — stated plainly.</h1>
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner">
+          <Reveal>
+            <p className="lb-kicker"><i />COMPLI<span>ANCE</span></p>
+            <h1>Data protection, hosting, and invoicing — stated plainly.</h1>
           </Reveal>
-        </div>
+        </div></div>
       </section>
 
-      <section className="py-16 md:py-20">
-        <div className="container-page max-w-2xl space-y-6">
-          <Reveal className="card p-6 md:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconShield size={18} /></div>
-              <h2 className="font-display text-lg font-semibold text-ink">Data protection (UAE PDPL)</h2>
+      <section><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / POSITION</span><h2>Three statements, no gloss.</h2></Reveal>
+        <div style={{ marginTop: 48, maxWidth: 820 }}>
+          <Reveal className="lb-doc">
+            <div className="lb-doc-head">
+              <span className="lb-doc-icon"><IconShield size={18} /></span>
+              <h2>Data protection (UAE PDPL)</h2>
             </div>
             <div className="mt-4 space-y-3 text-sm leading-relaxed text-ink-secondary">
               <p>
@@ -47,10 +50,10 @@ export default function Compliance() {
             </div>
           </Reveal>
 
-          <Reveal delay={60} className="card p-6 md:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconMapPin size={18} /></div>
-              <h2 className="font-display text-lg font-semibold text-ink">Where data is hosted</h2>
+          <Reveal delay={60} className="lb-doc">
+            <div className="lb-doc-head">
+              <span className="lb-doc-icon"><IconMapPin size={18} /></span>
+              <h2>Where data is hosted</h2>
             </div>
             <p className="mt-4 text-sm leading-relaxed text-ink-secondary">
               Hosting region depends on deployment configuration (see <span className="font-mono">render.yaml</span> and{' '}
@@ -61,10 +64,10 @@ export default function Compliance() {
             </p>
           </Reveal>
 
-          <Reveal delay={120} className="card p-6 md:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconFile size={18} /></div>
-              <h2 className="font-display text-lg font-semibold text-ink">VAT invoicing</h2>
+          <Reveal delay={120} className="lb-doc">
+            <div className="lb-doc-head">
+              <span className="lb-doc-icon"><IconFile size={18} /></span>
+              <h2>VAT invoicing</h2>
             </div>
             <p className="mt-4 text-sm leading-relaxed text-ink-secondary">
               Platform commission is invoiced with a sequential invoice number and a VAT breakdown at the UAE standard
@@ -73,19 +76,31 @@ export default function Compliance() {
             </p>
           </Reveal>
 
-          <Reveal delay={180} className="card p-6 md:p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}><IconInfo size={18} /></div>
-              <h2 className="font-display text-lg font-semibold text-ink">Company details</h2>
+          <Reveal delay={180} className="lb-doc">
+            <div className="lb-doc-head">
+              <span className="lb-doc-icon"><IconInfo size={18} /></span>
+              <h2>Company details</h2>
             </div>
-            <div className="mt-4 rounded-lg border border-dashed p-4 text-sm text-ink-muted" style={{ borderColor: 'var(--border-strong)' }}>
+            <div className="mt-4 rounded border border-dashed p-4 text-sm text-ink-muted" style={{ borderColor: 'var(--border-strong)', borderRadius: 4 }}>
               <p>Trade licence number: <em>— add before publishing publicly —</em></p>
               <p className="mt-1">Registered address: <em>— add before publishing publicly —</em></p>
               <p className="mt-1">Free zone / mainland status: <em>— add before publishing publicly —</em></p>
             </div>
           </Reveal>
         </div>
-      </section>
+      </div></section>
+
+      <section className="lb-final-cta"><div className="container-page">
+        <Reveal className="lb-final-card">
+          <span className="lb-section-no">NEXT</span>
+          <h2>Questions on the position?</h2>
+          <p>Read how the platform is secured, or start with one load.</p>
+          <div>
+            <Link to="/security" className="btn-accent btn-shine">How security works <IconArrowRight size={18} /></Link>
+            <Link to="/register" className="lb-quiet-link">Create an account</Link>
+          </div>
+        </Reveal>
+      </div></section>
     </div>
   );
 }

@@ -1,8 +1,11 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { formatDate } from '../lib/constants.js';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
+import { IconArrowRight } from '../components/icons.jsx';
+
+const PHOTO = 'https://images.pexels.com/photos/31361164/pexels-photo-31361164.jpeg?cs=srgb&fm=jpg&w=1600';
 
 const POSTS = [
   {
@@ -32,39 +35,46 @@ export default function Blog() {
   usePageTitle('Blog');
   useMeta('Notes on UAE drayage logistics and building a freight marketplace that survives past the first job.');
   return (
-    <div dir="ltr">
-      <MediaBackground src="https://images.pexels.com/photos/31361164/pexels-photo-31361164.jpeg?cs=srgb&fm=jpg&w=1600" overlay="fade-bottom" className="h-40 md:h-56" />
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Blog</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Notes from building Loadbyton</h1>
-            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">Field notes on UAE drayage economics and the product/engineering decisions behind the platform.</p>
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <img className="lb-hero-photo" src={PHOTO} alt="" aria-hidden="true" />
+        <div className="lb-hero-wash" />
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner">
+          <Reveal>
+            <p className="lb-kicker"><i />BL<span>OG</span></p>
+            <h1>Notes from building Loadbyton</h1>
+            <p className="lb-hero-lede">Field notes on UAE drayage economics and the product/engineering decisions behind the platform.</p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
 
-      <section className="py-16 md:py-20">
-        <div className="container-page max-w-2xl">
-          <div className="space-y-10">
-            {POSTS.map((p, i) => (
-              <Reveal key={p.title} delay={i * 70} as="article" className="card overflow-hidden md:flex md:flex-row-reverse">
-                <div className="aspect-[16/9] overflow-hidden md:aspect-auto md:w-56 md:shrink-0">
-                  <img src={p.photo} alt="" loading="lazy" className="h-full w-full object-cover" />
-                </div>
-                <div className="p-6 md:p-8">
-                  <div className="flex items-center gap-3">
-                    <span className="badge" style={{ background: 'var(--bg-raised)', color: 'var(--text-secondary)' }}>{p.tag}</span>
-                    <p className="text-xs text-ink-muted">{formatDate(p.date)}</p>
-                  </div>
-                  <h2 className="mt-3 font-display text-xl font-semibold text-ink">{p.title}</h2>
-                  <p className="mt-2.5 text-sm leading-relaxed text-ink-secondary">{p.body}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+      <section><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / FIELD NOTES</span><h2>Three essays, no content marketing.</h2></Reveal>
+        <div style={{ marginTop: 8 }}>
+          {POSTS.map((p, i) => (
+            <Reveal key={p.title} delay={i * 60} as="article" className="lb-post">
+              <div>
+                <p className="lb-post-meta"><span>{p.tag}</span><time>{formatDate(p.date)}</time></p>
+                <h2>{p.title}</h2>
+                <p>{p.body}</p>
+              </div>
+              <img src={p.photo} alt="" loading="lazy" />
+            </Reveal>
+          ))}
         </div>
-      </section>
+      </div></section>
+
+      <section className="lb-final-cta"><div className="container-page">
+        <Reveal className="lb-final-card">
+          <span className="lb-section-no">NEXT</span>
+          <h2>Read enough. Move freight.</h2>
+          <div>
+            <Link to="/register" className="btn-accent btn-shine">Start with one load <IconArrowRight size={18} /></Link>
+            <Link to="/" className="lb-quiet-link">Back to the platform</Link>
+          </div>
+        </Reveal>
+      </div></section>
     </div>
   );
 }

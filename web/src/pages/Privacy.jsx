@@ -10,15 +10,16 @@ export default function Privacy() {
   useMeta('Loadbyton Privacy Policy — how we collect, use, protect, and share your personal data under UAE PDPL.');
 
   return (
-    <div dir="ltr">
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-3xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Legal</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">Privacy Policy</h1>
-            <p className="mt-2 text-sm text-ink-muted">Last updated: {LAST_UPDATED}</p>
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner" style={{ paddingTop: 72, paddingBottom: 56 }}>
+          <Reveal>
+            <p className="lb-kicker"><i />LE<span>GAL</span></p>
+            <h1>Privacy Policy</h1>
+            <p className="mt-3 font-mono text-xs uppercase tracking-widest" style={{ color: 'rgba(255,255,255,.55)' }}>Last updated: {LAST_UPDATED}</p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
       <section className="py-12 md:py-16">
         <div className="container-page max-w-3xl">

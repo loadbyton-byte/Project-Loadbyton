@@ -1,7 +1,8 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { IconShield, IconClock, IconFile, IconLayers, IconUser, IconCompass, IconCheck, IconAlert } from '../components/icons.jsx';
+import { IconShield, IconClock, IconFile, IconLayers, IconUser, IconCompass, IconCheck, IconAlert, IconArrowRight } from '../components/icons.jsx';
 
 // TRUST SIGNAL, NOT A CLAIM SHEET: every line under "What's built today" is
 // something a reviewer can verify against this repo (server/lib/*.js). The
@@ -9,8 +10,8 @@ import { IconShield, IconClock, IconFile, IconLayers, IconUser, IconCompass, Ico
 // a vendor-risk questionnaire that finds an unearned "SOC 2 certified"
 // badge trusts the vendor less, not more. Never promote an item from
 // Roadmap to "built" here without it actually being true in the code — and
-// that applies to this pass too: everything below is a presentation change
-// (icons, layout, cards), the text content is unchanged from before.
+// that applies to this pass too: everything below is a presentation change,
+// the text content is unchanged from before.
 
 const BUILT = [
   { icon: <IconShield size={18} />, title: 'Password storage', detail: 'bcrypt, cost factor 10 — never plaintext, never reversible.' },
@@ -34,70 +35,59 @@ export default function Security() {
   usePageTitle('Security');
   useMeta('How Loadbyton protects account, financial, and shipment data — what is built today, and what is on the roadmap.');
   return (
-    <div dir="ltr">
-      <section className="border-b" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page py-16 md:py-20">
-          <Reveal className="max-w-2xl">
-            <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>Security</span>
-            <h1 className="mt-4 font-display text-3xl font-semibold leading-tight text-ink md:text-4xl">What's actually implemented — not a marketing checklist.</h1>
-            <p className="mt-4 text-lg leading-relaxed text-ink-secondary">
+    <div dir="ltr" className="lb-home">
+      <section className="lb-subhero">
+        <div className="lb-hero-grid" />
+        <div className="container-page"><div className="lb-subhero-inner">
+          <Reveal>
+            <p className="lb-kicker"><i />SECU<span>RITY</span></p>
+            <h1>What's actually implemented — not a marketing checklist.</h1>
+            <p className="lb-hero-lede">
               Where something isn't done yet, it's listed as a roadmap item below — not implied as already in place.
             </p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
 
-      <section className="border-b py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page">
-          <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">What's built today</Reveal>
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            {BUILT.map((item, i) => (
-              <Reveal key={item.title} delay={(i % 2) * 60} className="card flex gap-4 p-5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md" style={{ background: 'var(--status-success-bg)', color: 'var(--status-success)' }}>
-                  {item.icon}
-                </div>
-                <div>
-                  <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-                    {item.title} <IconCheck size={13} style={{ color: 'var(--status-success)' }} />
-                  </p>
-                  <p className="mt-1 text-sm text-ink-muted">{item.detail}</p>
-                </div>
-              </Reveal>
-            ))}
+      <section><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / BUILT TODAY</span><h2>Verifiable in the repo, not asserted in a badge.</h2><p>Every line below maps to code a reviewer can actually check.</p></Reveal>
+        <div className="lb-item-grid">
+          {BUILT.map((item, i) => (
+            <Reveal key={item.title} delay={(i % 3) * 60} className="lb-item">
+              <div className="lb-item-top"><span>S-{String(i + 1).padStart(2, '0')}</span>{item.icon}</div>
+              <h3 style={{ marginTop: 40, fontSize: 19 }}>{item.title} <IconCheck size={13} style={{ color: '#267038', verticalAlign: 'baseline' }} /></h3>
+              <p>{item.detail}</p>
+              <i className="lb-item-rail" />
+            </Reveal>
+          ))}
+        </div>
+      </div></section>
+
+      <section className="lb-record-section"><div className="container-page">
+        <Reveal className="lb-section-heading"><span className="lb-section-no">02 / ROADMAP</span><h2>Not yet complete — stated as such.</h2></Reveal>
+        <div style={{ marginTop: 40, maxWidth: 720 }}>
+          {ROADMAP.map((item, i) => (
+            <Reveal key={item} delay={i * 60} className="lb-doc" style={{ borderColor: '#f0c36d', background: '#fffdf5' }}>
+              <p style={{ display: 'flex', alignItems: 'flex-start', gap: 12, fontSize: 14, color: '#102631' }}>
+                <span style={{ marginTop: 6, width: 7, height: 7, flexShrink: 0, borderRadius: '50%', background: 'var(--status-warning)' }} />
+                {item}
+              </p>
+            </Reveal>
+          ))}
+        </div>
+      </div></section>
+
+      <section className="lb-final-cta"><div className="container-page">
+        <Reveal className="lb-final-card">
+          <span className="lb-section-no">RESPONSIBLE DISCLOSURE</span>
+          <h2>Found a security issue?</h2>
+          <p>Email <span className="font-mono">security@loadbyton.ae</span> — replace with a monitored inbox before this goes live; this address is a placeholder shipped with the page, not yet an active mailbox.</p>
+          <div>
+            <Link to="/compliance" className="btn-accent btn-shine">Read the compliance position <IconArrowRight size={18} /></Link>
+            <Link to="/" className="lb-quiet-link">Back to the platform</Link>
           </div>
-        </div>
-      </section>
-
-      <section className="border-b py-16 md:py-20" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page max-w-2xl">
-          <Reveal>
-            <h2 className="flex items-center gap-2 font-display text-2xl font-semibold text-ink">
-              <IconAlert size={20} style={{ color: 'var(--status-warning)' }} /> Roadmap — not yet complete
-            </h2>
-            <ul className="mt-6 space-y-3">
-              {ROADMAP.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm text-ink-secondary" style={{ borderColor: 'var(--border-default)', background: 'var(--status-warning-bg)' }}>
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--status-warning)' }} />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="py-16 md:py-20">
-        <div className="container-page max-w-2xl">
-          <Reveal>
-            <h2 className="font-display text-2xl font-semibold text-ink">Report a vulnerability</h2>
-            <p className="mt-4 text-sm leading-relaxed text-ink-secondary">
-              Found a security issue? Email <span className="font-mono">security@loadbyton.ae</span> — replace with a
-              monitored inbox before this goes live; this address is a placeholder shipped with the page, not yet an
-              active mailbox.
-            </p>
-          </Reveal>
-        </div>
-      </section>
+        </Reveal>
+      </div></section>
     </div>
   );
 }
