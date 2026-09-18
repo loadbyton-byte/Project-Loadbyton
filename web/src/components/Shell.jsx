@@ -662,7 +662,8 @@ function ShellInner({ children }) {
             with route grid, grouped wayfinding and live session footer. */}
         {user && (
           <aside
-            className="lb-sidebar hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
+            className="lb-sidebar app-sidebar hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
+            style={{ background: 'var(--sidebar-bg)' }}
           >
             <div className="relative flex h-16 items-center justify-between px-5">
               {/* Sidebar chrome is always dark (--sidebar-bg) but shifts
@@ -761,7 +762,7 @@ function ShellInner({ children }) {
               nav; signed-in users get command search + TRN + bell, since role
               nav already lives in the sidebar. */}
           <header
-            className="lb-chrome-veil sticky top-0 z-30 hidden border-b md:block"
+            className="lb-chrome-veil app-topbar sticky top-0 z-30 hidden border-b md:block"
             style={{ borderColor: 'var(--border-subtle)' }}
           >
             <div className="lb-top-route-line" aria-hidden="true" />
@@ -804,7 +805,7 @@ function ShellInner({ children }) {
             )}
           </header>
 
-          <main className="flex-1">{children}</main>
+          <main className="app-main flex-1">{children}</main>
 
           {!user && (
             <footer className="lb-footer" dir="ltr">

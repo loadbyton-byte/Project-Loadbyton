@@ -1,326 +1,118 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { EQUIPMENT_TYPES, equipmentLabel, formatAED, formatLabel } from '../lib/constants.js';
+import { formatAED, formatLabel } from '../lib/constants.js';
 import { usePageTitle } from '../lib/seo.jsx';
-import { useLocale } from '../lib/i18n.jsx';
 import { Reveal } from '../components/Reveal.jsx';
-import { MediaBackground } from '../components/MediaBackground.jsx';
-import { ScrollSteps } from '../components/ScrollSteps.jsx';
-import { SpotlightCard } from '../components/SpotlightCard.jsx';
 import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
-import HeroNarrative from '../components/HeroNarrative.jsx';
 import { useMagnetic } from '../lib/motion.js';
-import { IconShield, IconClock, IconArrowRight, IconStar, IconTruck, IconPackage, IconTrailer, IconLayers, IconCompass } from '../components/icons.jsx';
+import { IconArrowRight, IconCheck, IconCheckCircle, IconClock, IconFile, IconMapPin, IconMessage, IconPackage, IconShield, IconTruck } from '../components/icons.jsx';
 
-// Sector photography, hotlinked from Pexels (verified live, checked for
-// unwanted third-party branding before use — see the marketing-media-refresh
-// PR description for the full sourcing note).
 const PHOTO = {
-  heroTruck: 'https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=1920',
-  port: 'https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=1600',
-  warehouse: 'https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=1600',
+  hero: 'https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=1920',
+  port: 'https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=1920',
 };
 
-const EQUIPMENT_ICONS = {
-  CONTAINER_CHASSIS: IconPackage, TRAILER_WITH_GENSET: IconPackage, LOWBED_TRAILER: IconTrailer, FLATBED_TRAILER: IconTrailer,
-  TRAILER_20FT: IconPackage, TRAILER_40FT: IconPackage,
-  BOX_TRUCK: IconTruck, CURTAIN_TRUCK: IconTruck, FLATBED_TRUCK: IconTruck, REEFER_TRUCK: IconTruck,
-  PICKUP_3T: IconTruck, PICKUP_5T: IconTruck, PICKUP_7T: IconTruck,
-  PICKUP_10T: IconTruck, SIDE_LOADER_TRAILER: IconLayers, TRIPPER: IconLayers, CUSTOM: IconTruck,
-};
-
-const HOW_IT_WORKS_STEPS = [
-  { n: '01', title: 'Post the job', body: 'Equipment, terminal, delivery address, deadline, target price — one form, structured instantly. No back-and-forth to get a job in front of transporters.', icon: <IconPackage size={20} /> },
-  { n: '02', title: 'Transporters bid', body: 'Verified transporters only — TRN, trade licence, and insurance checked before they ever see a load. Every bid is priced against the live Lane Index.', icon: <IconTruck size={20} /> },
-  { n: '03', title: 'Agree the terms', body: 'Accept a bid and the price locks. Payment is held for the transport automatically — no invoice to chase, no transfer to confirm by phone.', icon: <IconShield size={20} /> },
-  { n: '04', title: 'Deliver & release', body: "POD goes up, payment releases — confirm it yourself or let the 24-hour auto-release handle it. Either way, you're not calling anyone to get paid.", icon: <IconClock size={20} /> },
+const RECORD_STEPS = [
+  { id: '01', title: 'Post', body: 'Lane, equipment, time and target price become one structured requirement.', icon: IconPackage },
+  { id: '02', title: 'Discover', body: 'Verified capacity sees the load. Every response returns to the same record.', icon: IconTruck },
+  { id: '03', title: 'Award', body: 'Choose the right bid. The agreed terms and payment are locked in.', icon: IconShield },
+  { id: '04', title: 'Move', body: 'Driver, location, exceptions and documents stay visible while freight moves.', icon: IconMapPin },
+  { id: '05', title: 'Close', body: 'POD completes the record and releases payment without another chase.', icon: IconCheckCircle },
 ];
+
+const ROLE_CONTENT = {
+  shipper: {
+    eyebrow: 'For shippers', title: 'Control the movement without managing the noise.',
+    body: 'Post once, compare accountable bids and follow the load through delivery. Every decision is recorded and every party works from the same facts.',
+    points: ['Structured requirements', 'Comparable live bids', 'Protected payment', 'Permanent delivery record'], cta: 'Move a load', to: '/register',
+  },
+  transporter: {
+    eyebrow: 'For transporters', title: 'Turn available capacity into dependable work.',
+    body: 'See relevant lanes, price with context and keep drivers connected to the job. Less time negotiating in chats; more time moving profitable freight.',
+    points: ['Qualified load discovery', 'Clear lane economics', 'Driver-ready instructions', 'Faster payment release'], cta: 'Find loads', to: '/register?role=CARRIER',
+  },
+};
+
+function LoadRecord({ market }) {
+  return (
+    <div className="lb-record" aria-label="Example Loadbyton load record">
+      <div className="lb-record-head"><div><span className="lb-record-kicker">LIVE LOAD RECORD</span><h2>LBT-4821</h2></div><span className="lb-live-pill"><i /> Open for bids</span></div>
+      <div className="lb-route">
+        <div className="lb-route-place"><span>AUH</span><strong>Khalifa Port</strong><small>Pickup · Today 14:30</small></div>
+        <div className="lb-route-line"><i /><span>164 km</span><i /></div>
+        <div className="lb-route-place lb-route-place--right"><span>SHJ</span><strong>Industrial Area 10</strong><small>Delivery · Today 18:00</small></div>
+      </div>
+      <div className="lb-record-grid"><div><small>Equipment</small><strong>40FT Flatbed</strong></div><div><small>Target</small><strong>AED 2,400</strong></div><div><small>Best bid</small><strong>AED 2,350</strong></div><div><small>Responses</small><strong>3 verified</strong></div></div>
+      <div className="lb-award-row"><span className="lb-company-mark">DL</span><span><strong>Desert Line Haulage</strong><small><IconShield size={12} /> Verified · 67 jobs · 4.9</small></span><strong>AED 2,350</strong></div>
+      <div className="lb-record-foot"><span><IconClock size={14} /> Bid received 2 min ago</span><span>{market?.openJobsNow ?? '—'} open loads now</span></div>
+    </div>
+  );
+}
+
+function ChannelDemo() {
+  const [channel, setChannel] = useState('web');
+  const copy = {
+    web: ['Operations desk', 'Full load record', 'Compare bids, documents, tracking and payment in one dense workspace.'],
+    mobile: ['Driver view', 'One next action', 'Pickup context first, large controls and no irrelevant office detail.'],
+    whatsapp: ['WhatsApp connected', 'A channel, not the database', 'Offers and driver replies flow back into LBT-4821 automatically.'],
+  }[channel];
+  return (
+    <div className="lb-channel-demo">
+      <div className="lb-channel-tabs" role="tablist" aria-label="Loadbyton operating surfaces">
+        {['web', 'mobile', 'whatsapp'].map((item) => <button key={item} type="button" role="tab" aria-selected={channel === item} onClick={() => setChannel(item)}>{item === 'web' ? 'Web app' : item === 'mobile' ? 'Mobile' : 'WhatsApp'}</button>)}
+      </div>
+      <div className={`lb-channel-screen lb-channel-screen--${channel}`}>
+        <div className="lb-channel-chrome"><i /><i /><i /><span>loadbyton / LBT-4821</span></div>
+        <div className="lb-channel-body"><div className="lb-channel-copy"><span>{copy[0]}</span><h3>{copy[1]}</h3><p>{copy[2]}</p></div><div className="lb-mini-timeline"><span className="done"><IconCheck size={13} /> Load posted</span><span className="done"><IconCheck size={13} /> Bid awarded</span><span className="active"><IconTruck size={14} /> Driver en route</span><span><IconFile size={14} /> POD pending</span></div></div>
+      </div>
+    </div>
+  );
+}
 
 export default function Landing() {
   usePageTitle('');
-  const { t } = useLocale();
-  const [carriers, setCarriers] = useState([]);
-  const [market, setMarket] = useState(null);
-  const [lanes, setLanes] = useState([]);
-  // Magnetic pull, opt-in per primary CTA (see lib/motion.js) — a hook
-  // call per element, not per .map() iteration, since these three are
-  // fixed, named CTAs, not a data-driven list.
-  const heroCtaRef = useMagnetic();
-  const volumeCtaRef = useMagnetic();
-  const bottomCtaRef = useMagnetic();
-  const heroSectionRef = useRef(null);
-
+  const [market, setMarket] = useState(null); const [lanes, setLanes] = useState([]); const [carriers, setCarriers] = useState([]); const [role, setRole] = useState('shipper');
+  const heroRef = useRef(null); const heroCtaRef = useMagnetic(); const finalCtaRef = useMagnetic();
   useEffect(() => {
-    api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 4))).catch(() => {});
     api.publicMarket().then((d) => setMarket(d.market)).catch(() => {});
-    // GET /api/public/lanes — the unified lane index was built server-side
-    // (server/lib/lanes.js) but, before this redesign pass, no page ever
-    // called it; the "Lane Index" copy elsewhere on this page was static
-    // marketing text, not real numbers. This is that data, live.
     api.publicLanes().then((d) => setLanes(d.lanes.slice(0, 4))).catch(() => {});
+    api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 3))).catch(() => {});
   }, []);
-
+  const roleCopy = ROLE_CONTENT[role];
   return (
-    <div>
-      {/* Hero — split, not centered. Left: thesis, set over a real photo of
-          the sector. Right: the actual product narrative (post -> bid ->
-          agree -> deliver), following one concrete example end to end —
-          restrained cross-fade between real UI states, not a decorative
-          animation; auto-advances, pauses on hover/focus, and falls back to
-          a single static panel under prefers-reduced-motion. See
-          HeroNarrative.jsx. The "no instant-matching framing" direction
-          stays: every step is a real, distinct stage the product actually
-          has, never a single "matched instantly" moment. */}
-      <div ref={heroSectionRef}>
-      <MediaBackground src={PHOTO.heroTruck} overlay="side" alt="">
-        <div className="container-page grid gap-12 py-16 lg:grid-cols-[1.05fr,0.95fr] lg:py-24">
-          <div className="flex flex-col justify-center">
-            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white md:text-5xl">
-              {t('landing.hero.title')}
-            </h1>
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-white/80 md:text-lg">
-              {t('landing.hero.subtitle')}
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link ref={heroCtaRef} to="/register" className="btn-accent btn-shine rounded-full px-6 py-3 text-base">
-                {t('landing.hero.ctaShipper')} <IconArrowRight size={18} className="btn-arrow-nudge" />
-              </Link>
-              <Link
-                to="/register?role=CARRIER"
-                className="btn rounded-full px-6 py-3 text-base"
-                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff' }}
-              >
-                {t('landing.hero.ctaCarrier')}
-              </Link>
-            </div>
-            <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 text-sm text-white/70">
-              <span className="inline-flex items-center gap-1.5"><IconShield size={16} /> {t('landing.hero.verified')}</span>
-              <span className="inline-flex items-center gap-1.5"><IconClock size={16} /> {t('landing.hero.autoRelease', 'Payment releases automatically in {hours}h', { hours: 24 })}</span>
-              <span className="inline-flex items-center gap-1.5"><IconCompass size={16} /> {t('landing.hero.coverage')}</span>
-            </div>
-          </div>
-
-          <div className="flex items-center">
-            <div className="w-full overflow-hidden rounded-xl border shadow-lg" style={{ borderColor: 'var(--border-default)', background: 'var(--lb-ink-900)' }}>
-              <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                <p className="font-display text-sm font-semibold text-white">Example load, open for bids</p>
-                {/* #FF7A70 literal, not a semantic token — this badge sits
-                    on the hero card, which (like the sidebar) is fixed dark
-                    chrome in both themes, so it needs a color chosen for
-                    that fixed dark background rather than whatever the
-                    current theme's accent token resolves to. Was
-                    var(--lb-orange-500) (#E53935): 2.81:1 against this
-                    badge's actual composited background (its own 20%-alpha
-                    orange over the dark card), below WCAG AA's 4.5:1.
-                    #FF7A70 (the existing --brand-accent-hover dark-mode
-                    value) measures 4.68:1 against the same background. */}
-                <span className="badge" style={{ background: 'rgba(242,96,12,0.2)', color: '#FF7A70' }}>Sample</span>
-              </div>
-
-              <HeroNarrative />
-
-              <div className="grid grid-cols-3 gap-px px-5 py-4" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                {[
-                  ['Open loads now', market?.openJobsNow ?? '—'],
-                  ['Take rate', market?.takeRate ?? '—'],
-                  ['UAE TEU / yr', market ? `${(market.teu2024 / 1e6).toFixed(1)}M` : '—'],
-                ].map(([label, value]) => (
-                  <div key={label} className="px-1 py-1 text-center">
-                    <p className="tabular font-display text-base font-semibold text-white">{value}</p>
-                    {/* Was text-white/50 — axe-core measured 4.34:1 against
-                        this card's actual composited background (the stat
-                        row's own rgba(255,255,255,0.06) overlay lightens it
-                        slightly beyond the card's base --lb-ink-900), below
-                        WCAG AA's 4.5:1. /60 matches the opacity already used
-                        for equivalent secondary text on this same dark-panel
-                        pattern elsewhere on this page. */}
-                    <p className="mt-0.5 text-[11px] text-white/60">{label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </MediaBackground>
-      </div>
-
-      {/* Everything below is still English-only (see lib/i18n.jsx's scope
-          note) — wrapped in dir="ltr" so untranslated sentences read
-          correctly under the Arabic locale instead of having their
-          terminal punctuation flip to the front of the line, the way
-          plain RTL inheritance does to unmarked English text. */}
-      <div dir="ltr">
-      {/* Sector photo band — a real port shot, not another icon row. Short,
-          fades into the page's own background at the bottom (fade-bottom
-          overlay) so it reads as a visual break between the hero and the
-          content sections, not another full section competing for weight. */}
-      <MediaBackground src={PHOTO.port} overlay="fade-bottom" className="h-56 md:h-72">
-        <div className="container-page flex h-full items-end pb-6">
-          <Reveal as="p" className="font-display text-sm font-semibold uppercase tracking-wide text-white/90">
-            Real UAE lanes. Real terminals. Not a diagram.
-          </Reveal>
-        </div>
-      </MediaBackground>
-
-      {/* How it works — a real sequence, numbering earns its place here. */}
-      <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page">
-          <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">One system. Zero chasing.</Reveal>
-          <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Post, bid, award, deliver — the same sequence every time, whether it's one container or a fifty-truck contract lane.</Reveal>
-          <ScrollSteps
-            className="mt-10"
-            steps={HOW_IT_WORKS_STEPS}
-            renderStep={(step) => (
-              <>
-                <div className="flex h-10 w-10 items-center justify-center rounded-md" style={{ background: 'var(--bg-raised)', color: 'var(--brand-accent)' }}>
-                  {step.icon}
-                </div>
-                <p className="tabular mt-4 text-xs font-semibold text-ink-muted">{step.n}</p>
-                <p className="mt-1 font-display text-base font-semibold text-ink">{step.title}</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{step.body}</p>
-              </>
-            )}
-          />
-        </div>
+    <div className="lb-home" dir="ltr">
+      <section ref={heroRef} className="lb-hero">
+        <img src={PHOTO.hero} alt="Freight truck operating in the UAE" className="lb-hero-photo" /><div className="lb-hero-wash" /><div className="lb-hero-grid" />
+        <div className="container-page lb-hero-inner"><div className="lb-hero-copy">
+          <p className="lb-kicker"><span>UAE FREIGHT INFRASTRUCTURE</span><i /> DXB · AUH · SHJ · FUJ</p>
+          <h1>The load exists everywhere.<br /><em>So the truth exists nowhere.</em></h1>
+          <p className="lb-hero-lede">Loadbyton replaces calls, chat threads, spreadsheets and disconnected updates with one shared operational record—from first requirement to final payment.</p>
+          <div className="lb-hero-actions"><Link ref={heroCtaRef} to="/register" className="btn-accent btn-shine">Start with one load <IconArrowRight size={18} /></Link><Link to="/for-transporters" className="lb-quiet-link">I move freight <IconArrowRight size={16} /></Link></div>
+          <div className="lb-hero-proof"><span><IconShield size={15} /> Verified network</span><span><IconClock size={15} /> 24h auto-release</span><span><IconMapPin size={15} /> UAE-wide lanes</span></div>
+        </div><LoadRecord market={market} /></div><div className="lb-hero-index"><span>01</span><i /><span>ONE RECORD</span></div>
       </section>
 
-      {/* Equipment coverage — not just containers. A scrolling strip, not a
-          12-card wall: the point is "we cover more than containers," not an
-          inventory listing every class by name. */}
-      <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page">
-          <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">Every truck class. <span style={{ color: 'var(--brand-accent)' }}>One platform.</span></Reveal>
-          <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">From container chassis to ten-tonne pickups, matched and priced the same way, every time.</Reveal>
-        </div>
-        <Reveal delay={80} className="relative mt-8 overflow-hidden py-1" style={{ maskImage: 'linear-gradient(to right, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(to right, transparent, black 8%, black 92%, transparent)' }}>
-          <div className="animate-marquee flex w-max items-center gap-3">
-            {[...EQUIPMENT_TYPES, ...EQUIPMENT_TYPES].map((t, i) => {
-              const EqIcon = EQUIPMENT_ICONS[t] || IconTruck;
-              return (
-                <span key={i} className="flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium text-ink-secondary" style={{ borderColor: 'var(--border-default)' }}>
-                  <EqIcon size={16} style={{ color: 'var(--brand-accent)' }} /> {equipmentLabel(t)}
-                </span>
-              );
-            })}
-          </div>
-        </Reveal>
-      </section>
+      <section className="lb-noise-section"><div className="container-page lb-two-col">
+        <Reveal className="lb-section-copy"><span className="lb-section-no">01 / THE PROBLEM</span><h2>Freight does not fail from lack of communication.</h2><p>It fails because the communication has no shared structure. One load becomes twelve conversations, three spreadsheets and several versions of what is true.</p></Reveal>
+        <Reveal delay={100} className="lb-noise-stack" aria-label="Example fragmented freight messages"><div className="lb-message lb-message--one"><span>WHATSAPP · 09:12</span><strong>Driver reached?</strong><p>He said 20 mins but terminal says no booking.</p></div><div className="lb-message lb-message--two"><span>OPERATIONS · 09:17</span><strong>Which rate was final?</strong><p>I have AED 2,400. Accounts has AED 2,550.</p></div><div className="lb-message lb-message--three"><span>ACCOUNTS · 09:24</span><strong>POD still missing</strong><p>Cannot release payment without the signed copy.</p></div><div className="lb-noise-resolution"><IconMessage size={18} /><span>12 messages</span><IconArrowRight size={16} /><strong>1 load record</strong></div></Reveal>
+      </div></section>
 
-      {/* UAE coverage — explicitly not Jebel-Ali-only. A stat, not a roll
-          call of every terminal by name: the claim is "the whole UAE," and
-          three numbers make that case faster than six labeled cards do. */}
-      <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page">
-          <div className="grid items-center gap-8 lg:grid-cols-[1.1fr,0.9fr]">
-            <div>
-              <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">Built for the whole UAE <span style={{ color: 'var(--brand-accent)' }}>— not just Dubai.</span></Reveal>
-              <Reveal as="p" delay={40} className="mt-2 max-w-md text-sm text-ink-muted">Post a job from Fujairah Port the same way you'd post one from Jebel Ali — same payment protection, same bidding, same rules.</Reveal>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                ['4', 'Emirates'],
-                ['6', 'Terminals'],
-                ['1', 'Lane Index'],
-              ].map(([value, label], i) => (
-                <Reveal key={label} delay={i * 60} className="card p-4 text-center">
-                  <p className="tabular font-display text-3xl font-bold" style={{ color: 'var(--brand-accent)' }}>{value}</p>
-                  <p className="mt-1 text-xs font-medium text-ink-muted">{label}</p>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      <section className="lb-record-section"><div className="container-page"><Reveal className="lb-section-heading"><span className="lb-section-no">02 / THE SYSTEM</span><h2>One load. One permanent operational truth.</h2><p>Every stage adds context to the same record instead of starting another conversation.</p></Reveal><div className="lb-record-steps">{RECORD_STEPS.map((step, index) => <Reveal key={step.id} delay={index * 70} className="lb-record-step"><div className="lb-step-top"><span>{step.id}</span><step.icon size={20} /></div><h3>{step.title}</h3><p>{step.body}</p><i className="lb-step-rail" /></Reveal>)}</div></div></section>
 
-      {/* Live Lane Index preview — real data from GET /api/public/lanes,
-          not just the "1 Lane Index" stat card above claiming it exists. */}
-      {lanes.length > 0 && (
-        <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
-          <div className="container-page">
-            <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">The Lane Index — live, not a quote you have to ask for.</Reveal>
-            <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Base price, distance, and on-time performance for real UAE lanes, updated as jobs complete.</Reveal>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {lanes.map((l, i) => (
-                <Reveal key={l.laneId} delay={i * 60} className="card p-4">
-                  <p className="text-sm font-semibold text-ink">{formatLabel(l.terminal)} → {formatLabel(l.area)}</p>
-                  <p className="tabular mt-2 font-display text-xl font-bold" style={{ color: 'var(--brand-accent)' }}>{formatAED(l.basePriceAed)}</p>
-                  <p className="mt-1 font-mono text-xs text-ink-muted">{l.distanceKm} km · {l.onTimePct}% on-time</p>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      <section className="lb-role-section"><div className="container-page lb-role-grid">
+        <Reveal className="lb-role-panel"><div className="lb-role-switch" role="tablist" aria-label="Choose your role">{Object.keys(ROLE_CONTENT).map((key) => <button key={key} role="tab" aria-selected={role === key} onClick={() => setRole(key)}>{key === 'shipper' ? 'I ship freight' : 'I move freight'}</button>)}</div><span className="lb-section-no">{roleCopy.eyebrow}</span><h2>{roleCopy.title}</h2><p>{roleCopy.body}</p><ul>{roleCopy.points.map((point) => <li key={point}><IconCheck size={15} /> {point}</li>)}</ul><Link to={roleCopy.to} className="btn-primary">{roleCopy.cta} <IconArrowRight size={17} /></Link></Reveal>
+        <Reveal delay={100} className="lb-role-visual"><div className="lb-role-map"><span>JEBEL ALI</span><i /><span>AL QUOZ</span></div><div className="lb-role-card lb-role-card--main"><small>ACTIVE MOVEMENT</small><strong>Container · 40FT</strong><p>Jebel Ali → Al Quoz</p><span><IconTruck size={15} /> Driver en route · 34 min</span></div><div className="lb-role-card lb-role-card--status"><IconCheckCircle size={18} /><span><strong>Terms locked</strong><small>AED 1,850 · Protected</small></span></div><div className="lb-role-card lb-role-card--driver"><span className="lb-avatar">MK</span><span><strong>Mohammed K.</strong><small>Location updated now</small></span></div></Reveal>
+      </div></section>
 
-      {/* Volume & enterprise CTA band */}
-      <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page">
-          <Reveal
-            className="group relative flex flex-col items-start justify-between gap-6 overflow-hidden rounded-2xl border px-8 py-10 transition-shadow duration-300 hover:shadow-lg sm:flex-row sm:items-center"
-            style={{ borderColor: 'var(--border-default)', background: 'linear-gradient(135deg, color-mix(in srgb, var(--brand-accent) 10%, var(--bg-surface)), var(--bg-surface) 65%)' }}
-          >
-            <IconLayers
-              size={150}
-              className="pointer-events-none absolute -right-6 -top-8 transition-transform duration-500 ease-out group-hover:-translate-y-1 group-hover:rotate-6"
-              style={{ color: 'var(--brand-accent)', opacity: 0.12 }}
-            />
-            <div className="relative">
-              <span className="badge" style={{ background: 'color-mix(in srgb, var(--brand-accent) 16%, transparent)', color: 'var(--brand-accent-on-tint)' }}>Volume inquiry</span>
-              <p className="mt-3 font-display text-xl font-semibold text-ink">Ten containers or five trucks — one job, not ten conversations.</p>
-              <p className="mt-1 max-w-lg text-sm text-ink-muted">State the count once. Transporters bid to cover the whole batch at one agreed price — no unit-by-unit negotiation, no separate thread per truck.</p>
-            </div>
-            <Link ref={volumeCtaRef} to="/register" className="btn-accent btn-shine relative shrink-0 rounded-full px-6 py-3 text-base transition-transform duration-200 group-hover:scale-[1.03]">
-              Post a volume inquiry <IconArrowRight size={18} />
-            </Link>
-          </Reveal>
-        </div>
-      </section>
+      <section className="lb-surfaces-section"><div className="container-page"><Reveal className="lb-section-heading lb-section-heading--light"><span className="lb-section-no">03 / EVERYWHERE THE WORK HAPPENS</span><h2>Different surfaces. The same load.</h2><p>Office teams, drivers and WhatsApp users see the right level of detail without creating parallel versions of the job.</p></Reveal><Reveal delay={80}><ChannelDemo /></Reveal></div></section>
 
-      {/* Transporter directory */}
-      <section className="border-b py-16" style={{ borderColor: 'var(--border-default)' }}>
-        <div className="container-page">
-          <div className="flex items-end justify-between">
-            <div>
-              <Reveal as="h2" className="font-display text-2xl font-semibold text-ink">Transporters who show up — verified, rated, accountable.</Reveal>
-              <Reveal as="p" delay={40} className="mt-2 max-w-xl text-sm text-ink-muted">Trade licence, TRN, and insurance checked before their first bid. Ratings and job counts come from delivery history on the platform — not a phone reference.</Reveal>
-            </div>
-          </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {(carriers.length ? carriers : Array.from({ length: 4 })).map((c, i) => (
-              <Reveal key={c?.id || i} delay={(i % 4) * 60}>
-                <SpotlightCard className="card card-hover p-5">
-                  <div className="flex items-start justify-between">
-                    <p className="font-display text-sm font-semibold text-ink">{c?.name || 'Loading…'}</p>
-                    <span className="badge" style={{ background: 'var(--brand-accent-bg)', color: 'var(--brand-accent-on-tint)' }}>{c?.tier}</span>
-                  </div>
-                  <p className="mt-2 flex items-center gap-1 text-sm text-ink-secondary">
-                    <IconStar size={14} style={{ color: 'var(--brand-accent)' }} /> {c?.rating?.toFixed?.(2) ?? '—'} · {c?.completedJobs ?? 0} jobs
-                  </p>
-                  <p className="mt-1 text-xs text-ink-muted">{c ? `Fleet of ${c.fleetSize}` : ''}</p>
-                </SpotlightCard>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <section className="lb-lanes-section"><div className="container-page"><Reveal className="lb-section-heading"><span className="lb-section-no">04 / LIVE MARKET CONTEXT</span><h2>Know the lane before you negotiate it.</h2><p>Market context turns freight pricing from a phone-call opinion into an operational decision.</p></Reveal><div className="lb-lane-grid">{(lanes.length ? lanes : Array.from({ length: 4 })).map((lane, index) => <Reveal key={lane?.laneId || index} delay={index * 60} className="lb-lane-card"><span className="lb-lane-code">LN-{String(index + 1).padStart(2, '0')}</span><h3>{lane ? `${formatLabel(lane.terminal)} → ${formatLabel(lane.area)}` : 'Live lane loading…'}</h3><strong>{lane ? formatAED(lane.basePriceAed) : '—'}</strong><div><span>{lane ? `${lane.distanceKm} km` : 'Distance'}</span><span>{lane ? `${lane.onTimePct}% on-time` : 'Performance'}</span></div></Reveal>)}</div><div className="lb-network-proof"><span><strong>{market ? `${(market.teu2024 / 1e6).toFixed(1)}M` : '—'}</strong> UAE TEU / year</span><span><strong>{market?.openJobsNow ?? '—'}</strong> Open loads now</span><span><strong>{carriers.length || '—'}</strong> Featured verified carriers</span></div></div></section>
 
-      {/* CTA band */}
-      <section className="py-16">
-        <div className="container-page">
-          <Reveal className="flex flex-col items-start justify-between gap-6 rounded-xl px-8 py-10 sm:flex-row sm:items-center" style={{ background: 'var(--lb-ink-900)' }}>
-            <div>
-              <p className="font-display text-xl font-semibold text-white">Run your lanes. Stop re-running the negotiation.</p>
-              <p className="mt-1 text-sm text-white/60">Save a lane's equipment, route, and terms once. Next time, it's two taps — not a new round of calls and quotes.</p>
-            </div>
-            <Link ref={bottomCtaRef} to="/register" className="btn-accent btn-shine rounded-full px-6 py-3 text-base">
-              Get started free <IconArrowRight size={18} />
-            </Link>
-          </Reveal>
-        </div>
-      </section>
-      </div>
-      <StickyMobileCta heroRef={heroSectionRef} to="/register" label={t('landing.hero.ctaShipper')} />
+      <section className="lb-industrial-break"><img src={PHOTO.port} alt="Container terminal operations" /><div className="lb-industrial-overlay" /><div className="container-page"><Reveal><span>THE MOVEMENT IS PHYSICAL.</span><h2>The operational truth should be just as real.</h2><p>Every lane. Every party. Every decision. One record that moves with the freight.</p></Reveal></div></section>
+
+      <section className="lb-final-cta"><div className="container-page"><Reveal className="lb-final-card"><span className="lb-section-no">BEGIN WITH THE NEXT MOVEMENT</span><h2>Start with one load.</h2><p>No digital-transformation project. No long implementation. Put the next real requirement into Loadbyton and let the record prove its value.</p><div><Link ref={finalCtaRef} to="/register" className="btn-accent btn-shine">Post your first load <IconArrowRight size={18} /></Link><Link to="/login" className="lb-quiet-link">Already have an account</Link></div></Reveal></div></section>
+      <StickyMobileCta heroRef={heroRef} to="/register" label="Start with one load" />
     </div>
   );
 }
