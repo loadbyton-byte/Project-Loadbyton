@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { usePageTitle } from '../../lib/seo.jsx';
 import { useLocale } from '../../lib/i18n.jsx';
-import { Button, Card, Badge, ErrorState, Stat } from '../../components/ui.jsx';
+import { Button, Card, Badge, ErrorState, Stat, Spinner } from '../../components/ui.jsx';
 import { useToasts } from '../../components/Toast.jsx';
 import { IconSync, IconCheckCircle, IconAlert, IconShield } from '../../components/icons.jsx';
 
@@ -45,7 +45,7 @@ export default function AdminLedgerVerify() {
     }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+  if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
   if (error) return <div className="container-page py-10"><ErrorState title="Couldn't load verification" description={error} onRetry={fetchData} /></div>;
 
   const valid = data?.valid === true;
@@ -58,7 +58,7 @@ export default function AdminLedgerVerify() {
           <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2"><IconShield size={24} /> {t('admin.ledgerVerify', 'Ledger Chain Verification')}</h1>
           <p className="text-ink-muted mt-1">{t('admin.ledgerVerifyDesc', 'Verify integrity of the append-only ledger hash chain')}</p>
         </div>
-        <Button onClick={runVerification} loading={verifying}><IconSync size={16} className="mr-2" /> {t('admin.runVerification', 'Run Verification')}</Button>
+        <Button onClick={runVerification} loading={verifying}><IconSync size={16} className="me-2" /> {t('admin.runVerification', 'Run Verification')}</Button>
       </div>
 
       <div className="mb-6">

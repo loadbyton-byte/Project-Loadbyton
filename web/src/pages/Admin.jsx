@@ -49,7 +49,7 @@ export default function Admin() {
   const Active = TAB_COMPONENTS[tab];
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Admin console</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Admin console</h1>
       <p className="mt-1 text-sm text-ink-muted">Verification, payment oversight, disputes, and the audit trail.</p>
       <div className="mt-6 flex gap-1 overflow-x-auto scroll-fade-x border-b" style={{ borderColor: 'var(--border-default)' }}>
         {TABS.map((t) => (

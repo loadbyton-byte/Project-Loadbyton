@@ -4,8 +4,8 @@ import { IconClose } from './icons.jsx';
 
 // Read-inline popup for the full Terms of Service — used wherever a form
 // asks for agreement (job posting, signup) so agreeing never means leaving
-// the form to a separate page and losing progress. z-[60] so it stacks
-// above a parent form modal (z-50) rather than behind it.
+// the form to a separate page and losing progress. z-modal-top so it stacks
+// above a parent form modal (z-overlay) rather than behind it.
 export default function TermsModal({ onClose }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -15,7 +15,7 @@ export default function TermsModal({ onClose }) {
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="animate-fade-in fixed inset-0 z-modal-top flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Terms of Service"

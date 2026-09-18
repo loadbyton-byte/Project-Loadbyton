@@ -56,7 +56,7 @@ export default function DocumentList({ documents, jobId, onAdd, isShipperParty, 
             <li key={d.id} className="flex items-center gap-2.5 text-sm">
               <IconFile size={14} className="shrink-0 text-ink-muted" />
               <a href={documentFileUrl(jobId, d)} target="_blank" rel="noreferrer" className="font-medium text-brand-secondary hover:underline">{d.title}</a>
-              <span className="rounded-full border px-2 py-0.5 text-xs font-medium" style={{ borderColor: 'var(--border-default)', color: 'var(--ink-muted)' }}>{DOC_TYPE_LABELS[d.doc_type] || d.doc_type}</span>
+              <span className="rounded-full border px-2 py-0.5 text-xs font-medium" style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}>{DOC_TYPE_LABELS[d.doc_type] || d.doc_type}</span>
             </li>
           ))}
         </ul>
@@ -65,7 +65,7 @@ export default function DocumentList({ documents, jobId, onAdd, isShipperParty, 
       <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
         <details className="mb-3 text-xs text-ink-muted">
           <summary className="cursor-pointer select-none font-medium text-ink-secondary">What should I upload?</summary>
-          <ul className="mt-2 space-y-1 pl-4" style={{ listStyle: 'disc' }}>
+          <ul className="mt-2 space-y-1 ps-4" style={{ listStyle: 'disc' }}>
             <li><strong>CUSTOMS</strong> — customs release/clearance paperwork for the container or cargo.</li>
             <li><strong>RECEIPT</strong> — terminal handling receipt or any charge slip tied to this job.</li>
             <li><strong>POD</strong> — proof of delivery (signed delivery note, gate pass) — usually attached automatically when you submit POD in the Actions panel.</li>

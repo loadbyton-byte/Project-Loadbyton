@@ -79,7 +79,7 @@ function VerificationTab() {
           />
           {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
         </label>
-        <div className="ml-auto flex gap-2">
+        <div className="ms-auto flex gap-2">
           <Button size="sm" disabled={selected.size === 0} loading={bulkBusy} onClick={() => bulkAct('approve')}>Approve selected</Button>
           <Button size="sm" variant="danger" disabled={selected.size === 0} loading={bulkBusy} onClick={() => bulkAct('reject')}>Reject selected</Button>
         </div>

@@ -77,6 +77,18 @@ module.exports = {
       maxWidth: {
         content: '1400px',
       },
+      // Stacking scale resolving to the --z-* tokens in src/index.css —
+      // overlay classes must use these (z-overlay, z-toast, …), never a
+      // bare numeric z-40/z-50, so layering stays a system, not a guess.
+      zIndex: {
+        raised: 'var(--z-raised)',
+        dropdown: 'var(--z-dropdown)',
+        header: 'var(--z-header)',
+        topbar: 'var(--z-topbar)',
+        overlay: 'var(--z-overlay)',
+        'modal-top': 'var(--z-modal-top)',
+        toast: 'var(--z-toast)',
+      },
     },
   },
   plugins: [],

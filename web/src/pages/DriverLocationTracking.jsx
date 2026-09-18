@@ -129,7 +129,7 @@ export default function DriverLocationTracking() {
             </div>
             <div className="flex gap-2">
               <Button variant={tracking ? 'danger' : 'primary'} onClick={tracking ? stopTracking : startTracking} disabled={!navigator.geolocation}>
-                {tracking ? (<span><IconSync size={16} className="mr-2 animate-spin" /> Stop Tracking</span>) : (<span><IconMapPin size={16} className="mr-2" /> Start Tracking</span>)}
+                {tracking ? (<span><IconSync size={16} className="me-2 animate-spin" /> Stop Tracking</span>) : (<span><IconMapPin size={16} className="me-2" /> Start Tracking</span>)}
               </Button>
             </div>
           </Card.Content>

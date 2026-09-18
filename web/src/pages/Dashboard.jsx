@@ -11,7 +11,7 @@ import {
   VEHICLE_CLASSES, vehicleClassOf, equipmentTypesForClass,
   LOCAL_EQUIPMENT, LOCAL_LENGTH_TYPES, LOCAL_BODY_TYPE_TYPES, TRUCK_LENGTH_OPTIONS_M, EQUIPMENT_BODY_TYPES, equipmentBodyTypeLabel,
 } from '../lib/constants.js';
-import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard, Skeleton } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Select, Textarea, EmptyState, ErrorState, StatusBadge, RatingPill, Pagination, BentoStat, JobCard, Skeleton, Modal, SegmentedControl } from '../components/ui.jsx';
 import { IconPlus, IconPackage, IconSearch, IconUpload, IconDownload, IconCheck, IconX, IconClose, IconArrowRight, IconTrendUp } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { parseCsv, csvRowsToJobs, downloadJobImportTemplate } from '../lib/csv.js';
@@ -326,16 +326,13 @@ export default function Dashboard() {
         </section>
       )}
 
-      {showForm && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={t('dashboard.postNewJob', 'Post a new job')} onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
-          <div className="animate-slide-up max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
-            <Card className="border-0 shadow-none">
-              <Card.Header>
-                <Card.Title className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span> {t('dashboard.postNewJob', 'Post a new job')}</Card.Title>
-                <button type="button" onClick={() => setShowForm(false)} className="rounded-full p-1.5 text-ink-muted hover:bg-surface-container hover:text-ink" aria-label="Close"><IconClose size={18} /></button>
-              </Card.Header>
-          <form onSubmit={onCreate}>
-            <Card.Content>
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        wide
+        title={<span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span>{t('dashboard.postNewJob', 'Post a new job')}</span>}
+      >
+        <form onSubmit={onCreate}>
               {/* Stepper header (Change 1b Phase E) — matches the mockup's
                   boxed step indicator: a filled accent box for the active
                   step, a checkmark for a done one, a bare number for
@@ -390,12 +387,10 @@ export default function Dashboard() {
               {postStep === 0 && (
                 <div className="sm:col-span-2">
                   <Label>Shipment direction</Label>
-                  <div className="mt-1 grid grid-cols-1 gap-1.5 rounded-lg border p-1 sm:grid-cols-3 sm:gap-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
-                    {SHIPMENT_TYPES.map((st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => {
+                  <SegmentedControl
+                    className="mt-1 sm:grid sm:grid-cols-3 sm:gap-0"
+                    value={form.shipmentType}
+                    onChange={(st) => {
                           // LOCAL never carries a container — skip the
                           // Trailer/Truck picker entirely and default into
                           // the LOCAL-only truck list; switching away from
@@ -408,14 +403,9 @@ export default function Dashboard() {
                             ...(enteringLocal ? { equipmentType: LOCAL_EQUIPMENT[0], truckLengthM: '', equipmentBodyType: '' } : {}),
                             ...(leavingLocal ? { equipmentType: 'TRAILER_20FT', truckLengthM: '', equipmentBodyType: '' } : {}),
                           });
-                        }}
-                        className={`rounded-md px-3 py-2 text-left text-sm font-semibold transition sm:text-center ${form.shipmentType === st ? 'bg-white shadow text-ink' : 'text-ink-muted hover:text-ink'}`}
-                        style={form.shipmentType === st ? { background: 'var(--bg-raised)', borderColor: 'var(--border-default)' } : {}}
-                      >
-                        {shipmentTypeLabel(st)}
-                      </button>
-                    ))}
-                  </div>
+                    }}
+                    options={SHIPMENT_TYPES.map((st) => ({ value: st, label: shipmentTypeLabel(st) }))}
+                  />
                   <p className="mt-1 text-xs text-ink-muted">
                     {form.shipmentType === 'IMPORT'
                       ? 'Container is picked at the port terminal, delivered to your customer, empty returns to depot.'
@@ -785,7 +775,7 @@ export default function Dashboard() {
                         type="file"
                         accept="application/pdf"
                         onChange={(e) => setForm({ ...form, packingList: e.target.files && e.target.files[0] ? e.target.files[0] : null })}
-                        className="mt-1 block w-full text-sm text-ink-secondary file:mr-3 file:rounded-md file:border-0 file:bg-[var(--brand-accent)] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
+                        className="mt-1 block w-full text-sm text-ink-secondary file:me-3 file:rounded-md file:border-0 file:bg-[var(--brand-accent)] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white hover:file:opacity-90"
                       />
                       <p className="mt-1 text-xs text-ink-muted">Attached to this job; the awarded transporter sees it once you confirm their bid.</p>
                     </div>
@@ -825,8 +815,7 @@ export default function Dashboard() {
 
               {error && <p className="sm:col-span-2 rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>{error}</p>}
               </div>
-            </Card.Content>
-            <Card.Footer>
+            <Card.Footer className="-mx-5 -mb-5 mt-5">
               {postStep > 0 ? (
                 <Button type="button" variant="ghost" onClick={() => { setError(''); setPostStep(postStep - 1); }}>Back</Button>
               ) : (
@@ -864,11 +853,8 @@ export default function Dashboard() {
                 <Button type="submit" loading={submitting} disabled={needsTermsCheckbox && !agreedToTerms}>Post job</Button>
               )}
             </Card.Footer>
-          </form>
-        </Card>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
       {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
 
@@ -899,11 +885,11 @@ export default function Dashboard() {
           <div className="mt-3">
             {/* Sticky filter bar (Change 1 mockup §2) — top-14 clears
                 Shell.jsx's own sticky h-14 header (mobile and desktop both),
-                z-20 keeps it below that header's z-30/z-40 so nothing
-                overlaps; the solid --bg-canvas background (the real page
+                z-dropdown keeps it below that header's z-header/z-topbar so
+                nothing overlaps; the solid --bg-canvas background (the real page
                 background token, not a card surface) stops scrolled job
                 cards from showing through underneath it. */}
-            <div className="sticky top-14 z-20 -mx-4 flex flex-wrap items-end gap-3 px-4 py-3 sm:mx-0 sm:px-0" style={{ background: 'var(--bg-canvas)' }}>
+            <div className="sticky top-14 z-dropdown -mx-4 flex flex-wrap items-end gap-3 px-4 py-3 sm:mx-0 sm:px-0" style={{ background: 'var(--bg-canvas)' }}>
               <div className="min-w-[140px]">
                 <Label htmlFor="dashboard-filter-status">{t('dashboard.filterByStatus', 'Filter by status')}</Label>
                 <Select id="dashboard-filter-status" value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full">

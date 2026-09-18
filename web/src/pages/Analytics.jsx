@@ -20,7 +20,7 @@ import { useLocale } from '../lib/i18n.jsx';
 // no charting library (the app has none today and doesn't need one at this
 // data volume).
 const STATUS_COLOR = {
-  DRAFT: 'var(--ink-muted)', OPEN: 'var(--status-info)', AWARDED: 'var(--brand-accent)',
+  DRAFT: 'var(--text-muted)', OPEN: 'var(--status-info)', AWARDED: 'var(--brand-accent)',
   PICKED_UP: 'var(--status-warning)', IN_TRANSIT: 'var(--status-warning)',
   DELIVERED: 'var(--status-success)', COMPLETED: 'var(--status-success)',
   CANCELLED: 'var(--status-danger)', DISPUTED: 'var(--status-danger)',
@@ -42,12 +42,12 @@ function MonthlyTrendChart({ months, isCarrier }) {
             <g key={m.key}>
               <rect x={x} y={chartH - h} width={barW} height={h} rx={4} fill="var(--brand-accent)" opacity={m.amountAED > 0 ? 1 : 0.15} />
               {m.amountAED > 0 && (
-                <text x={x + barW / 2} y={chartH - h - 6} textAnchor="middle" fontSize="10" fill="var(--ink-secondary)" fontFamily="var(--font-mono, monospace)">
+                <text x={x + barW / 2} y={chartH - h - 6} textAnchor="middle" fontSize="10" fill="var(--text-secondary)" fontFamily="var(--font-mono, monospace)">
                   {Math.round(m.amountAED / 1000)}k
                 </text>
               )}
-              <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize="11" fill="var(--ink-muted)">{m.label}</text>
-              <text x={x + barW / 2} y={chartH + 30} textAnchor="middle" fontSize="10" fill="var(--ink-muted)">{m.count} job{m.count === 1 ? '' : 's'}</text>
+              <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fontSize="11" fill="var(--text-muted)">{m.label}</text>
+              <text x={x + barW / 2} y={chartH + 30} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{m.count} job{m.count === 1 ? '' : 's'}</text>
             </g>
           );
         })}
@@ -66,7 +66,7 @@ function StatusBreakdownBar({ breakdown }) {
         {breakdown.map((b) => (
           <div
             key={b.status}
-            style={{ width: `${(b.count / total) * 100}%`, background: STATUS_COLOR[b.status] || 'var(--ink-muted)' }}
+            style={{ width: `${(b.count / total) * 100}%`, background: STATUS_COLOR[b.status] || 'var(--text-muted)' }}
             title={`${b.status}: ${b.count}`}
           />
         ))}
@@ -74,7 +74,7 @@ function StatusBreakdownBar({ breakdown }) {
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
         {breakdown.map((b) => (
           <span key={b.status} className="flex items-center gap-1.5 text-xs text-ink-secondary">
-            <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[b.status] || 'var(--ink-muted)' }} />
+            <span className="h-2 w-2 rounded-full" style={{ background: STATUS_COLOR[b.status] || 'var(--text-muted)' }} />
             {b.status.replaceAll('_', ' ')} <span className="tabular font-semibold text-ink">{b.count}</span>
           </span>
         ))}
@@ -127,7 +127,7 @@ export default function Analytics() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Performance</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Performance</h1>
       <p className="mt-1 text-sm text-ink-muted">
         {isCarrier ? 'Your bidding and delivery performance.' : 'Your spend and negotiation performance vs. the lane index.'}
       </p>

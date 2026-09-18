@@ -40,7 +40,7 @@ export default function Contracts() {
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-xl font-bold text-ink">Contract lanes</h1>
+          <h1 className="font-display text-2xl font-bold text-ink">Contract lanes</h1>
           <p className="mt-1 text-sm text-ink-muted">Commit monthly volume on a lane for priority transporter visibility and a discounted rate.</p>
         </div>
         <Button onClick={() => setShowForm(true)} className="shrink-0">

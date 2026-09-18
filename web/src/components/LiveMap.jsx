@@ -113,7 +113,7 @@ export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, delivery
     // isolation: isolate contains Leaflet's internal z-index scale (up to
     // 1000 for its corner controls, leaflet.css) inside this box's own
     // stacking context. Without it, those controls compete directly with
-    // page-level fixed UI like ChatPopup's z-40 floating button — at
+    // page-level fixed UI like ChatPopup's z-topbar floating button — at
     // whatever scroll position puts this map's bottom-right corner where
     // the chat button sits, Leaflet's much-higher z-index would render its
     // zoom/attribution controls on top of it.
@@ -127,7 +127,7 @@ export function LiveMap({ jobId, fallbackLat, fallbackLng, deliveryLat, delivery
           padding: 1px 6px;
           border-radius: 999px;
           margin: 0 6px 6px 0;
-          color: var(--ink-muted, #586A72);
+          color: var(--text-muted);
         }
         .lb-livemap .leaflet-control-attribution a { color: inherit; }
         .lb-livemap .leaflet-control-zoom { border: none !important; box-shadow: 0 2px 6px rgba(15,43,61,0.15) !important; }

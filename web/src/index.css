@@ -96,6 +96,10 @@
   --bg-surface: var(--lb-slate-0);
   --bg-raised: #F5F6F4;
   --bg-inverse: var(--lb-ink-900);
+  /* Alias retained for call sites that predate the raised/surface split
+     (Dashboard's shipment switcher, JobEditForm, BidForm) — a segmented
+     container fill that stays theme-aware in both modes. */
+  --bg-subtle: var(--bg-raised);
 
   /* Tonal-layering ladder used by the nested-card components (BentoStat,
      JobCard, sidebar). Existing components keep using bg-surface/bg-raised
@@ -209,6 +213,21 @@
   --motion-emphasis: 320ms;
   --motion-hero: 700ms;
   --motion-ease: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Stacking scale — every overlay in the app resolves against these, so
+     the next dialog/drawer/toast is safe by default instead of guessing a
+     number: raised (sticky bits inside panels) < dropdown < header <
+     topbar/chat < overlay (modals, drawer) < modal-top/toast. Wired into
+     Tailwind as z-raised/z-dropdown/z-header/z-topbar/z-overlay/
+     z-modal-top/z-toast (see tailwind.config.js) — use those, never a
+     bare z-40/z-50. Theme-independent: no dark override. */
+  --z-raised: 10;
+  --z-dropdown: 20;
+  --z-header: 30;
+  --z-topbar: 40;
+  --z-overlay: 50;
+  --z-modal-top: 60;
+  --z-toast: 60;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -483,7 +502,10 @@ html[lang="ar"] h1, html[lang="ar"] h2, html[lang="ar"] h3, html[lang="ar"] h4, 
   50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--brand-accent) 0%, transparent); }
 }
 .animate-chat-glow {
-  animation: chat-fab-glow 2s ease-out infinite;
+  /* 10 iterations (~20s), not infinite: long enough to catch the eye on
+     arrival, then rests at the static unread dot instead of compositing a
+     box-shadow pulse forever — including in backgrounded tabs. */
+  animation: chat-fab-glow 2s ease-out 10;
 }
 
 /* ChatBubble (ui.jsx, shared by ChatPopup.jsx and pages/Messages.jsx) —
@@ -1112,7 +1134,7 @@ html[dir="rtl"] .animate-drawer-in {
     gap: 12px;
     max-width: calc(100vw - 32px);
     pointer-events: none;
-    z-index: 60;
+    z-index: var(--z-toast);
   }
 
   .toast {
@@ -1620,13 +1642,15 @@ td.tabular, td .tabular, th.tabular { font-variant-numeric: tabular-nums; }
 
 /* ---- dialogs / sheets / command palette ---------------------------- */
 [role="dialog"] { letter-spacing: 0.005em; }
-.fixed.inset-0.z-50 .relative.w-full.max-w-lg {
+/* Hook class (not a Tailwind-utility selector — those confuse the @apply
+   pass) shared by every Modal panel, default and wide alike. */
+.lb-modal-panel {
   border-radius: 20px !important;
   border: 1px solid var(--border-default) !important;
   box-shadow: 0 30px 80px -20px rgba(10,26,36,0.5) !important;
   overflow: hidden;
 }
-.fixed.inset-0.z-50 .relative.w-full.max-w-lg::before {
+.lb-modal-panel::before {
   content: '';
   display: block;
   height: 3px;

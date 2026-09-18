@@ -85,7 +85,7 @@ export default function JobHistory() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">Job History</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">Job History</h1>
       <p className="mt-1 text-sm text-ink-muted">Every job you've posted — price, timing, and the documents tied to each one.</p>
 
       <Card className="mt-5 p-5">

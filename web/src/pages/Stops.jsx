@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { Button, Input, Label, Card, Badge, Modal, Select } from '../components/ui.jsx';
+import { Button, Input, Label, Card, Badge, Modal, Select, Spinner } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
@@ -140,7 +140,7 @@ export default function Stops() {
   const canComplete = job && ['PICKED_UP', 'IN_TRANSIT'].includes(job.status);
 
   if (loading) {
-    return <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" /></div>;
+    return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
   }
 
   if (!job) {
@@ -160,7 +160,7 @@ export default function Stops() {
           <h1 className="font-display text-2xl font-bold text-ink">{t('stops.title', 'Job Stops')}</h1>
           <p className="text-ink-muted mt-1">{job.job_code} · {job.pickup_terminal} → {job.delivery_area}</p>
         </div>
-        {canEdit && <Button onClick={openCreateModal}><IconPlus size={16} className="mr-2" /> {t('stops.addStop', 'Add Stop')}</Button>}
+        {canEdit && <Button onClick={openCreateModal}><IconPlus size={16} className="me-2" /> {t('stops.addStop', 'Add Stop')}</Button>}
       </div>
 
       <div className="mb-4 p-4 rounded-lg" style={{ background: 'var(--surface-container-high)' }}>
@@ -185,7 +185,7 @@ export default function Stops() {
           <IconMapPin size={48} className="mx-auto text-ink-muted mb-4" />
           <h3 className="font-semibold text-ink mb-2">{t('stops.noStops', 'No stops defined')}</h3>
           <p className="text-ink-muted mb-6">{t('stops.noStopsDesc', 'Add pickup, delivery, and intermediate stops for this job')}</p>
-          {canEdit && <Button onClick={openCreateModal}><IconPlus size={16} className="mr-2" /> {t('stops.addFirstStop', 'Add First Stop')}</Button>}
+          {canEdit && <Button onClick={openCreateModal}><IconPlus size={16} className="me-2" /> {t('stops.addFirstStop', 'Add First Stop')}</Button>}
         </Card>
       ) : (
         <div className="space-y-3">
@@ -223,7 +223,7 @@ export default function Stops() {
                   )}
                   {canComplete && !stop.completed_at && (
                     <Button variant="secondary" size="sm" onClick={() => handleComplete(stop)}>
-                      <IconCheckCircle size={14} className="mr-1" /> {t('stops.complete', 'Complete')}
+                      <IconCheckCircle size={14} className="me-1" /> {t('stops.complete', 'Complete')}
                     </Button>
                   )}
                   {canEdit && !stop.completed_at && (

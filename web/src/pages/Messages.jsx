@@ -119,7 +119,7 @@ export default function Messages() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="flex items-center gap-2 font-display text-xl font-bold text-ink">
+      <h1 className="flex items-center gap-2 font-display text-2xl font-bold text-ink">
         <span className="flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}>
           <IconChat size={16} />
         </span>
@@ -164,7 +164,7 @@ export default function Messages() {
                   key={row.id}
                   type="button"
                   onClick={() => openThread(row)}
-                  className={`animate-thread-row-in flex w-full items-start gap-2.5 p-3.5 transition-all duration-150 hover:z-10 hover:scale-[1.015] hover:bg-surface-container hover:shadow-md ${isRtl ? 'origin-right border-r-[3px] text-right' : 'origin-left border-l-[3px] text-left'}`}
+                  className={`animate-thread-row-in flex w-full items-start gap-2.5 p-3.5 transition-colors duration-150 hover:bg-surface-container ${isRtl ? 'border-r-[3px] text-right' : 'border-l-[3px] text-left'}`}
                   style={{
                     '--msg-delay': `${Math.min(i * 30, 240)}ms`,
                     ...(isRtl

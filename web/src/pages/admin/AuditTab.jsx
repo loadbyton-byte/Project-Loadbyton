@@ -39,7 +39,7 @@ function AuditTab() {
         </table>
       </div>
       <p className="border-t px-5 py-3 text-xs text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
-        <IconCheck size={12} className="mr-1 inline" /> Append-only — the database rejects any UPDATE or DELETE on this table.
+        <IconCheck size={12} className="me-1 inline" /> Append-only — the database rejects any UPDATE or DELETE on this table.
       </p>
     </Card>
   );

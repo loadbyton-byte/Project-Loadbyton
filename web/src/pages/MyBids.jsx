@@ -78,7 +78,7 @@ export default function MyBids() {
 
   return (
     <div className="container-page py-6" dir={isRtl ? 'rtl' : 'ltr'}>
-      <h1 className="font-display text-xl font-bold text-ink">My bids</h1>
+      <h1 className="font-display text-2xl font-bold text-ink">My bids</h1>
       <p className="mt-1 text-sm text-ink-muted">Your competitive quotes on open loads.</p>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
