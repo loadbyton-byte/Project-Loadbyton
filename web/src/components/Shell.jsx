@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, homePath } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
@@ -297,6 +297,7 @@ function ShellInner({ children }) {
   const { user, logout, theme, setTheme, walkthroughFinished, walkthroughStep, completeWalkthrough, setWalkthroughStep, endImpersonation, actingAs } = useAuth();
   const { locale, setLocale, t } = useLocale();
   const navigate = useNavigate();
+  const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [endingImpersonation, setEndingImpersonation] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
@@ -471,7 +472,7 @@ function ShellInner({ children }) {
           restructure; this stays the nav for narrow widths since it already
           works well there. */}
       <header
-        className="sticky top-0 z-40 border-b backdrop-blur-md md:hidden"
+        className="app-mobile-bar sticky top-0 z-40 border-b backdrop-blur-md md:hidden"
         style={{
           borderColor: 'var(--border-subtle)',
           backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)',
@@ -618,7 +619,7 @@ function ShellInner({ children }) {
             navByRole's per-role link data, no new routing logic. */}
         {user && (
           <aside
-            className="app-sidebar hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
+            className="app-sidebar hidden md:sticky md:top-0 md:flex md:h-dvh md:w-[272px] md:shrink-0 md:flex-col"
             style={{ background: 'var(--sidebar-bg)' }}
           >
             <div className="flex h-14 items-center px-5">
@@ -715,7 +716,7 @@ function ShellInner({ children }) {
               notifications bell, since role nav already lives in the
               sidebar. */}
           <header
-            className="app-topbar sticky top-0 z-30 hidden h-14 items-center justify-between border-b px-6 backdrop-blur-md md:flex"
+            className="app-topbar sticky top-0 z-30 hidden h-16 items-center justify-between border-b px-6 backdrop-blur-md md:flex"
             style={{ borderColor: 'var(--border-subtle)', backgroundColor: 'color-mix(in srgb, var(--bg-surface) 85%, transparent)' }}
           >
             {user ? (
@@ -756,10 +757,10 @@ function ShellInner({ children }) {
             )}
           </header>
 
-          <main className="app-main flex-1">{children}</main>
+          <main className="app-main flex-1" data-route={location.pathname}>{children}</main>
 
           {!user && (
-            <footer className="border-t" style={{ borderColor: 'var(--border-default)' }}>
+            <footer className="marketing-footer border-t" style={{ borderColor: 'var(--border-default)' }}>
               <div className="container-page flex flex-col gap-6 py-10 sm:flex-row sm:items-center sm:justify-between">
                 <Logo />
                 <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-muted">

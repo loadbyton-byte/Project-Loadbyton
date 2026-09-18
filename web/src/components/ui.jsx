@@ -30,7 +30,7 @@ export function Button({ variant = 'primary', size = 'md', className, children, 
 // ------------------------------------------------------------------ Card
 export function Card({ className, children, ...props }) {
   return (
-    <div className={cx('card', className)} {...props}>
+    <div className={cx('card app-surface', className)} {...props}>
       {children}
     </div>
   );
@@ -301,8 +301,8 @@ export function Skeleton({ variant = 'text', count = 3, className }) {
 // ------------------------------------------------------------ EmptyState
 export function EmptyState({ icon, title, description, action, className }) {
   return (
-    <div className={cx('flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center', className)} style={{ borderColor: 'var(--border-strong)' }}>
-      {icon && <div className="text-ink-muted">{icon}</div>}
+    <div className={cx('empty-state flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-14 text-center', className)} style={{ borderColor: 'var(--border-strong)' }}>
+      {icon && <div className="empty-state-icon text-ink-muted">{icon}</div>}
       <div>
         <p className="font-display text-base font-semibold text-ink">{title}</p>
         {description && <p className="mt-1 max-w-sm text-sm text-ink-muted">{description}</p>}
@@ -334,7 +334,7 @@ export function ErrorState({ title = 'Couldn’t load this', description, onRetr
 // ------------------------------------------------------------------ Stat
 export function Stat({ label, value, sub, tone = 'default' }) {
   return (
-    <div className="card p-4">
+    <div className="card app-stat p-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{label}</p>
       <p className={cx('tabular mt-1.5 font-display text-3xl font-bold tracking-tight', tone === 'accent' ? 'text-brand-accent' : 'text-ink')}>{value}</p>
       {sub && <p className="mt-1 text-xs text-ink-muted">{sub}</p>}
