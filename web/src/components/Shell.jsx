@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, homePath } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
@@ -757,7 +758,20 @@ function ShellInner({ children }) {
             )}
           </header>
 
-          <main className="app-main flex-1" data-route={location.pathname}>{children}</main>
+          <main className="app-main flex-1" data-route={location.pathname}>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={location.pathname}
+                className="route-stage"
+                initial={{ opacity: 0, y: 8, filter: 'blur(3px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={{ opacity: 0, y: -4, filter: 'blur(2px)' }}
+                transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </main>
 
           {!user && (
             <footer className="marketing-footer border-t" style={{ borderColor: 'var(--border-default)' }}>
