@@ -1313,6 +1313,588 @@ html[dir="rtl"] .animate-drawer-in {
   to { transform: translateX(120%); }
 }
 
+/* ================================================================== */
+/* LOADBYTON VISUAL UPGRADE — freight-operational premium layer        */
+/* ------------------------------------------------------------------ */
+/* Additive only: every token name, class name and keyframe above is   */
+/* preserved byte-for-byte so all routes, APIs, auth and functionality */
+/* keep working unchanged. What follows overrides the *rendered* look  */
+/* of those same primitives (cards, buttons, inputs, badges, tables,  */
+/* header, sidebar, drawer, footer, dialogs, toasts, empty/loading/    */
+/* error states) and adds the choreography vocabulary informed by the  */
+/* reference audit (Aceternity floating nav / magnetic CTA / moving    */
+/* borders / focus cards; MagicUI shimmer + border beams + marquee;    */
+/* ReUI app-shell density + timeline + stats; shadcn/Origin/Kokonut /  */
+/* Preline/HyperUI/Float interaction patterns; SVGator route motion;   */
+/* Jitter notification rhythm; AnimateUI/Animata staging; Framer/21st  */
+/* editorial pacing) — translated into freight specificity: lane,      */
+/* equipment, terminal grids, route lines, load tickets, live state.   */
+/* No new dependencies, no new routes, no logic changes.               */
+/* ================================================================== */
+
+:root {
+  --lb-ember-bright: #FF6A3D;
+  --lb-ember-deep: #B71C1C;
+  --lb-accent-gradient: linear-gradient(135deg, #FF6A3D 0%, var(--brand-accent) 45%, #B71C1C 100%);
+  --lb-navy-gradient: linear-gradient(160deg, #0A1A24 0%, #0F2B3D 55%, #1A3A52 100%);
+  --lb-grid-line: color-mix(in srgb, var(--lb-ink-900) 7%, transparent);
+  --lb-grid-line-dark: rgba(255, 255, 255, 0.06);
+  --lb-hairline: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  --lb-card-shadow: 0 1px 2px rgba(10, 26, 36, 0.06), 0 8px 24px -8px rgba(10, 26, 36, 0.14);
+  --lb-card-shadow-hover: 0 2px 4px rgba(10, 26, 36, 0.07), 0 18px 44px -12px rgba(10, 26, 36, 0.24);
+  --lb-accent-shadow: 0 8px 22px -8px color-mix(in srgb, var(--brand-accent) 65%, transparent);
+  --lb-ink-shadow: 0 10px 28px -10px rgba(10, 26, 36, 0.5);
+  --lb-ring: 0 0 0 3px color-mix(in srgb, var(--brand-secondary) 28%, transparent);
+}
+
+/* ---- canvas: warm operational paper — main's logistics grid as the base,
+   premium radial glows layered above it (multi-layer background, one rule
+   so neither side's canvas intent is lost in the merge). ------------- */
+body {
+  background-color: var(--bg-canvas);
+  background-image:
+    radial-gradient(1100px 420px at 85% -120px, color-mix(in srgb, var(--brand-accent) 7%, transparent), transparent 65%),
+    radial-gradient(900px 380px at -10% 8%, color-mix(in srgb, var(--brand-secondary) 6%, transparent), transparent 60%),
+    linear-gradient(to right, color-mix(in srgb, var(--border-subtle) 42%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--border-subtle) 42%, transparent) 1px, transparent 1px);
+  background-size: auto, auto, 40px 40px, 40px 40px;
+  background-position: center top;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at 76% 8%, color-mix(in srgb, var(--brand-secondary) 8%, transparent), transparent 31rem),
+    linear-gradient(var(--lb-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lb-grid-line) 1px, transparent 1px);
+  background-size: auto, 44px 44px, 44px 44px;
+  mask-image: radial-gradient(1200px 700px at 50% -10%, black 30%, transparent 78%);
+  -webkit-mask-image: radial-gradient(1200px 700px at 50% -10%, black 30%, transparent 78%);
+  opacity: 0.55;
+}
+:root[data-theme="dark"] body::before,
+:root:not([data-theme="light"]) body::before {
+  background-image:
+    linear-gradient(var(--lb-grid-line-dark) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lb-grid-line-dark) 1px, transparent 1px);
+  opacity: 0.5;
+}
+
+/* ---- editorial type ------------------------------------------------ */
+h1, h2, .font-display {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+::selection {
+  background: var(--brand-accent);
+  color: #fff;
+}
+:focus-visible {
+  outline: 2px solid var(--brand-secondary);
+  outline-offset: 3px;
+  box-shadow: var(--lb-ring);
+}
+
+/* ---- scrollbars: dense ops console --------------------------------- */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- section label: mono ticket tag -------------------------------- */
+.lb-section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--lb-font-mono, "JetBrains Mono", monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.lb-section-label::before {
+  content: '';
+  width: 22px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--brand-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 18%, transparent);
+}
+.lb-route-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+}
+.lb-route-divider::before, .lb-route-divider::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: repeating-linear-gradient(90deg, var(--border-strong) 0 8px, transparent 8px 14px);
+  opacity: 0.9;
+}
+.lb-route-divider > span {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ---- cards: structured load-record surfaces ------------------------ */
+@layer components {
+  .card {
+    border-radius: 16px;
+    border: 1px solid color-mix(in srgb, var(--border-default) 85%, transparent);
+    box-shadow: var(--lb-card-shadow);
+    position: relative;
+  }
+  .card-hover:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--lb-card-shadow-hover);
+  }
+  .card-interactive:hover { box-shadow: var(--lb-card-shadow-hover); }
+
+  /* moving border beam for featured surfaces (opt-in, restrained) */
+  .lb-beam {
+    position: relative;
+    isolation: isolate;
+  }
+  .lb-beam::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: conic-gradient(from var(--beam-angle, 0deg), transparent 0 72%, color-mix(in srgb, var(--brand-accent) 85%, white) 82%, transparent 92%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity var(--motion-standard) var(--motion-ease);
+    pointer-events: none;
+  }
+  .lb-beam:hover::after, .lb-beam:focus-within::after { opacity: 1; }
+  @property --beam-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  .lb-beam:hover { --beam-angle: 360deg; transition: --beam-angle 1.6s linear; }
+
+  /* ---- buttons: magnetic-ready, shine, glow ---------------------- */
+  .btn { border-radius: 12px; letter-spacing: 0.01em; }
+  .btn-accent {
+    background: var(--lb-accent-gradient);
+    box-shadow: var(--lb-accent-shadow), inset 0 1px 0 rgba(255,255,255,0.28);
+    border: 1px solid color-mix(in srgb, var(--brand-accent) 55%, #7a1010);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.18);
+  }
+  .btn-accent:hover {
+    background: linear-gradient(135deg, #ff7448 0%, var(--brand-accent-hover) 50%, #a81414 100%);
+    box-shadow: 0 12px 30px -8px color-mix(in srgb, var(--brand-accent) 75%, transparent), inset 0 1px 0 rgba(255,255,255,0.32);
+    transform: translateY(-1px);
+  }
+  .btn-accent:active { transform: translateY(0) scale(0.98); }
+  .btn-primary {
+    background: var(--lb-navy-gradient);
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: var(--lb-ink-shadow), inset 0 1px 0 rgba(255,255,255,0.14);
+    color: #fff;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 16px 34px -12px rgba(10,26,36,0.6), inset 0 1px 0 rgba(255,255,255,0.16); filter: brightness(1.12); }
+  .btn-secondary {
+    background: color-mix(in srgb, var(--bg-surface) 82%, transparent);
+    backdrop-filter: blur(6px);
+    box-shadow: var(--lb-shadow-sm);
+  }
+  .btn-secondary:hover { border-color: var(--brand-accent); box-shadow: var(--lb-card-shadow); transform: translateY(-1px); }
+
+  /* shimmer text for tiny eyebrow labels (MagicUI-inspired, freight tone) */
+  .lb-shimmer {
+    background: linear-gradient(100deg, var(--text-muted) 30%, var(--text-primary) 50%, var(--text-muted) 70%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: lb-shimmer 5s linear infinite;
+  }
+
+  /* ---- inputs: ops-console density -------------------------------- */
+  .input, .textarea, .select {
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--bg-surface) 92%, transparent);
+    box-shadow: inset 0 1px 2px rgba(10,26,36,0.05);
+    transition: border-color var(--motion-micro) ease, box-shadow var(--motion-standard) var(--motion-ease), background var(--motion-standard) ease;
+  }
+  .input:hover, .textarea:hover, .select:hover { border-color: var(--outline); }
+  .input:focus, .textarea:focus, .select:focus {
+    border-color: var(--brand-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 22%, transparent), inset 0 1px 2px rgba(10,26,36,0.04);
+  }
+  .label { font-weight: 600; letter-spacing: 0.01em; }
+
+  /* ---- badges: tag-style with live pulse --------------------------- */
+  .badge {
+    border-radius: 8px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+  }
+
+  /* ---- nav ---------------------------------------------------------- */
+  .nav-link { border-radius: 10px; }
+  .nav-link-active {
+    border-radius: 10px;
+    background: var(--lb-navy-gradient);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), var(--lb-shadow-sm);
+  }
+
+  /* ---- toasts: ops notification rhythm ------------------------------ */
+  .toast {
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--border-strong) 80%, transparent);
+    box-shadow: 0 18px 48px -12px rgba(10,26,36,0.4);
+    background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+    backdrop-filter: blur(10px);
+  }
+
+  /* ---- hero + marketing surfaces ------------------------------------- */
+  .hero-media { border-bottom: 1px solid var(--border-subtle); }
+  .media-card { border-radius: 18px; border: 1px solid rgba(255,255,255,0.14); box-shadow: var(--lb-card-shadow-hover); }
+  .card-spotlight::before {
+    background: radial-gradient(260px circle at var(--spot-x, 50%) var(--spot-y, 50%), color-mix(in srgb, var(--brand-accent) 16%, transparent), transparent 72%);
+  }
+}
+
+/* ---- global data tables: every authenticated list, one language ---- */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13.5px;
+}
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  text-align: left;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-raised) 88%, transparent);
+  backdrop-filter: blur(6px);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+thead th:first-child { border-top-left-radius: 12px; }
+thead th:last-child { border-top-right-radius: 12px; }
+tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+tbody tr { transition: background var(--motion-micro) ease; }
+tbody tr:hover { background: color-mix(in srgb, var(--brand-accent) 5%, transparent); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:last-child td:first-child { border-bottom-left-radius: 12px; }
+tbody tr:last-child td:last-child { border-bottom-right-radius: 12px; }
+td.tabular, td .tabular, th.tabular { font-variant-numeric: tabular-nums; }
+
+/* horizontal scroll wrappers get the fade cue + card frame */
+.overflow-x-auto {
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  box-shadow: var(--lb-card-shadow);
+}
+.overflow-x-auto table { border: none; }
+.overflow-x-auto:only-child, div > .overflow-x-auto { margin-block: 4px; }
+
+/* ---- dialogs / sheets / command palette ---------------------------- */
+[role="dialog"] { letter-spacing: 0.005em; }
+.fixed.inset-0.z-50 .relative.w-full.max-w-lg {
+  border-radius: 20px !important;
+  border: 1px solid var(--border-default) !important;
+  box-shadow: 0 30px 80px -20px rgba(10,26,36,0.5) !important;
+  overflow: hidden;
+}
+.fixed.inset-0.z-50 .relative.w-full.max-w-lg::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, var(--brand-accent) 0 14px, var(--lb-ink-900) 14px 22px);
+}
+
+/* ---- Loadbyton chrome: floating nav, sidebar, drawer, footer -------- */
+.lb-chrome-veil {
+  background: color-mix(in srgb, var(--bg-surface) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+.lb-top-route-line {
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--brand-accent) 0 18px, transparent 18px 28px, var(--brand-secondary) 28px 34px, transparent 34px 44px);
+  opacity: 0.9;
+}
+.lb-guest-pill {
+  border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
+  box-shadow: 0 10px 30px -12px rgba(10,26,36,0.25), inset 0 1px 0 rgba(255,255,255,0.6);
+  border-radius: 999px;
+}
+:root[data-theme="dark"] .lb-guest-pill { box-shadow: 0 10px 30px -12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08); }
+
+.lb-nav-pill-active {
+  background: var(--lb-navy-gradient) !important;
+  color: #fff !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 6px 16px -8px rgba(10,26,36,0.5);
+}
+.lb-cmd-kbd {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+}
+.lb-icon-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  width: 40px;
+  border-radius: 999px;
+  color: var(--text-primary);
+  border: 1px solid transparent;
+  transition: background var(--motion-micro) ease, transform var(--motion-micro) ease, border-color var(--motion-micro) ease, box-shadow var(--motion-standard) ease;
+}
+.lb-icon-btn:hover { background: var(--bg-raised); border-color: var(--border-subtle); transform: translateY(-1px); box-shadow: var(--lb-shadow-sm); }
+.lb-icon-btn:active { transform: scale(0.94); }
+
+.lb-sidebar {
+  /* Base fill comes from the inline --sidebar-bg (theme-aware navy shade)
+     plus .app-sidebar's ambient gradients — this hook only adds the
+     terminal-grid overlay and edge beam, so main's chrome work stays live. */
+  position: relative;
+}
+.lb-sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(180deg, black 0%, transparent 85%);
+  -webkit-mask-image: linear-gradient(180deg, black 0%, transparent 85%);
+}
+.lb-sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 1px;
+  background: linear-gradient(180deg, var(--brand-accent), transparent 35%, transparent 65%, var(--brand-secondary));
+  opacity: 0.55;
+}
+.lb-sidebar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 10px 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.48);
+}
+.lb-sidebar-group::before {
+  content: '';
+  width: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--brand-accent);
+}
+.lb-sidebar-link { position: relative; overflow: hidden; }
+.lb-sidebar-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(200px circle at var(--spot-x, 50%) 50%, rgba(255,255,255,0.09), transparent 70%);
+  opacity: 0;
+  transition: opacity var(--motion-standard) ease;
+  pointer-events: none;
+}
+.lb-sidebar-link:hover::after { opacity: 1; }
+
+.lb-drawer-panel {
+  background: var(--lb-navy-gradient) !important;
+  color: #fff;
+  border-inline-end: 1px solid rgba(255,255,255,0.12);
+}
+.lb-drawer-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 30px 30px;
+  mask-image: linear-gradient(180deg, black, transparent 75%);
+  -webkit-mask-image: linear-gradient(180deg, black, transparent 75%);
+}
+.lb-drawer-waypoint {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--lb-ember-bright);
+  border: 1px solid color-mix(in srgb, var(--brand-accent) 45%, transparent);
+  border-radius: 6px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--brand-accent) 14%, transparent);
+}
+.lb-footer {
+  background: linear-gradient(180deg, #0A1A24 0%, #0C2333 55%, #081420 100%);
+  color: rgba(255,255,255,0.72);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.lb-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(900px 320px at 20% 0%, black, transparent 75%);
+  -webkit-mask-image: radial-gradient(900px 320px at 20% 0%, black, transparent 75%);
+}
+.lb-footer a { transition: color var(--motion-micro) ease, transform var(--motion-micro) ease; }
+.lb-footer a:hover { color: #fff; }
+.lb-footer-col h3 {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 14px;
+}
+.lb-footer-ticker {
+  border-top: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+}
+.lb-status-dot { position: relative; width: 8px; height: 8px; border-radius: 999px; background: #56D364; }
+.lb-status-dot::after { content: ''; position: absolute; inset: -4px; border-radius: inherit; border: 1px solid #56D364; animation: lb-ping 2.2s ease-out infinite; }
+
+/* ---- live-state pulse for status dots ------------------------------- */
+.badge span.rounded-full { position: relative; }
+.badge span.rounded-full::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid currentColor;
+  opacity: 0.55;
+  animation: lb-ping 2.4s ease-out infinite;
+}
+
+/* ---- auth: loads like a load ticket, not a bare card ---------------- */
+.container-page .card[class*="max-w-md"] {
+  border-radius: 22px;
+  overflow: hidden;
+}
+.container-page .card[class*="max-w-md"]::before {
+  content: 'LOADBYTON · SECURE SESSION';
+  display: block;
+  margin: -2rem -2rem 1.25rem;
+  padding: 10px 32px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: rgba(255,255,255,0.85);
+  background: repeating-linear-gradient(90deg, #0F2B3D 0 26px, #132f44 26px 28px), #0F2B3D;
+  border-bottom: 2px solid var(--brand-accent);
+}
+
+/* ---- empty / loading / error: one visual voice ---------------------- */
+@layer components {
+  .lb-state-frame {
+    border-radius: 18px;
+    border: 1.5px dashed var(--border-strong);
+    background:
+      radial-gradient(420px 160px at 50% 0%, color-mix(in srgb, var(--brand-accent) 8%, transparent), transparent 70%),
+      var(--bg-surface);
+  }
+}
+
+/* ---- skeleton shimmer ------------------------------------------------ */
+.animate-pulse { animation: lb-skeleton 1.6s ease-in-out infinite; }
+
+/* ---- keyframes -------------------------------------------------------- */
+@keyframes lb-shimmer { from { background-position: 200% 0; } to { background-position: -20% 0; } }
+@keyframes lb-ping { 0% { transform: scale(0.6); opacity: 0.9; } 80%, 100% { transform: scale(1.5); opacity: 0; } }
+@keyframes lb-skeleton { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes lb-ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.lb-ticker-track { display: flex; width: max-content; gap: 2.5rem; animation: lb-ticker 30s linear infinite; }
+.lb-ticker-track:hover { animation-play-state: paused; }
+@keyframes lb-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes lb-route-dash { to { stroke-dashoffset: -24; } }
+
+/* ---- marketing sections: editorial rhythm ----------------------------- */
+section { scroll-margin-top: 84px; }
+.hero-snapshot-bid { border-inline-start: 2px solid transparent; }
+.hero-snapshot-bid:hover { border-inline-start-color: var(--brand-accent); background: rgba(255,255,255,0.055); }
+
+/* ---- focus cards (transporters, lanes, pricing) ------------------------ */
+.card-spotlight { border-radius: 16px; }
+.card-spotlight:hover { border-color: color-mix(in srgb, var(--brand-accent) 40%, var(--border-default)); }
+
+/* ---- sticky mobile CTA ------------------------------------------------- */
+.sticky-mobile-cta {
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -12px 40px rgba(10,26,36,0.22);
+  border-top: 2px solid var(--brand-accent);
+}
+
+/* ---- reduced motion: full fallback -------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  body::before { display: none; }
+  .lb-ticker-track, .animate-marquee, .lb-shimmer { animation: none !important; }
+  .lb-beam::after { display: none; }
+  .badge span.rounded-full::after, .lb-status-dot::after { animation: none !important; }
+}
+
+/* ---- responsive tightening ----------------------------------------------- */
+@media (max-width: 640px) {
+  .card { border-radius: 14px; }
+  thead th { padding: 8px 10px; }
+  tbody td { padding: 10px; }
+  .toast { width: calc(100vw - 32px); }
+}
+/* ---- dark-mode canvas depth ----------------------------------------------- */
+:root[data-theme="dark"] body {
+  background-image:
+    radial-gradient(1100px 420px at 85% -120px, rgba(229,57,53,0.14), transparent 65%),
+    radial-gradient(900px 380px at -10% 8%, rgba(59,130,246,0.12), transparent 60%),
+    linear-gradient(to right, color-mix(in srgb, var(--border-subtle) 42%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--border-subtle) 42%, transparent) 1px, transparent 1px);
+}
+
 /* Loadbyton editorial homepage — freight-specific, cinematic and operational. */
 .lb-home { background: #f3f0e8; color: #102631; overflow: hidden; }
 .lb-home h1, .lb-home h2, .lb-home h3 { font-family: 'Geist', ui-sans-serif, sans-serif; letter-spacing: -.045em; }
