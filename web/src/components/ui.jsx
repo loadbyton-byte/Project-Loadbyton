@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { IconStar, IconMapPin, IconAlert, IconX, IconCheck, IconFile, IconPackage, IconHandshake, IconTruck, IconGavel } from './icons.jsx';
 
 function cx(...parts) {
@@ -20,19 +21,28 @@ const BUTTON_SIZES = { sm: 'btn-sm', md: '', lg: 'btn-lg' };
 
 export function Button({ variant = 'primary', size = 'md', className, children, loading, ...props }) {
   return (
-    <button className={cx(BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.primary, BUTTON_SIZES[size], className)} disabled={loading || props.disabled} {...props}>
-      {loading && <Spinner size={14} />}
-      {children}
-    </button>
+    <motion.button
+      className={cx(BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.primary, BUTTON_SIZES[size], className)}
+      disabled={loading || props.disabled}
+      whileTap={{ scale: 0.975 }}
+      transition={{ type: 'spring', stiffness: 520, damping: 32 }}
+      aria-busy={loading || undefined}
+      {...props}
+    >
+      <AnimatePresence mode="popLayout" initial={false}>
+        {loading && <motion.span key="loader" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 14 }} exit={{ opacity: 0, width: 0 }}><Spinner size={14} /></motion.span>}
+      </AnimatePresence>
+      <motion.span layout="position">{children}</motion.span>
+    </motion.button>
   );
 }
 
 // ------------------------------------------------------------------ Card
 export function Card({ className, children, ...props }) {
   return (
-    <div className={cx('card app-surface', className)} {...props}>
+    <motion.div className={cx('card app-surface', className)} whileHover={{ y: -2 }} transition={{ duration: 0.18 }} {...props}>
       {children}
-    </div>
+    </motion.div>
   );
 }
 Card.Header = function CardHeader({ className, children, ...props }) {
@@ -257,7 +267,7 @@ export function Spinner({ size = 20, className }) {
 // `className`, same as they will once real content replaces the skeleton.
 const SKELETON_BLOCK = 'rounded';
 function SkeletonBlock({ className, style }) {
-  return <div className={cx(SKELETON_BLOCK, className)} style={{ background: 'var(--surface-container-high)', ...style }} />;
+  return <div className={cx(SKELETON_BLOCK, 'skeleton-shimmer', className)} style={{ background: 'var(--surface-container-high)', ...style }} />;
 }
 export function Skeleton({ variant = 'text', count = 3, className }) {
   const items = Array.from({ length: Math.max(1, count) });
@@ -375,24 +385,28 @@ export function BentoStat({ label, value, icon, delta, tone = 'default', span, a
   const accentColor = semantic ? semantic.value : 'var(--brand-accent)';
   if (accentBar) {
     return (
-      <div
+      <motion.div
         className={cx('relative flex min-h-12 flex-col gap-1 overflow-hidden rounded-lg p-4', className)}
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+        whileHover={{ y: -3, scale: 1.008 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 28 }}
       >
         <span className="absolute inset-y-0 left-0 w-[3px] rtl:left-auto rtl:right-0" style={{ background: accentColor }} />
         <span className="block truncate font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{label}</span>
         <p className="tabular truncate font-display text-2xl font-bold text-ink">{value}</p>
         {delta && <span className="text-[11.5px] font-semibold" style={{ color: 'var(--status-success)' }}>{delta}</span>}
-      </div>
+      </motion.div>
     );
   }
   return (
-    <div
+    <motion.div
       // 48px+ tap target (the mockup's stat-tile requirement): p-4 (16px)
       // padding around two stacked text rows already clears this, min-h-12
       // makes it explicit rather than incidental.
       className={cx('flex min-h-12 flex-col gap-1 rounded-lg p-4', span === 2 && 'col-span-2 flex-row items-center justify-between', className)}
       style={{ background: semantic ? semantic.bg : tone === 'accent' ? 'var(--surface-container-high)' : 'var(--surface-container-low)', border: '1px solid var(--border-subtle)' }}
+      whileHover={{ y: -3, scale: 1.008 }}
+      transition={{ type: 'spring', stiffness: 360, damping: 28 }}
     >
       {/* min-w-0 + span=2's flex-row both use the logical `me-` gap-based
           layout already (flex `gap`, not a margin side), so this reads
@@ -402,7 +416,7 @@ export function BentoStat({ label, value, icon, delta, tone = 'default', span, a
         <p className="tabular truncate font-display text-2xl font-extrabold" style={{ color: semantic ? semantic.value : 'var(--ink)' }}>{value}</p>
       </div>
       {icon && <span className="shrink-0" style={{ color: semantic ? semantic.value : 'var(--brand-accent)' }}>{icon}</span>}
-    </div>
+    </motion.div>
   );
 }
 
