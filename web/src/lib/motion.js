@@ -54,6 +54,31 @@ function prefersReducedMotion() {
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+// Reactive version of the check above — index.css's global media query
+// handles the CSS side (collapsing transition/animation durations) for
+// free, but a component that auto-advances on a JS timer (the hero
+// narrative) needs to know in JS too, so it can stop scheduling the next
+// step entirely rather than just rendering a step change with a near-zero
+// transition. Listens for the user flipping the OS setting mid-session,
+// not just the value at mount.
+export function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(prefersReducedMotion);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handler = () => setReduced(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', handler);
+    else mq.addListener(handler);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', handler);
+      else mq.removeListener(handler);
+    };
+  }, []);
+
+  return reduced;
+}
+
 // Magnetic CTA pull — the element nudges a few px toward the cursor inside
 // its own bounds, then springs back on leave. `strength` is the max
 // translation in px; deliberately small (the corporate/restrained motion

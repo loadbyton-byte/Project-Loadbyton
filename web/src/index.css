@@ -603,6 +603,141 @@ html[dir="rtl"] .animate-drawer-in {
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* Hero visual v2 (components/HeroNarrative.jsx) — the four-panel post ->
+   bid -> agree -> deliver sequence, replacing the single static
+   HeroLoadSnapshot card. Panels reuse .hero-snapshot-bid* above (same
+   visual vocabulary, not a second design language for the same card) plus
+   a few new pieces: the "awarded"/"delivered" badge state, a compact
+   field list for the post step, and the step-rail at the bottom. */
+.hero-narrative-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.55);
+}
+.hero-narrative-stage {
+  position: relative;
+  margin-top: 10px;
+  /* Fixed floor tall enough for the tallest panel (the 3-row bid list) so
+     swapping panels every few seconds doesn't visibly resize the card —
+     a layout jump reads as janky, not cinematic. Shorter panels just sit
+     in extra whitespace, which is the better trade. */
+  min-height: 158px;
+}
+.hero-narrative-panel {
+  /* Mount-triggered fade+rise, same convention as .animate-panel-in
+     elsewhere in this file (menu/chat/modal entrances) — React's key={active}
+     remounts this on every step change, so re-applying this animation on
+     mount is the entrance, not a hand-rolled cross-fade requiring both an
+     old and new panel on screen at once. */
+  animation: panel-in var(--motion-hero) var(--motion-ease) both;
+}
+.hero-narrative-fields {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.hero-narrative-fields dt {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.45);
+}
+.hero-narrative-fields dd {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+.hero-snapshot-bid--awarded {
+  border-radius: var(--lb-radius-md);
+  background: rgba(255, 255, 255, 0.06);
+}
+.hero-narrative-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: var(--lb-radius-full);
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--lb-orange-500);
+  background: rgba(242, 96, 12, 0.16);
+}
+.hero-narrative-badge--success {
+  color: #56D364;
+  background: rgba(86, 211, 100, 0.14);
+}
+.hero-narrative-note {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.hero-narrative-steps {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  grid-auto-flow: column;
+  gap: 10px;
+}
+.hero-narrative-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: color var(--motion-standard) var(--motion-ease);
+}
+.hero-narrative-step:hover,
+.hero-narrative-step:focus-visible {
+  color: rgba(255, 255, 255, 0.75);
+}
+.hero-narrative-step--active {
+  color: var(--lb-orange-500);
+}
+.hero-narrative-step-track {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border-radius: var(--lb-radius-full);
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.hero-narrative-step-track > span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: currentColor;
+  border-radius: inherit;
+}
+/* Fills over the same duration as the JS auto-advance timer (--step-ms,
+   set inline from HeroNarrative's STEP_MS so the two can't drift out of
+   sync) — a visible "this step is about to change" cue, restrained rather
+   than a glow/pulse. Pauses with the rest of the sequence on hover/focus
+   (HeroNarrative also clears its interval then) via the .is-paused class. */
+.hero-narrative-step--active .hero-narrative-step-track > span {
+  animation: hero-step-fill var(--step-ms, 4200ms) linear forwards;
+}
+.hero-narrative-steps.is-paused .hero-narrative-step--active .hero-narrative-step-track > span {
+  animation-play-state: paused;
+}
+@keyframes hero-step-fill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
 
 /* ------------------------------------------------------------------ */
 /* Component classes — in @layer components so plain Tailwind utility  */
