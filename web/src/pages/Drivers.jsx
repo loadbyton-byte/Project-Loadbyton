@@ -3,11 +3,22 @@ import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { uploadFile, UPLOAD_ACCEPT, driverDocumentUrl } from '../lib/upload.js';
 import { Button, Card, Input, Label, EmptyState, ErrorState, Badge, Select } from '../components/ui.jsx';
-import { IconPlus, IconTruck, IconFile, IconCheckCircle, IconWallet, IconChevronDown, IconChevronRight } from '../components/icons.jsx';
+import { IconPlus, IconTruck, IconFile, IconCheckCircle, IconWallet, IconChevronDown, IconChevronRight, IconMessage } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 
 const empty = { name: '', phone: '', licenseNumber: '', licenseExpiry: '' };
+
+// wa.me wants a bare international-format number, no "+", no spaces.
+// Register.jsx's own UAE_MOBILE_RE accepts 05XXXXXXXX or +9715XXXXXXXX —
+// both land here, since a driver's phone was validated against the same
+// shape when they were added to the roster.
+function waMeDigits(phone) {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.startsWith('971')) return digits;
+  if (digits.startsWith('0')) return `971${digits.slice(1)}`;
+  return digits;
+}
 
 export default function Drivers() {
   usePageTitle('My Drivers');
@@ -73,7 +84,7 @@ export default function Drivers() {
     setSeatBusyFor(driver.id);
     try {
       const { email, password } = await api.addDriverSeat(driver.id);
-      setRevealedSeat({ driverName: driver.name, email, password });
+      setRevealedSeat({ driverName: driver.name, email, password, phone: driver.phone });
       load();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Could not create login', body: err.message });
@@ -216,11 +227,13 @@ export default function Drivers() {
       </Card>
 
       {revealedSeat && (
-        <Card className="mt-5" style={{ borderColor: 'var(--brand-accent)' }}>
+        <Card className="mt-5 animate-slide-up" style={{ borderColor: 'var(--brand-accent)' }}>
           <Card.Content>
             <p className="text-sm font-semibold text-ink">Login created for {revealedSeat.driverName}</p>
             <p className="mt-1 text-sm text-ink-muted">
-              Share these with {revealedSeat.driverName} yourself (call or WhatsApp) — this password is shown only once and can't be retrieved again.
+              {revealedSeat.phone
+                ? `Send these to ${revealedSeat.driverName} on WhatsApp, or share them yourself another way — this password is shown only once and can't be retrieved again.`
+                : `Share these with ${revealedSeat.driverName} yourself (call or WhatsApp) — this password is shown only once and can't be retrieved again.`}
             </p>
             <div className="mt-3 grid gap-2 rounded-lg p-3 font-mono text-sm" style={{ background: 'var(--surface-container-high)' }}>
               <div><span className="text-ink-muted">Sign-in ID: </span>{revealedSeat.email}</div>
@@ -228,6 +241,16 @@ export default function Drivers() {
             </div>
           </Card.Content>
           <Card.Footer>
+            {revealedSeat.phone && (
+              <a
+                href={`https://wa.me/${waMeDigits(revealedSeat.phone)}?text=${encodeURIComponent(`Loadbyton login for ${revealedSeat.driverName}\nSign-in ID: ${revealedSeat.email}\nPassword: ${revealedSeat.password}`)}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-accent btn-shine"
+              >
+                <IconMessage size={16} /> Share via WhatsApp
+              </a>
+            )}
             <Button variant="secondary" onClick={() => setRevealedSeat(null)}>Done, I've saved it</Button>
           </Card.Footer>
         </Card>
