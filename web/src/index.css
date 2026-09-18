@@ -14,11 +14,11 @@
      reference these primitives directly for fixed-dark panels that never
      theme-swap, and renaming would mean touching those files for no
      functional reason — only the values change here. */
-  --lb-ink-950: #0A1A24;
-  --lb-ink-900: #0F2B3D;
-  --lb-ink-800: #1A3A52;
-  --lb-ink-700: #2C4E68;
-  --lb-ink-600: #3E6280;
+  --lb-ink-950: #071820;
+  --lb-ink-900: #0B2430;
+  --lb-ink-800: #123442;
+  --lb-ink-700: #244B5A;
+  --lb-ink-600: #3B6270;
 
   --lb-blue-700: #1E40AF;
   --lb-blue-600: #2563EB;
@@ -33,11 +33,11 @@
      Kept as --lb-orange-* names for the same reason as --lb-ink-* above
      (Features.jsx/Landing.jsx reference --lb-orange-500 directly for
      decorative dots/badges); only the values changed. */
-  --lb-orange-700: #C62828;
-  --lb-orange-600: #E53935;
-  --lb-orange-500: #E53935;
-  --lb-orange-200: #FDE8E8;
-  --lb-orange-100: #FEF2F2;
+  --lb-orange-700: #C9371F;
+  --lb-orange-600: #E84B30;
+  --lb-orange-500: #FF5A3D;
+  --lb-orange-200: #FFD8CF;
+  --lb-orange-100: #FFF0EC;
 
   --lb-amber-700: #B45309;
   --lb-amber-600: #D97706;
@@ -80,10 +80,10 @@
   /* Sharper, more geometric shape language — matches the navy/red/Geist
      "corporate enterprise" register (confirmed with the user), replacing
      Industrial Trust's rounder 8/12/16/24 scale. */
-  --lb-radius-sm: 6px;
-  --lb-radius-md: 10px;
-  --lb-radius-lg: 16px;
-  --lb-radius-xl: 24px;
+  --lb-radius-sm: 5px;
+  --lb-radius-md: 8px;
+  --lb-radius-lg: 12px;
+  --lb-radius-xl: 18px;
   --lb-radius-full: 999px;
   --lb-shadow-sm: 0 1px 2px rgba(15,43,61,0.07), 0 8px 24px rgba(15,43,61,0.04);
   --lb-shadow-md: 0 2px 8px rgba(15,43,61,0.08), 0 18px 44px rgba(15,43,61,0.08);
@@ -92,23 +92,23 @@
 
   /* "Warm White" / "Light Gray" from the brand kit, replacing Industrial
      Trust's cool slate-50/white. */
-  --bg-canvas: #FFFDF7;
+  --bg-canvas: #F3F1EA;
   --bg-surface: var(--lb-slate-0);
-  --bg-raised: #F5F6F4;
+  --bg-raised: #EAE8E1;
   --bg-inverse: var(--lb-ink-900);
 
   /* Tonal-layering ladder used by the nested-card components (BentoStat,
      JobCard, sidebar). Existing components keep using bg-surface/bg-raised
      above; this ladder is additive, not a replacement. */
   --surface-container-lowest: var(--lb-slate-0);
-  --surface-container-low: #FFFDF7;
-  --surface-container: #F5F6F4;
+  --surface-container-low: #F8F6F0;
+  --surface-container: #EAE8E1;
   --surface-container-high: var(--lb-slate-200);
   --surface-container-highest: var(--lb-slate-300);
   --outline: var(--lb-slate-500);
-  --outline-variant: #E5E8E3;
+  --outline-variant: #DADDD7;
 
-  --border-default: #E5E8E3;
+  --border-default: #D9DDD7;
   --border-subtle: var(--lb-slate-100);
   --border-strong: var(--lb-slate-300);
 
@@ -1346,3 +1346,156 @@ html[dir="rtl"] .animate-drawer-in {
 @media(max-width:1023px){.lb-hero-inner{grid-template-columns:1fr;padding-top:70px}.lb-record{max-width:680px}.lb-two-col,.lb-role-grid{grid-template-columns:1fr;gap:70px}.lb-record-steps{grid-template-columns:repeat(3,1fr)}.lb-lane-grid{grid-template-columns:repeat(2,1fr)}.lb-role-visual{min-height:500px}.lb-hero-index{display:none}}
 @media(max-width:640px){.lb-hero{min-height:auto}.lb-hero-inner{padding-top:56px;padding-bottom:64px}.lb-hero-copy h1{font-size:44px}.lb-kicker{font-size:8px}.lb-record{border-radius:0}.lb-route{grid-template-columns:1fr;padding:20px}.lb-route-line{margin:16px 0;width:100%}.lb-route-place--right{text-align:left}.lb-record-grid{grid-template-columns:1fr 1fr}.lb-record-grid div:nth-child(2){border-right:0}.lb-award-row{grid-template-columns:auto 1fr}.lb-award-row>strong:last-child{grid-column:2}.lb-record-foot{gap:10px}.lb-two-col{gap:40px}.lb-noise-stack{min-height:500px}.lb-message{width:90%}.lb-message--one{left:0}.lb-message--two{top:135px}.lb-message--three{top:270px;left:4%}.lb-record-steps{grid-template-columns:1fr}.lb-record-step{min-height:auto;padding:24px;border-right:1px solid #dfe1dc;border-bottom:1px solid #dfe1dc}.lb-record-step h3{margin-top:30px}.lb-role-panel ul{grid-template-columns:1fr}.lb-role-visual{min-height:430px}.lb-role-card--main{left:6%;width:72%}.lb-role-card--status{right:4%;top:48%}.lb-role-map{top:68%}.lb-role-card--driver{right:6%;bottom:6%}.lb-channel-body{grid-template-columns:1fr;gap:32px;padding:36px 24px}.lb-lane-grid{grid-template-columns:1fr}.lb-lane-card{min-height:190px}.lb-network-proof{grid-template-columns:1fr;gap:24px}.lb-industrial-break{min-height:500px}.lb-final-card>div,.lb-hero-actions{align-items:flex-start;flex-direction:column}.lb-final-card>div{align-items:center}}
 @media(prefers-reduced-motion:reduce){.lb-lane-card,.lb-step-rail{transition:none}.lb-lane-card:hover{transform:none}}
+
+/* ================================================================== */
+/* Loadbyton OS — unified visual language for every application route */
+/* ================================================================== */
+html { background: var(--bg-canvas); }
+body { letter-spacing: -.006em; }
+::selection { background: color-mix(in srgb, var(--brand-accent) 25%, transparent); }
+
+.app-sidebar {
+  border-inline-end: 1px solid rgba(255,255,255,.07);
+  box-shadow: 18px 0 55px rgba(4,18,25,.08);
+  isolation: isolate;
+}
+.app-sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: .32;
+  background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(#000, transparent 72%);
+  pointer-events: none;
+}
+.app-sidebar nav > div > p { margin: 18px 8px 7px; letter-spacing: .16em; }
+.app-sidebar nav a { min-height: 42px; border: 1px solid transparent; }
+.app-sidebar nav a:hover { background: rgba(255,255,255,.055) !important; border-color: rgba(255,255,255,.055); }
+.app-topbar,.app-mobile-bar {
+  border-color: color-mix(in srgb, var(--border-default) 75%, transparent) !important;
+  background: color-mix(in srgb, var(--bg-canvas) 90%, transparent) !important;
+  box-shadow: 0 8px 30px rgba(10,32,42,.035);
+}
+.app-topbar nav { padding: 4px; border: 1px solid var(--border-default); border-radius: var(--lb-radius-md); background: color-mix(in srgb,var(--bg-surface) 78%,transparent); }
+.app-topbar nav a { border-radius: 5px; font-size: 12px; }
+
+.app-main { position: relative; min-width: 0; }
+.app-main:not([data-route="/"]) { background-image: radial-gradient(circle at 96% 0%, color-mix(in srgb,var(--brand-accent) 5%,transparent), transparent 28rem); }
+.app-main:not([data-route="/"]) > div:not(.lb-home) { animation: app-page-in var(--motion-emphasis) var(--motion-ease) both; }
+@keyframes app-page-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
+/* Shared page hierarchy: every utility page gets the same editorial header rhythm. */
+.app-main:not([data-route="/"]) h1.font-display {
+  position: relative;
+  font-size: clamp(1.45rem,2.2vw,2.15rem);
+  line-height: 1.08;
+  letter-spacing: -.035em;
+}
+.app-main:not([data-route="/"]) h1.font-display::after {
+  content: '';
+  display: block;
+  width: 34px;
+  height: 3px;
+  margin-top: 11px;
+  background: var(--brand-accent);
+}
+.app-main h2.font-display,.app-main h3.font-display { letter-spacing: -.025em; }
+.app-main .container-page { max-width: 1460px; }
+
+/* Surfaces and cards: quiet containers, signal accents only where useful. */
+.card,.app-surface {
+  border-color: var(--border-default) !important;
+  border-radius: var(--lb-radius-lg);
+  background: color-mix(in srgb,var(--bg-surface) 97%,var(--bg-canvas));
+  box-shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 10px 35px rgba(8,31,41,.045);
+}
+.card::after { height: 2px; opacity: .9; background: linear-gradient(90deg,var(--brand-accent) 0 52px,transparent 52px); }
+.card-hover:hover,.card-interactive:hover { transform: translateY(-3px); border-color: color-mix(in srgb,var(--brand-accent) 25%,var(--border-default)) !important; box-shadow: 0 18px 50px rgba(8,31,41,.1); }
+.card > .border-b:first-child,.app-surface > .border-b:first-child { background: color-mix(in srgb,var(--bg-raised) 45%,transparent); }
+.app-stat { min-height: 122px; display:flex; flex-direction:column; justify-content:space-between; }
+
+/* Buttons and small controls — one restrained interaction vocabulary. */
+.btn,.btn-primary,.btn-accent,.btn-secondary,.btn-ghost,.btn-danger,.btn-success {
+  min-height: 42px;
+  border-radius: 6px;
+  font-size: 12px;
+  letter-spacing: -.005em;
+}
+.btn-accent { background: linear-gradient(135deg,var(--lb-orange-500),var(--lb-orange-700)); box-shadow: 0 10px 26px color-mix(in srgb,var(--brand-accent) 20%,transparent); }
+.btn-primary { background: var(--lb-ink-900); }
+.btn-secondary { background: color-mix(in srgb,var(--bg-surface) 90%,transparent); }
+.btn-sm { min-height: 34px; }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline: 2px solid var(--brand-accent); outline-offset: 2px; }
+
+/* Forms and pickers — consistent field geometry and active state. */
+.input,.textarea,.select,input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea {
+  border-radius: 6px;
+}
+.input,.textarea,.select {
+  min-height: 44px;
+  border-color: var(--border-default);
+  background: color-mix(in srgb,var(--bg-surface) 96%,var(--bg-canvas));
+  transition: border-color var(--motion-standard) var(--motion-ease), box-shadow var(--motion-standard) var(--motion-ease), background var(--motion-standard) var(--motion-ease);
+}
+.textarea { min-height: 112px; }
+.input:hover,.textarea:hover,.select:hover { border-color: var(--border-strong); background: var(--bg-surface); }
+.input:focus,.textarea:focus,.select:focus { border-color: var(--brand-accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--brand-accent) 14%,transparent); }
+.label { font: 750 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .035em; color: var(--text-secondary); }
+input[type="checkbox"],input[type="radio"] { accent-color: var(--brand-accent); }
+
+/* Tables and data lists — operational density with clear scanning rails. */
+.app-main table { border-collapse: separate; border-spacing: 0; }
+.app-main table thead { background: color-mix(in srgb,var(--bg-raised) 68%,transparent); }
+.app-main table th { padding: 12px 14px; border-bottom: 1px solid var(--border-default); font: 800 10px/1.25 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.app-main table td { padding: 14px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); }
+.app-main table tbody tr { transition: background var(--motion-micro) ease; }
+.app-main table tbody tr:hover { background: color-mix(in srgb,var(--brand-accent) 3.5%,var(--bg-surface)); }
+.app-main table tbody tr:last-child td { border-bottom: 0; }
+
+/* Tabs, tags, badges, alerts, empty/loading states. */
+.badge { border: 1px solid color-mix(in srgb,currentColor 18%,transparent); border-radius: 4px; font: 750 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing: .025em; }
+[role="tablist"] { scrollbar-width:none; }
+[role="tab"] { transition: color var(--motion-standard) var(--motion-ease),background var(--motion-standard) var(--motion-ease),border-color var(--motion-standard) var(--motion-ease),transform var(--motion-micro) ease; }
+[role="tab"]:active { transform: scale(.98); }
+.empty-state { background: color-mix(in srgb,var(--bg-surface) 52%,transparent); border-style: dashed !important; }
+.empty-state-icon { display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:var(--bg-raised); }
+.toast { border-radius: 9px; border-left: 3px solid var(--brand-accent); box-shadow: 0 22px 65px rgba(5,22,29,.18); }
+
+/* Dialogs, drawers and command surfaces. */
+[role="dialog"] > div:not(.absolute),[role="dialog"] .bg-surface { border-radius: var(--lb-radius-lg); }
+.animate-drawer-in { border-radius: 0 !important; box-shadow: 24px 0 70px rgba(4,18,25,.25); }
+.animate-slide-up { animation-duration: var(--motion-emphasis); }
+
+/* Auth routes share one deliberate sign-in/sign-up stage. */
+.app-main[data-route="/login"],.app-main[data-route="/register"],.app-main[data-route="/forgot-password"],.app-main[data-route="/reset-password"] {
+  background-color: #081d27;
+  background-image: linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px),radial-gradient(circle at 75% 20%,rgba(255,90,61,.16),transparent 32rem);
+  background-size: 44px 44px,44px 44px,auto;
+}
+.app-main[data-route="/login"] .card,.app-main[data-route="/register"] .card,.app-main[data-route="/forgot-password"] .card,.app-main[data-route="/reset-password"] .card { box-shadow: 0 35px 110px rgba(0,0,0,.34); }
+
+/* Dashboard-specific composition, inherited by role variants. */
+.app-main[data-route="/dashboard"] { background-image: linear-gradient(90deg,rgba(8,32,42,.025) 1px,transparent 1px),linear-gradient(rgba(8,32,42,.025) 1px,transparent 1px); background-size: 48px 48px; }
+.app-main[data-route="/dashboard"] .card { backdrop-filter: blur(8px); }
+.app-main[data-route="/dashboard"] section.card:first-of-type { border-left: 4px solid var(--brand-accent) !important; }
+
+/* Marketing pages beyond the homepage now share the same editorial frame. */
+.app-main[data-route="/features"] section:first-child,.app-main[data-route="/pricing"] section:first-child,.app-main[data-route="/about"] section:first-child,.app-main[data-route="/blog"] section:first-child,.app-main[data-route="/security"] section:first-child,.app-main[data-route="/compliance"] section:first-child,.app-main[data-route="/trust"] section:first-child,.app-main[data-route="/terms"] section:first-child,.app-main[data-route="/privacy"] section:first-child { position:relative;overflow:hidden; }
+.app-main[data-route="/features"] section:first-child::before,.app-main[data-route="/pricing"] section:first-child::before,.app-main[data-route="/about"] section:first-child::before,.app-main[data-route="/blog"] section:first-child::before,.app-main[data-route="/security"] section:first-child::before,.app-main[data-route="/compliance"] section:first-child::before,.app-main[data-route="/trust"] section:first-child::before { content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(10,35,46,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(10,35,46,.035) 1px,transparent 1px);background-size:56px 56px;mask-image:linear-gradient(#000,transparent); }
+.marketing-footer { background:#071b24;color:rgba(255,255,255,.6);border:0!important; }
+.marketing-footer .text-ink-muted { color:rgba(255,255,255,.55)!important; }.marketing-footer a:hover{color:#fff!important}
+
+/* Route transitions and hover motion stay purposeful and reduced-motion safe. */
+@media (hover:hover) { .app-main a.card:hover { transform: translateY(-3px); } }
+@media (max-width:767px) {
+  .app-main:not([data-route="/"]) h1.font-display { font-size:1.55rem; }
+  .app-main table th,.app-main table td { padding:11px 12px; }
+  .app-main:not([data-route="/"]) > div { padding-bottom:max(18px,env(safe-area-inset-bottom)); }
+  .app-mobile-bar { box-shadow:0 10px 30px rgba(7,25,34,.08); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .app-main:not([data-route="/"]) > div:not(.lb-home) { animation:none; }
+  .card-hover:hover,.card-interactive:hover,.app-main a.card:hover { transform:none; }
+}
