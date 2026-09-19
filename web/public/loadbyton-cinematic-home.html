@@ -106,6 +106,7 @@ img,svg,video{display:block;max-width:100%}
   linear-gradient(0deg,rgba(5,5,5,.62) 0%,transparent 43%,rgba(5,5,5,.16) 100%);pointer-events:none}
 .hero-noise{position:absolute;inset:0;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");mix-blend-mode:soft-light;pointer-events:none;animation:filmGrain .45s steps(2) infinite}
 .hero-media::before,.hero-media::after{content:"";position:absolute;z-index:4;left:0;right:0;height:clamp(10px,2.2vh,24px);background:#02080b;pointer-events:none}.hero-media::before{top:0}.hero-media::after{bottom:0}
+.hero-brand-lockup{position:absolute;z-index:3;right:clamp(28px,4vw,72px);bottom:clamp(46px,7vh,88px);width:clamp(150px,13vw,220px);height:auto;padding:10px 14px;border:1px solid rgba(255,255,255,.16);border-radius:10px;background:rgba(2,8,11,.68);box-shadow:0 14px 38px rgba(0,0,0,.26);backdrop-filter:blur(12px);pointer-events:none}
 @keyframes filmGrain{0%{transform:translate(0)}25%{transform:translate(-.3%,.2%)}50%{transform:translate(.2%,-.25%)}75%{transform:translate(.25%,.25%)}100%{transform:translate(-.2%,-.15%)}}
 .hero-inner{position:relative;z-index:3;min-height:100svh;display:grid;grid-template-columns:1fr;gap:0;align-items:end;padding-top:160px;padding-bottom:80px}
 .hero-copyblock{max-width:820px;color:#fff}
@@ -1025,26 +1026,27 @@ footer{
 <!-- HERO -->
 <section class="hero">
   <div class="hero-media" aria-hidden="true">
-    <div class="hero-slide active"><img src="/cinematic-assets/generated-v2/01-container-chassis-jebel-ali.webp" alt="Loadbyton 40FT container chassis at Jebel Ali Port" loading="eager" fetchpriority="high"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/02-trailer-20ft-khalifa-gate.webp" alt="Loadbyton 20FT container trailer at Khalifa Port" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/03-trailer-genset-cold-chain.webp" alt="Loadbyton reefer container trailer with genset" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/04-flatbed-trailer-steel.webp" alt="Loadbyton flatbed trailer carrying structural steel" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/05-lowbed-trailer-excavator.webp" alt="Loadbyton lowbed trailer transporting an excavator" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/06-side-loader-trailer.webp" alt="Loadbyton side-loader trailer handling a container" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/07-flatbed-truck-building-materials.webp" alt="Loadbyton flatbed truck delivering building materials" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/08-box-truck-al-quoz.webp" alt="Loadbyton box truck at an Al Quoz warehouse" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/09-reefer-truck-pharma.webp" alt="Loadbyton reefer truck serving pharmaceutical logistics" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/10-curtain-side-rak.webp" alt="Loadbyton curtain-side truck in Ras Al Khaimah" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/11-lowbed-wheel-loader.webp" alt="Loadbyton lowbed transporting a wheel loader" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/12-port-crane-handoff.webp" alt="Loadbyton container receiving a port crane handoff" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/13-side-loader-truck.webp" alt="Loadbyton side-loader truck transferring a container" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/14-warehouse-cross-dock.webp" alt="Loadbyton warehouse container cross-dock operation" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/15-pickup-ltl-al-quoz.webp" alt="Loadbyton pickup handling an LTL delivery in Al Quoz" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/16-ten-ton-industrial-cargo.webp" alt="Loadbyton 10-ton truck moving industrial cargo" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/17-terminal-smart-gate.webp" alt="Loadbyton container truck at a UAE terminal smart gate" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/18-customs-container-scan.webp" alt="Loadbyton container truck passing a customs cargo scanner" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/19-al-quoz-mixed-fleet.webp" alt="Loadbyton mixed equipment fleet at its Al Quoz operations office" loading="lazy"></div>
-    <div class="hero-slide"><img src="/cinematic-assets/generated-v2/20-uae-road-freight-corridor.webp" alt="Loadbyton truck on a UAE inter-emirate freight corridor" loading="lazy"></div>
+    <div class="hero-slide active"><img src="/cinematic-assets/generated-v3/01-container-chassis-jebel-ali.webp" alt="Loadbyton 40FT container chassis at Jebel Ali Port" loading="eager" fetchpriority="high"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/02-trailer-20ft-khalifa-gate.webp" alt="Loadbyton 20FT container trailer at Khalifa Port" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/03-trailer-genset-cold-chain.webp" alt="Loadbyton reefer container trailer with genset" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/04-flatbed-trailer-steel.webp" alt="Loadbyton flatbed trailer carrying structural steel" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/05-lowbed-trailer-excavator.webp" alt="Loadbyton lowbed trailer transporting an excavator" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/06-side-loader-trailer.webp" alt="Loadbyton side-loader trailer handling a container" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/07-flatbed-truck-building-materials.webp" alt="Loadbyton flatbed truck delivering building materials" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/08-box-truck-al-quoz.webp" alt="Loadbyton box truck at an Al Quoz warehouse" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/09-reefer-truck-pharma.webp" alt="Loadbyton reefer truck serving pharmaceutical logistics" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/10-curtain-side-rak.webp" alt="Loadbyton curtain-side truck in Ras Al Khaimah" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/11-lowbed-wheel-loader.webp" alt="Loadbyton lowbed transporting a wheel loader" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/12-port-crane-handoff.webp" alt="Loadbyton container receiving a port crane handoff" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/13-side-loader-truck.webp" alt="Loadbyton side-loader truck transferring a container" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/14-warehouse-cross-dock.webp" alt="Loadbyton warehouse container cross-dock operation" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/15-pickup-ltl-al-quoz.webp" alt="Loadbyton pickup handling an LTL delivery in Al Quoz" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/16-ten-ton-industrial-cargo.webp" alt="Loadbyton 10-ton truck moving industrial cargo" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/17-terminal-smart-gate.webp" alt="Loadbyton container truck at a UAE terminal smart gate" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/18-customs-container-scan.webp" alt="Loadbyton container truck passing a customs cargo scanner" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/19-al-quoz-mixed-fleet.webp" alt="Loadbyton mixed equipment fleet at its Al Quoz operations office" loading="lazy"></div>
+    <div class="hero-slide"><img src="/cinematic-assets/generated-v3/20-uae-road-freight-corridor.webp" alt="Loadbyton truck on a UAE inter-emirate freight corridor" loading="lazy"></div>
+    <img class="hero-brand-lockup" src="/brand/logo-full-on-dark-transparent.svg" alt="" aria-hidden="true">
     <div class="hero-vignette"></div>
     <div class="hero-noise"></div>
   </div>
