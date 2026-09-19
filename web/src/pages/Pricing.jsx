@@ -35,7 +35,7 @@ export default function Pricing() {
             <p className="lb-kicker"><i />PRI<span>CING</span></p>
             <h1>One take rate. No subscription, no listing fee.</h1>
             <p className="lb-hero-lede">
-              Loadbyton takes <span className="tabular font-semibold" style={{ color: '#ff6a60' }}>{takeRate}</span> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.
+              Loadbyton takes <span className="tabular font-semibold" style={{ color: 'var(--brand-accent)' }}>{takeRate}</span> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.
             </p>
           </Reveal>
         </div></div>
@@ -49,7 +49,7 @@ export default function Pricing() {
             <Reveal key={t.name} delay={i * 70} className="lb-item">
               <div className="lb-item-top"><span>TIER-{String(i + 1).padStart(2, '0')}</span>{t.recommended ? <span className="lb-item-flag">MOST POPULAR</span> : <IconShield size={18} />}</div>
               <h3>{t.name}</h3>
-              <p>{t.desc} — <strong style={{ color: '#c83d34' }}>{t.fee}</strong></p>
+              <p>{t.desc} — <strong style={{ color: 'var(--brand-accent)' }}>{t.fee}</strong></p>
               <ul>
                 {t.perks.map((p) => (
                   <li key={p}><IconCheck size={14} /> {p}</li>

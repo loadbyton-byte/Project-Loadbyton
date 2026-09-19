@@ -12,7 +12,7 @@ import { Spinner } from '../components/ui.jsx';
 export default function CinematicLanding() {
   const { user, actingAs, loading } = useAuth();
   if (loading) {
-    return <div className="flex min-h-dvh items-center justify-center bg-[#07151d]"><Spinner size={28} className="text-white" /></div>;
+    return <div className="flex min-h-dvh items-center justify-center" style={{ background: 'var(--lb-ink-950)' }}><Spinner size={28} className="text-white" /></div>;
   }
   if (user) return <Navigate to={homePath(user, actingAs)} replace />;
 
@@ -20,8 +20,8 @@ export default function CinematicLanding() {
     <iframe
       title="Loadbyton — One Load. One Context."
       src="/loadbyton-cinematic-home.html"
-      className="block min-h-dvh w-full border-0 bg-[#07151d]"
-      style={{ height: '100dvh' }}
+      className="block min-h-dvh w-full border-0"
+      style={{ height: '100dvh', background: 'var(--lb-ink-950)' }}
     />
   );
 }
