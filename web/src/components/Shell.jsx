@@ -315,6 +315,13 @@ const FOOTER_TICKER = [
 ];
 
 export function Shell({ children }) {
+  const location = useLocation();
+
+  // The approved homepage is a complete, self-contained composition. It
+  // owns its navigation, footer, spacing and responsive behaviour, so the
+  // application shell must not add a second header/footer around it.
+  if (location.pathname === '/') return children;
+
   return <ShellInner>{children}</ShellInner>;
 }
 
@@ -322,7 +329,6 @@ function ShellInner({ children }) {
   const { user, logout, theme, setTheme, walkthroughFinished, walkthroughStep, completeWalkthrough, setWalkthroughStep, endImpersonation, actingAs } = useAuth();
   const { locale, setLocale, t } = useLocale();
   const navigate = useNavigate();
-  const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [endingImpersonation, setEndingImpersonation] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
@@ -418,3 +424,519 @@ function ShellInner({ children }) {
     } else {
       panel.style.transform = 'translateX(0)';
     }
+    swipeRef.current = { active: false, axis: null, startX: 0, startY: 0 };
+  }
+
+  async function handleResendVerification() {
+    setResendingVerification(true);
+    try {
+      await api.resendVerification();
+      addToast({ type: 'system_message', title: 'Verification email sent', body: 'Check your inbox for the link.' });
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not send verification email', body: err.message });
+    } finally {
+      setResendingVerification(false);
+    }
+  }
+
+  async function handleLogout() {
+    closeDrawer();
+    await logout();
+    navigate('/');
+    addToast({ type: 'system_message', title: 'Session ended', body: 'You have been logged out.' });
+  }
+
+  async function handleEndImpersonation() {
+    setEndingImpersonation(true);
+    try {
+      await endImpersonation();
+      navigate('/admin');
+    } finally {
+      setEndingImpersonation(false);
+    }
+  }
+
+  const guestLinks = [
+    { to: '/features', label: t('nav.features', 'Features') },
+    { to: '/pricing', label: t('nav.pricing', 'Pricing') },
+    { to: '/about', label: t('nav.about', 'About') },
+    { to: '/blog', label: 'Blog' },
+    // Security.jsx/Compliance.jsx (App.jsx routes) existed with no link to
+    // them anywhere in the public nav — reachable only by typing the URL.
+    { to: '/security', label: 'Security' },
+    { to: '/compliance', label: 'Compliance' },
+  ];
+
+  return (
+    <div className={cx('lb-shell flex min-h-dvh flex-col bg-canvas', user ? 'lb-app-shell' : 'lb-public-shell')}>
+      {user && <CommandPalette navItems={navItems} />}
+      {user?.impersonating && (
+        <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-center text-xs font-medium text-white" style={{ background: 'var(--status-danger)' }}>
+          <span>Impersonating {user.profile?.company_name || user.email} — logged to the audit trail.</span>
+          <button onClick={handleEndImpersonation} disabled={endingImpersonation} className="shrink-0 rounded-full border border-white/40 px-3 py-2 text-xs font-semibold hover:bg-white/10">
+            {endingImpersonation ? 'Returning…' : 'Return to admin'}
+          </button>
+        </div>
+      )}
+
+      {user && !user.email_verified && !user.impersonating && (
+        <div className="flex flex-wrap items-center justify-center gap-3 px-4 py-2 text-center text-xs" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
+          <span>Verify your email to keep full access to your account.</span>
+          <button onClick={handleResendVerification} disabled={resendingVerification} className="rounded-md px-2 py-2 font-semibold underline underline-offset-2 disabled:opacity-60">
+            {resendingVerification ? 'Sending…' : 'Resend verification email'}
+          </button>
+        </div>
+      )}
+
+      {user && user.account_approval_status && user.account_approval_status !== 'APPROVED' && !user.impersonating && (
+        <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-2 text-center text-xs font-medium" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
+          <span>
+            {user.account_approval_status === 'REJECTED'
+              ? 'Your account was not approved — contact support if you believe this is a mistake.'
+              : 'Your account is pending admin approval — you can browse, but posting, bidding, and other actions are disabled until an admin approves it.'}
+          </span>
+        </div>
+      )}
+
+      {/* TopAppBar — mobile only (md:hidden). Floating glass bar with the
+          route-line accent; logo acts as role-aware home gesture. */}
+      <header
+        className="lb-chrome-veil sticky top-0 z-topbar border-b md:hidden"
+        style={{
+          borderColor: 'var(--border-subtle)',
+          paddingTop: 'env(safe-area-inset-top)',
+        }}
+      >
+        <div className="lb-top-route-line" aria-hidden="true" />
+        <div className="flex h-14 items-center justify-between px-3" style={{ paddingLeft: 'max(0.75rem, env(safe-area-inset-left))', paddingRight: 'max(0.75rem, env(safe-area-inset-right))' }}>
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="lb-icon-btn"
+            aria-label="Open menu"
+          >
+            <IconMenu size={22} />
+          </button>
+
+          <Logo to={user ? homePath(user, actingAs) : '/'} />
+
+          {user ? (
+            <div className="flex items-center">
+              <TrnQuickLink />
+              <NotificationBell />
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Link to="/login" className="rounded-full px-2.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
+                {t('nav.login', 'Log in')}
+              </Link>
+              {/* Desktop's slim header already had both Log in and Get
+                  started (below) — mobile's compact TopAppBar had only
+                  Log in, no primary conversion action at all. */}
+              <Link to="/register" className="btn-accent btn-shine px-3 py-1.5 text-sm">{t('nav.register', 'Get started')}</Link>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Drawer — mobile nav (only reachable via the hamburger above, which
+          is itself md:hidden). Full ops-drawer: numbered wayfinding, role
+          entry points, persistent conversion. Swipe-to-dismiss preserved. */}
+      {drawerOpen && (
+        <div className="fixed inset-0 z-overlay flex" role="dialog" aria-modal="true" aria-label="Menu">
+          <button aria-label="Close menu" className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={closeDrawer} />
+          <div
+            ref={drawerPanelRef}
+            className="lb-drawer-panel animate-drawer-in relative flex h-full w-[86%] max-w-xs flex-col"
+            style={{ boxShadow: 'var(--lb-shadow-lg)' }}
+            onTouchStart={handleDrawerTouchStart}
+            onTouchMove={handleDrawerTouchMove}
+            onTouchEnd={handleDrawerTouchEnd}
+          >
+            {/* Sticky header — a short phone's drawer content (5 nav items +
+                toggles + account block + logout) can exceed the visible
+                viewport height; pinning this keeps the close button reachable
+                without scrolling back to the top. */}
+            <div className="sticky top-0 z-raised flex items-center justify-between px-5 pb-3 pt-5">
+              <Link to={user ? homePath(user, actingAs) : '/'} aria-label="Loadbyton home" onClick={closeDrawer}>
+                <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
+              </Link>
+              <button onClick={closeDrawer} className="flex h-10 w-10 items-center justify-center rounded-full text-white/80 hover:bg-white/10 hover:text-white" aria-label="Close menu">
+                <IconClose size={18} />
+              </button>
+            </div>
+            <div className="px-5 pb-2">
+              <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">UAE road freight · one shared load record</p>
+              <div className="lb-top-route-line mt-2 opacity-70" aria-hidden="true" />
+            </div>
+
+            <div className="relative flex-1 overflow-y-auto px-5 pb-5">
+            <nav className="flex flex-col gap-1.5">
+              {user ? (
+                groupNavItems(navItems).map(({ group, items }) => (
+                  <div key={group}>
+                    <p className="lb-sidebar-group">{group}</p>
+                    {items.map((item, idx) => (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={closeDrawer}
+                        className={({ isActive }) => cx('lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all', isActive ? 'bg-white/10 text-white shadow-inner' : 'text-white/70 hover:bg-white/5 hover:text-white')}
+                      >
+                        <span className="lb-drawer-waypoint">{String(idx + 1).padStart(2, '0')}</span>
+                        {item.icon}
+                        {item.label}
+                      </NavLink>
+                    ))}
+                  </div>
+                ))
+              ) : (
+                <>
+                  <p className="lb-sidebar-group">Explore</p>
+                  {guestLinks.map((item, idx) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={closeDrawer}
+                      className={({ isActive }) => cx('lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all', isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white')}
+                    >
+                      <span className="lb-drawer-waypoint">{String(idx + 1).padStart(2, '0')}</span>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                  <p className="lb-sidebar-group">By role</p>
+                  <NavLink to="/for-shippers" onClick={closeDrawer} className="lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
+                    <span className="lb-drawer-waypoint">07</span> For shippers <IconArrowRight size={14} />
+                  </NavLink>
+                  <NavLink to="/for-transporters" onClick={closeDrawer} className="lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
+                    <span className="lb-drawer-waypoint">08</span> For transporters <IconArrowRight size={14} />
+                  </NavLink>
+                </>
+              )}
+            </nav>
+
+            <div className="my-4 border-t border-white/10" />
+
+            <div className="flex flex-col gap-1.5">
+              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
+                {theme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />}
+                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              </button>
+              <button onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')} className="rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
+                {locale === 'ar' ? 'English' : 'العربية'}
+              </button>
+            </div>
+
+            <div className="mt-4 pt-4">
+              {user ? (
+                <>
+                  <div className="mb-3 flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+                    <span className="lb-status-dot" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-white/55">{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+                    </div>
+                  </div>
+                  <Link to="/profile" onClick={closeDrawer} className="mb-1.5 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
+                    <IconUser size={16} /> Profile &amp; settings
+                  </Link>
+                  <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-[#FF8A80] hover:bg-white/5">
+                    <IconLogOut size={16} /> Log out
+                  </button>
+                </>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Link to="/register" onClick={closeDrawer} className="btn-accent btn-shine w-full justify-center">Start with one load <IconArrowRight size={16} /></Link>
+                  <Link to="/login" onClick={closeDrawer} className="flex w-full items-center justify-center rounded-xl border border-white/20 bg-white/5 px-4 py-3 text-sm font-bold text-white hover:bg-white/10">Log in</Link>
+                  <p className="mt-1 text-center font-mono text-[10px] uppercase tracking-widest text-white/40">Verified TRN · Secured payout · POD release</p>
+                </div>
+              )}
+            </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WALKTHROUGH_STEPS' copy ("Post your first requirement", "Review
+          carrier bids") is written specifically for the shipper posting
+          flow — showing it to a carrier, admin, or any other role describes
+          a workflow that isn't theirs. */}
+      {user && user.role === 'SHIPPER' && !walkthroughFinished && (
+        <WalkthroughModal step={walkthroughStep} onStep={setWalkthroughStep} onFinish={completeWalkthrough} />
+      )}
+
+      <div className="flex flex-1 md:flex-row">
+        {/* Sidebar — persistent, desktop only (md:flex). Dark terminal rail
+            with route grid, grouped wayfinding and live session footer. */}
+        {user && (
+          <aside
+            className="lb-sidebar app-sidebar hidden md:sticky md:top-0 md:flex md:h-dvh md:w-64 md:shrink-0 md:flex-col"
+            style={{ background: 'var(--sidebar-bg)' }}
+          >
+            <div className="relative flex h-16 items-center justify-between px-5">
+              {/* Sidebar chrome is always dark (--sidebar-bg) but shifts
+                  shade between light/dark app theme (--lb-ink-900 vs
+                  --lb-ink-800) — the transparent-background wordmark lets
+                  whichever shade show through, unlike Logo's own on-dark
+                  asset which bakes in a fixed navy rect and would leave a
+                  visible mismatched box in dark theme. */}
+              <Link to={homePath(user, actingAs)} aria-label="Loadbyton home">
+                <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
+              </Link>
+              <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-widest text-white/60">
+                <span className="lb-status-dot" style={{ width: 6, height: 6 }} aria-hidden="true" /> Live
+              </span>
+            </div>
+
+            <nav className="relative flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
+              {groupNavItems(navItems).map(({ group, items }) => (
+                <div key={group}>
+                  {/* var(--lb-slate-400), not the fixed --text-muted token — the
+                      sidebar is always dark-chrome in both themes (--sidebar-bg),
+                      so it needs a color chosen for that fixed dark background,
+                      not whichever the current theme's muted-text token resolves
+                      to. Was a hardcoded #5E7A8C (3.23:1 against --sidebar-bg's
+                      #0F2B3D, below WCAG AA's 4.5:1) — a real violation found
+                      wiring axe-core into e2e/accessibility.spec.js; this
+                      already-defined primitive measures 5.71:1 against the same
+                      background. */}
+                  <p className="lb-sidebar-group">
+                    {group}
+                  </p>
+                  {items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        cx(
+                          'lb-sidebar-link relative flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-[13.5px] font-medium transition-all',
+                          isActive ? 'text-white' : 'hover:text-white'
+                        )
+                      }
+                      style={({ isActive }) => ({
+                        color: isActive ? '#fff' : '#C7D6DD',
+                        background: isActive ? 'rgba(255,255,255,.09)' : 'transparent',
+                        boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 20px -12px rgba(0,0,0,0.6)' : 'none',
+                        border: isActive ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent',
+                      })}
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {/* Left accent bar — same motif as the Dashboard's
+                              KPI tiles (BentoStat's accentBar), so the active
+                              nav state and the stat cards read as one visual
+                              system rather than two unrelated treatments. */}
+                          {isActive && (
+                            <span className="absolute inset-y-1.5 -left-0.5 w-[3px] rounded-full" style={{ background: 'var(--brand-accent)', boxShadow: '0 0 12px var(--brand-accent)' }} />
+                          )}
+                          <span style={{ color: isActive ? 'var(--brand-accent)' : 'inherit', opacity: isActive ? 1 : 0.85 }}>{item.icon}</span>
+                          {item.label}
+                        </>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
+              ))}
+            </nav>
+
+            <div className="relative flex items-center gap-2.5 px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,.08)', background: 'rgba(0,0,0,0.18)' }}>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: 'var(--brand-secondary)' }}>
+                {(actingAs ? actingAs.displayName || actingAs.email : user.email)?.[0]?.toUpperCase() || '?'}
+              </span>
+              <div className="min-w-0 flex-1 text-xs">
+                <p className="truncate font-semibold text-white">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
+                <p className="truncate font-mono text-[10px] uppercase tracking-widest" style={{ color: '#8FA6B3' }}>{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                  {theme === 'dark' ? <IconSun size={14} /> : <IconMoon size={14} />}
+                </button>
+                <button onClick={() => setLocale(locale === 'ar' ? 'en' : 'ar')} className="flex h-7 w-7 items-center justify-center rounded-md text-[10px] font-bold text-white/70 hover:bg-white/10 hover:text-white" aria-label={locale === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}>
+                  {locale === 'ar' ? 'EN' : 'ع'}
+                </button>
+                <Link to="/profile" className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label="Profile & settings">
+                  <IconUser size={14} />
+                </Link>
+                <button onClick={handleLogout} className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label="Log out">
+                  <IconLogOut size={14} />
+                </button>
+              </div>
+            </div>
+          </aside>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Desktop header: floating ops bar. Guests get the pill marketing
+              nav; signed-in users get command search + TRN + bell, since role
+              nav already lives in the sidebar. */}
+          <header
+            className="lb-chrome-veil app-topbar sticky top-0 z-header hidden border-b md:block"
+            style={{ borderColor: 'var(--border-subtle)' }}
+          >
+            <div className="lb-top-route-line" aria-hidden="true" />
+            {user ? (
+              <div className="flex h-16 items-center justify-between gap-4 px-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="lb-section-label">Ops console</span>
+                  <span className="hidden font-mono text-[11px] text-ink-muted xl:inline">post → discover → award → move → close</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <CommandPaletteHint pill />
+                  <TrnQuickLink />
+                  <NotificationBell />
+                </div>
+              </div>
+            ) : (
+              <div className="mx-auto flex max-w-content items-center justify-between gap-4 px-5 py-3 sm:px-6 lg:px-8">
+                <Logo />
+                <nav className="lb-guest-pill lb-chrome-veil hidden items-center gap-0.5 px-1.5 py-1 lg:flex" aria-label="Primary">
+                  {guestLinks.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) => cx('rounded-full px-3.5 py-1.5 text-[13px] font-semibold transition-all', isActive ? 'lb-nav-pill-active' : 'text-ink-secondary hover:bg-raised hover:text-ink')}
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </nav>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="lb-icon-btn" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                    {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+                  </button>
+                  <Link to="/login" className="hidden rounded-full px-3.5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-raised sm:block">
+                    {t('nav.login', 'Log in')}
+                  </Link>
+                  <Link to="/register" className="btn-accent btn-shine px-4 py-2 text-sm">{t('nav.register', 'Get started')}</Link>
+                </div>
+              </div>
+            )}
+          </header>
+
+          <main className="app-main flex-1">{children}</main>
+
+          {!user && (
+            <footer className="lb-footer" dir="ltr">
+              <div className="lb-top-route-line" aria-hidden="true" />
+              <div className="mx-auto w-full max-w-content px-5 pb-8 pt-12 sm:px-6 lg:px-8">
+                <div className="grid gap-10 lg:grid-cols-[1.2fr,2fr]">
+                  <div>
+                    <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-7 w-auto" />
+                    <p className="mt-4 max-w-sm font-display text-xl font-semibold leading-snug text-white">
+                      The load exists everywhere. So the truth exists nowhere — <span style={{ color: 'var(--lb-ember-bright)' }}>until it lives on Loadbyton.</span>
+                    </p>
+                    <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/60">
+                      One shared load record from post to settlement — across web, mobile and WhatsApp. Road freight marketplace software, built for businesses across the UAE.
+                    </p>
+                    <div className="mt-6 flex flex-wrap gap-2.5">
+                      <Link to="/register" className="btn-accent btn-shine px-5 py-2.5 text-sm">Start with one load <IconArrowRight size={15} /></Link>
+                      <Link to="/for-shippers" className="rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/10">Talk to sales</Link>
+                    </div>
+                    <p className="mt-5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
+                      <span className="lb-status-dot" aria-hidden="true" /> All corridors operational
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+                    <div className="lb-footer-col">
+                      <h3>Platform</h3>
+                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
+                        <Link to="/features">Features</Link>
+                        <Link to="/industries">Industries</Link>
+                        <Link to="/pricing">Pricing</Link>
+                        <Link to="/trust">Trust &amp; Safety</Link>
+                      </div>
+                    </div>
+                    <div className="lb-footer-col">
+                      <h3>By role</h3>
+                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
+                        <Link to="/for-shippers">For Shippers</Link>
+                        <Link to="/for-transporters">For Transporters</Link>
+                        <Link to="/about">About</Link>
+                        <Link to="/blog">Blog</Link>
+                      </div>
+                    </div>
+                    <div className="lb-footer-col">
+                      <h3>Assurance</h3>
+                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
+                        <Link to="/security">Security</Link>
+                        <Link to="/compliance">Compliance</Link>
+                        <Link to="/terms">Terms</Link>
+                        <Link to="/privacy">Privacy</Link>
+                      </div>
+                    </div>
+                    <div className="lb-footer-col">
+                      <h3>Terminal</h3>
+                      <div className="flex flex-col gap-2.5 font-mono text-[11px] text-white/55">
+                        <span>JEBEL ALI · 25.01°N</span>
+                        <span>MUSSAFAH · 24.35°N</span>
+                        <span>KHOR FAKKAN · 25.33°N</span>
+                        <span>FUJAIRAH · 25.12°N</span>
+                        <a href="mailto:support@loadbyton.ae" className="mt-1 font-sans text-sm font-semibold text-white/80 hover:text-white">support@loadbyton.ae</a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="lb-footer-ticker overflow-hidden py-2.5" aria-hidden="true">
+                <div className="lb-ticker-track font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">
+                  {[...FOOTER_TICKER, ...FOOTER_TICKER].map((lane, i) => (
+                    <span key={i} className="flex items-center gap-8 whitespace-nowrap">
+                      {lane} <span style={{ color: 'var(--lb-ember-bright)' }}>●</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="mx-auto flex w-full max-w-content flex-col gap-2 px-5 py-5 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+                <p>© {new Date().getFullYear()} Loadbyton Freight Technologies FZ-LLC. All rights reserved.</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em]">Registered in Dubai, UAE · LBT-OPS/2026</p>
+              </div>
+            </footer>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const WALKTHROUGH_STEPS = [
+  { title: 'Post your first requirement', body: 'Create a job post that verified transporters can bid on.', cta: "Let's start" },
+  { title: 'Review transporter bids', body: 'Compare price, ETA, and ratings from competing transporters.', cta: 'Next' },
+  { title: 'Award and track', body: 'Accept a bid, mark status updates, and release payouts.', cta: 'Got it' },
+];
+
+function WalkthroughModal({ step, onStep, onFinish }) {
+  const current = WALKTHROUGH_STEPS[Math.min(step, WALKTHROUGH_STEPS.length - 1)];
+  const isLast = step >= WALKTHROUGH_STEPS.length - 1;
+
+  return (
+    <div className="fixed inset-0 z-overlay flex items-center justify-center bg-black/60 px-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label="Welcome walkthrough">
+      <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-[20px] border bg-surface shadow-2xl" style={{ borderColor: 'var(--border-default)' }}>
+        <div className="lb-top-route-line" aria-hidden="true" />
+        <div className="p-5 sm:p-8">
+          <p className="lb-section-label">Welcome aboard</p>
+          <h2 className="mt-2 font-display text-xl font-bold text-ink">Welcome to Loadbyton</h2>
+          <p className="mt-1 mb-6 text-sm text-ink-muted">Step {step + 1} of {WALKTHROUGH_STEPS.length}</p>
+
+          <div className="mb-1 flex gap-1.5">
+            {WALKTHROUGH_STEPS.map((_, i) => (
+              <span key={i} className="h-1 flex-1 rounded-full transition-all" style={{ background: i <= step ? 'var(--brand-accent)' : 'var(--border-default)' }} />
+            ))}
+          </div>
+
+          <div className="mt-6">
+            <h3 className="font-semibold text-ink">{current.title}</h3>
+            <p className="mt-1 text-sm text-ink-muted">{current.body}</p>
+            <button onClick={() => (isLast ? onFinish() : onStep(step + 1))} className="btn-accent btn-shine mt-4 w-full">
+              {current.cta}
+            </button>
+          </div>
+
+          <div className="mt-6 border-t pt-4 text-center" style={{ borderColor: 'var(--border-subtle)' }}>
+            <button onClick={onFinish} className="text-xs font-medium text-ink-muted hover:text-ink">
+              Skip — don't show this again
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
