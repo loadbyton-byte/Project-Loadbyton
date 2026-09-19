@@ -826,78 +826,52 @@ function ShellInner({ children }) {
 
           {!user && (
             <footer className="lb-footer" dir="ltr">
-              <div className="lb-top-route-line" aria-hidden="true" />
-              <div className="mx-auto w-full max-w-content px-5 pb-8 pt-12 sm:px-6 lg:px-8">
-                <div className="grid gap-10 lg:grid-cols-[1.2fr,2fr]">
-                  <div>
+              <div className="mx-auto w-full max-w-content px-5 pb-8 pt-16 sm:px-6 lg:px-8 lg:pt-24">
+                <div className="grid gap-12 pb-16 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:gap-16">
+                  <div className="lb-footer-brand">
                     <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-7 w-auto" />
-                    <p className="mt-4 max-w-sm font-display text-xl font-semibold leading-snug text-white">
-                      The load exists everywhere. So the truth exists nowhere — <span style={{ color: 'var(--lb-ember-bright)' }}>until it lives on Loadbyton.</span>
+                    <p className="mt-7 max-w-xs text-sm leading-7 text-white/55">
+                      A connected freight workspace for the operational work behind the load.
                     </p>
-                    <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/60">
-                      One shared load record from post to settlement — across web, mobile and WhatsApp. Road freight marketplace software, built for businesses across the UAE.
-                    </p>
-                    <div className="mt-6 flex flex-wrap gap-2.5">
-                      <Link to="/register" className="btn-accent btn-shine px-5 py-2.5 text-sm">Start with one load <IconArrowRight size={15} /></Link>
-                      <Link to="/for-shippers" className="rounded-xl border border-white/20 bg-white/5 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/10">Talk to sales</Link>
-                    </div>
-                    <p className="mt-5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/45">
-                      <span className="lb-status-dot" aria-hidden="true" /> All corridors operational
+                    <p className="mt-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/55">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,.12)]" aria-hidden="true" /> Operating in the UAE
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
-                    <div className="lb-footer-col">
-                      <h3>Platform</h3>
-                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
-                        <Link to="/features">Features</Link>
-                        <Link to="/industries">Industries</Link>
-                        <Link to="/pricing">Pricing</Link>
-                        <Link to="/trust">Trust &amp; Safety</Link>
-                      </div>
+                  <div className="lb-footer-col">
+                    <h3>Platform</h3>
+                    <div className="flex flex-col gap-4 text-sm text-white/60">
+                      <Link to="/features">Features</Link>
+                      <Link to="/industries">Industries</Link>
+                      <Link to="/pricing">Pricing</Link>
+                      <Link to="/trust">Trust &amp; safety</Link>
                     </div>
-                    <div className="lb-footer-col">
-                      <h3>By role</h3>
-                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
-                        <Link to="/for-shippers">For Shippers</Link>
-                        <Link to="/for-transporters">For Transporters</Link>
-                        <Link to="/about">About</Link>
-                        <Link to="/blog">Blog</Link>
-                      </div>
+                  </div>
+                  <div className="lb-footer-col">
+                    <h3>Product</h3>
+                    <div className="flex flex-col gap-4 text-sm text-white/60">
+                      <Link to="/for-shippers">For shippers</Link>
+                      <Link to="/for-transporters">For transporters</Link>
+                      <Link to="/gcc/corridors">GCC corridors</Link>
+                      <Link to="/login">Operations login</Link>
                     </div>
-                    <div className="lb-footer-col">
-                      <h3>Assurance</h3>
-                      <div className="flex flex-col gap-2.5 text-sm text-white/70">
-                        <Link to="/security">Security</Link>
-                        <Link to="/compliance">Compliance</Link>
-                        <Link to="/terms">Terms</Link>
-                        <Link to="/privacy">Privacy</Link>
-                      </div>
-                    </div>
-                    <div className="lb-footer-col">
-                      <h3>Terminal</h3>
-                      <div className="flex flex-col gap-2.5 font-mono text-[11px] text-white/55">
-                        <span>JEBEL ALI · 25.01°N</span>
-                        <span>MUSSAFAH · 24.35°N</span>
-                        <span>KHOR FAKKAN · 25.33°N</span>
-                        <span>FUJAIRAH · 25.12°N</span>
-                        <a href="mailto:support@loadbyton.ae" className="mt-1 font-sans text-sm font-semibold text-white/80 hover:text-white">support@loadbyton.ae</a>
-                      </div>
+                  </div>
+                  <div className="lb-footer-col">
+                    <h3>Company</h3>
+                    <div className="flex flex-col gap-4 text-sm text-white/60">
+                      <Link to="/about">About</Link>
+                      <Link to="/blog">Blog</Link>
+                      <a href="mailto:hello@loadbyton.com">Contact</a>
+                      <Link to="/register">Get started</Link>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="lb-footer-ticker overflow-hidden py-2.5" aria-hidden="true">
-                <div className="lb-ticker-track font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-white/45">
-                  {[...FOOTER_TICKER, ...FOOTER_TICKER].map((lane, i) => (
-                    <span key={i} className="flex items-center gap-8 whitespace-nowrap">
-                      {lane} <span style={{ color: 'var(--lb-ember-bright)' }}>●</span>
-                    </span>
-                  ))}
+                <div className="flex flex-col gap-5 border-t border-white/10 pt-8 text-xs text-white/45 lg:flex-row lg:items-center lg:justify-between">
+                  <p>© {new Date().getFullYear()} Loadbyton. All rights reserved.</p>
+                  <div className="flex flex-wrap gap-x-7 gap-y-3">
+                    <Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/security">Security</Link><Link to="/compliance">Compliance</Link>
+                  </div>
+                  <p className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]"><span className="h-5 w-5 rounded bg-emerald-500" /> UAE · Freight technology</p>
                 </div>
-              </div>
-              <div className="mx-auto flex w-full max-w-content flex-col gap-2 px-5 py-5 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-                <p>© {new Date().getFullYear()} Loadbyton Freight Technologies FZ-LLC. All rights reserved.</p>
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em]">Registered in Dubai, UAE · LBT-OPS/2026</p>
               </div>
             </footer>
           )}
