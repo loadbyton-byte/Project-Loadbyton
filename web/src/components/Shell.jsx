@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, homePath } from '../lib/auth.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { api } from '../lib/api.js';
@@ -315,6 +315,13 @@ const FOOTER_TICKER = [
 ];
 
 export function Shell({ children }) {
+  const location = useLocation();
+
+  // The approved homepage is a complete, self-contained composition. It
+  // owns its navigation, footer, spacing and responsive behaviour, so the
+  // application shell must not add a second header/footer around it.
+  if (location.pathname === '/') return children;
+
   return <ShellInner>{children}</ShellInner>;
 }
 
