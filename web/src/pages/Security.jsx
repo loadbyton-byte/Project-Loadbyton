@@ -55,7 +55,7 @@ export default function Security() {
           {BUILT.map((item, i) => (
             <Reveal key={item.title} delay={(i % 3) * 60} className="lb-item">
               <div className="lb-item-top"><span>S-{String(i + 1).padStart(2, '0')}</span>{item.icon}</div>
-              <h3 style={{ marginTop: 40, fontSize: 19 }}>{item.title} <IconCheck size={13} style={{ color: '#267038', verticalAlign: 'baseline' }} /></h3>
+              <h3 style={{ marginTop: 40, fontSize: 19 }}>{item.title} <IconCheck size={13} style={{ color: 'var(--status-success)', verticalAlign: 'baseline' }} /></h3>
               <p>{item.detail}</p>
               <i className="lb-item-rail" />
             </Reveal>
@@ -67,8 +67,8 @@ export default function Security() {
         <Reveal className="lb-section-heading"><span className="lb-section-no">02 / ROADMAP</span><h2>Not yet complete — stated as such.</h2></Reveal>
         <div style={{ marginTop: 40, maxWidth: 720 }}>
           {ROADMAP.map((item, i) => (
-            <Reveal key={item} delay={i * 60} className="lb-doc" style={{ borderColor: '#f0c36d', background: '#fffdf5' }}>
-              <p style={{ display: 'flex', alignItems: 'flex-start', gap: 12, fontSize: 14, color: '#102631' }}>
+            <Reveal key={item} delay={i * 60} className="lb-doc" style={{ borderColor: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}>
+              <p style={{ display: 'flex', alignItems: 'flex-start', gap: 12, fontSize: 14, color: 'var(--text-primary)' }}>
                 <span style={{ marginTop: 6, width: 7, height: 7, flexShrink: 0, borderRadius: '50%', background: 'var(--status-warning)' }} />
                 {item}
               </p>

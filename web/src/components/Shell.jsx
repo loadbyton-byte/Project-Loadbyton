@@ -639,7 +639,7 @@ function ShellInner({ children }) {
                   <Link to="/profile" onClick={closeDrawer} className="mb-1.5 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
                     <IconUser size={16} /> Profile &amp; settings
                   </Link>
-                  <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-[#FF8A80] hover:bg-white/5">
+                  <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold hover:bg-white/5" style={{ color: 'var(--lb-red-200)' }}>
                     <IconLogOut size={16} /> Log out
                   </button>
                 </>
@@ -713,7 +713,7 @@ function ShellInner({ children }) {
                         )
                       }
                       style={({ isActive }) => ({
-                        color: isActive ? '#fff' : '#C7D6DD',
+                        color: isActive ? 'var(--text-inverse)' : 'var(--lb-slate-300)',
                         background: isActive ? 'rgba(255,255,255,.09)' : 'transparent',
                         boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 20px -12px rgba(0,0,0,0.6)' : 'none',
                         border: isActive ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent',
@@ -744,7 +744,7 @@ function ShellInner({ children }) {
               </span>
               <div className="min-w-0 flex-1 text-xs">
                 <p className="truncate font-semibold text-white">{actingAs ? actingAs.displayName || actingAs.email : user.email}</p>
-                <p className="truncate font-mono text-[10px] uppercase tracking-widest" style={{ color: '#8FA6B3' }}>{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
+                <p className="truncate font-mono text-[10px] uppercase tracking-widest" style={{ color: 'var(--lb-slate-400)' }}>{actingAs ? `Seat · ${actingAs.seatRole}` : `${user.role} · ${user.tier}`}</p>
               </div>
               <div className="flex shrink-0 items-center gap-0.5">
                 <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="flex h-7 w-7 items-center justify-center rounded-md text-white/70 hover:bg-white/10 hover:text-white" aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>

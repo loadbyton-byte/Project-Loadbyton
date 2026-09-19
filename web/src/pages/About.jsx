@@ -49,11 +49,11 @@ export default function About() {
       <section><div className="container-page">
         <Reveal className="lb-section-heading"><span className="lb-section-no">02 / THE THESIS</span><h2>After the first job.</h2></Reveal>
         <Reveal className="lb-two-col" delay={60}>
-          <p style={{ fontSize: 16, lineHeight: 1.75, color: '#607078' }}>
+          <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--text-secondary)' }}>
             Loadbyton exists to change what happens after the first job. The product is built around the second shipment: recurring templates, committed contract lanes, a personal rate benchmark, and a payment-protection flow real enough that transporters and shippers can trust it with money.
           </p>
-          <p style={{ fontSize: 16, lineHeight: 1.75, color: '#607078' }}>
-            It's a working system, not a slide deck — payouts on the current deployment are a database status flip rather than a licensed money-transfer rail, and that's stated plainly on the <Link to="/security" className="lb-quiet-link" style={{ color: '#102631' }}>Security</Link> and <Link to="/compliance" className="lb-quiet-link" style={{ color: '#102631' }}>Compliance</Link> pages rather than glossed over. The logic underneath is the logic a real freight marketplace needs to run on.
+          <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--text-secondary)' }}>
+            It's a working system, not a slide deck — payouts on the current deployment are a database status flip rather than a licensed money-transfer rail, and that's stated plainly on the <Link to="/security" className="lb-quiet-link" style={{ color: 'var(--text-primary)' }}>Security</Link> and <Link to="/compliance" className="lb-quiet-link" style={{ color: 'var(--text-primary)' }}>Compliance</Link> pages rather than glossed over. The logic underneath is the logic a real freight marketplace needs to run on.
           </p>
         </Reveal>
       </div></section>
