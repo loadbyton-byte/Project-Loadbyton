@@ -329,6 +329,7 @@ function ShellInner({ children }) {
   const { user, logout, theme, setTheme, walkthroughFinished, walkthroughStep, completeWalkthrough, setWalkthroughStep, endImpersonation, actingAs } = useAuth();
   const { locale, setLocale, t } = useLocale();
   const navigate = useNavigate();
+  const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [endingImpersonation, setEndingImpersonation] = useState(false);
   const [resendingVerification, setResendingVerification] = useState(false);
@@ -340,6 +341,15 @@ function ShellInner({ children }) {
   // straight back to /driver. Its whole app is that one page — no sidebar.
   const navItems = (actingAs?.seatRole === 'DRIVER' || actingAs?.seatRole === 'DRIVER_ASSOCIATE') ? [] : (user ? navByRole(t)[user.role] || [] : []);
   const { addToast } = useToasts();
+  const routeSurface = (() => {
+    const path = location.pathname;
+    if (['/features', '/pricing', '/about', '/blog', '/security', '/compliance', '/terms', '/privacy', '/industries', '/trust', '/for-transporters', '/for-shippers'].includes(path)) return 'public';
+    if (['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'].includes(path)) return 'auth';
+    if (path === '/admin' || path.startsWith('/admin/')) return 'admin';
+    if (path === '/driver' || path.startsWith('/driver/')) return 'driver';
+    if (path.startsWith('/jobs/') || path.startsWith('/rfps/') || path.startsWith('/edi/')) return 'record';
+    return 'workspace';
+  })();
 
   function closeDrawer() {
     setDrawerOpen(false);
@@ -812,7 +822,7 @@ function ShellInner({ children }) {
             )}
           </header>
 
-          <main className="app-main flex-1">{children}</main>
+          <main className={`app-main lb-route-surface lb-route-${routeSurface} flex-1`} data-route-surface={routeSurface}>{children}</main>
 
           {!user && (
             <footer className="lb-footer" dir="ltr">
