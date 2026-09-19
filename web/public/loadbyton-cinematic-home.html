@@ -81,9 +81,10 @@ img,svg,video{display:block;max-width:100%}
 .nav.scrolled .search-pill{background:#fff;border-color:var(--line)}
 .menu{display:none;width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(7,21,29,.35);color:#fff;font-size:16px;place-items:center}
 .nav.scrolled .menu{background:#fff;border-color:var(--line);color:var(--ink)}
-.mobile-nav{position:fixed;z-index:3900;inset:0;background:var(--ink);padding:105px 24px 40px;opacity:0;visibility:hidden;transition:opacity .3s,visibility .3s;overflow-y:auto}
-.mobile-nav.open{opacity:1;visibility:visible}
-.mobile-nav a:not(.btn){display:block;color:#fff;font:760 30px Geist,sans-serif;letter-spacing:-.03em;padding:13px 0;border-bottom:1px solid var(--lineD)}
+.mobile-nav{position:fixed;z-index:3900;top:0;right:0;bottom:0;width:min(390px,88vw);background:var(--ink);padding:100px 28px 40px;opacity:0;visibility:hidden;transform:translateX(100%);transition:opacity .3s,visibility .3s,transform .38s var(--spring);overflow-y:auto;box-shadow:-30px 0 80px rgba(0,0,0,.28)}
+.mobile-nav::before{content:"EXPLORE LOADBYTON";display:block;margin-bottom:18px;color:rgba(255,255,255,.44);font:700 9px "JetBrains Mono",monospace;letter-spacing:.2em}
+.mobile-nav.open{opacity:1;visibility:visible;transform:none}
+.mobile-nav a:not(.btn){display:block;color:#fff;font:720 22px Geist,sans-serif;letter-spacing:-.025em;padding:12px 0;border-bottom:1px solid var(--lineD)}
 .mobile-nav .btn{width:100%;margin-top:25px}
 
 /* HERO */
@@ -988,27 +989,34 @@ footer{
       </svg>
     </a>
     <nav class="links" aria-label="Primary">
-      <a href="#problem">The problem</a>
-      <a href="#solution">Platform</a>
-      <a href="#process">Process</a>
-      <a href="#devices">Product</a>
-      <a href="#demo">Demo</a>
+      <a href="/features" target="_top">Features</a>
+      <a href="/industries" target="_top">Industries</a>
+      <a href="/pricing" target="_top">Pricing</a>
+      <a href="/for-shippers" target="_top">Shippers</a>
+      <a href="/for-transporters" target="_top">Transporters</a>
+      <a href="/about" target="_top">About</a>
     </nav>
     <div class="nav-right">
       <button class="search-pill" data-command type="button">Search · ⌘K</button>
-      <button class="btn btn-red btn-sm shimmer" data-post type="button">Post a Load →</button>
+      <a class="btn btn-red btn-sm shimmer" href="/register" target="_top">Get started →</a>
       <button class="menu" id="menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
     </div>
   </div>
 </header>
 
 <div class="mobile-nav" id="mobileNav">
-  <a href="#problem">The problem</a>
-  <a href="#solution">Platform</a>
-  <a href="#process">Process</a>
-  <a href="#devices">Product</a>
-  <a href="#demo">Demo</a>
-  <button class="btn btn-red" data-post type="button">Post a Load →</button>
+  <a href="/features" target="_top">Features</a>
+  <a href="/industries" target="_top">Industries</a>
+  <a href="/pricing" target="_top">Pricing</a>
+  <a href="/for-shippers" target="_top">For shippers</a>
+  <a href="/for-transporters" target="_top">For transporters</a>
+  <a href="/about" target="_top">About</a>
+  <a href="/blog" target="_top">Blog</a>
+  <a href="/security" target="_top">Security</a>
+  <a href="/compliance" target="_top">Compliance</a>
+  <a href="/trust" target="_top">Trust &amp; safety</a>
+  <a href="/login" target="_top">Log in</a>
+  <a class="btn btn-red" href="/register" target="_top">Get started →</a>
 </div>
 
 <main id="top">
@@ -1660,30 +1668,30 @@ footer{
       <div class="fcol">
         <h4>Platform</h4>
         <ul>
-          <li><a href="#problem">The problem</a></li>
-          <li><a href="#solution">Solution</a></li>
-          <li><a href="#process">Process</a></li>
-          <li><a href="#demo">Interactive demo</a></li>
+          <li><a href="/features" target="_top">Features</a></li>
+          <li><a href="/industries" target="_top">Industries</a></li>
+          <li><a href="/pricing" target="_top">Pricing</a></li>
+          <li><a href="/trust" target="_top">Trust &amp; safety</a></li>
         </ul>
       </div>
 
       <div class="fcol">
         <h4>Product</h4>
         <ul>
-          <li><a href="#devices">Dashboard</a></li>
-          <li><a href="#devices">Mobile</a></li>
-          <li><a href="#demo">Operations</a></li>
-          <li><a href="#trust">Coverage</a></li>
+          <li><a href="/for-shippers" target="_top">For shippers</a></li>
+          <li><a href="/for-transporters" target="_top">For transporters</a></li>
+          <li><a href="/gcc/corridors" target="_top">GCC corridors</a></li>
+          <li><a href="/login" target="_top">Operations login</a></li>
         </ul>
       </div>
 
       <div class="fcol">
         <h4>Company</h4>
         <ul>
-          <li><a href="#">About</a></li>
-          <li><a href="#">Careers</a></li>
+          <li><a href="/about" target="_top">About</a></li>
+          <li><a href="/blog" target="_top">Blog</a></li>
           <li><a href="mailto:hello@loadbyton.com">Contact</a></li>
-          <li><a href="#" data-post>Post a Load</a></li>
+          <li><a href="/register" target="_top">Get started</a></li>
         </ul>
       </div>
     </div>
@@ -1691,10 +1699,10 @@ footer{
     <div class="foot-bottom">
       <span>© 2026 Loadbyton. All rights reserved.</span>
       <div class="legal">
-        <a href="#">Privacy</a>
-        <a href="#">Terms</a>
-        <a href="#">Security</a>
-        <a href="#">Compliance</a>
+        <a href="/privacy" target="_top">Privacy</a>
+        <a href="/terms" target="_top">Terms</a>
+        <a href="/security" target="_top">Security</a>
+        <a href="/compliance" target="_top">Compliance</a>
       </div>
       <span class="region"><i></i>UAE · FREIGHT TECHNOLOGY</span>
     </div>
