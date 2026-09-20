@@ -5,8 +5,9 @@ import { Reveal } from '../components/Reveal.jsx';
 import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconArrowRight, IconGavel, IconWallet, IconTruck, IconShield, IconClock, IconStar } from '../components/icons.jsx';
+import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
-const PHOTO = 'https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=1600';
+const PHOTO = CAMPAIGN_IMAGES.roadFreight;
 
 const STEPS = [
   { n: '01', title: 'Get verified once', body: 'Submit your trade licence, TRN, and insurance. Usually reviewed within a day. After that, you can bid on any open load — no re-verifying per job.', icon: <IconShield size={20} /> },

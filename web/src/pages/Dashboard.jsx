@@ -295,7 +295,7 @@ export default function Dashboard() {
           <Button variant="ghost" size="sm" className="flex-1 sm:flex-none" onClick={() => setShowImport((v) => !v)}>
             <IconUpload size={15} /> {t('dashboard.importCsv', 'Import CSV')}
           </Button>
-          <Button size="sm" className="flex-1 sm:flex-none" disabled={user?.account_approval_status && user.account_approval_status !== 'APPROVED'} onClick={() => setShowForm(true)}>
+          <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setShowForm(true)}>
             <IconPlus size={15} /> {t('dashboard.postJob', 'Post a job')}
           </Button>
         </div>
@@ -333,6 +333,11 @@ export default function Dashboard() {
         title={<span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconPlus size={14} /></span>{t('dashboard.postNewJob', 'Post a new job')}</span>}
       >
         <form onSubmit={onCreate}>
+              {user?.account_approval_status && user.account_approval_status !== 'APPROVED' && (
+                <p className="mb-4 rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
+                  You can prepare and review the complete load now. Publishing becomes available as soon as your account is approved.
+                </p>
+              )}
               {/* Stepper header (Change 1b Phase E) — matches the mockup's
                   boxed step indicator: a filled accent box for the active
                   step, a checkmark for a done one, a bare number for
@@ -850,7 +855,7 @@ export default function Dashboard() {
                   Continue
                 </Button>
               ) : (
-                <Button type="submit" loading={submitting} disabled={needsTermsCheckbox && !agreedToTerms}>Post job</Button>
+                <Button type="submit" loading={submitting} disabled={(needsTermsCheckbox && !agreedToTerms) || (user?.account_approval_status && user.account_approval_status !== 'APPROVED')}>Post job</Button>
               )}
             </Card.Footer>
         </form>

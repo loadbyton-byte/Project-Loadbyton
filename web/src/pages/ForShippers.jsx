@@ -5,8 +5,9 @@ import { Reveal } from '../components/Reveal.jsx';
 import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconArrowRight, IconPackage, IconGavel, IconShield, IconFile, IconClock, IconLayers } from '../components/icons.jsx';
+import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
-const PHOTO = 'https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=1600';
+const PHOTO = CAMPAIGN_IMAGES.crossDock;
 
 const STEPS = [
   { n: '01', title: 'Post the requirement', body: 'Equipment, terminal or address, deadline, target price — one structured form. It\'s visible to verified transporters the moment it\'s posted.', icon: <IconPackage size={20} /> },

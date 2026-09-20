@@ -121,6 +121,8 @@ export default function Register() {
     scrollTop();
   }
 
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <AuthFrame eyebrow="Join the verified freight network" title="Start with your real operating role." body="A shipper, transporter, forwarder, broker and owner-operator need different controls—but they all contribute to the same accountable load record.">
       <Card className="w-full max-w-lg p-6 sm:p-8">
@@ -169,7 +171,7 @@ export default function Register() {
                   {r.label === 'OWNER_OPERATOR' && <IconTrailer size={22} className="text-brand-accent" />}
                 </span>
                 <div className="flex-1">
-                  <p className="font-display font-bold text-ink">{r.label === 'SHIPPER' ? 'I ship freight' : r.label === 'CARRIER' ? 'I move freight' : r.label === 'FORWARDER' ? 'I forward freight' : r.label === 'BROKER' ? 'I broker freight' : 'I own and operate'}</p>
+                  <p className="font-display font-bold text-ink">{r.label === 'SHIPPER' ? 'I am a shipper' : r.label === 'CARRIER' ? 'I am a transporter' : r.label === 'FORWARDER' ? 'I am a freight forwarder' : r.label === 'BROKER' ? 'I am a freight broker' : 'I am a fleet owner'}</p>
                   <p className="text-sm text-ink-muted">{r.desc}</p>
                 </div>
                 <IconArrowRight size={18} className="text-ink-muted" />
@@ -229,7 +231,10 @@ export default function Register() {
               <div>
                 <Label htmlFor="password">{t('auth.password')}</Label>
                 {/* Matches the server's MIN_PASSWORD_LENGTH (server/index.js). */}
-                <Input id="password" type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 8 characters" />
+                <div className="relative">
+                  <Input id="password" type={showPassword ? 'text' : 'password'} required minLength={8} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 8 characters" className="pr-16" />
+                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-brand-secondary" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>{showPassword ? 'Hide' : 'Show'}</button>
+                </div>
               </div>
             </div>
             <div>

@@ -6,6 +6,7 @@ import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import AuthFrame from '../components/AuthFrame.jsx';
+import BrandWordmark from '../components/BrandWordmark.jsx';
 
 export default function Login() {
   usePageTitle('Log in');
@@ -17,6 +18,7 @@ export default function Login() {
   const [needsMfa, setNeedsMfa] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -40,7 +42,9 @@ export default function Login() {
   return (
     <AuthFrame title="Return to the operating record." body="Your loads, bids, drivers, documents and delivery state remain connected in one freight workspace.">
       <Card className="w-full max-w-md p-8">
-        <p className="font-display text-xl font-semibold text-ink">Log in to Loadbyton</p>
+        <div className="flex flex-wrap items-center gap-2 font-display text-xl font-semibold text-ink">
+          <span>Log in to</span><BrandWordmark className="h-6 w-auto" />
+        </div>
         <p className="mt-1 text-sm text-ink-muted">Post loads, bid on freight, or run the ops console.</p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -53,7 +57,10 @@ export default function Login() {
               <Label htmlFor="password">{t('auth.password')}</Label>
               <Link to="/forgot-password" className="mb-1.5 text-xs font-medium text-brand-secondary hover:underline">Forgot password?</Link>
             </div>
-            <Input id="password" type="password" required autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="••••••••" />
+            <div className="relative">
+              <Input id="password" type={showPassword ? 'text' : 'password'} required autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="••••••••" className="pr-16" />
+              <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-brand-secondary" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>{showPassword ? 'Hide' : 'Show'}</button>
+            </div>
           </div>
           {needsMfa && (
             <div>

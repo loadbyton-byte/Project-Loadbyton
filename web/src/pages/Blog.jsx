@@ -4,8 +4,9 @@ import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { formatDate } from '../lib/constants.js';
 import { Reveal } from '../components/Reveal.jsx';
 import { IconArrowRight } from '../components/icons.jsx';
+import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
-const PHOTO = 'https://images.pexels.com/photos/31361164/pexels-photo-31361164.jpeg?cs=srgb&fm=jpg&w=1600';
+const PHOTO = CAMPAIGN_IMAGES.customs;
 
 const POSTS = [
   {
@@ -13,21 +14,21 @@ const POSTS = [
     date: '2026-07-18',
     tag: 'Operations',
     body: 'A container sitting uncollected at the terminal for two extra days quietly outspends the truck that moved it. The fix isn\'t a faster truck — it\'s a committed delivery date and time attached to every job, not a separate spreadsheet someone forgets to check.',
-    photo: 'https://images.pexels.com/photos/36652827/pexels-photo-36652827.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.containerChassis,
   },
   {
     title: 'Why "just add a phone number field" breaks a freight marketplace',
     date: '2026-06-30',
     tag: 'Product',
     body: 'The moment a shipper and transporter can text each other directly, the second job happens off-platform — at which point the marketplace only ever sees the first transaction from any given pair. Contact gating isn\'t friction for its own sake; it\'s the difference between a marketplace and a one-time introduction service.',
-    photo: 'https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.fleet,
   },
   {
     title: 'A payment-holding state machine is not optional, even for a demo',
     date: '2026-06-05',
     tag: 'Engineering',
     body: 'PENDING, HELD, FUNDED, RELEASED, DISPUTED — five states, and every transition has to be enforced server-side or the payment protection story is fiction. Building it as a real state machine from day one, even before a licensed payment rail exists, is what makes the eventual real-money version a swap of the execution layer, not a rewrite.',
-    photo: 'https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.smartGate,
   },
 ];
 

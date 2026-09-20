@@ -6,8 +6,9 @@ import { Reveal } from '../components/Reveal.jsx';
 import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconCheck, IconArrowRight, IconShield } from '../components/icons.jsx';
+import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
-const PHOTO = 'https://images.pexels.com/photos/27099094/pexels-photo-27099094.jpeg?cs=srgb&fm=jpg&w=1600';
+const PHOTO = CAMPAIGN_IMAGES.roadFreight;
 
 const TIERS = [
   { name: 'Bronze', desc: 'Every account starts here.', fee: 'Standard take rate', perks: ['Post or bid on any open load', 'Payment protection + live tracking', 'Standard 24h payout'] },

@@ -7,10 +7,11 @@ import { Reveal } from '../components/Reveal.jsx';
 import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
 import { IconArrowRight, IconCheck, IconCheckCircle, IconClock, IconFile, IconMapPin, IconMessage, IconPackage, IconShield, IconTruck } from '../components/icons.jsx';
+import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
 const PHOTO = {
-  hero: 'https://images.pexels.com/photos/28520996/pexels-photo-28520996.jpeg?cs=srgb&fm=jpg&w=1920',
-  port: 'https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=1920',
+  hero: CAMPAIGN_IMAGES.containerChassis,
+  port: CAMPAIGN_IMAGES.port,
 };
 
 const RECORD_STEPS = [
@@ -86,8 +87,8 @@ export default function Landing() {
         <img src={PHOTO.hero} alt="Freight truck operating in the UAE" className="lb-hero-photo" /><div className="lb-hero-wash" /><div className="lb-hero-grid" />
         <div className="container-page lb-hero-inner"><div className="lb-hero-copy">
           <p className="lb-kicker"><span>UAE FREIGHT INFRASTRUCTURE</span><i /> DXB · AUH · SHJ · FUJ</p>
-          <h1>The load exists everywhere.<br /><em>So the truth exists nowhere.</em></h1>
-          <p className="lb-hero-lede">Loadbyton replaces calls, chat threads, spreadsheets and disconnected updates with one shared operational record—from first requirement to final payment.</p>
+          <h1>Every load is an opportunity.<br /><em>LOAD|BY|TON makes it visible.</em></h1>
+          <p className="lb-hero-lede">The challenge isn't always finding the load. It's making the opportunity visible, structured and actionable.</p>
           <div className="lb-hero-actions"><Link ref={heroCtaRef} to="/register" className="btn-accent btn-shine">Start with one load <IconArrowRight size={18} /></Link><Link to="/for-transporters" className="lb-quiet-link">I move freight <IconArrowRight size={16} /></Link></div>
           <div className="lb-hero-proof"><span><IconShield size={15} /> Verified network</span><span><IconClock size={15} /> 24h auto-release</span><span><IconMapPin size={15} /> UAE-wide lanes</span></div>
         </div><LoadRecord market={market} /></div><div className="lb-hero-index"><span>01</span><i /><span>ONE RECORD</span></div>

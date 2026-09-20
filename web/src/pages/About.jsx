@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { IconShield, IconLayers, IconClock, IconArrowRight } from '../components/icons.jsx';
+import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
-const PHOTO = 'https://images.pexels.com/photos/2079628/pexels-photo-2079628.jpeg?cs=srgb&fm=jpg&w=1600';
+const PHOTO = CAMPAIGN_IMAGES.fleet;
 
 const PRINCIPLES = [
   { icon: <IconShield size={20} />, title: 'Enforced server-side', body: 'Transporter verification, the payment-hold gate, and the forward-only status flow aren\'t UI hints — every one of them is checked on the server, on every request.' },

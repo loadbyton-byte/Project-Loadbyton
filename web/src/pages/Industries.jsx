@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { IconArrowRight, IconStorefront, IconAcUnit, IconBoat, IconWarehouse, IconRuler, IconInventory } from '../components/icons.jsx';
+import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
-const PHOTO = 'https://images.pexels.com/photos/36656998/pexels-photo-36656998.jpeg?cs=srgb&fm=jpg&w=1600';
+const PHOTO = CAMPAIGN_IMAGES.materials;
 
 // Sector photography, hotlinked from Pexels — verified live and checked for
 // unwanted third-party branding before use (see the marketing-media-refresh
@@ -14,37 +15,37 @@ const INDUSTRIES = [
     icon: <IconStorefront size={20} />,
     title: 'Retail & FMCG',
     body: 'Restocking a warehouse or distribution centre on a schedule the shelves can\'t wait on. Volume inquiries cover a recurring container count at one agreed rate, so a weekly restock doesn\'t mean re-negotiating a price every time.',
-    photo: 'https://images.pexels.com/photos/30824313/pexels-photo-30824313.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.boxTruck,
   },
   {
     icon: <IconRuler size={20} />,
     title: 'Construction & building materials',
     body: 'Steel, cement, tiles, fittings — heavy, awkward, or just bulky freight moving from a port or supplier straight to a site. Equipment posted by type (flatbed, lowbed, tripper) so a transporter can see what the job actually needs before bidding.',
-    photo: 'https://images.pexels.com/photos/36656998/pexels-photo-36656998.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.flatbed,
   },
   {
     icon: <IconAcUnit size={20} />,
     title: 'F&B & cold chain',
     body: 'Temperature matters more than almost anything else in the move. Post the requirement as a reefer container or reefer truck, state the cargo type, and only transporters with the right equipment ever see the job.',
-    photo: 'https://images.pexels.com/photos/27099094/pexels-photo-27099094.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.reefer,
   },
   {
     icon: <IconBoat size={20} />,
     title: 'General trading & re-export',
     body: 'Import, export, and local moves all live on one platform with the same documentation trail — customs paperwork, proof of delivery, and payment status attached to the job permanently, not scattered across a dozen WhatsApp threads with different transporters.',
-    photo: 'https://images.pexels.com/photos/28438301/pexels-photo-28438301.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.port,
   },
   {
     icon: <IconWarehouse size={20} />,
     title: 'Manufacturing & industrial',
     body: 'Inbound raw materials and outbound finished goods, often on a fixed production schedule where a missed pickup window has a real cost. Committed delivery dates and times are part of every bid, not a verbal promise.',
-    photo: 'https://images.pexels.com/photos/31361164/pexels-photo-31361164.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.industrialCargo,
   },
   {
     icon: <IconInventory size={20} />,
     title: 'E-commerce fulfillment',
     body: 'Container-to-warehouse moves feeding a fulfillment operation that runs on inventory arriving when it says it will. Live tracking and a delivery commitment on every job, visible to whoever\'s managing the warehouse side.',
-    photo: 'https://images.pexels.com/photos/36652827/pexels-photo-36652827.jpeg?cs=srgb&fm=jpg&w=800',
+    photo: CAMPAIGN_IMAGES.crossDock,
   },
 ];
 

@@ -13,6 +13,7 @@ import {
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 import CommandPalette from './CommandPalette.jsx';
+import BrandWordmark from './BrandWordmark.jsx';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -31,7 +32,7 @@ export function Logo({ dark = false, className = '', to = '/' }) {
   const isDarkSurface = dark || theme === 'dark';
   return (
     <Link to={to} className={`flex shrink-0 items-center ${className}`} aria-label="Loadbyton home">
-      <img src={isDarkSurface ? '/brand/logo-full-on-dark.svg' : '/brand/logo-full.svg'} alt="Loadbyton" className="h-8 w-auto" />
+      <BrandWordmark dark={isDarkSurface} className="h-8 w-auto" />
     </Link>
   );
 }

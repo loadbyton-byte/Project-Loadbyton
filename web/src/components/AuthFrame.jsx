@@ -1,10 +1,12 @@
 import React from 'react';
+import BrandWordmark from './BrandWordmark.jsx';
 
 export default function AuthFrame({ children, eyebrow = 'Loadbyton operations network', title = 'One load. One accountable record.', body = 'Move freight through a verified operational workspace built around lanes, counterparties, documents and delivery—not disconnected messages.' }) {
   return (
     <main className="ops-auth">
       <section className="ops-auth__context" aria-label="Loadbyton operating context">
         <div>
+          <BrandWordmark dark className="ops-auth__logo" />
           <p className="ops-auth__eyebrow">{eyebrow}</p>
           <h1>{title}</h1>
           <p>{body}</p>
