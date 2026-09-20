@@ -972,6 +972,10 @@ footer{
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
   .lb-ticker-track{animation:none}
 }
+html.shell-embedded .nav,
+html.shell-embedded .mobile-nav,
+html.shell-embedded footer{display:none!important}
+html.shell-embedded body{overflow:hidden}
 </style>
 </head>
 <body>
@@ -1806,6 +1810,19 @@ footer{
 <script>
 (() => {
   'use strict';
+
+  const embeddedInShell = new URLSearchParams(window.location.search).get('embedded') === '1';
+  if (embeddedInShell) {
+    document.documentElement.classList.add('shell-embedded');
+    const reportHeight = () => window.parent.postMessage({
+      type: 'loadbyton:cinematic-height',
+      height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
+    }, window.location.origin);
+    window.addEventListener('load', reportHeight, { once: true });
+    if ('ResizeObserver' in window) new ResizeObserver(reportHeight).observe(document.body);
+    else window.addEventListener('resize', reportHeight);
+    requestAnimationFrame(reportHeight);
+  }
 
   const $  = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
