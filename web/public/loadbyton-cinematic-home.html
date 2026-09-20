@@ -139,7 +139,6 @@ img,svg,video{display:block;max-width:100%}
   linear-gradient(0deg,rgba(5,5,5,.62) 0%,transparent 43%,rgba(5,5,5,.16) 100%);pointer-events:none}
 .hero-noise{position:absolute;inset:0;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");mix-blend-mode:soft-light;pointer-events:none;animation:filmGrain .45s steps(2) infinite}
 .hero-media::before,.hero-media::after{content:"";position:absolute;z-index:4;left:0;right:0;height:clamp(10px,2.2vh,24px);background:#02080b;pointer-events:none}.hero-media::before{top:0}.hero-media::after{bottom:0}
-.hero-brand-lockup{position:absolute;z-index:3;right:clamp(28px,4vw,72px);bottom:clamp(46px,7vh,88px);width:clamp(150px,13vw,220px);height:auto;padding:10px 14px;border:1px solid rgba(255,255,255,.7);border-radius:10px;background:rgba(255,255,255,.9);box-shadow:0 14px 38px rgba(0,0,0,.26);backdrop-filter:blur(12px);pointer-events:none}
 @keyframes filmGrain{0%{transform:translate(0)}25%{transform:translate(-.3%,.2%)}50%{transform:translate(.2%,-.25%)}75%{transform:translate(.25%,.25%)}100%{transform:translate(-.2%,-.15%)}}
 .hero-inner{position:relative;z-index:3;min-height:100svh;display:grid;grid-template-columns:1fr;gap:0;align-items:end;padding-top:160px;padding-bottom:80px}
 .hero-copyblock{max-width:820px;color:#fff}
@@ -943,7 +942,7 @@ footer{
      combined width (~390px) overflowed the ~345px available and pushed
      the hamburger button off the right edge of the viewport entirely,
      making the mobile menu unreachable (not just visually squeezed). */
-  .logo svg,.logo img{width:104px}
+  .logo svg,.logo img{width:126px}
   .theme-pill{display:none}
   .nav-right{gap:6px}
   .nav-login{padding:8px 8px;font-size:11px}
@@ -1025,6 +1024,10 @@ footer{
 
 <header class="nav" id="nav">
   <div class="container navbar">
+    <!-- Mobile order matches Shell.jsx's TopAppBar exactly: hamburger,
+         then logo, then actions — .menu is display:none above 980px so
+         its position here is a no-op for the desktop grid layout below. -->
+    <button class="menu" id="menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
     <a class="logo" href="#top" aria-label="Loadbyton home"><img id="navLogo" src="/brand/logo-full.svg" alt="LOAD BY TON"></a>
     <nav class="links" aria-label="Primary">
       <a href="/features" target="_top">Features</a>
@@ -1038,7 +1041,6 @@ footer{
       <button class="theme-pill" type="button" aria-label="Toggle color theme"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg></button>
       <a class="nav-login" href="/login" target="_top">Log in</a>
       <a class="btn btn-red shimmer" href="/register" target="_top">Get started</a>
-      <button class="menu" id="menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">☰</button>
     </div>
   </div>
 </header>
@@ -1078,7 +1080,6 @@ footer{
     <div class="hero-slide"><img src="/cinematic-assets/campaign-2026/09-curtain-side-forklift.webp" alt="Loadbyton heavy-haul excavator movement" loading="lazy"></div>
     <div class="hero-slide"><img src="/cinematic-assets/campaign-2026/10-box-truck-crossdock.webp" alt="Loadbyton side-loader lifting a container" loading="lazy"></div>
     <div class="hero-slide"><img src="/cinematic-assets/campaign-2026/11-flatbed-steel.webp" alt="Loadbyton warehouse unloading operation" loading="lazy"></div>
-    <img class="hero-brand-lockup" src="/brand/logo-full.svg" alt="" aria-hidden="true">
     <div class="hero-vignette"></div>
     <div class="hero-noise"></div>
   </div>

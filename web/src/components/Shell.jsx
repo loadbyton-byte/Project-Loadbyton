@@ -537,7 +537,7 @@ function ShellInner({ children }) {
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <Link to="/login" className="rounded-full px-2.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
+              <Link to="/login" className="whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
                 {t('nav.login', 'Log in')}
               </Link>
               {/* Desktop's slim header already had both Log in and Get
