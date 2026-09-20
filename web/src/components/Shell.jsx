@@ -316,6 +316,13 @@ const FOOTER_TICKER = [
 ];
 
 export function Shell({ children }) {
+  const location = useLocation();
+
+  // The approved homepage is a complete, self-contained composition. It
+  // owns its navigation, footer, spacing and responsive behaviour, so the
+  // application shell must not add a second header/footer around it.
+  if (location.pathname === '/') return children;
+
   return <ShellInner>{children}</ShellInner>;
 }
 

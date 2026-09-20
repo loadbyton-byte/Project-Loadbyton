@@ -39,6 +39,15 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#0F2B3D" />
+    <!-- iOS ignores site.webmanifest's "display": "standalone" — it only
+         reads home-screen behavior from these Apple-specific tags. Without
+         them, "Add to Home Screen" opened the app inside Safari's own
+         chrome (URL bar, nav buttons) instead of full-screen. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Loadbyton" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Loaded non-render-blocking (media=print, swapped to all in main.jsx) so a
@@ -103,13 +112,13 @@
         gtag('config', GA_ID);
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-p2tvWMhb.js"></script>
+    <script type="module" crossorigin src="/assets/index-DUKLMVBD.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-hePW80VL.js">
     <link rel="modulepreload" crossorigin href="/assets/query-r9YKYr4_.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-Db8Qia-V.js">
     <link rel="modulepreload" crossorigin href="/assets/api-BPPiXbc-.js">
     <link rel="modulepreload" crossorigin href="/assets/socket-DvUdOoxG.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-BFDfnPYn.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-lOYm0GmZ.css">
   </head>
   <body>
     <div id="root"></div>
