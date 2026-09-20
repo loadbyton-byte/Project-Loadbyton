@@ -58,7 +58,7 @@ tbody tr{transition:background 160ms var(--motion-ease)}tbody tr:hover{backgroun
 
 /* Authentication: sober enterprise onboarding, no theatrical effects. */
 .ops-auth{min-height:calc(100dvh - 64px);display:grid;grid-template-columns:minmax(320px,42%) 1fr;background:var(--corp-canvas)}
-.ops-auth__context{display:flex;flex-direction:column;justify-content:center;min-height:650px;padding:clamp(44px,6vw,88px);color:#fff;background:linear-gradient(90deg,rgba(5,22,31,.96),rgba(5,22,31,.78)),url('/cinematic-assets/generated-v3/18-al-quoz-mixed-fleet.webp') center/cover no-repeat}
+.ops-auth__context{display:flex;flex-direction:column;justify-content:center;min-height:650px;padding:clamp(44px,6vw,88px);color:#fff;background:linear-gradient(90deg,rgba(5,22,31,.96),rgba(5,22,31,.78)),url('/cinematic-assets/campaign-2026/01-fleet-yard-office.webp') center/cover no-repeat}
 .ops-auth__logo{position:relative;z-index:1;width:190px;height:auto;margin-bottom:42px;filter:drop-shadow(0 8px 22px rgba(0,0,0,.28))}
 .ops-auth__context::before,.ops-auth__context::after{display:none}.ops-auth__eyebrow{color:#f28a84;font:700 .65rem/1.2 "JetBrains Mono",monospace;letter-spacing:.12em;text-transform:uppercase}
 .ops-auth__context h1{max-width:540px;margin-top:20px;font-size:clamp(2.1rem,3.8vw,4.2rem);font-weight:600;line-height:1.02;letter-spacing:-.05em}
