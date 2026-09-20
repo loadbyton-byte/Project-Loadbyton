@@ -71,14 +71,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router', 'react-router-dom'],
-          query: ['@tanstack/react-query'],
-          // Own chunk rather than bundled into JobDetail (the only importer
-          // today) — it's sizable, rarely changes, and this way it's
-          // cached independently of app-code deploys instead of inflating
-          // JobDetail's chunk every time either changes.
-          socket: ['socket.io-client'],
+        // Rolldown (Vite 8) accepts a function here rather than Rollup's
+        // legacy object form. Keep the same stable vendor boundaries.
+        manualChunks(id) {
+          if (id.includes('/node_modules/@tanstack/react-query/')) return 'query';
+          if (id.includes('/node_modules/socket.io-client/') || id.includes('/node_modules/socket.io-parser/') || id.includes('/node_modules/engine.io-client/')) return 'socket';
+          if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/') || id.includes('/node_modules/react-router/') || id.includes('/node_modules/react-router-dom/')) return 'vendor';
+          return undefined;
         },
       },
     },

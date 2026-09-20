@@ -27,6 +27,17 @@ jobs:
         working-directory: server
         run: npm ci
 
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      # The server prerender tests intentionally verify web/dist. Build first
+      # so CI tests the current source rather than whatever generated shell
+      # happened to be committed by the previous change.
+      - name: Build web frontend
+        working-directory: web
+        run: npm run build
+
       - name: Run server tests
         working-directory: server
         run: npm test
@@ -34,10 +45,6 @@ jobs:
           NODE_ENV: test
           INTERNAL_KEY: ci-test-key
           ENCRYPTION_KEY: ci-test-encryption-key-32chars-long
-
-      - name: Install web dependencies
-        working-directory: web
-        run: npm ci
 
       - name: TypeScript typecheck
         working-directory: server
@@ -49,30 +56,25 @@ jobs:
         env:
           NODE_ENV: test
 
-      - name: Build web frontend
+      - name: Lint web frontend
         working-directory: web
-        run: npm run build
+        run: npm run lint
+
+      - name: Lint server
+        working-directory: server
+        run: npm run lint
 
       - name: Security audit (server)
         working-directory: server
         run: npm audit --audit-level=moderate
 
-      # NOTE: the two steps below are intentionally advisory, not gates.
-      # Each needs real setup before it can safely block a merge:
-      #   - Lint: `npm run lint` in server/ references eslint, which isn't
-      #     an installed dependency or configured here — needs an ESLint
-      #     config added and the resulting findings triaged first.
-      #   - k6: the load script targets a running app server, which no
-      #     step here starts — needs a "boot the app in the background,
-      #     wait for /api/health" step before this can measure anything.
-      # Tracked as follow-up work, not silently treated as "passing" — each
-      # failure below prints why it didn't run rather than being swallowed.
-      - name: Lint server (advisory — not yet a gate, see note above)
-        working-directory: server
-        run: |
-          npm run lint 2>&1 | head -n 100
-          echo "not enforced -- eslint is not configured for server/ yet"
+      - name: Security audit (web)
+        working-directory: web
+        run: npm audit --audit-level=moderate
 
+      # k6 still needs a dedicated booted environment before it can become a
+      # merge gate. Keep the limitation explicit rather than reporting a
+      # false pass against an absent application server.
       - name: Run k6 load baseline (advisory — not yet a gate, see note above)
         run: |
           if docker --version >/dev/null 2>&1; then
