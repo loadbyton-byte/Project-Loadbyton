@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import TermsContent, { TERMS_LAST_UPDATED } from './TermsContent.jsx';
 import { IconClose } from './icons.jsx';
 
@@ -13,7 +14,15 @@ export default function TermsModal({ onClose }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  return (
+  // Portal to <body> — same reasoning as ui.jsx's Modal: this is opened
+  // from inside Dashboard's post-a-job form, a descendant of
+  // operations-system.css's `.container-page` corp-enter entrance
+  // animation, which keeps that ancestor acting as the containing block
+  // for `position: fixed` children for as long as the animation effect
+  // stays attached (fill-mode both never detaches it). Rendered inline,
+  // this panel ended up centered within that ancestor's full scroll
+  // height instead of the viewport.
+  return createPortal(
     <div
       className="animate-fade-in fixed inset-0 z-modal-top flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       role="dialog"
@@ -45,6 +54,7 @@ export default function TermsModal({ onClose }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

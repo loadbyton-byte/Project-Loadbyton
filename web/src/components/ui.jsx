@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { IconStar, IconMapPin, IconAlert, IconX, IconCheck, IconFile, IconPackage, IconHandshake, IconTruck, IconGavel } from './icons.jsx';
 
 function cx(...parts) {
@@ -648,7 +649,20 @@ export function Modal({ open, onClose, title, children, className, wide }) {
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Rendered via a portal straight onto <body> — a Modal mounted inline
+  // inherits whatever containing block its call site happens to sit
+  // inside. Several pages (Dashboard's post-a-job wizard among them) wrap
+  // their content in an entrance animation (operations-system.css's
+  // corp-enter) whose keyframes touch `transform`; browsers keep treating
+  // an element as "having a transform" for as long as that animation
+  // effect is attached (fill-mode both/forwards never detaches it), which
+  // turns that ancestor into the containing block for this panel's
+  // `position: fixed` instead of the viewport — the panel then renders
+  // centered within that ancestor's full scroll height, thousands of
+  // pixels below the fold, looking like the feature simply does nothing.
+  // A portal sidesteps the problem entirely, for this and any future
+  // transformed/animated ancestor, rather than chasing each one down.
+  return createPortal(
     <div className={cx('fixed inset-0 z-overlay flex items-center justify-center p-4', className)} role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="absolute inset-0 bg-black/50 animate-fade-in" onClick={onClose} />
       {/* wide: two-column wizards (Dashboard's post-a-job) exceed the
@@ -664,6 +678,7 @@ export function Modal({ open, onClose, title, children, className, wide }) {
         </div>
         <div ref={bodyRef} className="overflow-y-auto p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
