@@ -44,7 +44,6 @@ export function parseCsv(text) {
   return rows;
 }
 
-const BOOLEAN_TRUE = new Set(['true', '1', 'yes', 'y']);
 const NUMERIC_FIELDS = new Set(['targetPriceAed', 'cargoWeightTons', 'containerCount', 'truckCount']);
 
 // Header row + data rows -> array of job-shaped objects (same field names
@@ -58,8 +57,7 @@ export function csvRowsToJobs(rows) {
     headers.forEach((h, idx) => {
       const raw = (cells[idx] ?? '').trim();
       if (!raw) return;
-      if (BOOLEAN_FIELDS.has(h)) job[h] = BOOLEAN_TRUE.has(raw.toLowerCase());
-      else if (NUMERIC_FIELDS.has(h)) job[h] = Number(raw);
+      if (NUMERIC_FIELDS.has(h)) job[h] = Number(raw);
       else job[h] = raw;
     });
     return job;
