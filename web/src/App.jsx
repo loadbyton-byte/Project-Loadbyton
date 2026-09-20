@@ -8,7 +8,7 @@ import { Spinner } from './components/ui.jsx';
 // server-renders exactly these thirteen routes synchronously
 // (renderToStaticMarkup, no Suspense support), so entry-server.jsx must be
 // able to render them without hitting a lazy() boundary.
-import CinematicLanding from './pages/CinematicLanding.jsx';
+import Landing from './pages/Landing.jsx';
 import Features from './pages/Features.jsx';
 import Pricing from './pages/Pricing.jsx';
 import About from './pages/About.jsx';
@@ -154,7 +154,7 @@ export default function App() {
       <ScrollToTop />
       <Suspense fallback={<FullScreenSpinner />}>
         <Routes>
-          <Route path="/" element={<CinematicLanding />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/features" element={<Features />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/about" element={<About />} />

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getSocket } from '../../lib/socket.js';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
@@ -111,7 +112,13 @@ export default function ChatPopup({ jobId }) {
 
   const messages = activeThread?.messages || [];
 
-  return (
+  // Portal to <body> — mounted inside a page's `.container-page` (an
+  // ancestor carrying operations-system.css's corp-enter entrance
+  // animation), this floating launcher would otherwise anchor to that
+  // ancestor's own box instead of the viewport (see ui.jsx's Modal for the
+  // full explanation) and end up pinned to the bottom of the whole
+  // scrollable page rather than the visible corner.
+  return createPortal(
     <div className="fixed z-topbar" style={{ bottom: 'max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem))', right: 'max(1.25rem, env(safe-area-inset-right))' }} dir="ltr">
       {isOpen && (
         <div
@@ -181,6 +188,7 @@ export default function ChatPopup({ jobId }) {
           </span>
         )}
       </button>
-    </div>
+    </div>,
+    document.body
   );
 }

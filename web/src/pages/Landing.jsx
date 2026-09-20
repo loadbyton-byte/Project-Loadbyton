@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { formatAED, formatLabel } from '../lib/constants.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { Reveal } from '../components/Reveal.jsx';
 import { StickyMobileCta } from '../components/StickyMobileCta.jsx';
 import { useMagnetic } from '../lib/motion.js';
+import { useAuth, homePath } from '../lib/auth.jsx';
+import { Spinner } from '../components/ui.jsx';
 import { IconArrowRight, IconCheck, IconCheckCircle, IconClock, IconFile, IconMapPin, IconMessage, IconPackage, IconShield, IconTruck } from '../components/icons.jsx';
 import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
 
@@ -73,6 +75,7 @@ function ChannelDemo() {
 
 export default function Landing() {
   usePageTitle('');
+  const { user, actingAs, loading } = useAuth();
   const [market, setMarket] = useState(null); const [lanes, setLanes] = useState([]); const [carriers, setCarriers] = useState([]); const [role, setRole] = useState('shipper');
   const heroRef = useRef(null); const heroCtaRef = useMagnetic(); const finalCtaRef = useMagnetic();
   useEffect(() => {
@@ -81,14 +84,21 @@ export default function Landing() {
     api.publicCarriers().then((d) => setCarriers(d.carriers.slice(0, 3))).catch(() => {});
   }, []);
   const roleCopy = ROLE_CONTENT[role];
+  // A signed-in visitor landing on "/" (e.g. a bookmarked homepage URL)
+  // belongs at their dashboard, not back on the marketing page — same
+  // redirect the previous iframe-based CinematicLanding performed.
+  if (loading) {
+    return <div className="flex min-h-dvh items-center justify-center"><Spinner size={28} className="text-brand-primary" /></div>;
+  }
+  if (user) return <Navigate to={homePath(user, actingAs)} replace />;
   return (
     <div className="lb-home" dir="ltr">
       <section ref={heroRef} className="lb-hero">
         <img src={PHOTO.hero} alt="Freight truck operating in the UAE" className="lb-hero-photo" /><div className="lb-hero-wash" /><div className="lb-hero-grid" />
         <div className="container-page lb-hero-inner"><div className="lb-hero-copy">
           <p className="lb-kicker"><span>UAE FREIGHT INFRASTRUCTURE</span><i /> DXB · AUH · SHJ · FUJ</p>
-          <h1>Every load is an opportunity.<br /><em>LOAD|BY|TON makes it visible.</em></h1>
-          <p className="lb-hero-lede">The challenge isn't always finding the load. It's making the opportunity visible, structured and actionable.</p>
+          <h1>ONE LOAD.<br /><em>ONE TRUTH.</em></h1>
+          <p className="lb-hero-lede">Loadbyton keeps the requirement, transporter response, operational message, document and job progress attached to the same freight movement.</p>
           <div className="lb-hero-actions"><Link ref={heroCtaRef} to="/register" className="btn-accent btn-shine">Start with one load <IconArrowRight size={18} /></Link><Link to="/for-transporters" className="lb-quiet-link">I move freight <IconArrowRight size={16} /></Link></div>
           <div className="lb-hero-proof"><span><IconShield size={15} /> Verified network</span><span><IconClock size={15} /> 24h auto-release</span><span><IconMapPin size={15} /> UAE-wide lanes</span></div>
         </div><LoadRecord market={market} /></div><div className="lb-hero-index"><span>01</span><i /><span>ONE RECORD</span></div>

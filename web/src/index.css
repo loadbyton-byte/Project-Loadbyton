@@ -1088,6 +1088,18 @@ html[dir="rtl"] .animate-drawer-in {
     border-color: var(--brand-secondary);
   }
 
+  /* iOS Safari auto-zooms the whole page on focus for any form field
+     under 16px — text-sm above is 14px, so every input/select/textarea in
+     the app triggered it. 16px only below the sm breakpoint keeps the
+     denser desktop sizing untouched. */
+  @media (max-width: 639px) {
+    .input,
+    .textarea,
+    .select {
+      font-size: 16px;
+    }
+  }
+
   .label {
     @apply mb-1.5 block text-sm font-medium text-ink-secondary;
   }
