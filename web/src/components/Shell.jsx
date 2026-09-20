@@ -614,12 +614,23 @@ function ShellInner({ children }) {
                       {item.label}
                     </NavLink>
                   ))}
+                  {/* Industries/Trust — the cinematic homepage's own mobile
+                      drawer already links both; kept out of guestLinks
+                      itself (also the source for the desktop pill nav,
+                      which matches Home's desktop nav exactly and
+                      shouldn't grow past it) so only this drawer gains them. */}
+                  <NavLink to="/industries" onClick={closeDrawer} className={({ isActive }) => cx('lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all', isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white')}>
+                    <span className="lb-drawer-waypoint">{String(guestLinks.length + 1).padStart(2, '0')}</span> Industries
+                  </NavLink>
+                  <NavLink to="/trust" onClick={closeDrawer} className={({ isActive }) => cx('lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all', isActive ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5 hover:text-white')}>
+                    <span className="lb-drawer-waypoint">{String(guestLinks.length + 2).padStart(2, '0')}</span> Trust &amp; safety
+                  </NavLink>
                   <p className="lb-sidebar-group">By role</p>
                   <NavLink to="/for-shippers" onClick={closeDrawer} className="lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
-                    <span className="lb-drawer-waypoint">07</span> For shippers <IconArrowRight size={14} />
+                    <span className="lb-drawer-waypoint">{String(guestLinks.length + 3).padStart(2, '0')}</span> For shippers <IconArrowRight size={14} />
                   </NavLink>
                   <NavLink to="/for-transporters" onClick={closeDrawer} className="lb-sidebar-link flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/70 hover:bg-white/5 hover:text-white">
-                    <span className="lb-drawer-waypoint">08</span> For transporters <IconArrowRight size={14} />
+                    <span className="lb-drawer-waypoint">{String(guestLinks.length + 4).padStart(2, '0')}</span> For transporters <IconArrowRight size={14} />
                   </NavLink>
                 </>
               )}

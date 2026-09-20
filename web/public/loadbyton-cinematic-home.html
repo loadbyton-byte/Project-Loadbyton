@@ -7,6 +7,19 @@
 <meta name="description" content="Loadbyton — one load, one context, one visible operational history. A connected freight workspace for UAE road freight.">
 <meta name="color-scheme" content="light dark">
 <title>Loadbyton — One Load. One Context.</title>
+<!-- Same key/logic as the parent app's index.html inline script — a
+     visitor's dark-mode choice made anywhere in the app (this page is
+     served same-origin, inside an <iframe>, so localStorage is shared)
+     carries over here instead of this page always opening light
+     regardless of what they last chose. -->
+<script>
+  try {
+    var t = localStorage.getItem('loadbyton-theme');
+    document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -65,7 +78,7 @@ img,svg,video{display:block;max-width:100%}
 .nav.scrolled{background:rgba(255,255,255,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom-color:var(--line);box-shadow:0 8px 30px rgba(3,17,25,.055)}
 .navbar{height:80px;display:grid;grid-template-columns:220px 1fr 260px;align-items:center;gap:28px;transition:height .3s}
 .nav.scrolled .navbar{height:72px}
-.logo{display:inline-flex;align-items:center}
+.logo{display:inline-flex;align-items:center;flex-shrink:0}
 .logo svg,.logo img{width:150px;height:auto;display:block}
 .logo .word{fill:var(--navy);transition:fill .3s}
 .logo .sep{stroke:var(--red)}
@@ -75,17 +88,37 @@ img,svg,video{display:block;max-width:100%}
 .links a{padding:9px 14px;border-radius:999px;font-size:12px;font-weight:700;opacity:1;transition:color .2s,background .2s}
 .links a:hover{color:var(--ink);background:var(--cloud)}
 .nav-right{justify-self:end;display:flex;align-items:center;gap:10px;color:var(--ink)}
-.nav-login{padding:10px 12px;font-size:12px;font-weight:750;color:var(--ink)}
+.nav-login{padding:10px 12px;font-size:12px;font-weight:750;color:var(--ink);white-space:nowrap}
 .theme-pill{display:grid;width:42px;height:42px;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--ink);transition:background .2s,transform .2s}
 .theme-pill:hover{background:var(--cloud);transform:translateY(-1px)}
 .search-pill{height:34px;border-radius:999px;padding:0 12px;border:1px solid rgba(255,255,255,.22);background:rgba(7,21,29,.25);color:inherit;font-size:9px;font-weight:700;transition:.25s}
 .nav.scrolled .search-pill{background:#fff;border-color:var(--line)}
 .menu{display:none;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:16px;place-items:center}
+
+/* Dark mode — scoped to the nav bar only (background, links pill, logo,
+   login/menu buttons). --ink/--navy/--cloud are reused throughout this
+   file for elements that must stay dark regardless of theme (the hero,
+   the mobile drawer, several always-dark decorative blocks), so flipping
+   those tokens globally would break those instead of the nav. The rest
+   of the page (cards, sections) keeps its fixed editorial light/dark
+   two-tone look, same as every other Loadbyton marketing page today. */
+:root[data-theme="dark"] .nav{background:rgba(10,26,36,.96);border-bottom-color:rgba(255,255,255,.1)}
+:root[data-theme="dark"] .nav.scrolled{background:rgba(10,26,36,.92);border-bottom-color:rgba(255,255,255,.12);box-shadow:0 8px 30px rgba(0,0,0,.35)}
+:root[data-theme="dark"] .logo .word{fill:#fff}
+:root[data-theme="dark"] .links{background:#0f2733;border-color:rgba(255,255,255,.12);color:rgba(255,255,255,.62)}
+:root[data-theme="dark"] .links a:hover{color:#fff;background:rgba(255,255,255,.08)}
+:root[data-theme="dark"] .nav-right{color:#fff}
+:root[data-theme="dark"] .nav-login{color:#fff}
+:root[data-theme="dark"] .theme-pill{color:#fff}
+:root[data-theme="dark"] .theme-pill:hover{background:rgba(255,255,255,.1)}
+:root[data-theme="dark"] .menu{background:#0f2733;border-color:rgba(255,255,255,.16);color:#fff}
 .mobile-nav{position:fixed;z-index:3900;top:0;right:0;bottom:0;width:min(390px,88vw);background:var(--ink);padding:100px 28px 40px;opacity:0;visibility:hidden;transform:translateX(100%);transition:opacity .3s,visibility .3s,transform .38s var(--spring);overflow-y:auto;box-shadow:-30px 0 80px rgba(0,0,0,.28)}
 .mobile-nav::before{content:"EXPLORE LOADBYTON";display:block;margin-bottom:18px;color:rgba(255,255,255,.44);font:700 9px "JetBrains Mono",monospace;letter-spacing:.2em}
 .mobile-nav.open{opacity:1;visibility:visible;transform:none}
 .mobile-nav a:not(.btn){display:block;color:#fff;font:720 22px Geist,sans-serif;letter-spacing:-.025em;padding:12px 0;border-bottom:1px solid var(--lineD)}
 .mobile-nav .btn{width:100%;margin-top:25px}
+.mobile-theme-toggle{display:flex;align-items:center;gap:10px;width:100%;color:#fff;font:720 15px Geist,sans-serif;letter-spacing:-.01em;padding:12px 0;border-bottom:1px solid var(--lineD)}
+.mobile-theme-toggle svg{flex-shrink:0;color:rgba(255,255,255,.7)}
 
 /* HERO */
 .hero{min-height:100svh;position:relative;overflow:hidden;background:var(--ink)}
@@ -901,8 +934,21 @@ footer{
   .section{padding:80px 0}
   .links,.search-pill{display:none}
   .menu{display:grid}
-  .logo svg{width:160px}
-  .navbar{display:flex;height:70px}
+  .navbar{display:flex;justify-content:space-between;align-items:center;gap:10px;height:70px}
+  /* Dark-mode toggle moves into the mobile drawer below (.mobile-theme-
+     toggle) — keeping it inline here, alongside Log in/Get started/the
+     hamburger, left no room for anything else on a 360-390px phone.
+     Logo and the two nav-right buttons also drop to a denser size here —
+     at the base 150px logo + full-size Get-started button, the group's
+     combined width (~390px) overflowed the ~345px available and pushed
+     the hamburger button off the right edge of the viewport entirely,
+     making the mobile menu unreachable (not just visually squeezed). */
+  .logo svg,.logo img{width:104px}
+  .theme-pill{display:none}
+  .nav-right{gap:6px}
+  .nav-login{padding:8px 8px;font-size:11px}
+  .nav-right .btn{height:36px;padding:0 14px;font-size:10px}
+  .menu{width:38px;height:38px}
   .hero-inner{padding-top:150px;padding-bottom:60px}
   .hero-proof{display:none}
   .problem-head,.problem-layout,.device-row,.device-row.rev{grid-template-columns:1fr}
@@ -979,7 +1025,7 @@ footer{
 
 <header class="nav" id="nav">
   <div class="container navbar">
-    <a class="logo" href="#top" aria-label="Loadbyton home"><img src="/brand/logo-full.svg" alt="LOAD BY TON"></a>
+    <a class="logo" href="#top" aria-label="Loadbyton home"><img id="navLogo" src="/brand/logo-full.svg" alt="LOAD BY TON"></a>
     <nav class="links" aria-label="Primary">
       <a href="/features" target="_top">Features</a>
       <a href="/pricing" target="_top">Pricing</a>
@@ -1008,6 +1054,10 @@ footer{
   <a href="/security" target="_top">Security</a>
   <a href="/compliance" target="_top">Compliance</a>
   <a href="/trust" target="_top">Trust &amp; safety</a>
+  <button class="mobile-theme-toggle" type="button" id="mobileThemeToggle" aria-pressed="false">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+    <span id="mobileThemeToggleLabel">Dark mode</span>
+  </button>
   <a href="/login" target="_top">Log in</a>
   <a class="btn btn-red" href="/register" target="_top">Get started →</a>
 </div>
@@ -1875,6 +1925,37 @@ footer{
     syncLock();
   });
   $$('#mobileNav a').forEach(a => on(a, 'click', () => { closeMobileNav(); syncLock(); }));
+
+  /* Theme toggle — same 'loadbyton-theme' localStorage key the parent app
+     reads (web/index.html's own inline script), so a choice made on this
+     page or on the app carries over either way; this page is same-origin,
+     served inside an <iframe>, so localStorage is genuinely shared, not
+     just a matching key name. */
+  const THEME_KEY = 'loadbyton-theme';
+  const MOON = '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/>';
+  const SUN = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+  const themeIcons = () => $$('.theme-pill svg, .mobile-theme-toggle svg');
+  const paintTheme = (theme) => {
+    const dark = theme === 'dark';
+    themeIcons().forEach(svg => { svg.innerHTML = dark ? SUN : MOON; });
+    $$('.theme-pill, #mobileThemeToggle').forEach(btn => btn.setAttribute('aria-pressed', String(dark)));
+    const label = $('#mobileThemeToggleLabel');
+    if (label) label.textContent = dark ? 'Light mode' : 'Dark mode';
+    // The navy-on-transparent header wordmark reads as barely visible
+    // once the nav bar itself goes dark — swap to the same white-on-
+    // transparent variant the footer (always dark) already uses.
+    const navLogo = $('#navLogo');
+    if (navLogo) navLogo.src = dark ? '/brand/logo-full-on-dark-transparent.svg' : '/brand/logo-full.svg';
+  };
+  paintTheme(document.documentElement.getAttribute('data-theme'));
+  const toggleTheme = () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch {}
+    paintTheme(next);
+  };
+  $$('.theme-pill').forEach(btn => on(btn, 'click', toggleTheme));
+  on($('#mobileThemeToggle'), 'click', toggleTheme);
 
   const revealIO = new IntersectionObserver(entries => {
     entries.forEach(e => {
