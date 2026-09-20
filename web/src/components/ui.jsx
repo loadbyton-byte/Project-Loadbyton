@@ -603,6 +603,24 @@ export function Modal({ open, onClose, title, children, className, wide }) {
   const bodyRef = useRef(null);
   const previouslyFocusedRef = useRef(null);
 
+  // Callers overwhelmingly pass onClose as an inline arrow function
+  // (onClose={() => setShowForm(false)}), which is a new function
+  // identity on every render of the parent — including every render
+  // triggered by typing into one of the modal's own controlled inputs.
+  // The effect below used to list `onClose` in its dependency array, so
+  // each keystroke re-ran it: it re-read document.activeElement as the
+  // "previously focused" element and, more visibly, re-focused the first
+  // focusable node in the body — the post-a-job wizard's own step-tab
+  // buttons, not whatever field the user was typing into. In practice
+  // this yanked focus off the input after every single character, so
+  // typing anything past the first keystroke did nothing (confirmed: the
+  // stepper's "done" step buttons are still real, enabled <button>s, so
+  // they're exactly the "first focusable element" this was finding).
+  // Kept in a ref instead so the effect can depend on `open` alone while
+  // still always invoking whatever onClose is current.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   // Focus trap + restore: no dialog in this app previously moved focus into
   // itself on open, cycled Tab within itself, or gave it back to whatever
   // triggered it on close — a keyboard/screen-reader user's focus stayed
@@ -625,7 +643,7 @@ export function Modal({ open, onClose, title, children, className, wide }) {
 
     function onKeyDown(e) {
       if (e.key === 'Escape') {
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (e.key !== 'Tab' || !dialog) return;
@@ -646,7 +664,8 @@ export function Modal({ open, onClose, title, children, className, wide }) {
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocusedRef.current?.focus?.();
     };
-  }, [open, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onClose is read via onCloseRef precisely so this doesn't re-run per keystroke
+  }, [open]);
 
   if (!open) return null;
   // Rendered via a portal straight onto <body> — a Modal mounted inline
