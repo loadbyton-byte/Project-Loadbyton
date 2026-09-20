@@ -306,23 +306,7 @@ function groupNavItems(items) {
   return order.map((g) => ({ group: g, items: byGroup.get(g) }));
 }
 
-const FOOTER_TICKER = [
-  'JEBEL ALI → MUSSAFAH',
-  'KHOR FAKKAN → JEBEL ALI',
-  'FUJAIRAH PORT → DIP',
-  'SHARJAH → ABU DHABI',
-  'JEBEL ALI → RUWAIS',
-  'DIP → KHALIFA PORT',
-];
-
 export function Shell({ children }) {
-  const location = useLocation();
-
-  // The approved homepage is a complete, self-contained composition. It
-  // owns its navigation, footer, spacing and responsive behaviour, so the
-  // application shell must not add a second header/footer around it.
-  if (location.pathname === '/') return children;
-
   return <ShellInner>{children}</ShellInner>;
 }
 
@@ -344,7 +328,7 @@ function ShellInner({ children }) {
   const { addToast } = useToasts();
   const routeSurface = (() => {
     const path = location.pathname;
-    if (['/features', '/pricing', '/about', '/blog', '/security', '/compliance', '/terms', '/privacy', '/industries', '/trust', '/for-transporters', '/for-shippers'].includes(path)) return 'public';
+    if (['/', '/features', '/pricing', '/about', '/blog', '/security', '/compliance', '/terms', '/privacy', '/industries', '/trust', '/for-transporters', '/for-shippers'].includes(path)) return 'public';
     if (['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'].includes(path)) return 'auth';
     if (path === '/admin' || path.startsWith('/admin/')) return 'admin';
     if (path === '/driver' || path.startsWith('/driver/')) return 'driver';
