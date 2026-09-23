@@ -12,6 +12,7 @@ import { usePageTitle } from '../lib/seo.jsx';
 import { MktIcon } from '../components/marketing/MktIcon.jsx';
 import { SitePage, PHOTOS, PAGE, delay } from '../components/marketing/SubKit.jsx';
 import { MktAuthFrame, PwField } from '../components/marketing/AuthKit.jsx';
+import TermsModal from '../components/TermsModal.jsx';
 
 // Client-side mirror of the server's UAE-format validators (server/index.js)
 // so a wrong format is caught before submit, not after a round trip. The
@@ -42,6 +43,7 @@ export default function Register() {
   const [errs, setErrs] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: k === 'tradeLicenseNumber' ? e.target.value.toUpperCase() : e.target.value });
   const top = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -131,7 +133,8 @@ export default function Register() {
                 <div className="group"><label htmlFor="password">Password</label><PwField id="password" name="password" value={form.password} onChange={set('password')} placeholder="At least 8 characters" autoComplete="new-password" minLength={8} /></div>
               </div>
               <div className="group"><label htmlFor="referral">Referral code (optional)</label><input className="input" id="referral" name="referralCode" value={form.referralCode} onChange={set('referralCode')} placeholder="CAR-EMIRATES" /></div>
-              <label className="auth-check"><input type="checkbox" required checked={form.agreed} onChange={(e) => setForm({ ...form, agreed: e.target.checked })} /><span>I have read and agree to the Terms &amp; Conditions</span></label>
+              <label className="auth-check"><input type="checkbox" required checked={form.agreed} onChange={(e) => setForm({ ...form, agreed: e.target.checked })} /><span>I have read and agree to the <button type="button" className="auth-link" style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 700, cursor: 'pointer' }} onClick={() => setShowTermsModal(true)}>Terms &amp; Conditions</button></span></label>
+              {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
               {error && <p className="auth-note err" role="status" style={delay(0)}>{error}</p>}
               <div className="auth-actions">
                 <button className="btn btn-light" type="button" onClick={() => { setStep(1); top(); }}>&#8592; Back</button>
