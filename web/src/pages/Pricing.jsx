@@ -1,9 +1,10 @@
 // Ported from the design-tool export's pages/Marketing.jsx (PricingPage).
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
 import { MktIcon } from '../components/marketing/MktIcon.jsx';
 import { SitePage, SubHero, SubSection, SubCard, SubCta, PHOTOS, PAGE } from '../components/marketing/SubKit.jsx';
 import { Link } from 'react-router-dom';
+import { api } from '../lib/api.js';
 
 const P = PAGE;
 
@@ -16,13 +17,15 @@ const TIERS = [
 export default function Pricing() {
   usePageTitle('Pricing');
   useMeta('A transparent take rate, no subscription. See how Loadbyton pricing compares to broker markups.');
+  const [takeRate, setTakeRate] = useState('6%');
+  useEffect(() => { api.publicMarket().then((d) => setTakeRate(d.market.takeRate)).catch(() => {}); }, []);
   return (
     <SitePage>
       <SubHero
         photo={PHOTOS.roadFreight}
         kicker="PRICING"
         title="One take rate. No subscription, no listing fee."
-        lede={<>Loadbyton takes <b>6%</b> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.</>}
+        lede={<>Loadbyton takes <b>{takeRate}</b> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.</>}
         actions={<>
           <Link className="btn btn-red shimmer" to={P.register}>Create a free account &#8594;</Link>
           <Link className="btn btn-glass" to={P.features}>What's included</Link>
