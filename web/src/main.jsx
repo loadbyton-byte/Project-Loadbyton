@@ -10,6 +10,12 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient.js';
 import './index.css';
 import './styles/operations-system.css';
+// Ported from the design-tool export's home.css + site.css, scoped entirely
+// under `.mkt-scope` (see the file header) so nothing in it can leak onto —
+// or be overridden by — the rest of the app. Client-only import, exactly
+// like operations-system.css above: entry-server.jsx (the SSR/prerender
+// entry) never imports main.jsx, so this never runs during prerendering.
+import './styles/marketing.css';
 
 // Initialize Sentry as early as possible
 initSentry();

@@ -1,75 +1,33 @@
+// Ported from the design-tool export's pages/Marketing.jsx (AboutPage).
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { usePageTitle, useMeta } from '../lib/seo.jsx';
-import { Reveal } from '../components/Reveal.jsx';
-import { IconShield, IconLayers, IconClock, IconArrowRight } from '../components/icons.jsx';
-import { CAMPAIGN_IMAGES } from '../lib/campaignImages.js';
+import { SitePage, SubHero, SubSection, SubCards, SubCta, PHOTOS, PAGE } from '../components/marketing/SubKit.jsx';
 
-const PHOTO = CAMPAIGN_IMAGES.fleet;
+const P = PAGE;
 
-const PRINCIPLES = [
-  { icon: <IconShield size={20} />, title: 'Enforced server-side', body: 'Transporter verification, the payment-hold gate, and the forward-only status flow aren\'t UI hints — every one of them is checked on the server, on every request.' },
-  { icon: <IconLayers size={20} />, title: 'A record that survives the job', body: 'Every bid, award, and status change writes to an append-only audit log. Documents and proof of delivery stay attached to the job permanently, not to whichever chat thread happened to carry them.' },
-  { icon: <IconClock size={20} />, title: 'Built for the repeat shipment', body: 'A shipper who posts once and goes back to their usual broker is a cost paid for nothing — so the product is built around what makes the second and fiftieth shipment easier, not just the first.' },
+const ITEMS = [
+  { icon: 'Shield', title: 'Enforced server-side', body: "Transporter verification, the payment-hold gate, and the forward-only status flow aren't UI hints — every one of them is checked on the server, on every request." },
+  { icon: 'Layers', title: 'A record that survives the job', body: 'Every bid, award, and status change writes to an append-only audit log. Documents and proof of delivery stay attached to the job permanently, not to whichever chat thread happened to carry them.' },
+  { icon: 'Clock', title: 'Built for the repeat shipment', body: 'A shipper who posts once and goes back to their usual broker is a cost paid for nothing — so the product is built around what makes the second and fiftieth shipment easier, not just the first.' },
 ];
 
 export default function About() {
   usePageTitle('About');
   useMeta('Loadbyton is a UAE road freight & container drayage marketplace built to make the second shipment happen on-platform, with an accountable, payment-protected system in place of an off-platform chat.');
   return (
-    <div dir="ltr" className="lb-home">
-      <section className="lb-subhero">
-        <img className="lb-hero-photo" src={PHOTO} alt="" aria-hidden="true" />
-        <div className="lb-hero-wash" />
-        <div className="lb-hero-grid" />
-        <div className="container-page"><div className="lb-subhero-inner">
-          <Reveal>
-            <p className="lb-kicker"><i />ABOUT <span>LOADBYTON</span></p>
-            <h1>Built for the second shipment, not just the first.</h1>
-            <p className="lb-hero-lede">
-              Most road freight in the UAE still moves the way it did a decade ago — a shipper with a stuck container calls around, a broker quotes a price nobody can verify against anything, and the whole arrangement lives in a chat thread that disappears the moment the truck arrives.
-            </p>
-          </Reveal>
-        </div></div>
-      </section>
-
-      <section className="lb-record-section"><div className="container-page">
-        <Reveal className="lb-section-heading"><span className="lb-section-no">01 / PRINCIPLES</span><h2>What the platform actually enforces.</h2><p>Not marketing language — the mechanics a real freight marketplace has to run on.</p></Reveal>
-        <div className="lb-item-grid">
-          {PRINCIPLES.map((p, i) => (
-            <Reveal key={p.title} delay={i * 70} className="lb-item">
-              <div className="lb-item-top"><span>P-{String(i + 1).padStart(2, '0')}</span>{p.icon}</div>
-              <h3>{p.title}</h3>
-              <p>{p.body}</p>
-              <i className="lb-item-rail" />
-            </Reveal>
-          ))}
+    <SitePage>
+      <SubHero photo={PHOTOS.fleet} kicker="ABOUT · LOADBYTON" title="Built for the second shipment, not just the first." lede="Most road freight in the UAE still moves the way it did a decade ago — a shipper with a stuck container calls around, a broker quotes a price nobody can verify against anything, and the whole arrangement lives in a chat thread that disappears the moment the truck arrives." />
+      <SubSection tone="dark" no="01 / Principles" title="What the platform actually enforces." copy="Not marketing language — the mechanics a real freight marketplace has to run on.">
+        <SubCards prefix="P" items={ITEMS} />
+      </SubSection>
+      <SubSection tone="paper" no="02 / The thesis" title="After the first job.">
+        <div className="sub-prose mkt-reveal">
+          <p>Loadbyton exists to change what happens after the first job. The product is built around the second shipment: recurring templates, committed contract lanes, a personal rate benchmark, and a payment-protection flow real enough that transporters and shippers can trust it with money.</p>
+          <p>It's a working system, not a slide deck — payouts on the current deployment are a database status flip rather than a licensed money-transfer rail, and that's stated plainly on the <Link to={P.security}>Security</Link> and <Link to={P.compliance}>Compliance</Link> pages rather than glossed over. The logic underneath is the logic a real freight marketplace needs to run on.</p>
         </div>
-      </div></section>
-
-      <section><div className="container-page">
-        <Reveal className="lb-section-heading"><span className="lb-section-no">02 / THE THESIS</span><h2>After the first job.</h2></Reveal>
-        <Reveal className="lb-two-col" delay={60}>
-          <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--text-secondary)' }}>
-            Loadbyton exists to change what happens after the first job. The product is built around the second shipment: recurring templates, committed contract lanes, a personal rate benchmark, and a payment-protection flow real enough that transporters and shippers can trust it with money.
-          </p>
-          <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--text-secondary)' }}>
-            It's a working system, not a slide deck — payouts on the current deployment are a database status flip rather than a licensed money-transfer rail, and that's stated plainly on the <Link to="/security" className="lb-quiet-link" style={{ color: 'var(--text-primary)' }}>Security</Link> and <Link to="/compliance" className="lb-quiet-link" style={{ color: 'var(--text-primary)' }}>Compliance</Link> pages rather than glossed over. The logic underneath is the logic a real freight marketplace needs to run on.
-          </p>
-        </Reveal>
-      </div></section>
-
-      <section className="lb-final-cta"><div className="container-page">
-        <Reveal className="lb-final-card">
-          <span className="lb-section-no">BEGIN WITH THE NEXT MOVEMENT</span>
-          <h2>See the mechanics for yourself.</h2>
-          <p>A free account gets you a real job on the platform, not a demo environment.</p>
-          <div>
-            <Link to="/register" className="btn-accent btn-shine">Get started <IconArrowRight size={18} /></Link>
-            <Link to="/features" className="lb-quiet-link">What the platform does</Link>
-          </div>
-        </Reveal>
-      </div></section>
-    </div>
+      </SubSection>
+      <SubCta kicker="Begin with the next movement" title="See the mechanics for yourself." body="A free account gets you a real job on the platform, not a demo environment." primary={['Get started', P.register]} secondary={['What the platform does', P.features]} />
+    </SitePage>
   );
 }

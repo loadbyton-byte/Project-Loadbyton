@@ -1,109 +1,74 @@
+// Redesigned Register page — visual design ported from the design-tool
+// export's pages/Auth.jsx (RegisterPage), wired to the real account
+// service. The export's own submit handler was a non-functional preview
+// stub (`setDone(true)` with no request sent) — this uses the same
+// register/redirect/validation logic the previous Register.jsx had
+// (useAuth().register, UAE TRN/phone/trade-licence validation, redirect to
+// role home on success).
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, roleHome } from '../lib/auth.jsx';
-import { Button, Input, Label, Card } from '../components/ui.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
-import { useLocale } from '../lib/i18n.jsx';
-import { IconTruck, IconPackage, IconArrowLeft, IconArrowRight, IconCheckCircle, IconCompass, IconLayers, IconTrailer } from '../components/icons.jsx';
+import { MktIcon } from '../components/marketing/MktIcon.jsx';
+import { SitePage, PHOTOS, PAGE, delay } from '../components/marketing/SubKit.jsx';
+import { MktAuthFrame, PwField } from '../components/marketing/AuthKit.jsx';
 import TermsModal from '../components/TermsModal.jsx';
-import AuthFrame from '../components/AuthFrame.jsx';
 
+// Client-side mirror of the server's UAE-format validators (server/index.js)
+// so a wrong format is caught before submit, not after a round trip. The
+// server enforces the same rules regardless — this only improves UX.
+const UAE_MOBILE_RE = /^(\+9715|05)\d{8}$/;
+const UAE_TRN_RE = /^\d{15}$/;
+const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
+
+const ROLES = [
+  { key: 'SHIPPER', icon: 'Package', label: 'I am a shipper', desc: 'Post freight jobs, get transporter bids, track with payment protection' },
+  { key: 'CARRIER', icon: 'Truck', label: 'I am a transporter', desc: 'Browse open loads, bid, get paid on delivery' },
+  { key: 'FORWARDER', icon: 'Compass', label: 'I am a freight forwarder', desc: 'Manage freight forwarding, client roster, assign loads' },
+  { key: 'BROKER', icon: 'Layers', label: 'I am a freight broker', desc: 'Broker jobs, direct-assign carriers, earn broker spread' },
+  { key: 'OWNER_OPERATOR', icon: 'Trailer', label: 'I am a fleet owner', desc: 'Own and operate your own fleet of trucks' },
+];
 const STEPS = ['Role', 'Business', 'Account'];
-
-  // Client-side mirror of the server's UAE-format validators (server/index.js)
-  // so a wrong format is caught before submit, not after a round trip. The
-  // server enforces the same rules regardless — this only improves UX.
-  const UAE_MOBILE_RE = /^(\+9715|05)\d{8}$/;
-  const UAE_TRN_RE = /^\d{15}$/;
-  const UAE_LICENCE_RE = /^(?=.*\d)[A-Z0-9-]{5,15}$/;
-
-  const ROLES = [
-    { label: 'SHIPPER', desc: 'Post freight jobs, get transporter bids, track with payment protection' },
-    { label: 'CARRIER', desc: 'Browse open loads, bid, get paid on delivery' },
-    { label: 'FORWARDER', desc: 'Manage freight forwarding, client roster, assign loads' },
-    { label: 'BROKER', desc: 'Broker jobs, direct-assign carriers, earn broker spread' },
-    { label: 'OWNER_OPERATOR', desc: 'Own and operate your own fleet of trucks' },
-  ];
 
 export default function Register() {
   usePageTitle('Create your account');
   const { register } = useAuth();
-  const { t } = useLocale();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [role, setRole] = useState(params.get('role') === 'CARRIER' ? 'CARRIER' : ['SHIPPER','FORWARDER','BROKER','OWNER_OPERATOR'].includes(params.get('role')) ? params.get('role') : null);
-  const [step, setStep] = useState(role ? 1 : 0);
-  const [form, setForm] = useState({
-    companyName: '', email: '', password: '', phone: '', trnNumber: '', tradeLicenseNumber: '', referralCode: '',
-  });
+  const qRole = params.get('role');
+  const initRole = ROLES.some((r) => r.key === qRole) ? qRole : null;
+  const [role, setRole] = useState(initRole);
+  const [step, setStep] = useState(initRole ? 1 : 0);
+  const [form, setForm] = useState({ companyName: '', phone: '', trnNumber: '', tradeLicenseNumber: '', email: '', password: '', referralCode: '', agreed: false });
+  const [errs, setErrs] = useState({});
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const set = (k) => (e) => setForm({ ...form, [k]: k === 'tradeLicenseNumber' ? e.target.value.toUpperCase() : e.target.value });
+  const top = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  function scrollTop() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function validateField(name) {
-    if (name === 'phone') {
-      const phone = form.phone.trim().replace(/\s+/g, '');
-      if (!phone) return 'Phone number is required.';
-      if (!UAE_MOBILE_RE.test(phone)) return 'Enter a valid UAE mobile number — 05XXXXXXXX or +9715XXXXXXXX. Landlines and international numbers aren\u2019t accepted.';
-    }
-    if (name === 'trnNumber') {
-      const trn = form.trnNumber.trim();
-      if (!trn) return 'TRN is required.';
-      if (!UAE_TRN_RE.test(trn)) return 'TRN must be exactly 15 digits — the UAE Tax Registration Number on your VAT certificate.';
-    }
-    if (name === 'tradeLicenseNumber') {
-      const licence = form.tradeLicenseNumber.trim().toUpperCase();
-      if (!licence) return 'Trade licence number is required.';
-      if (!UAE_LICENCE_RE.test(licence)) return 'Trade licence must be 5\u201315 letters, digits, or dashes and contain at least one digit.';
-    }
+  function check(name) {
     if (name === 'companyName' && !form.companyName.trim()) return 'Company name is required.';
+    if (name === 'phone') { const p = form.phone.trim().replace(/\s+/g, ''); if (!p) return 'Phone number is required.'; if (!UAE_MOBILE_RE.test(p)) return 'Enter a valid UAE mobile number — 05XXXXXXXX or +9715XXXXXXXX. Landlines and international numbers aren’t accepted.'; }
+    if (name === 'trnNumber') { const t = form.trnNumber.trim(); if (!t) return 'TRN is required.'; if (!UAE_TRN_RE.test(t)) return 'TRN must be exactly 15 digits — the UAE Tax Registration Number on your VAT certificate.'; }
+    if (name === 'tradeLicenseNumber') { const l = form.tradeLicenseNumber.trim(); if (!l) return 'Trade licence number is required.'; if (!UAE_LICENCE_RE.test(l)) return 'Trade licence must be 5–15 letters, digits, or dashes and contain at least one digit.'; }
     return null;
   }
-
   function validateBusinessFields() {
-    const errors = {};
-    for (const f of ['companyName', 'phone', 'trnNumber', 'tradeLicenseNumber']) {
-      const msg = validateField(f);
-      if (msg) errors[f] = msg;
-    }
-    return errors;
+    const e = {};
+    ['companyName', 'phone', 'trnNumber', 'tradeLicenseNumber'].forEach((f) => { const m = check(f); if (m) e[f] = m; });
+    return e;
   }
-
-  function handleBlur(e) {
-    const msg = validateField(e.target.name);
-    setFieldErrors((prev) => ({ ...prev, [e.target.name]: msg || undefined }));
+  function blur(e) { const m = check(e.target.name); setErrs((p) => ({ ...p, [e.target.name]: m || undefined })); }
+  function cont() {
+    const e = validateBusinessFields();
+    setErrs(e); if (Object.keys(e).length) return; setStep(2); top();
   }
-
-  function handleContinue() {
-    const errors = validateBusinessFields();
-    setFieldErrors(errors);
-    if (Object.keys(errors).length) return;
-    setError('');
-    setStep(2);
-    scrollTop();
-  }
-
-  function FieldError({ name }) {
-    return fieldErrors[name] ? (
-      <p className="mt-1 text-xs font-medium" style={{ color: 'var(--status-danger)' }} role="alert">{fieldErrors[name]}</p>
-    ) : null;
-  }
-
-  async function onSubmit(e) {
+  async function submit(e) {
     e.preventDefault();
     setError('');
     const errors = validateBusinessFields();
-    if (Object.keys(errors).length) {
-      setFieldErrors(errors);
-      setStep(1);
-      scrollTop();
-      return;
-    }
+    if (Object.keys(errors).length) { setErrs(errors); setStep(1); top(); return; }
     setLoading(true);
     try {
       const user = await register({ ...form, role });
@@ -114,163 +79,72 @@ export default function Register() {
       setLoading(false);
     }
   }
-
-  function chooseRole(r) {
-    setRole(r);
-    setStep(1);
-    scrollTop();
-  }
-
-  const [showPassword, setShowPassword] = useState(false);
+  function Err({ n }) { return errs[n] ? <p className="field-err" role="alert">{errs[n]}</p> : null; }
+  const roleObj = ROLES.find((r) => r.key === role);
 
   return (
-    <AuthFrame eyebrow="Join the verified freight network" title="Start with your real operating role." body="A shipper, transporter, forwarder, broker and owner-operator need different controls—but they all contribute to the same accountable load record.">
-      <Card className="w-full max-w-lg p-6 sm:p-8">
-        <p className="font-display text-xl font-bold text-ink">Create your account</p>
-        <p className="mt-1 text-sm text-ink-muted">Post drayage jobs, or bid on them — pick which one you are.</p>
+    <SitePage>
+      <MktAuthFrame photo={PHOTOS.yard} kicker="JOIN THE VERIFIED FREIGHT NETWORK" title="Start with your real operating role." body="A shipper, transporter, forwarder, broker and owner-operator need different controls — but they all contribute to the same accountable load record.">
+        <div className="auth-card mkt-reveal">
+          <div className="auth-card-head">
+            <h2>Create your account</h2>
+            <p>Post drayage jobs, or bid on them — pick which one you are.</p>
+            <div className="auth-steps" aria-label={'Step ' + (step + 1) + ' of 3'}>
+              {STEPS.map((s, i) => (
+                <React.Fragment key={s}>
+                  <span className={'s' + (i <= step ? ' on' : '')}><b>{i < step ? <MktIcon name="Check" size={12} strokeWidth={2.5} /> : i + 1}</b>{s}</span>
+                  {i < STEPS.length - 1 && <span className={'bar' + (i < step ? ' on' : '')} />}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
 
-        {/* Step progress — matches the carrier_registration multi-step
-            pattern (get_started_choice -> business details -> account). */}
-        <div className="mt-5 flex items-center gap-2">
-          {STEPS.map((s, i) => (
-            <React.Fragment key={s}>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="flex h-6 w-6 items-center justify-center rounded-full font-mono text-[11px] font-bold transition-colors"
-                  style={{
-                    background: i <= step ? 'var(--brand-accent)' : 'var(--surface-container-high)',
-                    color: i <= step ? 'var(--text-on-accent)' : 'var(--text-muted)',
-                    transitionDuration: 'var(--motion-standard)',
-                    transitionTimingFunction: 'var(--motion-ease)',
-                  }}
-                >
-                  {i < step ? <IconCheckCircle size={13} /> : i + 1}
-                </span>
-                <span className={i <= step ? 'text-xs font-semibold text-ink' : 'text-xs text-ink-muted'}>{s}</span>
+          {step === 0 ? (
+            <div className="auth-card-body step-in">
+              <div className="role-list">
+                {ROLES.map((r) => (
+                  <button key={r.key} type="button" className="role-opt" onClick={() => { setRole(r.key); setStep(1); top(); }}>
+                    <span className="pcard-ico"><MktIcon name={r.icon} size={20} /></span>
+                    <span><b>{r.label}</b><small>{r.desc}</small></span>
+                    <MktIcon name="ArrowRight" size={18} />
+                  </button>
+                ))}
               </div>
-              {i < STEPS.length - 1 && (
-                <span
-                  className="h-0.5 flex-1 transition-colors"
-                  style={{ background: i < step ? 'var(--brand-accent)' : 'var(--outline-variant)', transitionDuration: 'var(--motion-standard)', transitionTimingFunction: 'var(--motion-ease)' }}
-                />
-              )}
-            </React.Fragment>
-          ))}
+            </div>
+          ) : step === 1 ? (
+            <div className="auth-card-body step-in">
+              {roleObj && <p className="sub-post-meta"><span>{roleObj.label}</span></p>}
+              <div className="group"><label htmlFor="companyName">Company name</label><input className="input" id="companyName" name="companyName" value={form.companyName} onChange={set('companyName')} onBlur={blur} placeholder="Al-Majid Global Freight" /><Err n="companyName" /></div>
+              <div className="auth-grid2">
+                <div className="group"><label htmlFor="phone">Phone</label><input className="input" id="phone" name="phone" value={form.phone} onChange={set('phone')} onBlur={blur} placeholder="05XXXXXXXX" /><span className="field-hint">UAE mobile number — no landlines</span><Err n="phone" /></div>
+                <div className="group"><label htmlFor="trn">TRN number</label><input className="input" id="trn" name="trnNumber" inputMode="numeric" maxLength={15} value={form.trnNumber} onChange={set('trnNumber')} onBlur={blur} placeholder="100000000000000" /><span className="field-hint">Exactly 15 digits</span><Err n="trnNumber" /></div>
+              </div>
+              <div className="group"><label htmlFor="license">Trade licence number</label><input className="input" id="license" name="tradeLicenseNumber" maxLength={15} value={form.tradeLicenseNumber} onChange={set('tradeLicenseNumber')} onBlur={blur} placeholder="CN-1122334" /><span className="field-hint">5&ndash;15 letters/digits/dashes, at least one digit</span><Err n="tradeLicenseNumber" /></div>
+              {role === 'CARRIER' && <p className="auth-note warn">New accounts are read-only until an admin approves them; transporter verification (TRN, trade licence, insurance) happens separately before bidding — usually within a day.</p>}
+              <div className="auth-actions">
+                <button className="btn btn-light" type="button" onClick={() => { setStep(0); top(); }}>&#8592; Back</button>
+                <button className="btn btn-red" type="button" disabled={!form.companyName} onClick={cont}>Continue &#8594;</button>
+              </div>
+            </div>
+          ) : (
+            <form className="auth-card-body step-in" onSubmit={submit}>
+              <div className="auth-grid2">
+                <div className="group"><label htmlFor="email">Email</label><input className="input" id="email" name="email" type="email" required value={form.email} onChange={set('email')} placeholder="you@company.ae" /></div>
+                <div className="group"><label htmlFor="password">Password</label><PwField id="password" name="password" value={form.password} onChange={set('password')} placeholder="At least 8 characters" autoComplete="new-password" minLength={8} /></div>
+              </div>
+              <div className="group"><label htmlFor="referral">Referral code (optional)</label><input className="input" id="referral" name="referralCode" value={form.referralCode} onChange={set('referralCode')} placeholder="CAR-EMIRATES" /></div>
+              <label className="auth-check"><input type="checkbox" required checked={form.agreed} onChange={(e) => setForm({ ...form, agreed: e.target.checked })} /><span>I have read and agree to the <button type="button" className="auth-link" style={{ background: 'none', border: 0, padding: 0, font: 'inherit', fontWeight: 700, cursor: 'pointer' }} onClick={() => setShowTermsModal(true)}>Terms &amp; Conditions</button></span></label>
+              {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
+              {error && <p className="auth-note err" role="status" style={delay(0)}>{error}</p>}
+              <div className="auth-actions">
+                <button className="btn btn-light" type="button" onClick={() => { setStep(1); top(); }}>&#8592; Back</button>
+                <button className="btn btn-red shimmer" type="submit" disabled={loading}>{loading ? 'Creating account…' : 'Create account →'}</button>
+              </div>
+            </form>
+          )}
+          <div className="auth-foot">Already have an account? <Link to={PAGE.login}>Log in</Link></div>
         </div>
-
-        {/* Step 0 — get-started role choice */}
-        {step === 0 && (
-          <div className="mt-6 flex flex-col gap-3 animate-slide-up">
-            {ROLES.map((r) => (
-              <button key={r.label} type="button" onClick={() => chooseRole(r.label)} className="card flex items-center gap-4 p-5 text-left hover:shadow-elevated">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: 'var(--surface-container-high)' }}>
-                  {r.label === 'SHIPPER' && <IconPackage size={22} className="text-brand-accent" />}
-                  {r.label === 'CARRIER' && <IconTruck size={22} className="text-brand-accent" />}
-                  {r.label === 'FORWARDER' && <IconCompass size={22} className="text-brand-accent" />}
-                  {r.label === 'BROKER' && <IconLayers size={22} className="text-brand-accent" />}
-                  {r.label === 'OWNER_OPERATOR' && <IconTrailer size={22} className="text-brand-accent" />}
-                </span>
-                <div className="flex-1">
-                  <p className="font-display font-bold text-ink">{r.label === 'SHIPPER' ? 'I am a shipper' : r.label === 'CARRIER' ? 'I am a transporter' : r.label === 'FORWARDER' ? 'I am a freight forwarder' : r.label === 'BROKER' ? 'I am a freight broker' : 'I am a fleet owner'}</p>
-                  <p className="text-sm text-ink-muted">{r.desc}</p>
-                </div>
-                <IconArrowRight size={18} className="text-ink-muted" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Step 1 — business details */}
-        {step === 1 && (
-          <div className="mt-6 space-y-4 animate-slide-up">
-            <div>
-              <Label htmlFor="companyName">{t('auth.companyName')}</Label>
-              <Input id="companyName" name="companyName" required value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} onBlur={handleBlur} placeholder="Al-Majid Global Freight" />
-              <FieldError name="companyName" />
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" name="phone" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} onBlur={handleBlur} placeholder="05XXXXXXXX or +9715XXXXXXXX" />
-                <p className="mt-1 text-xs text-ink-muted">UAE mobile number — no landlines</p>
-                <FieldError name="phone" />
-              </div>
-              <div>
-                <Label htmlFor="trn">TRN number</Label>
-                <Input id="trn" name="trnNumber" required value={form.trnNumber} onChange={(e) => setForm({ ...form, trnNumber: e.target.value })} onBlur={handleBlur} placeholder="100000000000000" inputMode="numeric" maxLength={15} />
-                <p className="mt-1 text-xs text-ink-muted">UAE Tax Registration Number — exactly 15 digits</p>
-                <FieldError name="trnNumber" />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="license">Trade licence number</Label>
-              <Input id="license" name="tradeLicenseNumber" required value={form.tradeLicenseNumber} onChange={(e) => setForm({ ...form, tradeLicenseNumber: e.target.value.toUpperCase() })} onBlur={handleBlur} placeholder="CN-1122334" maxLength={15} />
-              <p className="mt-1 text-xs text-ink-muted">5-15 letters/digits/dashes, at least one digit</p>
-              <FieldError name="tradeLicenseNumber" />
-            </div>
-            {role === 'CARRIER' && (
-              <p className="rounded-md px-3 py-2 text-xs" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>
-                New accounts are read-only until an admin approves them; transporter verification (TRN, trade licence, insurance) happens separately before bidding — usually within a day.
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => { setStep(0); scrollTop(); }}><IconArrowLeft size={15} /> Back</Button>
-              <Button type="button" className="flex-1" disabled={!form.companyName} onClick={handleContinue}>Continue</Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2 — account credentials + submit */}
-        {step === 2 && (
-          <form onSubmit={onSubmit} className="mt-6 space-y-4 animate-slide-up">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="email">{t('auth.email')}</Label>
-                <Input id="email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@company.ae" />
-              </div>
-              <div>
-                <Label htmlFor="password">{t('auth.password')}</Label>
-                {/* Matches the server's MIN_PASSWORD_LENGTH (server/index.js). */}
-                <div className="relative">
-                  <Input id="password" type={showPassword ? 'text' : 'password'} required minLength={8} autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 8 characters" className="pr-16" />
-                  <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-brand-secondary" aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>{showPassword ? 'Hide' : 'Show'}</button>
-                </div>
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="referral">Referral code (optional)</Label>
-              <Input id="referral" value={form.referralCode} onChange={(e) => setForm({ ...form, referralCode: e.target.value })} placeholder="CAR-EMIRATES" />
-            </div>
-            <label className="flex items-start gap-2 text-sm text-ink-secondary">
-              <input
-                type="checkbox"
-                required
-                checked={form.agreedToTerms || false}
-                onChange={(e) => setForm({ ...form, agreedToTerms: e.target.checked })}
-                className="mt-0.5"
-              />
-              <span>
-                I have read and agree to the{' '}
-                <button type="button" onClick={() => setShowTermsModal(true)} className="font-medium text-brand-secondary hover:underline">Terms &amp; Conditions</button>
-              </span>
-            </label>
-            {showTermsModal && <TermsModal onClose={() => setShowTermsModal(false)} />}
-            {error && (
-              <p className="rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>
-                {error}
-              </p>
-            )}
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => { setStep(1); scrollTop(); }}><IconArrowLeft size={15} /> Back</Button>
-              <Button type="submit" className="flex-1" loading={loading}>{t('auth.register')}</Button>
-            </div>
-          </form>
-        )}
-
-        <p className="mt-5 text-center text-sm text-ink-muted">
-          Already have an account? <Link to="/login" className="font-medium text-brand-secondary hover:underline">Log in</Link>
-        </p>
-      </Card>
-    </AuthFrame>
+      </MktAuthFrame>
+    </SitePage>
   );
 }
