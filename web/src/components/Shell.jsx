@@ -315,13 +315,26 @@ const FOOTER_TICKER = [
   'DIP → KHALIFA PORT',
 ];
 
+// Routes whose page owns a complete, self-contained composition — its own
+// header, mobile drawer, footer, spacing and responsive behaviour (see
+// components/marketing/SiteChrome.jsx + SubKit.jsx's <SitePage>, shared by
+// every one of them) — so Shell must not add a second, different-looking
+// header/footer around it. Extends the same bypass the homepage ('/') has
+// always had (see below) to the rest of the redesigned public site: the
+// nine marketing subpages, Trust, and the two auth pages, all built from
+// the same design-tool export and sharing one chrome implementation rather
+// than a second parallel nav system living in this file. Terms/Privacy and
+// the authenticated app keep Shell's own chrome (ShellInner) unchanged.
+const MKT_CHROME_ROUTES = new Set([
+  '/', '/features', '/pricing', '/about', '/blog', '/security', '/compliance',
+  '/industries', '/trust', '/for-transporters', '/for-shippers',
+  '/login', '/register',
+]);
+
 export function Shell({ children }) {
   const location = useLocation();
 
-  // The approved homepage is a complete, self-contained composition. It
-  // owns its navigation, footer, spacing and responsive behaviour, so the
-  // application shell must not add a second header/footer around it.
-  if (location.pathname === '/') return children;
+  if (MKT_CHROME_ROUTES.has(location.pathname)) return children;
 
   return <ShellInner>{children}</ShellInner>;
 }
