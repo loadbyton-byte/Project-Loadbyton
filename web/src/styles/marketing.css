@@ -73,7 +73,7 @@ body.lock{overflow:hidden}
 .mkt-scope .nav.scrolled{background:rgba(255,255,255,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom-color:var(--line);box-shadow:0 8px 30px rgba(3,17,25,.055)}
 .mkt-scope .navbar{height:80px;display:grid;grid-template-columns:220px 1fr 260px;align-items:center;gap:28px;transition:height .3s}
 .mkt-scope .nav.scrolled .navbar{height:72px}
-.mkt-scope .logo{display:inline-flex;align-items:center}
+.mkt-scope .logo{display:inline-flex;align-items:center;flex-shrink:0}
 .mkt-scope .logo svg,
 .mkt-scope .logo img{width:150px;height:auto;display:block}
 .mkt-scope .logo .word{fill:var(--navy);transition:fill .3s}
@@ -84,17 +84,20 @@ body.lock{overflow:hidden}
 .mkt-scope .links a{padding:9px 14px;border-radius:999px;font-size:12px;font-weight:700;opacity:1;transition:color .2s,background .2s}
 .mkt-scope .links a:hover{color:var(--ink);background:var(--cloud)}
 .mkt-scope .nav-right{justify-self:end;display:flex;align-items:center;gap:10px;color:var(--ink)}
-.mkt-scope .nav-login{padding:10px 12px;font-size:12px;font-weight:750;color:var(--ink)}
-.mkt-scope .theme-pill{display:grid;width:42px;height:42px;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--ink);transition:background .2s,transform .2s}
+.mkt-scope .nav-login{padding:10px 12px;font-size:12px;font-weight:750;color:var(--ink);white-space:nowrap;flex-shrink:0}
+.mkt-scope .theme-pill{display:grid;width:42px;height:42px;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--ink);transition:background .2s,transform .2s;flex-shrink:0}
 .mkt-scope .theme-pill:hover{background:var(--cloud);transform:translateY(-1px)}
 .mkt-scope .search-pill{height:34px;border-radius:999px;padding:0 12px;border:1px solid rgba(255,255,255,.22);background:rgba(7,21,29,.25);color:inherit;font-size:9px;font-weight:700;transition:.25s}
 .mkt-scope .nav.scrolled .search-pill{background:#fff;border-color:var(--line)}
-.mkt-scope .menu{display:none;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:16px;place-items:center}
+.mkt-scope .menu{display:none;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:16px;place-items:center;flex-shrink:0}
+.mkt-scope .nav-right .btn{flex-shrink:0}
 .mkt-scope .mobile-nav{position:fixed;z-index:3900;top:0;right:0;bottom:0;width:min(390px,88vw);background:var(--ink);padding:100px 28px 40px;opacity:0;visibility:hidden;transform:translateX(100%);transition:opacity .3s,visibility .3s,transform .38s var(--spring);overflow-y:auto;box-shadow:-30px 0 80px rgba(0,0,0,.28)}
 .mkt-scope .mobile-nav::before{content:"EXPLORE LOADBYTON";display:block;margin-bottom:18px;color:rgba(255,255,255,.44);font:700 9px "JetBrains Mono",monospace;letter-spacing:.2em}
 .mkt-scope .mobile-nav.open{opacity:1;visibility:visible;transform:none}
 .mkt-scope .mobile-nav a:not(.btn){display:block;color:#fff;font:720 22px Geist,sans-serif;letter-spacing:-.025em;padding:12px 0;border-bottom:1px solid var(--lineD)}
 .mkt-scope .mobile-nav .btn{width:100%;margin-top:25px}
+.mkt-scope .mobile-theme-toggle{display:none;align-items:center;gap:10px;width:100%;margin-top:18px;padding:0;background:none;border:0;color:#fff;font:720 15px Geist,sans-serif}
+.mkt-scope .mobile-theme-toggle svg{flex-shrink:0}
 
 /* HERO */
 .mkt-scope .hero{min-height:100svh;position:relative;overflow:hidden;background:var(--ink)}
@@ -921,9 +924,15 @@ body.lock{overflow:hidden}
   .mkt-scope .section{padding:80px 0}
   .mkt-scope .links,
 .mkt-scope .search-pill{display:none}
-  .mkt-scope .menu{display:grid}
-  .mkt-scope .logo svg{width:160px}
+  .mkt-scope .menu{display:grid;width:38px;height:38px}
+  .mkt-scope .logo svg,
+.mkt-scope .logo img{width:124px}
   .mkt-scope .navbar{display:flex;height:70px}
+  .mkt-scope .nav-right{gap:4px}
+  .mkt-scope .nav .theme-pill{display:none}
+  .mkt-scope .nav-login{padding:8px 6px;font-size:11px}
+  .mkt-scope .nav-right .btn{height:36px;padding:0 12px;font-size:10px}
+  .mkt-scope .mobile-theme-toggle{display:flex}
   .mkt-scope .hero-inner{padding-top:150px;padding-bottom:60px}
   .mkt-scope .hero-proof{display:none}
   .mkt-scope .problem-head,

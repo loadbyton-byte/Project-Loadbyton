@@ -41,7 +41,11 @@ export function initHomeRuntime() {
 
     const $ = (sel, root = document) => root.querySelector(sel);
     const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-    const on = (el, ev, fn, opts) => el && el.addEventListener(ev, fn, opts);
+    const on = (el, ev, fn, opts) => {
+      if (!el) return;
+      el.addEventListener(ev, fn, opts);
+      teardowns.push(() => el.removeEventListener(ev, fn, opts));
+    };
 
     const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (m) => (
       { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
