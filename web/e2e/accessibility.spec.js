@@ -119,7 +119,9 @@ test.describe('authenticated dashboard', () => {
     await page.goto('/dashboard');
     await expect(page).toHaveURL(/dashboard/);
     const skip = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-    if (await skip.isVisible({ timeout: 5000 }).catch(() => false)) await skip.click();
+    // isVisible() samples the current state once with no polling — a real
+    // race against the walkthrough modal's async mount. waitFor() polls.
+    if (await skip.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) await skip.click();
 
     const violations = await auditPage(page);
     expect(violations, describeViolations(violations)).toEqual([]);

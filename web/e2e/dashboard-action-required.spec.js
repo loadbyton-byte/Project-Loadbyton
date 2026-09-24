@@ -16,8 +16,10 @@ test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json'
 test('a dispute appears in Dashboard\'s Action Required section and links to the job', async ({ page, baseURL }) => {
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/dashboard/);
+  // isVisible() samples the current state once with no polling — a real
+  // race against the walkthrough modal's async mount. waitFor() polls.
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skipWalkthrough.isVisible({ timeout: 5000 }).catch(() => false)) {
+  if (await skipWalkthrough.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
     await skipWalkthrough.click();
   }
 

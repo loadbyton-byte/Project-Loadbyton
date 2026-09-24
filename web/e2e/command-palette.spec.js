@@ -15,7 +15,9 @@ test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json'
 async function dismissWalkthrough(page) {
   await page.goto('/dashboard');
   const skip = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skip.isVisible({ timeout: 5000 }).catch(() => false)) await skip.click();
+  // isVisible() samples the current state once with no polling — a real
+  // race against the walkthrough modal's async mount. waitFor() polls.
+  if (await skip.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) await skip.click();
 }
 
 test('opens with Ctrl/Cmd+K, filters nav items while typing, and navigates on Enter', async ({ page }) => {

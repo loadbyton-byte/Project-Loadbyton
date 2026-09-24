@@ -24,8 +24,10 @@ test.use({ storageState: path.join(process.cwd(), 'e2e', '.auth', 'shipper.json'
 // So this runs at the actual point of use, on whatever page is current,
 // not just once upfront.
 async function dismissWalkthroughIfPresent(page) {
+  // isVisible() samples the current state once with no polling — a real
+  // race against the walkthrough modal's async mount. waitFor() polls.
   const skipWalkthrough = page.getByRole('button', { name: /Skip.*don.t show this again/i });
-  if (await skipWalkthrough.isVisible({ timeout: 5000 }).catch(() => false)) {
+  if (await skipWalkthrough.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
     await skipWalkthrough.click();
   }
 }
