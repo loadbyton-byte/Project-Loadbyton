@@ -221,7 +221,7 @@ export function formatDateTime(iso) {
   return ltrIsolate(d.toLocaleString('en-AE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }));
 }
 
-export const ANCILLARY_CHARGE_LABELS = { SALIK: 'Salik', ETOKEN: 'E-Token', DEMURRAGE: 'Demurrage/Waiting', INSPECTION_WAITING: 'Inspection waiting', OTHER: 'Other' };
+export const ANCILLARY_CHARGE_LABELS = { SALIK: 'Salik', ETOKEN: 'E-Token', DEMURRAGE: 'Demurrage/Waiting', DETENTION: 'Truck detention', INSPECTION_WAITING: 'Inspection waiting', OTHER: 'Other' };
 
 export const CURRENCIES = [
   { code: 'AED', name: 'UAE Dirham', symbol: 'AED' },

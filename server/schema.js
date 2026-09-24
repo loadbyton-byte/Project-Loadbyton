@@ -1168,7 +1168,7 @@ module.exports = function initSchema(db) {
   CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
-    charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+    charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER')),
     amount_aed REAL NOT NULL,
     notes TEXT,
     proposed_by INTEGER NOT NULL REFERENCES users(id),
@@ -1178,6 +1178,30 @@ module.exports = function initSchema(db) {
   );
   CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
   `);
+  // charge_type's CHECK constraint above only covers a brand-new database —
+  // an EXISTING one already has the table with the old, narrower CHECK
+  // (no DETENTION), and SQLite has no ALTER...DROP/ADD CONSTRAINT to widen
+  // it in place. Same rebuild-on-detection pattern as admin_approvals above.
+  const ancillaryChargesTableSql = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='bid_ancillary_charges'`).get();
+  if (ancillaryChargesTableSql && !ancillaryChargesTableSql.sql.includes('DETENTION')) {
+    db.exec(`
+      ALTER TABLE bid_ancillary_charges RENAME TO bid_ancillary_charges_pre_detention;
+      CREATE TABLE bid_ancillary_charges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+        charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER')),
+        amount_aed REAL NOT NULL,
+        notes TEXT,
+        proposed_by INTEGER NOT NULL REFERENCES users(id),
+        agreed_by_shipper INTEGER NOT NULL DEFAULT 0,
+        agreed_by_carrier INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO bid_ancillary_charges SELECT * FROM bid_ancillary_charges_pre_detention;
+      DROP TABLE bid_ancillary_charges_pre_detention;
+      CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
+    `);
+  }
   addColumn('bids', 'terms_confirmed_at', 'terms_confirmed_at TEXT');
   // Commercial-logic audit finding — POST /api/jobs/:id/direct-assign
   // (broker.routes.js) created a bid on the CARRIER's behalf and awarded

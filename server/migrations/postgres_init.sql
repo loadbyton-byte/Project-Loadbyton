@@ -799,10 +799,20 @@ CREATE TABLE IF NOT EXISTS bid_negotiations (
 );
 CREATE INDEX IF NOT EXISTS idx_bid_negotiations_bid ON bid_negotiations(bid_id);
 
+-- charge_type covers DETENTION (truck detention, distinct from a shipping
+-- line's container DEMURRAGE) as of the truck-detention-visibility fix. This
+-- CREATE TABLE IF NOT EXISTS only benefits a brand-new Postgres bootstrap —
+-- a database that already ran this script with the old, narrower CHECK
+-- needs a manual, one-time:
+--   ALTER TABLE bid_ancillary_charges DROP CONSTRAINT bid_ancillary_charges_charge_type_check;
+--   ALTER TABLE bid_ancillary_charges ADD CONSTRAINT bid_ancillary_charges_charge_type_check
+--     CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER'));
+-- (the auto-migrating SQLite path in server/schema.js does the equivalent
+-- rebuild automatically — this file has no such runner.)
 CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
   id SERIAL PRIMARY KEY,
   bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
-  charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+  charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER')),
   amount_aed REAL NOT NULL,
   notes TEXT,
   proposed_by INTEGER NOT NULL REFERENCES users(id),
