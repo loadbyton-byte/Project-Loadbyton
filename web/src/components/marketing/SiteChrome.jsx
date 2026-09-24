@@ -42,7 +42,7 @@ export function SiteNav() {
           >
             {theme === 'dark' ? <IconSun size={19} /> : <IconMoon size={19} />}
           </button>
-          <NavLink className={navLinkClass} to="/login" style={{ padding: '10px 12px', fontSize: 12, fontWeight: 750 }}>
+          <NavLink className={({ isActive }) => `nav-login${isActive ? ' current' : ''}`} to="/login">
             Log in
           </NavLink>
           <Link className="btn btn-red shimmer" to="/register">Get started</Link>
@@ -56,6 +56,7 @@ export function SiteNav() {
 }
 
 export function SiteMobileNav() {
+  const { theme, setTheme } = useAuth();
   return (
     <div className="mobile-nav" id="mobileNav">
       <NavLink to="/features" className={navLinkClass}>Features</NavLink>
@@ -70,6 +71,15 @@ export function SiteMobileNav() {
       <NavLink to="/trust" className={navLinkClass}>Trust &amp; safety</NavLink>
       <NavLink to="/login" className={navLinkClass}>Log in</NavLink>
       <Link className="btn btn-red" to="/register">Get started &#8594;</Link>
+      <button
+        type="button"
+        className="mobile-theme-toggle"
+        aria-pressed={theme === 'dark'}
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      >
+        {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+        <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+      </button>
     </div>
   );
 }
