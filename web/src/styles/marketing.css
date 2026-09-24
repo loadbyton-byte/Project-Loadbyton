@@ -16,7 +16,7 @@
 /* ===== home.css ===== */
 .mkt-scope{
   --ink:#07151d; --navy:#0f2b3d; --red:#e53935; --red2:#bd201d;
-  --paper:#f7f4ec; --cloud:#f5f8fa; --white:#fff; --muted:#6b7c85;
+  --paper:#f7f4ec; --cloud:#f5f8fa; --white:#fff; --muted:#5f717a;
   --line:rgba(7,21,29,.12); --lineD:rgba(255,255,255,.13);
   --green:#23a16f; --wa:#25d366; --blue:#2a78b6; --amber:#a46c13;
   --ease:cubic-bezier(.22,.8,.22,1); --spring:cubic-bezier(.16,1,.3,1);
@@ -154,11 +154,17 @@ body.lock{overflow:hidden}
 .mkt-scope .problem-head .copy{justify-self:end}
 .mkt-scope .problem-layout{display:grid;grid-template-columns:.76fr 1.24fr;gap:70px;margin-top:70px}
 .mkt-scope .problem-steps{padding-bottom:40px}
-.mkt-scope .pstep{min-height:54vh;padding:45px 0;border-top:1px solid var(--line);opacity:.3;transition:opacity .4s var(--corp)}
-.mkt-scope .pstep.active{opacity:1}
-.mkt-scope .pstep .n{font:700 9px "JetBrains Mono";color:var(--red)}
+/* Was a whole-article opacity:.3 fade for the inactive state — the
+   effective blended text color that produced against --paper failed
+   WCAG AA contrast (axe-core caught it: as low as 1.42:1, and even the
+   .pstep p base color alone was only 4.11:1 before this). Text now stays
+   at a solid, always-compliant color; the "current step" cue moves to a
+   non-text accent border instead. */
+.mkt-scope .pstep{min-height:54vh;padding:45px 0;border-top:1px solid var(--line);transition:border-color .4s var(--corp)}
+.mkt-scope .pstep.active{border-top-color:var(--red)}
+.mkt-scope .pstep .n{font:700 9px "JetBrains Mono";color:#cc2b2b}
 .mkt-scope .pstep h3{font:790 36px Geist,sans-serif;letter-spacing:-.045em;margin:13px 0 11px;line-height:1.1}
-.mkt-scope .pstep p{font-size:14px;line-height:1.72;color:#687983;max-width:450px}
+.mkt-scope .pstep p{font-size:14px;line-height:1.72;color:#566369;max-width:450px}
 .mkt-scope .problem-sticky{position:sticky;top:105px;height:calc(100vh - 140px);min-height:590px}
 .mkt-scope .problem-screen{height:100%;border-radius:30px;background:linear-gradient(145deg,#0c222e,#061219);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow)}
 .mkt-scope .problem-scene{position:absolute;inset:0;padding:28px;opacity:0;transform:translateY(16px) scale(.985);transition:opacity .55s var(--corp),transform .55s var(--spring);pointer-events:none;overflow:hidden}
@@ -440,7 +446,11 @@ body.lock{overflow:hidden}
 .mkt-scope .pcard-num{
   font:700 10px "JetBrains Mono";
   letter-spacing:.14em;
-  color:var(--red);
+  /* var(--red) alone is 4.22:1 against white at this size — below WCAG
+     AA's 4.5:1 for text (axe-core caught it). A dedicated, slightly
+     darker red keeps the brand color everywhere else (buttons, accents)
+     untouched. */
+  color:#d32f2f;
 }
 .mkt-scope .pcard-pill{
   font:700 7px "JetBrains Mono";
@@ -566,7 +576,7 @@ body.lock{overflow:hidden}
 .mkt-scope .lb-trust-card h4{font:780 15px Geist,sans-serif;letter-spacing:-.02em;margin:0 0 6px}
 .mkt-scope .lb-trust-card p{font-size:11px;line-height:1.55;color:var(--muted);margin:0}
 .mkt-scope .lb-lanes{margin-top:32px;border-top:1px solid var(--line);padding-top:24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
-.mkt-scope .lb-lanes-label{font:700 8px "JetBrains Mono";letter-spacing:.14em;text-transform:uppercase;color:#93a1a8}
+.mkt-scope .lb-lanes-label{font:700 8px "JetBrains Mono";letter-spacing:.14em;text-transform:uppercase;color:#5a6c75}
 .mkt-scope .lb-lane-chips{display:flex;gap:8px;flex-wrap:wrap}
 .mkt-scope .lb-lane-chip{
   padding:7px 11px;border-radius:999px;background:#fff;
@@ -650,7 +660,13 @@ body.lock{overflow:hidden}
 .mkt-scope .story:nth-child(2){background:var(--paper);color:var(--ink)}
 .mkt-scope .story:nth-child(3){background:#14222a}
 .mkt-scope .story:nth-child(4){background:#fff;color:var(--ink);border:1px solid var(--line)}
-.mkt-scope .story .tag{font:700 8px "JetBrains Mono";letter-spacing:.13em;color:var(--red);text-transform:uppercase}
+/* var(--red) alone fails WCAG AA against every one of this card's four
+   alternating backgrounds (axe-core: 3.46-3.84:1, need 4.5:1) — a
+   lighter red for the two dark cards, a darker one for the two light
+   cards, both picked to clear 4.5:1 with margin. */
+.mkt-scope .story .tag{font:700 8px "JetBrains Mono";letter-spacing:.13em;color:#ff6a60;text-transform:uppercase}
+.mkt-scope .story:nth-child(2) .tag,
+.mkt-scope .story:nth-child(4) .tag{color:#cc2b2b}
 .mkt-scope .story h3{font:800 clamp(28px,3.2vw,37px)/1.05 Geist,sans-serif;letter-spacing:-.05em;margin:9px 0}
 .mkt-scope .story p{font-size:11px;line-height:1.65;opacity:.72;max-width:310px}
 .mkt-scope .story-visual{height:235px;border:1px solid rgba(255,255,255,.13);border-radius:16px;background:rgba(255,255,255,.05);padding:14px;overflow:hidden}
@@ -664,7 +680,7 @@ body.lock{overflow:hidden}
 .mkt-scope .tl{display:grid;grid-template-columns:16px 1fr;gap:8px;font-size:8px;min-height:46px}
 .mkt-scope .tl i{width:8px;height:8px;border-radius:50%;background:var(--red);box-shadow:0 0 0 4px rgba(229,57,53,.12);margin-top:3px}
 .mkt-scope .tl b{display:block}
-.mkt-scope .tl small{color:#71848e}
+.mkt-scope .tl small{color:#8b9ca5}
 .mkt-scope .stack-demo{height:100%;position:relative}
 .mkt-scope .sd-card{position:absolute;left:10%;right:10%;height:130px;border-radius:15px;background:#fff;color:var(--ink);padding:14px;box-shadow:0 13px 35px rgba(0,0,0,.18)}
 .mkt-scope .sd-card:nth-child(1){top:12px;transform:rotate(-4deg)}
@@ -804,7 +820,7 @@ body.lock{overflow:hidden}
   gap:20px;
   padding-top:26px;
   flex-wrap:wrap;
-  color:#657a85;
+  color:#7690a0;
   font-size:11px;
 }
 .mkt-scope .foot-bottom .legal{
@@ -1063,7 +1079,9 @@ body.lock{overflow:hidden}
 .mkt-scope .pcard-list{list-style:none;margin:20px 0 0;padding:16px 0 0;border-top:1px solid var(--line);display:grid;gap:10px}
 .mkt-scope .pcard-list li{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.5;color:#445760}
 .mkt-scope .pcard-list li svg{color:var(--green);margin-top:2px}
-.mkt-scope .pcard-fee{display:block;margin-top:10px;font:700 9px "JetBrains Mono";letter-spacing:.12em;text-transform:uppercase;color:var(--red)}
+/* Same WCAG AA fix as .pcard-num: var(--red) alone is 4.22:1 on white at
+   this size, below the 4.5:1 text needs. */
+.mkt-scope .pcard-fee{display:block;margin-top:10px;font:700 9px "JetBrains Mono";letter-spacing:.12em;text-transform:uppercase;color:#d32f2f}
 .mkt-scope .pcard--photo{padding:0}
 .mkt-scope .pcard--photo .pcard-img{aspect-ratio:16/9;overflow:hidden;background:var(--ink)}
 .mkt-scope .pcard--photo .pcard-img img{width:100%;height:100%;object-fit:cover;transition:transform .9s var(--spring)}
@@ -1073,6 +1091,7 @@ body.lock{overflow:hidden}
 .mkt-scope .dark .pcard{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1)}
 .mkt-scope .dark .pcard h3{color:#fff}
 .mkt-scope .dark .pcard p{color:#92a3ab}
+.mkt-scope .dark .pcard-num{color:#ff6a60}
 .mkt-scope .dark .pcard:hover{border-color:rgba(255,255,255,.2);box-shadow:0 30px 70px rgba(0,0,0,.3)}
 .mkt-scope .dark .pcard-ico{background:rgba(229,57,53,.14)}
 

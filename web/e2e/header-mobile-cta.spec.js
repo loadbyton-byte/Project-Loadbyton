@@ -9,8 +9,12 @@ test.use({ viewport: { width: 320, height: 640 } });
 test('mobile header shows both Log in and Get started with no horizontal overflow', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('link', { name: 'Log in', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Get started', exact: true })).toBeVisible();
+  // Scoped to #nav — the page footer has its own "Get started" link too
+  // (SiteChrome.jsx's SiteFooter), which otherwise makes this locator
+  // ambiguous (Playwright's strict mode rejects a 2-element match).
+  const nav = page.locator('#nav');
+  await expect(nav.getByRole('link', { name: 'Log in', exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Get started', exact: true })).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1); // sub-pixel rounding only
