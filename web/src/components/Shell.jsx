@@ -550,7 +550,14 @@ function ShellInner({ children }) {
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <Link to="/login" className="whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container">
+              {/* Hidden below 360px (iPhone SE 1st-gen/older or narrow
+                  Android at 320-352px CSS width): logo + Log in + Get
+                  started together overflow the viewport there (found via
+                  real-device-width screenshot testing on /terms — a
+                  horizontal-scroll bug, "Get started" clipped off-screen).
+                  Log in stays reachable via the hamburger drawer's own
+                  guest actions (below), so this only drops a duplicate. */}
+              <Link to="/login" className="hidden whitespace-nowrap rounded-full px-2.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-container min-[360px]:block">
                 {t('nav.login', 'Log in')}
               </Link>
               {/* Desktop's slim header already had both Log in and Get
