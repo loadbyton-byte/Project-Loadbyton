@@ -112,7 +112,6 @@ const routes = [
   './routes/gcc.routes',
   './routes/stops.routes',
   './routes/insurance.routes',
-  './routes/ledger.routes',
   './routes/location.routes',
   './routes/messages.routes',
   './routes/ml.routes',

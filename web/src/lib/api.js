@@ -282,7 +282,6 @@ Object.assign(api, {
   ingestEdi: (body) => post('/edi/ingest', body),
   listConsignments: () => get('/edi/consignments'),
   createCompliance: (id, body) => post(`/jobs/${id}/compliance`, body),
-  tokenizeBL: (id, body) => post(`/jobs/${id}/tokenize`, body),
   predictEta: (body) => post('/ml/predict-eta', body),
   // Insurance — quote has no job id in its path (it's pure rate-card math,
   // not job-scoped); only bind/cancel are.
@@ -346,6 +345,4 @@ Object.assign(api, {
   // Audit / Ledger
   getAuditChain: () => get('/audit/chain'),
   verifyAuditChain: () => get('/audit/chain/verify'),
-  // Job instruments
-  getInstruments: (id) => get(`/jobs/${id}/instruments`),
 });

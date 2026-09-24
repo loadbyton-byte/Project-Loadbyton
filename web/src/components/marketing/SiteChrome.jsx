@@ -46,10 +46,15 @@ export function SiteNav() {
             Log in
           </NavLink>
           <Link className="btn btn-red shimmer" to="/register">Get started</Link>
-          <button className="menu" id="menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">
-            &#9776;
-          </button>
         </div>
+        {/* Direct navbar child (not nested in .nav-right) so it can be
+            pushed to the far right on mobile independently of Log in/Get
+            started, which stay anchored left next to the logo instead of
+            drifting into the middle of the row — see .menu's mobile
+            margin-left:auto in marketing.css. */}
+        <button className="menu" id="menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileNav">
+          &#9776;
+        </button>
       </div>
     </header>
   );

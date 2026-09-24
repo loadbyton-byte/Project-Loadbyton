@@ -7,7 +7,6 @@ import { useLocale } from '../lib/i18n.jsx';
 import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, ltrIsolate, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, PaymentStatusBadge, RatingPill, ErrorState, Skeleton, Modal } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
-import { useToasts } from '../components/Toast.jsx';
 import { documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
 import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
 import { EirChecklist } from '../components/EirChecklist.jsx';
@@ -74,7 +73,6 @@ export default function JobDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t, isRtl } = useLocale();
-  const { addToast } = useToasts();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [error, setError] = useState('');
@@ -92,9 +90,6 @@ export default function JobDetail() {
   const [newChargeAmount, setNewChargeAmount] = useState('');
   const [lowCapacityAcked, setLowCapacityAcked] = useState(false);
   const [negotiationBusy, setNegotiationBusy] = useState(false);
-  const [blNumberDraft, setBlNumberDraft] = useState('');
-  const [instruments, setInstruments] = useState([]);
-  const [tokenizeBusy, setTokenizeBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -142,15 +137,6 @@ export default function JobDetail() {
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [awardConfirm]);
-
-  // Existing BL tokens for this job — GET /api/jobs/:id/instruments had a
-  // real backend and an api.js client (getInstruments) but was never
-  // called anywhere, so a token created via "Tokenize BL" below was
-  // immediately invisible again on the next page load.
-  useEffect(() => {
-    if (!data?.job?.id) return;
-    api.getInstruments(data.job.id).then((r) => setInstruments(r.instruments || [])).catch(() => {});
-  }, [data?.job?.id]);
 
   if (error && !data) {
     return (
@@ -804,67 +790,6 @@ export default function JobDetail() {
             <Link to={`/jobs/${job.id}/dispute`} className="btn-danger mb-6 w-full justify-center">
               <IconGavel size={15} /> View dispute
             </Link>
-          )}
-
-          {/* Tokenize Bill of Lading — shipper only, after award */}
-          {(isShipper || isAwardedCarrier) && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(job.status) && (
-            <Section title="Bill of Lading Token" className="mb-6">
-              <Card className="border-l-4" style={{ borderLeftColor: 'var(--brand-accent)' }}>
-                <Card.Content className="flex flex-col gap-3 p-4">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-ink">{t('jobDetail.tokenizeBL', 'Tokenize Bill of Lading')}</p>
-                      <p className="text-xs text-ink-muted">{t('jobDetail.tokenizeBLDesc', 'Create a verifiable, transferable digital token for this shipment\'s bill of lading')}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      placeholder={t('jobDetail.blNumber', 'Bill of Lading number')}
-                      value={blNumberDraft}
-                      onChange={(e) => setBlNumberDraft(e.target.value)}
-                      className="flex-1 min-w-[200px]"
-                    />
-                    <Button
-                      variant="accent"
-                      loading={tokenizeBusy}
-                      disabled={!blNumberDraft.trim()}
-                      onClick={async () => {
-                        setTokenizeBusy(true);
-                        try {
-                          const res = await api.tokenizeBL(job.id, { blNumber: blNumberDraft.trim(), shipmentType: job.shipment_type });
-                          setInstruments((prev) => [res.instrument, ...prev]);
-                          setBlNumberDraft('');
-                          addToast({
-                            type: 'system_message',
-                            title: 'Bill of Lading tokenized',
-                            body: `Token ${res.instrument.token_id} · risk score ${res.risk.score} · rate ${res.risk.rateBps}bps`,
-                          });
-                        } catch (err) {
-                          addToast({ type: 'system_message', title: 'Could not tokenize BL', body: err.message });
-                        } finally {
-                          setTokenizeBusy(false);
-                        }
-                      }}
-                    >
-                      {t('jobDetail.tokenizeBLBtn', 'Tokenize BL')}
-                    </Button>
-                  </div>
-                  {instruments.length > 0 && (
-                    <ul className="mt-1 space-y-1 text-sm text-ink-secondary">
-                      {instruments.map((inst) => (
-                        <li key={inst.id} className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs">{inst.token_id}</span>
-                          <span>BL {inst.bl_number}</span>
-                          <span>{formatAED(inst.face_value_aed)}</span>
-                          <span className="text-xs text-ink-muted">risk {inst.risk_score} · {inst.interest_rate_bps}bps</span>
-                          <Badge color={inst.status === 'ACTIVE' ? 'success' : 'warning'}>{inst.status}</Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Card.Content>
-              </Card>
-            </Section>
           )}
 
           {/* Currency selector — shipper can change job currency before award */}
