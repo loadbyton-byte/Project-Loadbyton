@@ -971,6 +971,29 @@ body.lock{overflow:hidden}
   .mkt-scope .demo-side button{width:auto;white-space:nowrap;padding:0 13px}
   .mkt-scope .footer-grid{grid-template-columns:1fr 1fr;gap:40px}
 }
+/* Narrow-to-mid phones (up to ~400px CSS width): even after the 980px
+   compacting above, logo + nav-right (Log in + Get started + hamburger)
+   left only single-digit pixels of margin right at the 360px boundary —
+   the hamburger button rendered fully off the right edge at 320-359px,
+   clipped and unreachable (position:fixed content overflowing the
+   viewport doesn't trigger a horizontal scrollbar, so a plain
+   scrollWidth check alone missed it; caught by an e2e test asserting the
+   actual elements are visible, which failed in CI's browser even where
+   a slightly older local Chromium build didn't reproduce it — a sign the
+   margin was too thin to trust across browser/font-rendering variance,
+   not that one specific width was the only broken one). Shrinks the same
+   handful of controls further, verified via real screenshots and a
+   getBoundingClientRect sweep from 320-400px to leave real margin (not
+   just barely-positive) throughout, not just at the exact breakpoint. */
+@media(max-width:400px){
+  .mkt-scope .logo svg,
+.mkt-scope .logo img{width:98px}
+  .mkt-scope .navbar{gap:8px}
+  .mkt-scope .nav-right{gap:3px}
+  .mkt-scope .nav-login{padding:6px 4px;font-size:10px}
+  .mkt-scope .nav-right .btn{padding:0 9px;font-size:9px}
+  .mkt-scope .menu{width:34px;height:34px}
+}
 @media(max-width:640px){
   .mkt-scope{--gutter:15px}
   .mkt-scope .section{padding:70px 0}
