@@ -38,6 +38,7 @@ export default function Drivers() {
   const [engageUnits, setEngageUnits] = useState('');
   const [engageNote, setEngageNote] = useState('');
   const [walletBusyFor, setWalletBusyFor] = useState(null);
+  const [fleetPerformance, setFleetPerformance] = useState([]);
 
   function load() {
     setDriversError('');
@@ -50,6 +51,12 @@ export default function Drivers() {
       // '—' placeholder regardless of the account's real fleet data.
       api.getFleetCapacity().then((c) => setCapacity(c)).catch(() => setCapacity(null)),
       api.listDriverAssociateWallet().then((w) => setWalletEntries(w.entries || [])).catch(() => setWalletEntries([])),
+      // GET /api/carrier/fleet (enterprise.routes.js) — per-driver
+      // completion rate / clean-POD rate / avg turnaround across this
+      // carrier's last 100 jobs, grouped by assigned_driver_name. Fully
+      // built on the backend with no frontend caller anywhere — a QA
+      // audit found it as a "shipped but invisible" feature.
+      api.getFleet().then((f) => setFleetPerformance(f.fleet || [])).catch(() => setFleetPerformance([])),
     ]);
   }
   useEffect(load, []);
@@ -225,6 +232,44 @@ export default function Drivers() {
           )}
         </Card.Content>
       </Card>
+
+      {/* Driver performance — per-driver completion rate / clean-POD rate /
+          avg turnaround across this carrier's recent jobs. Grouped by
+          assigned_driver_name on the backend, so it only shows drivers
+          who've actually been assigned a job, not the full roster above. */}
+      {fleetPerformance.length > 0 && (
+        <Card className="mt-5">
+          <Card.Header>
+            <Card.Title>Driver performance</Card.Title>
+          </Card.Header>
+          <Card.Content className="overflow-x-auto scroll-fade-x">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b text-xs uppercase tracking-wide text-ink-muted" style={{ borderColor: 'var(--border-default)' }}>
+                  <th className="py-2 pe-4 font-medium">Driver</th>
+                  <th className="py-2 pe-4 font-medium">Jobs</th>
+                  <th className="py-2 pe-4 font-medium">Completion rate</th>
+                  <th className="py-2 pe-4 font-medium">Clean PODs</th>
+                  <th className="py-2 pe-4 font-medium">Avg turnaround</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fleetPerformance.map((f) => (
+                  <tr key={f.driver} className="border-b last:border-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <td className="py-2 pe-4 font-medium text-ink">{f.driver}</td>
+                    <td className="tabular py-2 pe-4 text-ink-secondary">{f.jobs}</td>
+                    <td className="py-2 pe-4">
+                      <Badge color={f.completionRate >= 90 ? 'success' : f.completionRate >= 60 ? 'neutral' : 'danger'} dot={false}>{f.completionRate}%</Badge>
+                    </td>
+                    <td className="tabular py-2 pe-4 text-ink-secondary">{f.podClean} / {f.completed}</td>
+                    <td className="tabular py-2 pe-4 text-ink-secondary">{f.avgHours != null ? `${f.avgHours}h` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card.Content>
+        </Card>
+      )}
 
       {revealedSeat && (
         <Card className="mt-5 animate-slide-up" style={{ borderColor: 'var(--brand-accent)' }}>
