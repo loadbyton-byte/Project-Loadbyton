@@ -247,9 +247,32 @@ async function handleInboundMessage(msg) {
         // views can't render it.
       }
     }
-    await db
-      .prepare(`INSERT INTO messages (job_id, sender_id, thread_id, content, channel, whatsapp_message_id) VALUES (?,?,?,?,'WHATSAPP',?)`)
+    const result = await db
+      .prepare(`INSERT INTO messages (job_id, sender_id, thread_id, content, channel, whatsapp_message_id) VALUES (?,?,?,?,'WHATSAPP',?) RETURNING id`)
       .run(job.id, senderId, threadId, content, msg.id || null);
+    // A QA audit found an inbound WhatsApp message landed in the `messages`
+    // table (and rendered fine on a job's own thread view) but never
+    // notified anyone and never pushed a socket event — unlike the web
+    // composer's send path (routes/job-extras.routes.js), which does both
+    // right after its own INSERT. The Messages inbox page only refreshes
+    // its conversation list on a `notification:new` event of type
+    // 'message', and only live-updates an already-open thread on
+    // `new_message` — with neither ever firing, a WhatsApp reply was
+    // invisible there until the page was manually reloaded and the thread
+    // re-opened. Mirrors job-extras.routes.js's pattern exactly: notify
+    // whichever real user the thread's "other" role resolves to, then push
+    // the socket event to anyone with that thread open.
+    if (threadRoles) {
+      const otherRole = threadRoles[1];
+      const recipientId = otherRole === 'SHIPPER' ? job.shipper_id : otherRole === 'CARRIER' ? job.carrier_id : null;
+      if (recipientId && recipientId !== senderId) {
+        await notify(recipientId, 'New message', `New message on ${job.job_code} (via WhatsApp)`, job.id, 'message').catch(() => {});
+      }
+    }
+    if (threadId) {
+      const message = await db.prepare('SELECT * FROM messages WHERE id=?').get(Number(result.lastInsertRowid));
+      try { require('../lib/socket').emitNewMessage(threadId, message); } catch {}
+    }
     if (msg.type === 'image' || msg.type === 'audio') {
       await storeInboundMedia(msg, { job, senderId });
     }
