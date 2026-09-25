@@ -292,7 +292,7 @@ router.post('/api/admin/credit/jobs/:jobId/settle', auth(['ADMIN']), async (req,
 router.get('/api/admin/users', auth(['ADMIN']), async (req, res) => {
   const rows = await db
     .prepare(
-      `SELECT u.*, p.company_name, p.completed_jobs, p.rating_avg
+      `SELECT u.*, p.company_name, p.completed_jobs, p.rating_avg, p.commission_rate_bps
        FROM users u LEFT JOIN profiles p ON p.user_id = u.id
        ORDER BY u.created_at DESC`
     )
@@ -305,9 +305,49 @@ router.get('/api/admin/users', auth(['ADMIN']), async (req, res) => {
       is_verified: !!r.is_verified,
       tier: r.tier,
       created_at: r.created_at,
-      profile: { company_name: r.company_name, completed_jobs: r.completed_jobs, rating_avg: r.rating_avg },
+      profile: { company_name: r.company_name, completed_jobs: r.completed_jobs, rating_avg: r.rating_avg, commission_rate_bps: r.commission_rate_bps },
     })),
   });
+});
+
+// Flexible per-account commission override — lets an admin negotiate a
+// different platform commission rate for one specific shipper or carrier
+// instead of everyone paying the global settings.commission_rate_bps.
+// award.service.js's effectiveCommissionBps resolves carrier override >
+// shipper override > global default at award time (see that file for why
+// carrier wins when both are set). rateBps: null clears the override back
+// to the global default; SHIPPER/FORWARDER/CARRIER only — an ADMIN account
+// never bids or ships, and commission has no meaning for one.
+router.post('/api/admin/users/:userId/commission', auth(['ADMIN']), async (req, res) => {
+  const { rateBps } = req.body || {};
+  const user = await db.prepare(`SELECT id, role FROM users WHERE id=?`).get(req.params.userId);
+  if (!user) return sendError(res, 404, 'User not found');
+  if (!['SHIPPER', 'FORWARDER', 'CARRIER'].includes(user.role)) {
+    return apiResponse.error(req, res, 'VALIDATION_FAILED', 'Commission overrides only apply to shipper/forwarder/carrier accounts');
+  }
+  let normalizedRateBps = null;
+  if (rateBps !== null && rateBps !== undefined && rateBps !== '') {
+    normalizedRateBps = Number(rateBps);
+    if (!Number.isFinite(normalizedRateBps) || normalizedRateBps < 0 || normalizedRateBps > 10000) {
+      return apiResponse.error(req, res, 'VALIDATION_FAILED', 'rateBps must be a number between 0 and 10000, or null to clear the override');
+    }
+  }
+  await db.prepare('UPDATE profiles SET commission_rate_bps=? WHERE user_id=?').run(normalizedRateBps, user.id);
+  await writeAudit(req, {
+    userId: req.actorId,
+    action: 'COMMISSION_OVERRIDE_SET',
+    details: normalizedRateBps === null ? `Cleared commission override — back to platform default` : `Set commission override to ${normalizedRateBps} bps (${(normalizedRateBps / 100).toFixed(2)}%)`,
+    entityType: 'user',
+    entityId: user.id,
+  });
+  await notify(
+    user.id,
+    'Commission rate updated',
+    normalizedRateBps === null ? 'Your account now uses the platform default commission rate.' : `Your account's commission rate has been set to ${(normalizedRateBps / 100).toFixed(2)}%.`,
+    null,
+    'system'
+  );
+  res.json({ ok: true, commission_rate_bps: normalizedRateBps });
 });
 
 // Admin document visibility — browse any company's registration documents

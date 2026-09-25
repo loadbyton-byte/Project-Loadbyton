@@ -1280,6 +1280,16 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'credit_due_at', 'credit_due_at TEXT');
   addColumn('jobs', 'credit_settled_at', 'credit_settled_at TEXT');
 
+  // Per-account commission override — admin can negotiate a different
+  // platform commission rate for a specific shipper or carrier (a large
+  // account, a promotional rate, etc.) instead of everyone paying the one
+  // global settings.commission_rate_bps. NULL means "use the global rate",
+  // same nullable-override shape as haulage_insurance_expiry etc. above —
+  // not a zero-vs-unset ambiguity, since 0 is itself a valid (commission-
+  // free) override. See award.service.js for the resolution order between
+  // a carrier override, a shipper override, and the global default.
+  addColumn('profiles', 'commission_rate_bps', 'commission_rate_bps INTEGER');
+
   // ---------------------------------------------------------------------------
   // Telr split-payment payout — closes the "NOT IMPLEMENTED" gap in
   // lib/payments.js's executePayout() for PAYMENTS_PROVIDER=telr. Unlike

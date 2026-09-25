@@ -240,6 +240,7 @@ export const api = {
   adminGetSettings: () => get('/admin/settings'),
   adminUpdateSettings: (body) => patch('/admin/settings', body),
   adminUsers: () => get('/admin/users'),
+  adminSetCommission: (userId, rateBps) => post(`/admin/users/${userId}/commission`, { rateBps }),
   adminReferrals: () => get('/admin/referrals'),
   adminImpersonate: (userId) => post(`/admin/impersonate/${userId}`),
   endImpersonation: () => post('/admin/impersonate/end'),

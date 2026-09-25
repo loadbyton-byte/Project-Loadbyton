@@ -84,7 +84,7 @@ async function awardJob(req, res, jobId, bidId) {
   // an over-committed carrier can still genuinely have room for one more
   // job; the shipper just has to say so on purpose.
   const acknowledgeLowCapacity = !!(req.body && req.body.acknowledgeLowCapacity);
-  const carrierProfile = await db.prepare('SELECT available_units FROM profiles WHERE user_id=?').get(preBid.carrier_id);
+  const carrierProfile = await db.prepare('SELECT available_units, commission_rate_bps FROM profiles WHERE user_id=?').get(preBid.carrier_id);
   if (carrierProfile && carrierProfile.available_units <= 0 && !acknowledgeLowCapacity) {
     res.status(409).json({ error: 'This carrier has declared 0 available units — acknowledge to award anyway.', lowCapacity: true });
     return;
@@ -104,7 +104,18 @@ async function awardJob(req, res, jobId, bidId) {
   ).get(bidId);
   const ancillaryTotal = Number(agreedCharges?.total) || 0;
   const { commission_rate_bps } = await getSettings();
-  const commissionRate = commission_rate_bps / 10000;
+  // Flexible per-account commission (admin-set, POST
+  // /api/admin/users/:userId/commission) — a shipper or carrier can be
+  // negotiated onto a different rate than everyone else's global default.
+  // Carrier override wins over shipper override wins over the global
+  // default when both happen to be set: the commission is nominally "what
+  // Loadbyton charges to connect this carrier with a shipper," so the
+  // carrier's own negotiated rate is the more specific of the two: whoever
+  // set both should treat the carrier rate as authoritative. Either being
+  // NULL just falls through to the next one.
+  const shipperProfile = await db.prepare('SELECT commission_rate_bps FROM profiles WHERE user_id=?').get(preJob.shipper_id);
+  const effectiveCommissionBps = carrierProfile?.commission_rate_bps ?? shipperProfile?.commission_rate_bps ?? commission_rate_bps;
+  const commissionRate = effectiveCommissionBps / 10000;
   const agreedPrice = preBid.amount_aed + ancillaryTotal;
   // Financial-audit finding: rounded to the nearest whole AED instead of
   // the nearest fils (2 decimals), unlike every other fee computation in

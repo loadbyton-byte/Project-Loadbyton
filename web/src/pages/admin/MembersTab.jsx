@@ -6,6 +6,65 @@ import { useToasts } from '../../components/Toast.jsx';
 import { Button, Card, Input, Badge, Select, EmptyState, ErrorState } from '../../components/ui.jsx';
 import { IconUser } from '../../components/icons.jsx';
 
+// Admin-set per-account commission override (award.service.js resolves
+// carrier override > shipper override > the global settings.commission_rate_bps
+// — see that file). Doesn't apply to ADMIN rows, which never bid or ship.
+function CommissionCell({ user, onSaved }) {
+  const { addToast } = useToasts();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(user.profile?.commission_rate_bps != null ? String(user.profile.commission_rate_bps / 100) : '');
+  const [busy, setBusy] = useState(false);
+
+  if (user.role === 'ADMIN') return <span className="text-xs text-ink-muted">—</span>;
+
+  async function save(rateBps) {
+    setBusy(true);
+    try {
+      await api.adminSetCommission(user.id, rateBps);
+      addToast({ type: 'status_change', title: rateBps === null ? 'Commission override cleared' : 'Commission override set' });
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not update commission', body: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center justify-end gap-2">
+        {user.profile?.commission_rate_bps != null ? (
+          <Badge color="accent">{(user.profile.commission_rate_bps / 100).toFixed(2)}%</Badge>
+        ) : (
+          <span className="text-xs text-ink-muted">Default</span>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>Edit</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <Input
+        type="number"
+        min="0"
+        max="100"
+        step="0.01"
+        placeholder="%"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-20"
+      />
+      <Button size="sm" loading={busy} onClick={() => save(value === '' ? null : Math.round(Number(value) * 100))}>Save</Button>
+      {user.profile?.commission_rate_bps != null && (
+        <Button size="sm" variant="ghost" loading={busy} onClick={() => save(null)}>Clear</Button>
+      )}
+      <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+    </div>
+  );
+}
+
 function MembersTab() {
   const { refresh } = useAuth();
   const { addToast } = useToasts();
@@ -78,6 +137,7 @@ function MembersTab() {
                 <th className="px-5 py-3 font-medium">Verified</th>
                 <th className="px-5 py-3 font-medium">Tier</th>
                 <th className="px-5 py-3 font-medium">Completed jobs</th>
+                <th className="px-5 py-3 text-right font-medium">Commission</th>
                 <th className="px-5 py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -94,6 +154,7 @@ function MembersTab() {
                   </td>
                   <td className="px-5 py-3 text-ink-secondary">{u.tier || '—'}</td>
                   <td className="px-5 py-3 text-ink-secondary">{u.profile?.completed_jobs || 0}</td>
+                  <td className="px-5 py-3"><CommissionCell user={u} onSaved={load} /></td>
                   <td className="px-5 py-3 text-right">
                     {u.role === 'ADMIN' ? (
                       <span className="text-xs text-ink-muted">—</span>
