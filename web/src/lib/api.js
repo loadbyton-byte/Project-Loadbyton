@@ -230,6 +230,16 @@ export const api = {
   adminRevenue: () => get('/admin/revenue'),
   adminPayoutsSla: () => get('/admin/payouts-sla'),
   adminMarkTransferred: (payoutId, reference) => post(`/admin/payouts/${payoutId}/mark-transferred`, { reference }),
+  // Ambiguous payout-attempts queue (server/routes/admin.routes.js) — a
+  // provider call whose result couldn't be determined (network/transport
+  // failure) blocks any new attempt on that payout until an admin either
+  // reconciles the existing attempt (re-drives the SAME idempotency key —
+  // safe, asks the provider for the truth) or retries the payout itself
+  // (re-runs executePayoutAsync's own guards fresh). This had a fully
+  // working backend with no admin UI at all — see PayoutsSlaTab.jsx.
+  adminPayoutsUnknown: () => get('/admin/payouts/unknown'),
+  adminReconcilePayoutAttempt: (attemptId) => post(`/admin/payout-attempts/${attemptId}/reconcile`),
+  adminRetryPayout: (payoutId) => post(`/admin/payouts/${payoutId}/retry`),
   // Two-person approval inbox (admin-approvals.routes.js) — was API-only
   // with no frontend caller at all until the Approvals tab.
   adminActionApprovals: (status) => get(`/admin/action-approvals${status ? `?status=${status}` : ''}`),
