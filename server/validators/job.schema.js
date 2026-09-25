@@ -57,6 +57,18 @@ async function createJobFromBody(body, req) {
 
   if (!effectivePickupTerminal) throw { status: 400, message: 'pickupTerminal is required' };
   if (!effectiveDeliveryArea && !deliveryAddress) throw { status: 400, message: 'deliveryArea or deliveryAddress is required' };
+  // jobs.ready_at / jobs.deadline are both NOT NULL. The web form's own
+  // submit handler (Dashboard.jsx) guards this client-side and always
+  // computes deadline from readyAt before sending, but that guard doesn't
+  // exist for a direct API call or the CSV bulk-import path (POST
+  // /api/jobs/import loops this same function per row) — either used to
+  // insert `null` into a NOT NULL column, an unhandled crash rather than a
+  // real validation error. middleware/validate.js's jobCreateSchema marks
+  // both `.optional()` (loosened for the scheduled-post/other optional
+  // fields on the same schema), so this is the one place that can actually
+  // enforce it before the INSERT.
+  if (!readyAt) throw { status: 400, message: 'readyAt is required' };
+  if (!deadline) throw { status: 400, message: 'deadline is required' };
 
   const eqType = EQUIPMENT_TYPES.includes(equipmentType) ? equipmentType : 'CONTAINER_CHASSIS';
   const cgType = CARGO_TYPES.includes(cargoType) ? cargoType : 'GENERAL_GOODS';
@@ -81,9 +93,32 @@ async function createJobFromBody(body, req) {
 
   const effectiveNotes = body.customRequirement ? (notes ? `${notes}\n\nCustom requirement: ${body.customRequirement}` : body.customRequirement) : notes;
 
+  // jobs.container_size / jobs.container_type are both NOT NULL. LOCAL
+  // shipments never carry a container, hence the 'N/A' fallback below — but
+  // IMPORT/EXPORT genuinely need one, and the old code let a missing value
+  // fall through to `null` there with no rejecting check (the web form
+  // always has a non-empty default, but a direct API call or the CSV
+  // bulk-import path did not), hitting the same class of unhandled NOT
+  // NULL crash as the delivery_address bug above.
+  if (shipType !== 'LOCAL' && (!containerSize || !containerType)) {
+    throw { status: 400, message: 'containerSize and containerType are required for IMPORT/EXPORT shipments' };
+  }
   const effectiveContainerSize = containerSize || (shipType === 'LOCAL' ? 'N/A' : null);
   const effectiveContainerType = containerType || (shipType === 'LOCAL' ? 'N/A' : null);
-  const effectiveDeliveryAddress = deliveryAddress || (shipType === 'LOCAL' ? (deliveryLocation || effectiveDeliveryArea) : null);
+  // jobs.delivery_address is NOT NULL — the web form's "Delivery address
+  // detail" field (which is what `deliveryAddress` actually is) has no
+  // `required` attribute for IMPORT/EXPORT, so a shipper who skips it
+  // (it reads as optional/supplementary, not essential) sent `deliveryAddress:
+  // undefined` here. The old fallback only covered LOCAL — every IMPORT/EXPORT
+  // job posted without that optional field hit a raw, unhandled NOT NULL
+  // constraint violation (Postgres error 23502) surfaced to the shipper as a
+  // bare "Internal server error", since the validation above only requires
+  // deliveryArea OR deliveryAddress, not deliveryAddress specifically.
+  // Falling back to effectiveDeliveryArea for every shipment type closes
+  // this: that check already guarantees at least one of deliveryAddress/
+  // effectiveDeliveryArea is truthy by this point, so this can never insert
+  // null.
+  const effectiveDeliveryAddress = deliveryAddress || effectiveDeliveryArea;
 
   const code = jobCode();
   const initialStatus = scheduledPostAt && new Date(scheduledPostAt) > new Date() ? 'DRAFT' : 'OPEN';

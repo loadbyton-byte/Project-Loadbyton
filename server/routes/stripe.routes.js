@@ -69,8 +69,10 @@ router.post('/api/jobs/:id/pay', auth(['SHIPPER']), writeLimiter, async (req,res
   if(!['AWARDED','PICKED_UP','IN_TRANSIT'].includes(job.status)) return sendError(res,400,'Job not in payable state');
   const amount = job.agreed_price_aed || job.max_budget_aed;
   if(!amount) return sendError(res,400,'No agreed price');
-  // incidentals buffer 10% held automatically
-  const buffer = Math.round(amount * 0.10);
+  // incidentals buffer 10% held automatically — rounded to the nearest
+  // fils (2 dp), not whole AED, matching every other AED computation in
+  // this codebase (see e.g. lib/adminActions.js's split-payout math).
+  const buffer = Math.round(amount * 0.10 * 100) / 100;
   const total = amount + buffer;
   const intent = await createPaymentIntent({ amountAed: total, jobCode: job.job_code, shipperEmail: req.user.email });
   await db.prepare(`UPDATE jobs SET processor_payment_ref=?, processor_amount_aed=?, processor_payment_status='REQUIRES_PAYMENT', incidentals_buffer_aed=?, updated_at=datetime('now') WHERE id=?`).run(intent.id, total, buffer, job.id);
