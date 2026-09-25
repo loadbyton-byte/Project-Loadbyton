@@ -326,34 +326,43 @@ export default function JobDetail() {
         <Modal
           open
           onClose={() => setAwardConfirm(null)}
-          title={<span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>Discuss &amp; award this bid</span>}
+          title={
+            <span className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>
+              {isShipper ? 'Discuss & award this bid' : 'Discuss your bid with the shipper'}
+            </span>
+          }
         >
                 <p className="text-sm text-ink">
-                  <strong>{formatMoney(awardConfirm.amount_aed, job.currency)}</strong> from{' '}
-                  <strong>{awardConfirm.carrier_company || 'this transporter'}</strong>.
+                  <strong>{formatMoney(awardConfirm.amount_aed, job.currency)}</strong>
+                  {isShipper ? <> from <strong>{awardConfirm.carrier_company || 'this transporter'}</strong>.</> : ' — your bid on this job.'}
                 </p>
-                <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingInlineStart: '1.1rem' }}>
-                  <li>Every other bid on this job will be rejected once assigned</li>
-                  <li>
-                    {agreedChargesTotal > 0
-                      ? <>Final price locks at <strong className="text-ink">{formatMoney(finalAwardTotal, job.currency)}</strong> ({formatMoney(awardConfirm.amount_aed, job.currency)} bid + {formatMoney(agreedChargesTotal, job.currency)} agreed extras) — nothing can be changed after this</>
-                      : <>The price is locked at {formatMoney(awardConfirm.amount_aed, job.currency)} — bids can't be changed after this</>}
-                  </li>
-                  <li>{(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Payment is held for this transport and the job moves to "Awarded"' : `The job moves to "Awarded" — ${paymentTermLabel(job.payment_tier)}`}</li>
-                </ul>
+                {isShipper && (
+                  <>
+                    <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingInlineStart: '1.1rem' }}>
+                      <li>Every other bid on this job will be rejected once assigned</li>
+                      <li>
+                        {agreedChargesTotal > 0
+                          ? <>Final price locks at <strong className="text-ink">{formatMoney(finalAwardTotal, job.currency)}</strong> ({formatMoney(awardConfirm.amount_aed, job.currency)} bid + {formatMoney(agreedChargesTotal, job.currency)} agreed extras) — nothing can be changed after this</>
+                          : <>The price is locked at {formatMoney(awardConfirm.amount_aed, job.currency)} — bids can't be changed after this</>}
+                      </li>
+                      <li>{(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Payment is held for this transport and the job moves to "Awarded"' : `The job moves to "Awarded" — ${paymentTermLabel(job.payment_tier)}`}</li>
+                    </ul>
 
-                {isLowCapacity && (
-                  <div
-                    className="mt-3 rounded-md px-3 py-2 text-sm"
-                    style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
-                  >
-                    <p className="font-semibold">⚠ This transporter has declared 0 available units.</p>
-                    <p className="mt-0.5 text-xs">They may already be fully committed to other jobs. You can still award — just confirm you understand the risk.</p>
-                    <label className="mt-2 flex items-center gap-2 text-xs font-medium">
-                      <input type="checkbox" checked={lowCapacityAcked} onChange={(e) => setLowCapacityAcked(e.target.checked)} />
-                      Award anyway
-                    </label>
-                  </div>
+                    {isLowCapacity && (
+                      <div
+                        className="mt-3 rounded-md px-3 py-2 text-sm"
+                        style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
+                      >
+                        <p className="font-semibold">⚠ This transporter has declared 0 available units.</p>
+                        <p className="mt-0.5 text-xs">They may already be fully committed to other jobs. You can still award — just confirm you understand the risk.</p>
+                        <label className="mt-2 flex items-center gap-2 text-xs font-medium">
+                          <input type="checkbox" checked={lowCapacityAcked} onChange={(e) => setLowCapacityAcked(e.target.checked)} />
+                          Award anyway
+                        </label>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Ancillary charges — Salik, e-token, demurrage, inspection
@@ -363,27 +372,37 @@ export default function JobDetail() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Ancillary charges</p>
                   {ancillaryCharges.length === 0 && <p className="mt-1 text-sm text-ink-muted">None proposed yet.</p>}
                   <ul className="mt-2 space-y-1.5">
-                    {ancillaryCharges.map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span>{c.charge_type} — {formatMoney(c.amount_aed, job.currency)}</span>
-                        <span className="flex items-center gap-1.5">
-                          {c.agreed_by_shipper && c.agreed_by_carrier ? (
-                            <Badge color="success">Agreed</Badge>
-                          ) : !c.agreed_by_shipper ? (
-                            <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
-                          ) : (
-                            <Badge color="neutral">Awaiting transporter</Badge>
-                          )}
-                          {/* Only the party who proposed a charge can withdraw it (server now
-                              enforces this — see bids.routes.js) — a shipper couldn't previously
-                              tell a carrier-proposed charge apart here, and this button would
-                              have 403'd on one instead of just not being offered. */}
-                          {c.proposed_by === user?.id && (
-                            <Button size="sm" variant="ghost" onClick={() => removeCharge(c.id)} loading={negotiationBusy}>Remove</Button>
-                          )}
-                        </span>
-                      </li>
-                    ))}
+                    {ancillaryCharges.map((c) => {
+                      // Which side "I am" depends on who's viewing — this modal
+                      // is now opened by either party (previously shipper-only,
+                      // so hardcoding agreed_by_shipper as "my side" happened to
+                      // work by accident). Read my/their agreement off the
+                      // correct column for whoever's actually looking at it.
+                      const myAgreed = isShipper ? c.agreed_by_shipper : c.agreed_by_carrier;
+                      const otherAgreed = isShipper ? c.agreed_by_carrier : c.agreed_by_shipper;
+                      const otherLabel = isShipper ? 'transporter' : 'shipper';
+                      return (
+                        <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span>{c.charge_type} — {formatMoney(c.amount_aed, job.currency)}</span>
+                          <span className="flex items-center gap-1.5">
+                            {myAgreed && otherAgreed ? (
+                              <Badge color="success">Agreed</Badge>
+                            ) : !myAgreed ? (
+                              <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
+                            ) : (
+                              <Badge color="neutral">Awaiting {otherLabel}</Badge>
+                            )}
+                            {/* Only the party who proposed a charge can withdraw it (server now
+                                enforces this — see bids.routes.js) — a shipper couldn't previously
+                                tell a carrier-proposed charge apart here, and this button would
+                                have 403'd on one instead of just not being offered. */}
+                            {c.proposed_by === user?.id && (
+                              <Button size="sm" variant="ghost" onClick={() => removeCharge(c.id)} loading={negotiationBusy}>Remove</Button>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                   <div className="mt-2 flex gap-2">
                     <Select value={newChargeType} onChange={(e) => setNewChargeType(e.target.value)} className="text-sm">
@@ -399,14 +418,27 @@ export default function JobDetail() {
                 </div>
 
                 {/* Negotiation thread — pre-award commercial chat on this
-                    specific bid, separate from the post-award job chat. */}
+                    specific bid, separate from the post-award job chat. Now a
+                    real two-way conversation (previously only the shipper had
+                    any entry point to it at all): messages are attributed by
+                    sender so either side can actually follow who said what. */}
                 <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Discuss with this transporter</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{isShipper ? 'Discuss with this transporter' : 'Discuss with the shipper'}</p>
                   <div className="mt-2 max-h-32 space-y-1.5 overflow-y-auto text-sm">
                     {negotiationMessages.length === 0 && <p className="text-ink-muted">No messages yet.</p>}
-                    {negotiationMessages.map((m) => (
-                      <p key={m.id} className="rounded-md px-2 py-1" style={{ background: 'var(--surface-container)' }}>{m.message}</p>
-                    ))}
+                    {negotiationMessages.map((m) => {
+                      const mine = m.sender_id === user?.id;
+                      return (
+                        <p
+                          key={m.id}
+                          className={`rounded-md px-2 py-1 ${mine ? 'ms-6' : 'me-6'}`}
+                          style={{ background: mine ? 'color-mix(in srgb, var(--brand-accent) 12%, transparent)' : 'var(--surface-container)' }}
+                        >
+                          <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{mine ? 'You' : isShipper ? 'Transporter' : 'Shipper'}</span>
+                          {m.message}
+                        </p>
+                      );
+                    })}
                   </div>
                   <div className="mt-2 flex gap-2">
                     <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="e.g. Any Salik charges expected?" className="flex-1" />
@@ -414,16 +446,24 @@ export default function JobDetail() {
                   </div>
                 </div>
 
-                <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
-              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-                <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
-                {ancillaryCharges.length === 0 && (
-                  <Button variant="ghost" onClick={skipAndAward} loading={busy} disabled={isLowCapacity && !lowCapacityAcked}>No charges — award now</Button>
+                {isShipper ? (
+                  <>
+                    <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
+                    <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
+                      {ancillaryCharges.length === 0 && (
+                        <Button variant="ghost" onClick={skipAndAward} loading={busy} disabled={isLowCapacity && !lowCapacityAcked}>No charges — award now</Button>
+                      )}
+                      <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed || (isLowCapacity && !lowCapacityAcked)}>
+                        Confirm terms &amp; assign
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Close</Button>
+                  </div>
                 )}
-                <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed || (isLowCapacity && !lowCapacityAcked)}>
-                  Confirm terms &amp; assign
-                </Button>
-              </div>
         </Modal>
       )}
       <button
@@ -680,6 +720,19 @@ export default function JobDetail() {
                       <Badge color={b.status === 'ACCEPTED' ? 'success' : b.status === 'REJECTED' ? 'danger' : 'neutral'}>{b.status}</Badge>
                       {isShipper && job.status === 'OPEN' && b.status === 'PENDING' && (
                         <Button variant="accent" onClick={() => openAwardFlow(b)} loading={busy}>Discuss &amp; award</Button>
+                      )}
+                      {/* Real-life gap: a carrier previously had no way at all to
+                          discuss their own bid with the shipper (propose/agree
+                          ancillary charges, ask a question) — only the shipper
+                          could open this thread, from their side, via "Discuss &
+                          award" above. The backend already allowed the bid's own
+                          carrier to read/post to it (bids.routes.js's
+                          loadBidWithJobForNegotiation), it just had no frontend
+                          entry point. Reuses the exact same modal/state as the
+                          shipper's flow — see isShipper checks inside it for
+                          what's award-only vs. shared. */}
+                      {isCarrier && job.status === 'OPEN' && b.status === 'PENDING' && b.carrier_id === user.id && (
+                        <Button variant="secondary" onClick={() => openAwardFlow(b)}>Discuss with shipper</Button>
                       )}
                     </div>
                   </div>
