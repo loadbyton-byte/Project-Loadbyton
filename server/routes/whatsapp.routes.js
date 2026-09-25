@@ -5,13 +5,14 @@
 //
 // Narrow first flow only: resolve the inbound phone number to a driver (or
 // a shipper/carrier profile), attach the message to that party's most
-// relevant job, and — for the delivery-confirmation bot flow specifically —
-// interpret a "Delivered" button reply by calling the exact same
-// confirmDelivery() path the web dashboard's POD upload already uses. No
-// free-text NLP, no other flows, per this pass's scope.
+// relevant job, and interpret the delivery-confirmation bot's button
+// replies by calling the same service paths the web dashboard already
+// uses for each — "Delivered" through confirmDelivery(), "Issue" through
+// fileDispute(). No free-text NLP, no other flows, per this pass's scope.
 const crypto = require('node:crypto');
 const db = require('../db');
 const { confirmDelivery } = require('../services/delivery.service');
+const { fileDispute } = require('../services/dispute.service');
 const { bindDriverToJob } = require('../services/driver-assignment.service');
 const { recordInboundSession, isConfigured: isWhatsappConfigured, downloadWhatsAppMedia } = require('../lib/whatsapp');
 const { resolveOrCreateThread } = require('../lib/messaging');
@@ -250,9 +251,29 @@ async function handleInboundMessage(msg) {
     if ((buttonId === 'ACCEPT_TRIP' || buttonId === 'DECLINE_TRIP') && tripOffer) {
       await handleTripOfferResponse(tripOffer, job, driver, buttonId === 'ACCEPT_TRIP');
     }
-    // 'DELAYED' / 'ISSUE' — logged as an inbound message above for a human
-    // to follow up on; no automated status transition for those in this
-    // narrow first pass.
+    // 'ISSUE' files a real dispute through the same path the web dashboard's
+    // dispute form uses (services/dispute.service.js) — escrow freezes and
+    // an admin gets notified, rather than a chat line only a human happens
+    // to read. No free-text detail is available from a button tap, so it
+    // files as dispute_type OTHER for an admin to triage; the button-reply
+    // text itself was already recorded as a thread message above regardless.
+    // A job already DISPUTED (e.g. a repeat tap) is rejected by fileDispute
+    // itself, so this can't create duplicates.
+    // 'DELAYED' stays log-only — no job-status value exists for "delayed" in
+    // the state machine to transition to, so there is nothing to automate.
+    if (buttonId === 'ISSUE' && senderId) {
+      try {
+        await fileDispute(job, {
+          actorId: senderId,
+          reason: 'Reported via WhatsApp "Issue" button reply — needs human follow-up.',
+          disputeType: 'OTHER',
+          req: null,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[whatsapp:webhook] auto-filing dispute for job ${job.id} failed:`, err.message);
+      }
+    }
   }
 }
 

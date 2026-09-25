@@ -25,6 +25,8 @@ const issueInvoice = /** @type {any} */ (invoiceMod).issueInvoice;
 /** @type {any} */
 const deliveryService = require('../services/delivery.service');
 /** @type {any} */
+const disputeService = require('../services/dispute.service');
+/** @type {any} */
 const { bindDriverToJob } = require('../services/driver-assignment.service');
 /** @type {any} */
 const configMod = require('../lib/config');
@@ -45,9 +47,7 @@ const helpersMod = require('../lib/helpers');
 const normalizeUaeMobile = /** @type {any} */ (helpersMod).normalizeUaeMobile;
 const getSettings = /** @type {any} */ (helpersMod).getSettings;
 const writeAudit = /** @type {any} */ (helpersMod).writeAudit;
-const recordShipmentEvent = /** @type {any} */ (helpersMod).recordShipmentEvent;
 const notify = /** @type {any} */ (helpersMod).notify;
-const notifyAdmins = /** @type {any} */ (helpersMod).notifyAdmins;
 const isPartyOnJob = /** @type {any} */ (helpersMod).isPartyOnJob;
 const isParticipantOrBidder = /** @type {any} */ (helpersMod).isParticipantOrBidder;
 const canViewJob = /** @type {any} */ (helpersMod).canViewJob;
@@ -353,50 +353,16 @@ router.post('/api/jobs/:id/dispute', auth(['SHIPPER', 'CARRIER']), requireSeatRo
   if (!DISPUTABLE_STATUSES.includes(job.status)) return sendError(res, 403, `Cannot dispute a job in ${job.status} status`);
   const { reason, disputeType } = /** @type {any} */ (req.body) || {};
   if (!reason || !String(reason).trim()) return sendError(res, 400, 'reason is required');
-  const DISPUTE_TYPES = ['PRICE', 'DELAY_DEMURRAGE', 'DAMAGE_SHORTAGE', 'MISSING_DOCS', 'NO_SHOW', 'PAYMENT_VAT', 'FRAUD_IDENTITY'];
-  if (!DISPUTE_TYPES.includes(disputeType)) {
-    return sendError(res, 400, `disputeType is required and must be one of: ${DISPUTE_TYPES.join(', ')}`);
-  }
-  // Per-type minimum evidence — require photo evidence to already exist
-  // rather than accepting an empty claim and leaving the admin to chase it
-  // down. Scoped to the two types with a clear, mechanical evidence check
-  // today; the other five are surfaced to the admin at resolution time
-  // instead (see the evidence-bundle logic on the resolve side).
-  if (disputeType === 'DAMAGE_SHORTAGE') {
-    const hasEirPhoto = await db.prepare(`SELECT 1 FROM job_documents WHERE job_id=? AND doc_type='EIR'`).get(job.id);
-    if (!hasEirPhoto) return sendError(res, 400, 'A damage/shortage dispute requires at least one EIR photo already on file for this job');
-  }
-  if (disputeType === 'NO_SHOW') {
-    const hasLocation = await db.prepare(`SELECT 1 FROM location_logs WHERE job_id=?`).get(job.id);
-    if (!hasLocation) return sendError(res, 400, 'A no-show dispute requires at least one recorded location ping, or a gate-attempt photo uploaded as a document first');
+  if (!disputeService.DISPUTE_TYPES.includes(disputeType)) {
+    return sendError(res, 400, `disputeType is required and must be one of: ${disputeService.DISPUTE_TYPES.join(', ')}`);
   }
 
-  const result = /** @type {any} */ (await db.prepare(
-    `INSERT INTO disputes (job_id, opened_by, reason, status, dispute_type, sla_deadline) VALUES (?,?,?,'OPEN',?,datetime('now','+48 hours')) RETURNING id`
-  ).run(job.id, req.user.id, String(reason).trim(), disputeType));
-  await db.prepare(`UPDATE jobs SET status='DISPUTED', escrow_status='DISPUTED', updated_at=datetime('now') WHERE id=?`).run(job.id);
-  await writeAudit(req, {
-    userId: req.actorId,
-    action: 'DISPUTE_OPEN',
-    details: String(reason).trim(),
-    entityType: 'job',
-    entityId: job.id,
-    beforeState: job.status,
-    afterState: 'DISPUTED',
-  });
+  let dispute;
   try {
-    await recordShipmentEvent(job.id, {
-      eventType: 'DISPUTE_OPENED',
-      actorId: req.actorId,
-      actorRole: req.user.role,
-      summary: `${job.job_code}: dispute opened (${disputeType})`,
-      data: { disputeType, disputeId: Number(result.lastInsertRowid) },
-    });
-  } catch (e) { console.error(`[shipment_events] DISPUTE_OPENED record failed for job ${job.id}:`, e); }
-  const other = req.user.id === job.shipper_id ? job.carrier_id : job.shipper_id;
-  await notify(other, 'Dispute opened', `${job.job_code}: a dispute was opened by the counterparty. Escrow is frozen pending admin review.`, job.id, 'dispute');
-  await notifyAdmins('New dispute filed', `${job.job_code}: filed by ${req.actorLabel}. Escrow frozen, awaiting review.`, job.id);
-  const dispute = /** @type {any} */ (await db.prepare('SELECT * FROM disputes WHERE id=?').get(Number(result.lastInsertRowid)));
+    dispute = await disputeService.fileDispute(job, { actorId: req.actorId, openedByUserId: req.user.id, reason, disputeType, req, actorLabel: req.actorLabel });
+  } catch (/** @type {any} */ e) {
+    return sendError(res, e.status || 400, e.message || 'Could not file dispute');
+  }
   res.status(201).json({ dispute });
 });
 
