@@ -757,7 +757,7 @@ export default function JobDetail() {
                         <p className="tabular font-display text-base font-semibold text-ink">{b.masked ? 'Hidden until award' : formatMoney(b.amount_aed, job.currency)}</p>
                         {!b.masked && b.ancillary_charges?.length > 0 && (
                           <p className="tabular text-sm font-semibold" style={{ color: 'var(--status-warning)' }}>
-                            + {formatMoney(b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0), job.currency)} extras = {formatMoney(b.amount_aed + b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0), job.currency)} est. total
+                            + {formatMoney(b.ancillary_charges.reduce((sum, c) => sum + c.amount_aed, 0), job.currency)} extras (not included in the bid amount — see below)
                           </p>
                         )}
                       </div>

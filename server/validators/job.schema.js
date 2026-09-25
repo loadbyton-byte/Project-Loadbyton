@@ -83,7 +83,20 @@ async function createJobFromBody(body, req) {
 
   const effectiveContainerSize = containerSize || (shipType === 'LOCAL' ? 'N/A' : null);
   const effectiveContainerType = containerType || (shipType === 'LOCAL' ? 'N/A' : null);
-  const effectiveDeliveryAddress = deliveryAddress || (shipType === 'LOCAL' ? (deliveryLocation || effectiveDeliveryArea) : null);
+  // jobs.delivery_address is NOT NULL — the web form's "Delivery address
+  // detail" field (which is what `deliveryAddress` actually is) has no
+  // `required` attribute for IMPORT/EXPORT, so a shipper who skips it
+  // (it reads as optional/supplementary, not essential) sent `deliveryAddress:
+  // undefined` here. The old fallback only covered LOCAL — every IMPORT/EXPORT
+  // job posted without that optional field hit a raw, unhandled NOT NULL
+  // constraint violation (Postgres error 23502) surfaced to the shipper as a
+  // bare "Internal server error", since the validation above only requires
+  // deliveryArea OR deliveryAddress, not deliveryAddress specifically.
+  // Falling back to effectiveDeliveryArea for every shipment type closes
+  // this: that check already guarantees at least one of deliveryAddress/
+  // effectiveDeliveryArea is truthy by this point, so this can never insert
+  // null.
+  const effectiveDeliveryAddress = deliveryAddress || effectiveDeliveryArea;
 
   const code = jobCode();
   const initialStatus = scheduledPostAt && new Date(scheduledPostAt) > new Date() ? 'DRAFT' : 'OPEN';
