@@ -26,7 +26,7 @@ async function resolveDisputeCore(req, { dispute, job, determination, decision, 
     const carrierPct = Number(splitCarrierPct);
     const { commission_rate_bps } = await getSettings();
     carrierPortionGross = Math.round((job.agreed_price_aed || 0) * carrierPct / 100 * 100) / 100;
-    carrierPlatformFee = Math.round(carrierPortionGross * (commission_rate_bps / 10000));
+    carrierPlatformFee = Math.round(carrierPortionGross * (commission_rate_bps / 10000) * 100) / 100;
     carrierNetAed = carrierPortionGross - carrierPlatformFee;
     shipperRefundAed = Math.round(((job.agreed_price_aed || 0) - carrierPortionGross) * 100) / 100;
     void shipperPct; // sum-to-100 already validated by the caller

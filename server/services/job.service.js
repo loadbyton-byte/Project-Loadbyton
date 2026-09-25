@@ -48,10 +48,21 @@ async function updateJobStatus(jobId, nextStatus, req) {
     throw e;
   }
 
-  const role = req.user.role;
-  const isShipperOwner = role === 'SHIPPER' && job.shipper_id === req.user.id;
-  const isCarrierOwner = role === 'CARRIER' && job.carrier_id === req.user.id;
-  if (!isShipperOwner && !isCarrierOwner && role !== 'ADMIN') {
+  // A QA audit found this used to gate on `req.user.role === 'SHIPPER'`/
+  // `'CARRIER'` directly — but FORWARDER/BROKER/OWNER_OPERATOR accounts are
+  // allowed to own a job as its actual shipper_id/carrier_id (auth()
+  // already let them post/award/bid via middleware/auth.js's roleSatisfies
+  // role-aliasing), so a FORWARDER-owned job's shipper_id is a real match
+  // for req.user.id while req.user.role is literally 'FORWARDER', not
+  // 'SHIPPER' — every status transition on their own job 403'd with "Not a
+  // participant on this job". Ownership by id is the actual authorization
+  // boundary (matching every other job route this codebase gets right);
+  // the account's literal role only decides which TRANSITIONS table entry
+  // applies below.
+  const isAdmin = req.user.role === 'ADMIN';
+  const isShipperOwner = job.shipper_id === req.user.id;
+  const isCarrierOwner = job.carrier_id === req.user.id;
+  if (!isShipperOwner && !isCarrierOwner && !isAdmin) {
     const e = new Error('Not a participant on this job');
     e.status = 403;
     throw e;
@@ -62,6 +73,7 @@ async function updateJobStatus(jobId, nextStatus, req) {
     throw e;
   }
 
+  const role = isAdmin ? 'ADMIN' : isShipperOwner ? 'SHIPPER' : 'CARRIER';
   const allowedFor = TRANSITIONS[role] || {};
   const allowedNext = allowedFor[job.status] || [];
   if (!allowedNext.includes(nextStatus)) {
