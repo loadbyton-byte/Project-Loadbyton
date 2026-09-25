@@ -93,17 +93,25 @@ export default function JobDetail() {
   const [negotiationBusy, setNegotiationBusy] = useState(false);
   const [etaPrediction, setEtaPrediction] = useState(null);
   const [etaPredicting, setEtaPredicting] = useState(false);
+  const [telematicsLogs, setTelematicsLogs] = useState([]);
 
   const load = useCallback(async () => {
     try {
       // ChatPopup fetches its own thread data (GET .../threads) lazily when
       // opened, not eagerly here — most job views never open the widget.
-      const [jobData, trackData] = await Promise.all([
+      // Telematics (reefer temperature/speed/fuel) is real hardware data
+      // that most jobs simply have none of — fetched here so the section
+      // below can just render nothing rather than an empty-state box for
+      // the common case, but caught silently like track() since its
+      // absence isn't an error.
+      const [jobData, trackData, telematicsData] = await Promise.all([
         api.getJob(id),
         api.track(id).catch(() => null),
+        api.getTelematicsLogs(id).catch(() => null),
       ]);
       setData(jobData);
       setTrack(trackData);
+      setTelematicsLogs(telematicsData?.logs || []);
     } catch (err) {
       setError(err.message);
     }
@@ -873,6 +881,46 @@ export default function JobDetail() {
           {/* Phase 3: live map when IN_TRANSIT */}
           {['PICKED_UP','IN_TRANSIT','DELIVERED'].includes(job.status) && (
             <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} deliveryLat={job.delivery_lat} deliveryLng={job.delivery_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
+          )}
+
+          {/* Hardware telematics (reefer temperature/speed/fuel) — GET
+              /api/telematics/logs (telematics.routes.js) was fully built
+              with role-scoped access but no frontend caller anywhere,
+              found by a QA audit. Renders nothing at all when this job has
+              no device data (most jobs don't — it depends on the truck
+              actually carrying a telematics unit), rather than an
+              empty-state box every job would otherwise show. */}
+          {telematicsLogs.length > 0 && (
+            <Card className="mb-6">
+              <Card.Header><Card.Title>Telematics</Card.Title></Card.Header>
+              <Card.Content className="text-sm">
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-xs text-ink-muted">Temperature</p>
+                    <p className="tabular font-display text-xl font-bold text-ink">{telematicsLogs[0].temperature != null ? `${telematicsLogs[0].temperature}°C` : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-ink-muted">Speed</p>
+                    <p className="tabular font-display text-xl font-bold text-ink">{telematicsLogs[0].speed != null ? `${telematicsLogs[0].speed} km/h` : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-ink-muted">Fuel</p>
+                    <p className="tabular font-display text-xl font-bold text-ink">{telematicsLogs[0].fuel_level != null ? `${telematicsLogs[0].fuel_level}%` : '—'}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-ink-muted">Last reading {formatDateTime(telematicsLogs[0].recorded_at)} · device {telematicsLogs[0].device_id}</p>
+                {telematicsLogs.length > 1 && (
+                  <div className="mt-3 max-h-32 overflow-y-auto border-t pt-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {telematicsLogs.slice(1, 10).map((l) => (
+                      <div key={l.id} className="flex items-center justify-between gap-2 py-1 text-xs text-ink-muted">
+                        <span>{formatDateTime(l.recorded_at)}</span>
+                        <span className="tabular">{l.temperature != null ? `${l.temperature}°C` : '—'} · {l.speed != null ? `${l.speed} km/h` : '—'} · {l.fuel_level != null ? `${l.fuel_level}%` : '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card.Content>
+            </Card>
           )}
 
           {/* ETA prediction — see getEtaPrediction()'s comment on why this is

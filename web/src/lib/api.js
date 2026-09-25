@@ -273,6 +273,11 @@ Object.assign(api, {
   postLocation: (id, body) => post(`/jobs/${id}/location`, body),
   getLocations: (id) => get(`/jobs/${id}/locations`),
   ingestTelematics: (body) => post('/telematics/ingest', body),
+  // Hardware telematics (reefer temperature, speed, fuel) for a specific
+  // job — server/routes/telematics.routes.js already scopes this to a job
+  // the caller is actually a party to (or ADMIN). Fully built with no
+  // frontend caller anywhere until now.
+  getTelematicsLogs: (jobId) => get(`/telematics/logs?jobId=${jobId}`),
   // currency / tax
   currencyRates: () => get('/currency/rates'),
   setJobCurrency: (id, body) => post(`/jobs/${id}/currency`, body),
