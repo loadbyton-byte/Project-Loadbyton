@@ -91,6 +91,8 @@ export default function JobDetail() {
   const [newChargeAmount, setNewChargeAmount] = useState('');
   const [lowCapacityAcked, setLowCapacityAcked] = useState(false);
   const [negotiationBusy, setNegotiationBusy] = useState(false);
+  const [etaPrediction, setEtaPrediction] = useState(null);
+  const [etaPredicting, setEtaPredicting] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -218,6 +220,27 @@ export default function JobDetail() {
       setError(err.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // POST /api/ml/predict-eta (ml.routes.js) — a QA audit found this fully
+  // implemented with an api.js client method already defined, but nothing
+  // in the app ever called it. On demand rather than auto-fetched on
+  // page load: the backend's own comment says this is a deterministic
+  // mock (random port-congestion component) standing in for a real
+  // AIS/NOAA pipeline, so refetching it silently on every render would
+  // make the "prediction" look like it's tracking something real when
+  // it's actually just re-rolling.
+  async function getEtaPrediction() {
+    setEtaPredicting(true);
+    setError('');
+    try {
+      const { prediction } = await api.predictEta({ jobId: job.id });
+      setEtaPrediction(prediction);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEtaPredicting(false);
     }
   }
 
@@ -850,6 +873,52 @@ export default function JobDetail() {
           {/* Phase 3: live map when IN_TRANSIT */}
           {['PICKED_UP','IN_TRANSIT','DELIVERED'].includes(job.status) && (
             <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} deliveryLat={job.delivery_lat} deliveryLng={job.delivery_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
+          )}
+
+          {/* ETA prediction — see getEtaPrediction()'s comment on why this is
+              a manual "get a prediction" action rather than something
+              auto-fetched: the backend is an explicitly-labeled mock model
+              standing in for a real AIS/weather pipeline. Useful once
+              there's an actual movement to predict a duration for. */}
+          {['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status) && (
+            <Card className="mb-6">
+              <Card.Header>
+                <Card.Title>ETA prediction</Card.Title>
+                <Button size="sm" variant="secondary" onClick={getEtaPrediction} loading={etaPredicting}>
+                  {etaPrediction ? 'Refresh prediction' : 'Get ETA prediction'}
+                </Button>
+              </Card.Header>
+              <Card.Content className="text-sm">
+                {!etaPrediction ? (
+                  <p className="text-ink-muted">Estimate a delivery window from route, weather, and port-congestion factors.</p>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-ink-muted">Predicted transit time</p>
+                      <p className="tabular font-display text-2xl font-bold text-ink">{etaPrediction.predictedHours}h</p>
+                      <p className="text-xs text-ink-muted">
+                        Base {etaPrediction.baseHours}h + weather {etaPrediction.weatherPenalty}h + port congestion {etaPrediction.congestion}h
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Route alternatives</p>
+                      <ul className="mt-1.5 space-y-1.5">
+                        {etaPrediction.alternatives.map((alt) => (
+                          <li key={alt.route} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5" style={{ background: 'var(--surface-container)' }}>
+                            <span className="flex items-center gap-1.5"><IconClock size={13} className="text-ink-muted" /> {alt.route}</span>
+                            <span className="flex items-center gap-2">
+                              <span className="tabular font-semibold text-ink">{alt.etaHours}h</span>
+                              <Badge color={alt.risk === 'LOW' ? 'success' : alt.risk === 'MEDIUM' ? 'warning' : 'danger'}>{alt.risk}</Badge>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <p className="text-xs italic text-ink-muted">Model estimate, not a guarantee — refresh for an updated read.</p>
+                  </div>
+                )}
+              </Card.Content>
+            </Card>
           )}
           {/* Phase 4: EIR for carrier — captured at BOTH pickup and
               delivery now, not just pickup, so a damage/shortage dispute
