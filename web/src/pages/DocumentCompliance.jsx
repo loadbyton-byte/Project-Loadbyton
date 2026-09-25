@@ -66,7 +66,7 @@ export default function DocumentCompliance() {
     { label: 'TRN certificate', done: !!p.trn_number, hint: 'UAE Tax Registration Number on file.' },
     { label: 'Trade licence', done: !!p.trade_license_number, hint: 'Trade licence number on file.' },
     ...(isCarrier ? [
-      { label: 'Insurance', done: !!p.insurance_uploaded, hint: 'Fleet/cargo insurance confirmed.' },
+      { label: 'Insurance', done: !!p.insurance_uploaded, hint: 'Fleet/cargo insurance confirmed. Required before an admin can approve verification.' },
       { label: 'RTA permit', done: !!p.rta_permit_doc_storage_path, hint: 'Roads & Transport Authority goods-transport permit.' },
       { label: 'Haulage insurance', done: !!p.haulage_insurance_doc_storage_path, hint: 'Goods-in-transit insurance, separate from fleet/cargo insurance.' },
       { label: 'Payout IBAN', done: !!p.iban, hint: 'Required before an admin can approve verification.' },

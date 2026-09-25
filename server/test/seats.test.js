@@ -109,7 +109,14 @@ test('a VIEWER seat cannot pull a fuel advance or confirm bid terms — money-mo
   const admin = makeClient(server.baseUrl);
   await admin.login('admin@loadbyton.ae', 'demo1234');
   await admin.post(`/api/admin/approve/${registered.body.user.id}`, { action: 'approve' });
-  await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
+  // Verification now hard-blocks approval without an insurance document on
+  // file (verification.service.js) — upload one first, same as any real
+  // carrier would.
+  await carrierRoot.post('/api/profile/documents', {
+    docType: 'INSURANCE', mimeType: 'application/pdf', fileBase64: Buffer.from('%PDF-1.4 test insurance').toString('base64'),
+  });
+  const verified = await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
+  assert.equal(verified.status, 200, verified.raw);
 
   const viewerEmail = `seat-viewer-money-${Date.now()}@example.ae`;
   const viewerAdd = await carrierRoot.post('/api/org/members', { email: viewerEmail, password: 'demo1234', seatRole: 'VIEWER', displayName: 'Viewer Person' });
