@@ -94,6 +94,10 @@ export default function JobDetail() {
   const [etaPrediction, setEtaPrediction] = useState(null);
   const [etaPredicting, setEtaPredicting] = useState(false);
   const [telematicsLogs, setTelematicsLogs] = useState([]);
+  const [complianceDeclarations, setComplianceDeclarations] = useState([]);
+  const [newHsCode, setNewHsCode] = useState('');
+  const [complianceBusy, setComplianceBusy] = useState(false);
+  const [clearingComplianceId, setClearingComplianceId] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -104,14 +108,16 @@ export default function JobDetail() {
       // below can just render nothing rather than an empty-state box for
       // the common case, but caught silently like track() since its
       // absence isn't an error.
-      const [jobData, trackData, telematicsData] = await Promise.all([
+      const [jobData, trackData, telematicsData, complianceData] = await Promise.all([
         api.getJob(id),
         api.track(id).catch(() => null),
         api.getTelematicsLogs(id).catch(() => null),
+        api.getCompliance(id).catch(() => null),
       ]);
       setData(jobData);
       setTrack(trackData);
       setTelematicsLogs(telematicsData?.logs || []);
+      setComplianceDeclarations(complianceData?.declarations || []);
     } catch (err) {
       setError(err.message);
     }
@@ -201,6 +207,7 @@ export default function JobDetail() {
   const isShipper = user.id === job.shipper_id;
   const isCarrier = user.role === 'CARRIER';
   const isAwardedCarrier = user.id === job.carrier_id;
+  const isAdmin = user.role === 'ADMIN';
   const myBid = bids.find((b) => b.carrier_id === user.id);
   // Job editing: only while OPEN and before any carrier has a live bid
   // against this exact spec — matches the server's own guard in
@@ -249,6 +256,43 @@ export default function JobDetail() {
       setError(err.message);
     } finally {
       setEtaPredicting(false);
+    }
+  }
+
+  // POST /api/jobs/:id/compliance + GET .../compliance + POST
+  // /api/compliance/:id/clear (compliance.routes.js) — the customs
+  // HS-code/manifest declaration feature, fully built server-side
+  // (validation, a simulated ZK-proof commitment, an async webhook to a
+  // sovereign tax-clearing endpoint) with no page anywhere letting a
+  // shipper file one or an admin clear one. Found by a QA audit.
+  async function fileComplianceDeclaration() {
+    if (!/^\d{6,10}$/.test(newHsCode.trim())) {
+      setError('HS code must be 6-10 digits');
+      return;
+    }
+    setComplianceBusy(true);
+    setError('');
+    try {
+      await api.createCompliance(job.id, { hsCode: newHsCode.trim() });
+      setNewHsCode('');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setComplianceBusy(false);
+    }
+  }
+
+  async function clearComplianceDeclaration(declarationId) {
+    setClearingComplianceId(declarationId);
+    setError('');
+    try {
+      await api.adminClearCompliance(declarationId);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setClearingComplianceId(null);
     }
   }
 
@@ -779,6 +823,53 @@ export default function JobDetail() {
           <Section title="Documents">
             <DocumentList documents={documents} jobId={job.id} onAdd={load} isShipperParty={isShipper} isCarrierParty={isAwardedCarrier} />
           </Section>
+
+          {/* Customs compliance — HS-code/manifest declaration. Filing is
+              SHIPPER/ADMIN-only (compliance.routes.js); shipper, the
+              awarded carrier, and admin can all view what's on file.
+              Clearing a PENDING declaration is admin-only. */}
+          {(isShipper || isAwardedCarrier || isAdmin) && (
+            <Section title="Customs compliance">
+              {complianceDeclarations.length === 0 ? (
+                <p className="text-sm text-ink-muted">No customs declarations filed for this job.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {complianceDeclarations.map((d) => (
+                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <div>
+                        <p className="font-mono font-semibold text-ink">HS {d.hs_code}</p>
+                        <p className="text-xs text-ink-muted">
+                          Filed {formatDateTime(d.created_at)}{d.cleared_at ? ` · Cleared ${formatDateTime(d.cleared_at)}` : ''}
+                        </p>
+                        <p className="mt-0.5 font-mono text-xs text-ink-muted" title="Simulated ZK-proof manifest commitment">{d.manifest_hash.slice(0, 24)}…</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge color={d.status === 'CLEARED' ? 'success' : 'warning'}>{d.status}</Badge>
+                        {isAdmin && d.status === 'PENDING' && (
+                          <Button size="sm" variant="secondary" loading={clearingComplianceId === d.id} onClick={() => clearComplianceDeclaration(d.id)}>
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(isShipper || isAdmin) && (
+                <div className="mt-3 flex gap-2 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <Input
+                    placeholder="HS code (6-10 digits)"
+                    value={newHsCode}
+                    onChange={(e) => setNewHsCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="w-48 font-mono"
+                  />
+                  <Button size="sm" variant="secondary" onClick={fileComplianceDeclaration} loading={complianceBusy}>
+                    File declaration
+                  </Button>
+                </div>
+              )}
+            </Section>
+          )}
 
           <Section title="Event history">
             <EventHistory events={events} />
