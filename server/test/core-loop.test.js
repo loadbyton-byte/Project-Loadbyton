@@ -39,7 +39,7 @@ test('unverified carrier is blocked from bidding, server-side', async () => {
   const job = jobs.body.jobs.find((j) => j.status === 'OPEN');
   assert.ok(job, 'expected at least one OPEN job in seed data');
 
-  const bid = await carrier.post(`/api/jobs/${job.id}/bids`, { amountAed: 500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bid = await carrier.post(`/api/jobs/${job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bid.status, 403, 'unverified carrier must be rejected server-side, not just hidden in the UI');
 });
 
@@ -62,7 +62,7 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
 
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234'); // seeded verified GOLD carrier
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed',
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
@@ -198,7 +198,7 @@ test('award commission rounds to the nearest fils, not the nearest whole AED', a
 
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 125.40, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);
@@ -248,14 +248,14 @@ test('a losing bidder cannot see the winning bid\'s driver name/phone after awar
 
   const winner = makeClient(server.baseUrl);
   await winner.login('carrier@dubaidrayage.com', 'demo1234');
-  const winningBid = await winner.post(`/api/jobs/${jobId}/bids`, {
+  const winningBid = await winner.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 700, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed',
   });
   assert.equal(winningBid.status, 201, winningBid.raw);
 
   const loser = makeClient(server.baseUrl);
   await loser.login('falcon@containerxpress.ae', 'demo1234');
-  const losingBid = await loser.post(`/api/jobs/${jobId}/bids`, {
+  const losingBid = await loser.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 750, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(losingBid.status, 201, losingBid.raw);

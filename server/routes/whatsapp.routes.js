@@ -5,16 +5,18 @@
 //
 // Narrow first flow only: resolve the inbound phone number to a driver (or
 // a shipper/carrier profile), attach the message to that party's most
-// relevant job, and — for the delivery-confirmation bot flow specifically —
-// interpret a "Delivered" button reply by calling the exact same
-// confirmDelivery() path the web dashboard's POD upload already uses. No
-// free-text NLP, no other flows, per this pass's scope.
+// relevant job, and interpret the delivery-confirmation bot's button
+// replies by calling the same service paths the web dashboard already
+// uses for each — "Delivered" through confirmDelivery(), "Issue" through
+// fileDispute(). No free-text NLP, no other flows, per this pass's scope.
 const crypto = require('node:crypto');
 const db = require('../db');
 const { confirmDelivery } = require('../services/delivery.service');
+const { fileDispute } = require('../services/dispute.service');
 const { bindDriverToJob } = require('../services/driver-assignment.service');
-const { recordInboundSession, isConfigured: isWhatsappConfigured } = require('../lib/whatsapp');
+const { recordInboundSession, isConfigured: isWhatsappConfigured, downloadWhatsAppMedia, last9Digits } = require('../lib/whatsapp');
 const { resolveOrCreateThread } = require('../lib/messaging');
+const { saveUploadedFile, recordShipmentEvent, notify } = require('../lib/helpers');
 const router = require('express').Router();
 
 // Meta's subscription verification handshake — GET with hub.mode/verify_token/
@@ -46,21 +48,75 @@ function verifySignature(req) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// Compares only the last 9 digits (the local UAE mobile part) since stored
-// phone numbers exist in a mix of formats (+971..., 0..., bare 5...) while
-// Meta's `from` field always arrives as bare E.164 digits (e.g. 971501234567).
-function last9Digits(raw) {
-  return String(raw || '').replace(/\D/g, '').slice(-9);
-}
-
 function extractContent(msg) {
   if (msg.type === 'text') return msg.text && msg.text.body ? msg.text.body : null;
   if (msg.type === 'interactive' && msg.interactive && msg.interactive.type === 'button_reply') {
     return `[Bot reply] ${msg.interactive.button_reply.title}`;
   }
+  // Real gap a QA audit found: this used to be a bare placeholder string
+  // with the actual photo never fetched, and 'audio' had no case at all —
+  // an inbound voice note was silently dropped, not even logged. Both now
+  // also get an actual attempt at storeInboundMedia() below; this text is
+  // just what lands in the chat thread either way (the real file, when the
+  // download succeeds, shows up in the job's Documents tab instead).
   if (msg.type === 'image') return '[Photo attachment]';
+  if (msg.type === 'audio') return '[Voice message]';
   if (msg.type === 'location') return `[Shared location] ${msg.location.latitude}, ${msg.location.longitude}`;
   return null;
+}
+
+// Downloads an inbound photo/voice-note via lib/whatsapp.js's
+// downloadWhatsAppMedia() and attaches it to the job as a real
+// job_documents row (doc_type WHATSAPP_MEDIA) — visible in the same
+// Documents tab/section any other job document uses, not a side-channel
+// only the chat thread knows about. Best-effort: dark mode, a network
+// error, or an unsupported mime type all just mean no document gets
+// attached (the chat message from extractContent() above still lands
+// regardless) — never lets a media-download failure break processing of
+// the message itself.
+async function storeInboundMedia(msg, { job, senderId }) {
+  if (!job || !senderId) return;
+  const media = msg.type === 'image' ? msg.image : msg.type === 'audio' ? msg.audio : null;
+  if (!media || !media.id) return;
+  const result = await downloadWhatsAppMedia(media.id);
+  if (!result.ok) {
+    // eslint-disable-next-line no-console
+    console.log(`[whatsapp:webhook] media download skipped for job ${job.id} (${result.reason}) — chat message still recorded`);
+    return;
+  }
+  try {
+    const { storagePath, mimeType } = await saveUploadedFile(String(job.id), result.mimeType, result.buffer.toString('base64'));
+    const title = `WhatsApp ${msg.type === 'image' ? 'photo' : 'voice message'} — ${new Date().toISOString()}`;
+    await db
+      .prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)')
+      .run(job.id, senderId, 'WHATSAPP_MEDIA', title, storagePath, storagePath, mimeType);
+  } catch (err) {
+    // e.g. an mp4/unsupported mime type Meta sent that saveUploadedFile's
+    // allowlist rejects — log and move on, same "never break the message"
+    // guarantee as a failed download above.
+    // eslint-disable-next-line no-console
+    console.error(`[whatsapp:webhook] storing downloaded media failed for job ${job.id}:`, err.message);
+  }
+}
+
+// A phone can legitimately match more than one active job at once (a
+// driver reassigned to a second load while the first is still awaiting a
+// reply). "Most recently updated" alone can misroute the reply to the
+// wrong one — this prefers whichever job this phone's last OUTBOUND
+// WhatsApp send was actually about (whatsapp_sessions.last_outbound_job_id,
+// set by lib/whatsapp.js's recordOutboundJobContext()) and only falls back
+// to the updated_at ordering already baked into `candidates` when no send
+// is on record for this phone, or it doesn't match any current candidate
+// (e.g. that job has since left the active-status set).
+async function pinnedJob(candidates, last9) {
+  if (candidates.length <= 1) return candidates[0] || null;
+  const session = await db.prepare('SELECT last_outbound_job_id FROM whatsapp_sessions WHERE phone=?').get(last9);
+  const pinnedId = session && session.last_outbound_job_id;
+  if (pinnedId) {
+    const pinned = candidates.find((j) => j.id === pinnedId);
+    if (pinned) return pinned;
+  }
+  return candidates[0];
 }
 
 // threadRoles pairs with lib/messaging.js's resolveOrCreateThread so an
@@ -76,9 +132,13 @@ async function resolveSender(last9) {
     // yet (that only happens on acceptance) — check for a live offer first,
     // so ACCEPT_TRIP/DECLINE_TRIP has a job to act on before binding exists.
     const tripOffer = await db.prepare(`SELECT * FROM trip_offers WHERE driver_id=? AND status='PENDING' ORDER BY offered_at DESC LIMIT 1`).get(driver.id);
-    const job = tripOffer
-      ? await db.prepare('SELECT * FROM jobs WHERE id=?').get(tripOffer.job_id)
-      : await db.prepare(`SELECT * FROM jobs WHERE assigned_driver_id=? AND status IN ('AWARDED','PICKED_UP','IN_TRANSIT') ORDER BY updated_at DESC LIMIT 1`).get(driver.id);
+    let job;
+    if (tripOffer) {
+      job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(tripOffer.job_id);
+    } else {
+      const candidates = await db.prepare(`SELECT * FROM jobs WHERE assigned_driver_id=? AND status IN ('AWARDED','PICKED_UP','IN_TRANSIT') ORDER BY updated_at DESC`).all(driver.id);
+      job = await pinnedJob(candidates, last9);
+    }
     if (driver.seat_user_id) {
       return { senderId: driver.seat_user_id, job, driver, tripOffer, threadRoles: ['DRIVER', 'CARRIER'] };
     }
@@ -93,9 +153,10 @@ async function resolveSender(last9) {
   // real-world match. No login identity exists for an ad-hoc driver, so the
   // inbound message/action is attributed to the carrier account, same as
   // every other job-level action taken on that driver's behalf today.
-  const adHocJob = await db
-    .prepare(`SELECT * FROM jobs WHERE status IN ('AWARDED','PICKED_UP','IN_TRANSIT') AND REPLACE(REPLACE(REPLACE(assigned_driver_phone,'+',''),'-',''),' ','') LIKE '%' || ? ORDER BY updated_at DESC LIMIT 1`)
-    .get(last9);
+  const adHocCandidates = await db
+    .prepare(`SELECT * FROM jobs WHERE status IN ('AWARDED','PICKED_UP','IN_TRANSIT') AND REPLACE(REPLACE(REPLACE(assigned_driver_phone,'+',''),'-',''),' ','') LIKE '%' || ? ORDER BY updated_at DESC`)
+    .all(last9);
+  const adHocJob = await pinnedJob(adHocCandidates, last9);
   if (adHocJob) {
     return { senderId: adHocJob.carrier_id, job: adHocJob, driver: null, threadRoles: ['CARRIER', 'SHIPPER'] };
   }
@@ -123,7 +184,6 @@ async function resolveSender(last9) {
 // uses — one implementation, not a second copy of the bind logic.
 async function handleTripOfferResponse(tripOffer, job, driver, accepted) {
   const { sendWhatsAppMessage } = require('../lib/whatsapp');
-  const { notify } = require('../lib/helpers');
 
   if (!accepted) {
     await db.prepare(`UPDATE trip_offers SET status='DECLINED', responded_at=datetime('now') WHERE id=?`).run(tripOffer.id);
@@ -142,6 +202,9 @@ async function handleTripOfferResponse(tripOffer, job, driver, accepted) {
       tripOffer.id
     );
     await notify(tripOffer.carrier_id, 'Trip offer blocked — compliance', `${driver.name} cannot take ${job.job_code}: ${result.blockers.map((b) => b.description).join('; ')}`, job.id, 'system');
+    // No pin here — informational only, no reply expected (see the comment
+    // on recordOutboundJobContext()'s call sites: only sends that invite a
+    // specific reply are allowed to move the "which job" pin).
     sendWhatsAppMessage({ to: driver.phone, template: 'trip_offer_blocked', params: [job.job_code] }).catch(() => {});
     return;
   }
@@ -187,6 +250,9 @@ async function handleInboundMessage(msg) {
     await db
       .prepare(`INSERT INTO messages (job_id, sender_id, thread_id, content, channel, whatsapp_message_id) VALUES (?,?,?,?,'WHATSAPP',?)`)
       .run(job.id, senderId, threadId, content, msg.id || null);
+    if (msg.type === 'image' || msg.type === 'audio') {
+      await storeInboundMedia(msg, { job, senderId });
+    }
   } else if (content) {
     // eslint-disable-next-line no-console
     console.log(`[whatsapp:webhook] inbound from unrecognized/jobless number ${digits}: ${content}`);
@@ -205,9 +271,53 @@ async function handleInboundMessage(msg) {
     if ((buttonId === 'ACCEPT_TRIP' || buttonId === 'DECLINE_TRIP') && tripOffer) {
       await handleTripOfferResponse(tripOffer, job, driver, buttonId === 'ACCEPT_TRIP');
     }
-    // 'DELAYED' / 'ISSUE' — logged as an inbound message above for a human
-    // to follow up on; no automated status transition for those in this
-    // narrow first pass.
+    // 'ISSUE' files a real dispute through the same path the web dashboard's
+    // dispute form uses (services/dispute.service.js) — escrow freezes and
+    // an admin gets notified, rather than a chat line only a human happens
+    // to read. No free-text detail is available from a button tap, so it
+    // files as dispute_type OTHER for an admin to triage; the button-reply
+    // text itself was already recorded as a thread message above regardless.
+    // A job already DISPUTED (e.g. a repeat tap) is rejected by fileDispute
+    // itself, so this can't create duplicates.
+    if (buttonId === 'ISSUE' && senderId) {
+      try {
+        await fileDispute(job, {
+          actorId: senderId,
+          reason: 'Reported via WhatsApp "Issue" button reply — needs human follow-up.',
+          disputeType: 'OTHER',
+          req: null,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[whatsapp:webhook] auto-filing dispute for job ${job.id} failed:`, err.message);
+      }
+    }
+    // 'DELAYED' has no job-status value to transition to (there's no
+    // "delayed" state in the state machine, and inventing one is a bigger
+    // schema/UI change than a button reply warrants) — so instead of
+    // staying log-only, it records a real DELAY_REPORTED shipment event
+    // (visible on the job's timeline, same as DRIVER_ASSIGNED/POD_SUBMITTED/
+    // DISPUTE_OPENED above) and notifies the shipper immediately, so a
+    // driver-reported delay actually reaches the party waiting on the load
+    // instead of sitting unread in a chat thread.
+    if (buttonId === 'DELAYED' && senderId) {
+      try {
+        await recordShipmentEvent(job.id, {
+          eventType: 'DELAY_REPORTED',
+          actorId: senderId,
+          actorRole: senderId === job.shipper_id ? 'SHIPPER' : 'CARRIER',
+          summary: `${job.job_code}: driver reported a delay via WhatsApp`,
+          data: { source: 'whatsapp' },
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[shipment_events] DELAY_REPORTED record failed for job ${job.id}:`, err.message);
+      }
+      await notify(job.shipper_id, 'Delivery delayed', `${job.job_code}: the driver reported a delay via WhatsApp.`, job.id, 'status').catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error(`[whatsapp:webhook] delay notification failed for job ${job.id}:`, err.message);
+      });
+    }
   }
 }
 
@@ -240,3 +350,9 @@ module.exports = router;
 // compliance-check/bind logic either channel triggers it through, not a
 // second copy for the case where a driver has no WhatsApp configured.
 module.exports.handleTripOfferResponse = handleTripOfferResponse;
+// Exported for direct testing (server/test/whatsapp-media.test.js) — lets
+// a test drive the real inbound-message/media-download logic in-process
+// against a real job/user, with global.fetch mocked, without needing a
+// second process's fetch calls to be interceptable over HTTP.
+module.exports.handleInboundMessage = handleInboundMessage;
+module.exports.storeInboundMedia = storeInboundMedia;

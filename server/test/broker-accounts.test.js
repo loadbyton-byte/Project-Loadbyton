@@ -213,7 +213,7 @@ test('broker accounts cannot bid — direct-assign is their only win path (no se
   });
   assert.equal(created.status, 201, created.raw);
 
-  const bid = await broker.post(`/api/jobs/${created.body.job.id}/bids`, {
+  const bid = await broker.post(`/api/jobs/${created.body.job.id}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 400, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 403, `broker bidding must be rejected, got: ${bid.raw}`);
@@ -332,7 +332,7 @@ test('owner-operator registers and can bid like a carrier', async () => {
   // are unverified, so bidding stops at the verification check — which
   // proves the ROLE guard passed (a role failure would be 403
   // "Insufficient permissions" instead).
-  const bid = await oopClient.post(`/api/jobs/${created.body.job.id}/bids`, {
+  const bid = await oopClient.post(`/api/jobs/${created.body.job.id}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 400, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.ok(!String(bid.raw).includes('Insufficient permissions'), `owner-operator must pass the carrier role guard, got: ${bid.raw}`);

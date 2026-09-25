@@ -694,6 +694,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
   last_inbound_at TEXT NOT NULL,
   session_expires_at TEXT NOT NULL
 );
+-- Pins an inbound reply to the job it's actually about — see server/schema.js.
+ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS last_outbound_job_id INTEGER REFERENCES jobs(id);
 
 -- Compliance-engine foundation for the future DRIVER_ASSOCIATE role
 -- (Change 25) — see server/schema.js for rationale.
@@ -799,10 +801,20 @@ CREATE TABLE IF NOT EXISTS bid_negotiations (
 );
 CREATE INDEX IF NOT EXISTS idx_bid_negotiations_bid ON bid_negotiations(bid_id);
 
+-- charge_type covers DETENTION (truck detention, distinct from a shipping
+-- line's container DEMURRAGE) as of the truck-detention-visibility fix. This
+-- CREATE TABLE IF NOT EXISTS only benefits a brand-new Postgres bootstrap —
+-- a database that already ran this script with the old, narrower CHECK
+-- needs a manual, one-time:
+--   ALTER TABLE bid_ancillary_charges DROP CONSTRAINT bid_ancillary_charges_charge_type_check;
+--   ALTER TABLE bid_ancillary_charges ADD CONSTRAINT bid_ancillary_charges_charge_type_check
+--     CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER'));
+-- (the auto-migrating SQLite path in server/schema.js does the equivalent
+-- rebuild automatically — this file has no such runner.)
 CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
   id SERIAL PRIMARY KEY,
   bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
-  charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+  charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER')),
   amount_aed REAL NOT NULL,
   notes TEXT,
   proposed_by INTEGER NOT NULL REFERENCES users(id),
@@ -975,6 +987,27 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_terms_days INTEGER NOT NULL
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_approved_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_due_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_settled_at TEXT;
+
+-- Credit requests — see server/schema.js for the full reasoning; mirrored
+-- here for the opt-in Postgres path.
+CREATE TABLE IF NOT EXISTS credit_requests (
+  id SERIAL PRIMARY KEY,
+  shipper_id INTEGER NOT NULL REFERENCES users(id),
+  requested_limit_aed REAL NOT NULL,
+  proof_doc_storage_path TEXT NOT NULL,
+  proof_doc_mime_type TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+  admin_note TEXT,
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_credit_requests_shipper ON credit_requests(shipper_id);
+CREATE INDEX IF NOT EXISTS idx_credit_requests_status ON credit_requests(status);
+
+-- Per-account commission override — see server/schema.js for the full
+-- reasoning; mirrored here for the opt-in Postgres path.
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS commission_rate_bps INTEGER;
 
 -- Telr split-payment payout — see server/schema.js for the full reasoning;
 -- mirrored here for the opt-in Postgres path.

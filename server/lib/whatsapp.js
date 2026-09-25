@@ -32,21 +32,66 @@ function isConfigured() {
   return !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
 }
 
+// Stored phone numbers exist in a mix of formats (local 0-prefixed, bare
+// 5-prefixed, +971-prefixed) while Meta's inbound `from` field always
+// arrives as bare E.164 digits (e.g. 971501234567) — comparing only the
+// last 9 digits (the local UAE mobile part) is what makes those two worlds
+// match. Single implementation shared with routes/whatsapp.routes.js's
+// resolveSender(), which used to keep its own private copy of this.
+function last9Digits(raw) {
+  return String(raw || '').replace(/\D/g, '').slice(-9);
+}
+
 // Meta only allows free-form (including interactive button/list) messages
 // within 24h of the contact's last inbound message — outside that window
 // only a pre-approved template may be sent. server/routes/whatsapp.routes.js
 // updates this row on every inbound webhook message.
+//
+// A QA audit found this previously keyed whatsapp_sessions by whatever raw
+// format the caller happened to pass in — recordInboundSession() got the
+// webhook's bare E.164 digits (e.g. "971501234567"), while isSessionOpen()
+// got a stored driver phone in local format (e.g. "0501234567"). Those
+// never matched, so a session could never be found "open" for a real
+// driver phone and the interactive-buttons flow always fell through to the
+// template fallback, even seconds after the driver had just replied. Both
+// now key on last9Digits() instead, matching every other phone comparison
+// in this codebase (see routes/whatsapp.routes.js's resolveSender()).
 async function isSessionOpen(phone) {
-  const row = await getDb().prepare('SELECT session_expires_at FROM whatsapp_sessions WHERE phone=?').get(phone);
+  const row = await getDb().prepare('SELECT session_expires_at FROM whatsapp_sessions WHERE phone=?').get(last9Digits(phone));
   return !!row && new Date(row.session_expires_at) > new Date();
 }
 
 async function recordInboundSession(phone) {
+  const key = last9Digits(phone);
+  if (!key) return;
   const expiresAt = new Date(Date.now() + SESSION_WINDOW_HOURS * 3600 * 1000).toISOString();
   await getDb().prepare(
     `INSERT INTO whatsapp_sessions (phone, last_inbound_at, session_expires_at) VALUES (?, datetime('now'), ?)
      ON CONFLICT(phone) DO UPDATE SET last_inbound_at=datetime('now'), session_expires_at=excluded.session_expires_at`
-  ).run(phone, expiresAt);
+  ).run(key, expiresAt);
+}
+
+// Records which job an outbound send was about, so a later inbound reply
+// from the same phone can be routed back to that specific job even if the
+// phone is (or becomes, in the interim) bound to more than one active job
+// — see resolveSender() in routes/whatsapp.routes.js and schema.js's
+// comment on whatsapp_sessions.last_outbound_job_id. Call this ONLY for a
+// send that genuinely invites a reply (the delivery-confirmation and
+// trip-offer interactive-button prompts) — a purely informational push
+// (e.g. "here are your pickup details", no buttons) must not steal the
+// "which job is this conversation about" pin away from a job that's
+// actually mid-exchange. Deliberately never opens or extends the 24h
+// session window itself — only a genuine inbound message does that, per
+// Meta's actual rules — so a phone with no prior
+// inbound message gets a pre-expired row here, keeping isSessionOpen()
+// accurate.
+async function recordOutboundJobContext(phone, jobId) {
+  const key = last9Digits(phone);
+  if (!key || !jobId) return;
+  await getDb().prepare(
+    `INSERT INTO whatsapp_sessions (phone, last_inbound_at, session_expires_at, last_outbound_job_id) VALUES (?, datetime('now'), datetime('now'), ?)
+     ON CONFLICT(phone) DO UPDATE SET last_outbound_job_id=excluded.last_outbound_job_id`
+  ).run(key, jobId);
 }
 
 // `template` must already be an approved WhatsApp message template name
@@ -170,12 +215,74 @@ async function sendDeliveryConfirmationPrompt({ to, jobCode }) {
   return sendWhatsAppMessage({ to, template: 'delivery_confirmation_prompt', params: [jobCode] });
 }
 
+// Trip-offer prompt (Accept/Decline) — same open/closed-session fallback
+// as sendDeliveryConfirmationPrompt above. A QA audit found this send used
+// to go straight to sendInteractiveButtons() with no fallback at all: if
+// the pool driver's 24h session was closed (they hadn't messaged
+// recently, the common case for a driver not currently mid-conversation),
+// Meta silently rejected the send and the driver never saw the offer.
+async function sendTripOfferPrompt({ to, jobCode, pickupTerminal, deliveryArea }) {
+  if (!to) return { sent: false, reason: 'no_recipient' };
+  const sessionOpen = await isSessionOpen(to).catch(() => false);
+  if (sessionOpen) {
+    return sendInteractiveButtons({
+      to,
+      bodyText: `New trip: ${jobCode}, ${pickupTerminal} → ${deliveryArea}. Accept this job?`,
+      buttons: [
+        { id: 'ACCEPT_TRIP', title: 'Accept' },
+        { id: 'DECLINE_TRIP', title: 'Decline' },
+      ],
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[whatsapp:session] 24h window closed for ${to} — sending trip_offer_new as a template instead of interactive buttons`);
+  return sendWhatsAppMessage({ to, template: 'trip_offer_new', params: [jobCode, pickupTerminal, deliveryArea] });
+}
+
+// Downloads an inbound media attachment (photo, voice note, document) from
+// Meta's Graph API. A QA audit found this gap: inbound images only ever
+// stored a literal '[Photo attachment]' placeholder string as the chat
+// message, and voice/audio messages were silently dropped entirely
+// (extractContent() in whatsapp.routes.js had no case for them at all) —
+// neither the real photo nor the real voice note was ever fetched, so
+// nothing could show up in the web dashboard's Documents tab.
+//
+// Two-step Meta flow (developers.facebook.com/docs/whatsapp/cloud-api/reference/media):
+// resolve the media_id to a short-lived signed URL, then download from
+// that URL with the same bearer token. Gated behind isConfigured() like
+// every other real network call in this module — dark by default returns
+// {ok:false, reason:'not_configured'} with no attempt at either request.
+async function downloadWhatsAppMedia(mediaId) {
+  if (!mediaId) return { ok: false, reason: 'no_media_id' };
+  if (!isConfigured()) return { ok: false, reason: 'not_configured' };
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+    });
+    if (!metaRes.ok) return { ok: false, reason: 'provider_error', status: metaRes.status };
+    const meta = await metaRes.json();
+    if (!meta || !meta.url) return { ok: false, reason: 'no_url' };
+    const fileRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
+    if (!fileRes.ok) return { ok: false, reason: 'download_failed', status: fileRes.status };
+    const buffer = Buffer.from(await fileRes.arrayBuffer());
+    return { ok: true, buffer, mimeType: meta.mime_type || fileRes.headers.get('content-type') || null };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[whatsapp:error] downloading media ${mediaId} failed:`, err.message);
+    return { ok: false, reason: 'network_error' };
+  }
+}
+
 module.exports = {
   sendWhatsAppMessage,
   notifyDriverAsync,
   isConfigured,
   isSessionOpen,
   recordInboundSession,
+  recordOutboundJobContext,
   sendInteractiveButtons,
   sendDeliveryConfirmationPrompt,
+  sendTripOfferPrompt,
+  downloadWhatsAppMedia,
+  last9Digits,
 };

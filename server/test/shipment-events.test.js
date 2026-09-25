@@ -91,7 +91,7 @@ test('a full job lifecycle over real HTTP records the expected ordered event_typ
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
 
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 1000, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);

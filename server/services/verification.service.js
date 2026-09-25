@@ -50,6 +50,29 @@ async function verifyCarrier(req, userId, action, iban) {
   if (user.role !== 'CARRIER') { const e = new Error('User is not a carrier'); e.status = 400; throw e; }
 
   if (action === 'approve') {
+    // Insurance was a self-reported checklist item with nothing behind it
+    // ("Insurance" in DocumentCompliance.jsx's checklist, "Insurance:
+    // Uploaded/Missing" in the admin verification queue) — an admin could
+    // approve a carrier with none on file, same class of bug as the
+    // credit_limit_aed/priority_placement_fee_aed columns this codebase
+    // has found and fixed elsewhere (a field that LOOKS enforced but
+    // isn't wired up). Fleet/cargo insurance is the one document every
+    // transporter and fleet owner genuinely needs on file before hauling
+    // freight for shippers on this platform — hard-blocked here, not just
+    // displayed, same as the IBAN check below.
+    // Checked via insurance_uploaded, not insurance_doc_storage_path
+    // directly — DocumentCompliance.jsx's checklist and the admin
+    // verification queue (VerificationTab.jsx) both already read
+    // insurance_uploaded as "is insurance on file", and documents.routes.js
+    // keeps it in sync with the real uploaded file going forward; matching
+    // that same field here is what makes this an enforcement of the
+    // existing claim rather than a second, stricter, inconsistent check.
+    const profileForInsurance = await db.prepare('SELECT insurance_uploaded FROM profiles WHERE user_id=?').get(userId);
+    if (!profileForInsurance?.insurance_uploaded) {
+      const e = new Error('This carrier has no insurance document on file — they must upload one (Document compliance page) before verification can be approved.');
+      e.status = 400;
+      throw e;
+    }
     await db.prepare(`UPDATE users SET is_verified=1 WHERE id=?`).run(userId);
     if (iban) {
       await db.prepare(`UPDATE profiles SET iban=?, verified_at=datetime('now') WHERE user_id=?`).run(encryptField(iban), userId);

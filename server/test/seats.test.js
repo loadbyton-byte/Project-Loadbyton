@@ -109,7 +109,14 @@ test('a VIEWER seat cannot pull a fuel advance or confirm bid terms — money-mo
   const admin = makeClient(server.baseUrl);
   await admin.login('admin@loadbyton.ae', 'demo1234');
   await admin.post(`/api/admin/approve/${registered.body.user.id}`, { action: 'approve' });
-  await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
+  // Verification now hard-blocks approval without an insurance document on
+  // file (verification.service.js) — upload one first, same as any real
+  // carrier would.
+  await carrierRoot.post('/api/profile/documents', {
+    docType: 'INSURANCE', mimeType: 'application/pdf', fileBase64: Buffer.from('%PDF-1.4 test insurance').toString('base64'),
+  });
+  const verified = await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
+  assert.equal(verified.status, 200, verified.raw);
 
   const viewerEmail = `seat-viewer-money-${Date.now()}@example.ae`;
   const viewerAdd = await carrierRoot.post('/api/org/members', { email: viewerEmail, password: 'demo1234', seatRole: 'VIEWER', displayName: 'Viewer Person' });
@@ -124,7 +131,7 @@ test('a VIEWER seat cannot pull a fuel advance or confirm bid terms — money-mo
     readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
   });
   assert.equal(job.status, 201, job.raw);
-  const bid = await carrierRoot.post(`/api/jobs/${job.body.job.id}/bids`, { amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
+  const bid = await carrierRoot.post(`/api/jobs/${job.body.job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
   assert.equal(bid.status, 201, bid.raw);
   const confirmByOwner = await shipper.post(`/api/bids/${bid.body.bid.id}/confirm-terms`);
   assert.equal(confirmByOwner.status, 200, confirmByOwner.raw);
@@ -159,7 +166,7 @@ test('a VIEWER seat cannot pull a fuel advance or confirm bid terms — money-mo
     readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
   });
   assert.equal(job2.status, 201, job2.raw);
-  const bid2 = await carrierRoot.post(`/api/jobs/${job2.body.job.id}/bids`, { amountAed: 400, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
+  const bid2 = await carrierRoot.post(`/api/jobs/${job2.body.job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 400, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
   assert.equal(bid2.status, 201, bid2.raw);
 
   const confirmBlocked = await shipperViewer.post(`/api/bids/${bid2.body.bid.id}/confirm-terms`);

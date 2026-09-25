@@ -37,6 +37,13 @@ async function bindDriverToJob(job, { driverId, driverName, driverPhone, actorId
     });
   } catch (e) { console.error(`[shipment_events] DRIVER_ASSIGNED record failed for job ${job.id}:`, e); }
   await notify(job.shipper_id, 'Driver reassigned', `${job.job_code}: the assigned driver was changed to ${driverName}.`, job.id, 'status');
+  // Deliberately does not pin whatsapp_sessions.last_outbound_job_id here —
+  // this send is informational only (no buttons, no reply expected), so it
+  // must not steal the "which job is this conversation about" pin away
+  // from a job that's genuinely mid-exchange (e.g. an IN_TRANSIT delivery-
+  // confirmation prompt still awaiting Delivered/Delayed/Issue). Only sends
+  // that actually invite a specific reply pin — see lib/whatsapp.js's
+  // recordOutboundJobContext() and its call sites.
   notifyDriverAsync({
     to: driverPhone,
     template: 'job_awarded_pickup_details',

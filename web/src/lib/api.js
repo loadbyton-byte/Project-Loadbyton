@@ -230,6 +230,16 @@ export const api = {
   adminRevenue: () => get('/admin/revenue'),
   adminPayoutsSla: () => get('/admin/payouts-sla'),
   adminMarkTransferred: (payoutId, reference) => post(`/admin/payouts/${payoutId}/mark-transferred`, { reference }),
+  // Ambiguous payout-attempts queue (server/routes/admin.routes.js) — a
+  // provider call whose result couldn't be determined (network/transport
+  // failure) blocks any new attempt on that payout until an admin either
+  // reconciles the existing attempt (re-drives the SAME idempotency key —
+  // safe, asks the provider for the truth) or retries the payout itself
+  // (re-runs executePayoutAsync's own guards fresh). This had a fully
+  // working backend with no admin UI at all — see PayoutsSlaTab.jsx.
+  adminPayoutsUnknown: () => get('/admin/payouts/unknown'),
+  adminReconcilePayoutAttempt: (attemptId) => post(`/admin/payout-attempts/${attemptId}/reconcile`),
+  adminRetryPayout: (payoutId) => post(`/admin/payouts/${payoutId}/retry`),
   // Two-person approval inbox (admin-approvals.routes.js) — was API-only
   // with no frontend caller at all until the Approvals tab.
   adminActionApprovals: (status) => get(`/admin/action-approvals${status ? `?status=${status}` : ''}`),
@@ -240,12 +250,21 @@ export const api = {
   adminGetSettings: () => get('/admin/settings'),
   adminUpdateSettings: (body) => patch('/admin/settings', body),
   adminUsers: () => get('/admin/users'),
+  adminSetCommission: (userId, rateBps) => post(`/admin/users/${userId}/commission`, { rateBps }),
   adminReferrals: () => get('/admin/referrals'),
   adminImpersonate: (userId) => post(`/admin/impersonate/${userId}`),
   endImpersonation: () => post('/admin/impersonate/end'),
   runAutoRelease: () => post('/system/auto-release'),
   adminCredit: () => get('/admin/credit'),
   adminApproveCredit: (userId, limitAed, termsDays) => post(`/admin/credit/${userId}/approve`, { limitAed, termsDays }),
+  // Shipper-initiated credit requests (server/routes/credit.routes.js) —
+  // a shipper asks for a specific limit with a proof document attached,
+  // instead of only an admin proactively granting one.
+  getCreditRequestUploadUrl: (mimeType) => post('/credit/requests/upload-url', { mimeType }),
+  submitCreditRequest: (body) => post('/credit/requests', body),
+  myCreditRequests: () => get('/credit/requests'),
+  adminCreditRequests: (status) => get(`/admin/credit/requests?status=${status || 'PENDING'}`),
+  adminDecideCreditRequest: (id, body) => post(`/admin/credit/requests/${id}/decide`, body),
   adminSettleCredit: (jobId) => post(`/admin/credit/jobs/${jobId}/settle`),
 };
 // ——— enterprise additions (Phase 2-5) ———
@@ -262,6 +281,11 @@ Object.assign(api, {
   postLocation: (id, body) => post(`/jobs/${id}/location`, body),
   getLocations: (id) => get(`/jobs/${id}/locations`),
   ingestTelematics: (body) => post('/telematics/ingest', body),
+  // Hardware telematics (reefer temperature, speed, fuel) for a specific
+  // job — server/routes/telematics.routes.js already scopes this to a job
+  // the caller is actually a party to (or ADMIN). Fully built with no
+  // frontend caller anywhere until now.
+  getTelematicsLogs: (jobId) => get(`/telematics/logs?jobId=${jobId}`),
   // currency / tax
   currencyRates: () => get('/currency/rates'),
   setJobCurrency: (id, body) => post(`/jobs/${id}/currency`, body),
@@ -269,7 +293,7 @@ Object.assign(api, {
   setEToken: (id, token) => post(`/jobs/${id}/etoken`, { token }),
   postEir: (id, photos, { stage = 'pickup', sealNumber } = {}) => post(`/jobs/${id}/eir?stage=${stage}`, { photos, sealNumber }),
   getDetention: (id) => get(`/jobs/${id}/detention`),
-  requestFuelAdvance: (id, type) => post(`/jobs/${id}/fuel-advance`, { type }),
+  requestFuelAdvance: (id, type, requestedAmountAed) => post(`/jobs/${id}/fuel-advance`, { type, requestedAmountAed }),
   getFuelAdvances: (id) => get(`/jobs/${id}/fuel-advances`),
   getFleet: () => get('/carrier/fleet'),
   // RFPs
@@ -282,7 +306,8 @@ Object.assign(api, {
   ingestEdi: (body) => post('/edi/ingest', body),
   listConsignments: () => get('/edi/consignments'),
   createCompliance: (id, body) => post(`/jobs/${id}/compliance`, body),
-  tokenizeBL: (id, body) => post(`/jobs/${id}/tokenize`, body),
+  getCompliance: (id) => get(`/jobs/${id}/compliance`),
+  adminClearCompliance: (declarationId) => post(`/compliance/${declarationId}/clear`),
   predictEta: (body) => post('/ml/predict-eta', body),
   // Insurance — quote has no job id in its path (it's pure rate-card math,
   // not job-scoped); only bind/cancel are.
@@ -346,6 +371,4 @@ Object.assign(api, {
   // Audit / Ledger
   getAuditChain: () => get('/audit/chain'),
   verifyAuditChain: () => get('/audit/chain/verify'),
-  // Job instruments
-  getInstruments: (id) => get(`/jobs/${id}/instruments`),
 });

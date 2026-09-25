@@ -1168,7 +1168,7 @@ module.exports = function initSchema(db) {
   CREATE TABLE IF NOT EXISTS bid_ancillary_charges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
-    charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','INSPECTION_WAITING','OTHER')),
+    charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER')),
     amount_aed REAL NOT NULL,
     notes TEXT,
     proposed_by INTEGER NOT NULL REFERENCES users(id),
@@ -1178,6 +1178,30 @@ module.exports = function initSchema(db) {
   );
   CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
   `);
+  // charge_type's CHECK constraint above only covers a brand-new database —
+  // an EXISTING one already has the table with the old, narrower CHECK
+  // (no DETENTION), and SQLite has no ALTER...DROP/ADD CONSTRAINT to widen
+  // it in place. Same rebuild-on-detection pattern as admin_approvals above.
+  const ancillaryChargesTableSql = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='bid_ancillary_charges'`).get();
+  if (ancillaryChargesTableSql && !ancillaryChargesTableSql.sql.includes('DETENTION')) {
+    db.exec(`
+      ALTER TABLE bid_ancillary_charges RENAME TO bid_ancillary_charges_pre_detention;
+      CREATE TABLE bid_ancillary_charges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bid_id INTEGER NOT NULL REFERENCES bids(id) ON DELETE CASCADE,
+        charge_type TEXT NOT NULL CHECK (charge_type IN ('SALIK','ETOKEN','DEMURRAGE','DETENTION','INSPECTION_WAITING','OTHER')),
+        amount_aed REAL NOT NULL,
+        notes TEXT,
+        proposed_by INTEGER NOT NULL REFERENCES users(id),
+        agreed_by_shipper INTEGER NOT NULL DEFAULT 0,
+        agreed_by_carrier INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO bid_ancillary_charges SELECT * FROM bid_ancillary_charges_pre_detention;
+      DROP TABLE bid_ancillary_charges_pre_detention;
+      CREATE INDEX IF NOT EXISTS idx_bid_ancillary_charges_bid ON bid_ancillary_charges(bid_id);
+    `);
+  }
   addColumn('bids', 'terms_confirmed_at', 'terms_confirmed_at TEXT');
   // Commercial-logic audit finding — POST /api/jobs/:id/direct-assign
   // (broker.routes.js) created a bid on the CARRIER's behalf and awarded
@@ -1256,6 +1280,43 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'credit_due_at', 'credit_due_at TEXT');
   addColumn('jobs', 'credit_settled_at', 'credit_settled_at TEXT');
 
+  // Credit requests — CONTRACT_CREDIT above only ever supported an admin
+  // proactively granting a limit (POST /api/admin/credit/:userId/approve,
+  // two plain numbers, no evidence attached). A real product gap: a
+  // shipper had no way to ASK for credit, and nothing tied a grant to any
+  // proof of the shipper's ability to pay (a cheque, a bank guarantee,
+  // whatever an ops team would actually want on file before extending
+  // unsecured trade credit). One row per request (not a single
+  // profiles column) deliberately, so a shipper's credit history —
+  // repeated requests, what was asked for vs. actually granted, rejections
+  // — stays visible rather than being overwritten each time.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS credit_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shipper_id INTEGER NOT NULL REFERENCES users(id),
+    requested_limit_aed REAL NOT NULL,
+    proof_doc_storage_path TEXT NOT NULL,
+    proof_doc_mime_type TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+    admin_note TEXT,
+    decided_by INTEGER REFERENCES users(id),
+    decided_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_credit_requests_shipper ON credit_requests(shipper_id);
+  CREATE INDEX IF NOT EXISTS idx_credit_requests_status ON credit_requests(status);
+  `);
+
+  // Per-account commission override — admin can negotiate a different
+  // platform commission rate for a specific shipper or carrier (a large
+  // account, a promotional rate, etc.) instead of everyone paying the one
+  // global settings.commission_rate_bps. NULL means "use the global rate",
+  // same nullable-override shape as haulage_insurance_expiry etc. above —
+  // not a zero-vs-unset ambiguity, since 0 is itself a valid (commission-
+  // free) override. See award.service.js for the resolution order between
+  // a carrier override, a shipper override, and the global default.
+  addColumn('profiles', 'commission_rate_bps', 'commission_rate_bps INTEGER');
+
   // ---------------------------------------------------------------------------
   // Telr split-payment payout — closes the "NOT IMPLEMENTED" gap in
   // lib/payments.js's executePayout() for PAYMENTS_PROVIDER=telr. Unlike
@@ -1312,6 +1373,18 @@ module.exports = function initSchema(db) {
   // exactly the stuck-unpaid case runUnpaidAwardReminderSweep exists to
   // catch.
   addColumn('jobs', 'awarded_at', 'awarded_at TEXT');
+  // Pins an inbound WhatsApp reply to the job it's actually about. Without
+  // this, resolving a phone number to a job (whatsapp.routes.js's
+  // resolveSender()) could only fall back to "whichever active job for this
+  // phone was updated most recently" — which silently misroutes a reply if
+  // the carrier reassigns the same driver to a second job while the first
+  // is still awaiting a reply (e.g. a delivery-confirmation prompt sent for
+  // job A, then job B gets awarded to the same driver before they reply —
+  // the old heuristic would attribute the reply to B, not the A it's
+  // actually replying to). Set on every outbound send tied to a job
+  // (recordOutboundJobContext() in lib/whatsapp.js); resolveSender() prefers
+  // whichever active job matches this over the updated_at tiebreak.
+  addColumn('whatsapp_sessions', 'last_outbound_job_id', 'last_outbound_job_id INTEGER REFERENCES jobs(id)');
 
   // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.

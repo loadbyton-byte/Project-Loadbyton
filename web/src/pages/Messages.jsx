@@ -51,6 +51,29 @@ export default function Messages() {
   }
   useEffect(loadInbox, []);
 
+  // The inbox list itself used to be a point-in-time snapshot with no live
+  // update path at all — a brand-new conversation, another thread's unread
+  // badge, or its last-message preview bumping all sat frozen until the
+  // user reloaded the page, even though the per-thread listener below kept
+  // an already-open conversation current. notify() (server/lib/helpers.js)
+  // already pushes a `notification:new` event to this user's own socket
+  // room for every new message on any of their threads (job-extras.routes.js
+  // calls it right alongside the message insert, type 'message') — this
+  // reuses that existing signal instead of adding a new server-side event,
+  // and connects the socket unconditionally on mount so it's listening
+  // before the user has opened any thread yet, not only once one is
+  // selected (the per-thread effect below only connects when `selected` is
+  // set, which is exactly when a message could otherwise arrive unnoticed).
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+    function onNotification(n) {
+      if (n.type === 'message') loadInbox();
+    }
+    socket.on('notification:new', onNotification);
+    return () => socket.off('notification:new', onNotification);
+  }, []);
+
   async function openThread(row) {
     setSelected(row);
     setThreadLoaded(false);

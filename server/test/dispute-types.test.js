@@ -28,7 +28,7 @@ async function fullyDeliveredJob(shipper, carrier) {
     maxBudgetAed: 1000,
   });
   const jobId = created.body.job.id;
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 1000, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });

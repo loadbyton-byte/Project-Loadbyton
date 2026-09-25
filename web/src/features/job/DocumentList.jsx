@@ -16,6 +16,9 @@ const SHIPPER_DOC_TYPES = ['GATE_PASS', 'POD_TEMPLATE'];
 const DOC_TYPE_LABELS = {
   DO: 'Delivery Order', BOE: 'Bill of Entry', INSPECTION_PROOF: 'Proof of inspection',
   GATE_PASS: 'Gate Pass', POD_TEMPLATE: 'POD Template',
+  // Server-generated (server/routes/whatsapp.routes.js) — never offered in
+  // the upload dropdown below, only ever appears already-attached.
+  WHATSAPP_MEDIA: 'WhatsApp attachment',
 };
 
 export default function DocumentList({ documents, jobId, onAdd, isShipperParty, isCarrierParty }) {

@@ -73,7 +73,7 @@ test('a bid notification is stored with priority=normal and pushed live only to 
     shipperSocket.on('notification:new', (n) => shipperEvents.push(n));
     carrierSocket.on('notification:new', (n) => carrierEvents.push(n));
 
-    const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+    const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
       amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
     });
     assert.equal(bid.status, 201, bid.raw);
@@ -130,9 +130,9 @@ test('single-notification mark-read only affects that row, mark-all affects ever
 
   const jobId1 = await createOpenJob(shipper);
   const jobId2 = await createOpenJob(shipper);
-  const bid1 = await carrier.post(`/api/jobs/${jobId1}/bids`, { amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bid1 = await carrier.post(`/api/jobs/${jobId1}/bids`, { acknowledgePaymentTerms: true, amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bid1.status, 201, bid1.raw);
-  const bid2 = await carrier.post(`/api/jobs/${jobId2}/bids`, { amountAed: 1600, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bid2 = await carrier.post(`/api/jobs/${jobId2}/bids`, { acknowledgePaymentTerms: true, amountAed: 1600, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bid2.status, 201, bid2.raw);
 
   const list = await shipper.get('/api/notifications');
@@ -163,7 +163,7 @@ test('a user cannot mark another user\'s notification as read', async () => {
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
 
   const jobId = await createOpenJob(shipper);
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bid.status, 201, bid.raw);
 
   const list = await shipper.get('/api/notifications');

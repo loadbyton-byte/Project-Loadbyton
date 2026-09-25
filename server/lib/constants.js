@@ -6,14 +6,24 @@ const CONTAINER_TYPES = ['DRY', 'REEFER', 'HAZMAT', 'OPEN_TOP', 'FLAT_RACK'];
 // GATE_PASS and POD_TEMPLATE (the upload) are shipper-facing. All reuse
 // the existing job_documents table and access pattern — see
 // job-extras.routes.js's uploader/type checks.
-const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'PACKING_LIST', 'OTHER', 'DO', 'BOE', 'GATE_PASS', 'POD_TEMPLATE', 'INSPECTION_PROOF'];
+// WHATSAPP_MEDIA: a photo or voice note a driver sent over WhatsApp,
+// downloaded and stored automatically (server/routes/whatsapp.routes.js,
+// server/lib/whatsapp.js's downloadWhatsAppMedia) — server-generated, not
+// offered in any upload form's dropdown, unlike every other value here.
+const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'PACKING_LIST', 'OTHER', 'DO', 'BOE', 'GATE_PASS', 'POD_TEMPLATE', 'INSPECTION_PROOF', 'WHATSAPP_MEDIA'];
 
 // Bumped by hand whenever web/src/pages/Terms.jsx's content materially
 // changes — a user re-accepts only when this changes since their last
 // recorded acceptance for that context, not on every job/signup.
 const TERMS_VERSION = '2026-09-01';
 
-const ANCILLARY_CHARGE_TYPES = ['SALIK', 'ETOKEN', 'DEMURRAGE', 'INSPECTION_WAITING', 'OTHER'];
+const ANCILLARY_CHARGE_TYPES = ['SALIK', 'ETOKEN', 'DEMURRAGE', 'DETENTION', 'INSPECTION_WAITING', 'OTHER'];
+// Mirrors web/src/lib/constants.js's ANCILLARY_CHARGE_LABELS — kept in sync
+// by hand (same duplication pattern as the other constants above that exist
+// in both the server and web bundles). Used for server-rendered documents
+// (settlement statement, load confirmation) that need a human label rather
+// than the raw charge_type code.
+const ANCILLARY_CHARGE_LABELS = { SALIK: 'Salik', ETOKEN: 'E-Token', DEMURRAGE: 'Demurrage/Waiting', DETENTION: 'Truck detention', INSPECTION_WAITING: 'Inspection waiting', OTHER: 'Other' };
 const STATUS_ORDER = ['DRAFT', 'OPEN', 'AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'];
 
 // When a shipper's payment is due — replaces the old SPOT_ESCROW/
@@ -192,6 +202,6 @@ module.exports = {
   BID_SORT_COLUMNS, JOB_SORT_COLUMNS, ESCROW_STATUSES,
   TRANSITIONS, DISPUTABLE_STATUSES,
   BACKLOAD_ELIGIBLE_STATUSES, BACKLOAD_MAX_DISTANCE_KM,
-  TERMS_VERSION, ANCILLARY_CHARGE_TYPES,
+  TERMS_VERSION, ANCILLARY_CHARGE_TYPES, ANCILLARY_CHARGE_LABELS,
   PAYMENT_TERMS, PAYMENT_TERM_DUE_HOURS, DEFERRED_PAYMENT_TERMS,
 };

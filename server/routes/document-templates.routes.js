@@ -27,13 +27,42 @@ async function profiles(job) {
   return { shipperProfile, carrierProfile };
 }
 
+// The awarded bid's base amount plus whichever ancillary charges (Salik,
+// e-token, demurrage, truck detention, ...) both shipper and carrier agreed
+// to — the same two figures award.service.js summed into job.agreed_price_aed
+// at award time. Surfaced here so the settlement statement and load
+// confirmation can show the breakdown behind that lump sum instead of just
+// the total, which was previously invisible on every customer-facing
+// document even though the money was already correct.
+//
+// Matched by job_id + carrier_id rather than bid.status='AWARDED': a real
+// award (award.service.js) does set that status, but seed.js's directly
+// SQL-inserted demo jobs (every AWARDED-or-beyond scenario job — see this
+// file's top comment / document-templates.test.js) leave the bid at
+// whatever status it was originally inserted with (e.g. 'ACCEPTED'), never
+// 'AWARDED'. job.carrier_id is the one field both paths always set.
+async function agreedAncillaryCharges(job) {
+  const bid = await db
+    .prepare(`SELECT id, amount_aed FROM bids WHERE job_id=? AND carrier_id=? ORDER BY id DESC LIMIT 1`)
+    .get(job.id, job.carrier_id);
+  if (!bid) return { baseAed: null, charges: [] };
+  const charges = await db
+    .prepare(
+      `SELECT charge_type, amount_aed, notes FROM bid_ancillary_charges
+       WHERE bid_id=? AND agreed_by_shipper=1 AND agreed_by_carrier=1 ORDER BY created_at ASC`
+    )
+    .all(bid.id);
+  return { baseAed: bid.amount_aed, charges };
+}
+
 router.get('/api/jobs/:id/documents/settlement', auth(), async (req, res) => {
   const job = await loadAuthorizedJob(req, res);
   if (!job) return;
   const payout = await db.prepare('SELECT * FROM payouts WHERE job_id=?').get(job.id);
   if (!payout) return sendError(res, 404, 'No payout on file for this job yet');
   const { carrierProfile } = await profiles(job);
-  res.set('Content-Type', 'text/html').send(renderSettlementHtml({ job, payout, carrierProfile }));
+  const ancillary = await agreedAncillaryCharges(job);
+  res.set('Content-Type', 'text/html').send(renderSettlementHtml({ job, payout, carrierProfile, ancillary }));
 });
 
 router.get('/api/jobs/:id/documents/load-confirmation', auth(), async (req, res) => {
@@ -41,7 +70,8 @@ router.get('/api/jobs/:id/documents/load-confirmation', auth(), async (req, res)
   if (!job) return;
   if (!job.agreed_price_aed || !job.carrier_id) return sendError(res, 404, 'This job has not been awarded yet');
   const { shipperProfile, carrierProfile } = await profiles(job);
-  res.set('Content-Type', 'text/html').send(renderLoadConfirmationHtml({ job, shipperProfile, carrierProfile }));
+  const ancillary = await agreedAncillaryCharges(job);
+  res.set('Content-Type', 'text/html').send(renderLoadConfirmationHtml({ job, shipperProfile, carrierProfile, ancillary }));
 });
 
 router.get('/api/jobs/:id/documents/pod-certificate', auth(), async (req, res) => {

@@ -940,10 +940,10 @@ body.lock{overflow:hidden}
   .mkt-scope .section{padding:80px 0}
   .mkt-scope .links,
 .mkt-scope .search-pill{display:none}
-  .mkt-scope .menu{display:grid;width:38px;height:38px}
+  .mkt-scope .menu{display:grid;width:38px;height:38px;margin-left:auto}
   .mkt-scope .logo svg,
 .mkt-scope .logo img{width:124px}
-  .mkt-scope .navbar{display:flex;height:70px}
+  .mkt-scope .navbar{display:flex;align-items:center;height:70px;gap:10px}
   .mkt-scope .nav-right{gap:4px}
   .mkt-scope .nav .theme-pill{display:none}
   .mkt-scope .nav-login{padding:8px 6px;font-size:11px}
@@ -1036,7 +1036,12 @@ body.lock{overflow:hidden}
   .mkt-scope .cta-wrap{padding:70px 0}
   .mkt-scope .cta{padding:32px 22px;min-height:460px;border-radius:24px}
   .mkt-scope .cta h2{font-size:46px}
-  .mkt-scope .footer-grid{grid-template-columns:1fr;gap:32px;padding-bottom:36px}
+  /* Side-by-side link columns instead of all 4 stacked full-width (which
+     made the footer very tall to scroll through) — footer-brand (logo +
+     description) spans the full row since its content shape doesn't fit
+     a narrow column, the three link lists pair up 2-per-row instead. */
+  .mkt-scope .footer-grid{grid-template-columns:1fr 1fr;gap:28px 20px;padding-bottom:32px}
+  .mkt-scope .footer-brand{grid-column:1 / -1}
   .mkt-scope .footer-brand p{max-width:100%}
   .mkt-scope .foot-bottom{flex-direction:column;align-items:flex-start;gap:14px}
   .mkt-scope .form-grid{grid-template-columns:1fr}

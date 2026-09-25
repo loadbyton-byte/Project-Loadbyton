@@ -56,7 +56,7 @@ test('multi-stop itinerary: add, list via job detail, complete, delete-block on 
   // Award to a carrier so carrier-side completion is exercisable.
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 600, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });

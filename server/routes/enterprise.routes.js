@@ -118,11 +118,23 @@ router.post('/api/jobs/:id/fuel-advance', auth(['CARRIER']), requireSeatRole(['O
   if(job.escrow_status==='RELEASED') return apiResponse.error(req,res,'VALIDATION_FAILED','This job is already settled — no advance available');
   const exists=await db.prepare('SELECT 1 FROM fuel_advances WHERE job_id=? AND carrier_id=?').get(job.id, req.user.id);
   if(exists) return apiResponse.error(req,res,'VALIDATION_FAILED','Advance already taken for this job');
-  const amount = Math.round((job.agreed_price_aed||job.max_budget_aed||0)*0.20);
-  if(amount<=0) return apiResponse.error(req,res,'VALIDATION_FAILED','No agreed price to advance');
-  const { type } = req.body||{};
+  const ceiling = Math.round((job.agreed_price_aed||job.max_budget_aed||0)*0.20);
+  if(ceiling<=0) return apiResponse.error(req,res,'VALIDATION_FAILED','No agreed price to advance');
+  const { type, requestedAmountAed } = req.body||{};
   const t = String(type||'FUEL').toUpperCase();
   if(!['FUEL','SALIK'].includes(t)) return apiResponse.error(req,res,'VALIDATION_FAILED','type must be FUEL or SALIK');
+  // A carrier can ask for less than the full 20% ceiling (previously this
+  // was always the fixed ceiling amount with no way to request a smaller,
+  // specific figure) — still auto-approved/instant, same as before; only
+  // the amount is now the carrier's own choice, capped at the same ceiling
+  // the fixed formula already used.
+  let amount = ceiling;
+  if (requestedAmountAed !== undefined && requestedAmountAed !== null && requestedAmountAed !== '') {
+    const requested = Number(requestedAmountAed);
+    if (!Number.isFinite(requested) || requested <= 0) return apiResponse.error(req,res,'VALIDATION_FAILED','requestedAmountAed must be a positive number');
+    if (requested > ceiling) return apiResponse.error(req,res,'VALIDATION_FAILED',`Requested amount exceeds the maximum advance available (AED ${ceiling})`);
+    amount = Math.round(requested);
+  }
   try {
     await db.prepare(`INSERT INTO fuel_advances (job_id,carrier_id,amount_aed,type) VALUES (?,?,?,?)`).run(job.id, req.user.id, amount, t);
   } catch (e) {

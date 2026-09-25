@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
+import { getSocket } from '../lib/socket.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
 import { STATUS_FLOW, formatAED, formatMoney, formatDate, formatDateTime, formatLabel, ltrIsolate, EQUIPMENT_TYPES, CONTAINER_EQUIPMENT, equipmentLabel, cargoTypeLabel, TERMINALS, AREAS, DEPOTS, depotLabel, ANCILLARY_CHARGE_LABELS, CURRENCIES, paymentTermLabel, DEFERRED_PAYMENT_TERMS } from '../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, Badge, StatusBadge, PaymentStatusBadge, RatingPill, ErrorState, Skeleton, Modal } from '../components/ui.jsx';
 import { IconClock, IconMapPin, IconFile, IconAlert, IconArrowLeft, IconGavel, IconStar } from '../components/icons.jsx';
-import { useToasts } from '../components/Toast.jsx';
 import { documentFileUrl, driverDocumentUrl } from '../lib/upload.js';
 import { LiveMap, useLiveTracking } from '../components/LiveMap.jsx';
 import { EirChecklist } from '../components/EirChecklist.jsx';
@@ -74,7 +74,6 @@ export default function JobDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t, isRtl } = useLocale();
-  const { addToast } = useToasts();
   const [data, setData] = useState(null);
   const [track, setTrack] = useState(null);
   const [error, setError] = useState('');
@@ -92,20 +91,33 @@ export default function JobDetail() {
   const [newChargeAmount, setNewChargeAmount] = useState('');
   const [lowCapacityAcked, setLowCapacityAcked] = useState(false);
   const [negotiationBusy, setNegotiationBusy] = useState(false);
-  const [blNumberDraft, setBlNumberDraft] = useState('');
-  const [instruments, setInstruments] = useState([]);
-  const [tokenizeBusy, setTokenizeBusy] = useState(false);
+  const [etaPrediction, setEtaPrediction] = useState(null);
+  const [etaPredicting, setEtaPredicting] = useState(false);
+  const [telematicsLogs, setTelematicsLogs] = useState([]);
+  const [complianceDeclarations, setComplianceDeclarations] = useState([]);
+  const [newHsCode, setNewHsCode] = useState('');
+  const [complianceBusy, setComplianceBusy] = useState(false);
+  const [clearingComplianceId, setClearingComplianceId] = useState(null);
 
   const load = useCallback(async () => {
     try {
       // ChatPopup fetches its own thread data (GET .../threads) lazily when
       // opened, not eagerly here — most job views never open the widget.
-      const [jobData, trackData] = await Promise.all([
+      // Telematics (reefer temperature/speed/fuel) is real hardware data
+      // that most jobs simply have none of — fetched here so the section
+      // below can just render nothing rather than an empty-state box for
+      // the common case, but caught silently like track() since its
+      // absence isn't an error.
+      const [jobData, trackData, telematicsData, complianceData] = await Promise.all([
         api.getJob(id),
         api.track(id).catch(() => null),
+        api.getTelematicsLogs(id).catch(() => null),
+        api.getCompliance(id).catch(() => null),
       ]);
       setData(jobData);
       setTrack(trackData);
+      setTelematicsLogs(telematicsData?.logs || []);
+      setComplianceDeclarations(complianceData?.declarations || []);
     } catch (err) {
       setError(err.message);
     }
@@ -143,14 +155,27 @@ export default function JobDetail() {
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [awardConfirm]);
 
-  // Existing BL tokens for this job — GET /api/jobs/:id/instruments had a
-  // real backend and an api.js client (getInstruments) but was never
-  // called anywhere, so a token created via "Tokenize BL" below was
-  // immediately invisible again on the next page load.
+  // Pre-award bid negotiation had no real-time path at all — the sender
+  // saw their own message (from the POST response below), but the other
+  // party only ever saw a new one by closing and reopening this modal.
+  // bids.routes.js's POST /:id/negotiation already calls notify() (type
+  // 'bid') to the other party right alongside the insert — reuses that
+  // existing push instead of adding a new server-side event, same fix as
+  // Messages.jsx/JobDispute.jsx. Kept above the early data-loading returns
+  // below (React hooks must run in the same order every render).
   useEffect(() => {
-    if (!data?.job?.id) return;
-    api.getInstruments(data.job.id).then((r) => setInstruments(r.instruments || [])).catch(() => {});
-  }, [data?.job?.id]);
+    if (!awardConfirm || !data?.job?.id) return;
+    const jobId = data.job.id;
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+    function onNotification(n) {
+      if (n.type === 'bid' && String(n.job_id) === String(jobId)) {
+        api.getBidNegotiation(awardConfirm.id).then((neg) => setNegotiationMessages(neg.messages || [])).catch(() => {});
+      }
+    }
+    socket.on('notification:new', onNotification);
+    return () => socket.off('notification:new', onNotification);
+  }, [awardConfirm, data?.job?.id]);
 
   if (error && !data) {
     return (
@@ -182,6 +207,7 @@ export default function JobDetail() {
   const isShipper = user.id === job.shipper_id;
   const isCarrier = user.role === 'CARRIER';
   const isAwardedCarrier = user.id === job.carrier_id;
+  const isAdmin = user.role === 'ADMIN';
   const myBid = bids.find((b) => b.carrier_id === user.id);
   // Job editing: only while OPEN and before any carrier has a live bid
   // against this exact spec — matches the server's own guard in
@@ -212,6 +238,64 @@ export default function JobDetail() {
     }
   }
 
+  // POST /api/ml/predict-eta (ml.routes.js) — a QA audit found this fully
+  // implemented with an api.js client method already defined, but nothing
+  // in the app ever called it. On demand rather than auto-fetched on
+  // page load: the backend's own comment says this is a deterministic
+  // mock (random port-congestion component) standing in for a real
+  // AIS/NOAA pipeline, so refetching it silently on every render would
+  // make the "prediction" look like it's tracking something real when
+  // it's actually just re-rolling.
+  async function getEtaPrediction() {
+    setEtaPredicting(true);
+    setError('');
+    try {
+      const { prediction } = await api.predictEta({ jobId: job.id });
+      setEtaPrediction(prediction);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEtaPredicting(false);
+    }
+  }
+
+  // POST /api/jobs/:id/compliance + GET .../compliance + POST
+  // /api/compliance/:id/clear (compliance.routes.js) — the customs
+  // HS-code/manifest declaration feature, fully built server-side
+  // (validation, a simulated ZK-proof commitment, an async webhook to a
+  // sovereign tax-clearing endpoint) with no page anywhere letting a
+  // shipper file one or an admin clear one. Found by a QA audit.
+  async function fileComplianceDeclaration() {
+    if (!/^\d{6,10}$/.test(newHsCode.trim())) {
+      setError('HS code must be 6-10 digits');
+      return;
+    }
+    setComplianceBusy(true);
+    setError('');
+    try {
+      await api.createCompliance(job.id, { hsCode: newHsCode.trim() });
+      setNewHsCode('');
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setComplianceBusy(false);
+    }
+  }
+
+  async function clearComplianceDeclaration(declarationId) {
+    setClearingComplianceId(declarationId);
+    setError('');
+    try {
+      await api.adminClearCompliance(declarationId);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setClearingComplianceId(null);
+    }
+  }
+
   async function openAwardFlow(b) {
     setAwardConfirm(b);
     setNegotiationMessages([]);
@@ -225,6 +309,7 @@ export default function JobDetail() {
       setError(err.message);
     }
   }
+
 
   async function sendNegotiationMessage() {
     if (!newMessage.trim()) return;
@@ -316,34 +401,43 @@ export default function JobDetail() {
         <Modal
           open
           onClose={() => setAwardConfirm(null)}
-          title={<span className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>Discuss &amp; award this bid</span>}
+          title={
+            <span className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full text-white" style={{ background: 'var(--brand-accent)' }}><IconGavel size={14} /></span>
+              {isShipper ? 'Discuss & award this bid' : 'Discuss your bid with the shipper'}
+            </span>
+          }
         >
                 <p className="text-sm text-ink">
-                  <strong>{formatMoney(awardConfirm.amount_aed, job.currency)}</strong> from{' '}
-                  <strong>{awardConfirm.carrier_company || 'this transporter'}</strong>.
+                  <strong>{formatMoney(awardConfirm.amount_aed, job.currency)}</strong>
+                  {isShipper ? <> from <strong>{awardConfirm.carrier_company || 'this transporter'}</strong>.</> : ' — your bid on this job.'}
                 </p>
-                <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingInlineStart: '1.1rem' }}>
-                  <li>Every other bid on this job will be rejected once assigned</li>
-                  <li>
-                    {agreedChargesTotal > 0
-                      ? <>Final price locks at <strong className="text-ink">{formatMoney(finalAwardTotal, job.currency)}</strong> ({formatMoney(awardConfirm.amount_aed, job.currency)} bid + {formatMoney(agreedChargesTotal, job.currency)} agreed extras) — nothing can be changed after this</>
-                      : <>The price is locked at {formatMoney(awardConfirm.amount_aed, job.currency)} — bids can't be changed after this</>}
-                  </li>
-                  <li>{(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Payment is held for this transport and the job moves to "Awarded"' : `The job moves to "Awarded" — ${paymentTermLabel(job.payment_tier)}`}</li>
-                </ul>
+                {isShipper && (
+                  <>
+                    <ul className="mt-3 space-y-1.5 text-sm text-ink-secondary" style={{ listStyle: 'disc', paddingInlineStart: '1.1rem' }}>
+                      <li>Every other bid on this job will be rejected once assigned</li>
+                      <li>
+                        {agreedChargesTotal > 0
+                          ? <>Final price locks at <strong className="text-ink">{formatMoney(finalAwardTotal, job.currency)}</strong> ({formatMoney(awardConfirm.amount_aed, job.currency)} bid + {formatMoney(agreedChargesTotal, job.currency)} agreed extras) — nothing can be changed after this</>
+                          : <>The price is locked at {formatMoney(awardConfirm.amount_aed, job.currency)} — bids can't be changed after this</>}
+                      </li>
+                      <li>{(!job.payment_tier || job.payment_tier === 'INSTANT') ? 'Payment is held for this transport and the job moves to "Awarded"' : `The job moves to "Awarded" — ${paymentTermLabel(job.payment_tier)}`}</li>
+                    </ul>
 
-                {isLowCapacity && (
-                  <div
-                    className="mt-3 rounded-md px-3 py-2 text-sm"
-                    style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
-                  >
-                    <p className="font-semibold">⚠ This transporter has declared 0 available units.</p>
-                    <p className="mt-0.5 text-xs">They may already be fully committed to other jobs. You can still award — just confirm you understand the risk.</p>
-                    <label className="mt-2 flex items-center gap-2 text-xs font-medium">
-                      <input type="checkbox" checked={lowCapacityAcked} onChange={(e) => setLowCapacityAcked(e.target.checked)} />
-                      Award anyway
-                    </label>
-                  </div>
+                    {isLowCapacity && (
+                      <div
+                        className="mt-3 rounded-md px-3 py-2 text-sm"
+                        style={{ color: 'var(--status-warning)', background: 'var(--status-warning-bg)' }}
+                      >
+                        <p className="font-semibold">⚠ This transporter has declared 0 available units.</p>
+                        <p className="mt-0.5 text-xs">They may already be fully committed to other jobs. You can still award — just confirm you understand the risk.</p>
+                        <label className="mt-2 flex items-center gap-2 text-xs font-medium">
+                          <input type="checkbox" checked={lowCapacityAcked} onChange={(e) => setLowCapacityAcked(e.target.checked)} />
+                          Award anyway
+                        </label>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Ancillary charges — Salik, e-token, demurrage, inspection
@@ -353,27 +447,37 @@ export default function JobDetail() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Ancillary charges</p>
                   {ancillaryCharges.length === 0 && <p className="mt-1 text-sm text-ink-muted">None proposed yet.</p>}
                   <ul className="mt-2 space-y-1.5">
-                    {ancillaryCharges.map((c) => (
-                      <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span>{c.charge_type} — {formatMoney(c.amount_aed, job.currency)}</span>
-                        <span className="flex items-center gap-1.5">
-                          {c.agreed_by_shipper && c.agreed_by_carrier ? (
-                            <Badge color="success">Agreed</Badge>
-                          ) : !c.agreed_by_shipper ? (
-                            <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
-                          ) : (
-                            <Badge color="neutral">Awaiting transporter</Badge>
-                          )}
-                          {/* Only the party who proposed a charge can withdraw it (server now
-                              enforces this — see bids.routes.js) — a shipper couldn't previously
-                              tell a carrier-proposed charge apart here, and this button would
-                              have 403'd on one instead of just not being offered. */}
-                          {c.proposed_by === user?.id && (
-                            <Button size="sm" variant="ghost" onClick={() => removeCharge(c.id)} loading={negotiationBusy}>Remove</Button>
-                          )}
-                        </span>
-                      </li>
-                    ))}
+                    {ancillaryCharges.map((c) => {
+                      // Which side "I am" depends on who's viewing — this modal
+                      // is now opened by either party (previously shipper-only,
+                      // so hardcoding agreed_by_shipper as "my side" happened to
+                      // work by accident). Read my/their agreement off the
+                      // correct column for whoever's actually looking at it.
+                      const myAgreed = isShipper ? c.agreed_by_shipper : c.agreed_by_carrier;
+                      const otherAgreed = isShipper ? c.agreed_by_carrier : c.agreed_by_shipper;
+                      const otherLabel = isShipper ? 'transporter' : 'shipper';
+                      return (
+                        <li key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                          <span>{c.charge_type} — {formatMoney(c.amount_aed, job.currency)}</span>
+                          <span className="flex items-center gap-1.5">
+                            {myAgreed && otherAgreed ? (
+                              <Badge color="success">Agreed</Badge>
+                            ) : !myAgreed ? (
+                              <Button size="sm" variant="ghost" onClick={() => agreeCharge(c.id)} loading={negotiationBusy}>Agree</Button>
+                            ) : (
+                              <Badge color="neutral">Awaiting {otherLabel}</Badge>
+                            )}
+                            {/* Only the party who proposed a charge can withdraw it (server now
+                                enforces this — see bids.routes.js) — a shipper couldn't previously
+                                tell a carrier-proposed charge apart here, and this button would
+                                have 403'd on one instead of just not being offered. */}
+                            {c.proposed_by === user?.id && (
+                              <Button size="sm" variant="ghost" onClick={() => removeCharge(c.id)} loading={negotiationBusy}>Remove</Button>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                   <div className="mt-2 flex gap-2">
                     <Select value={newChargeType} onChange={(e) => setNewChargeType(e.target.value)} className="text-sm">
@@ -389,14 +493,27 @@ export default function JobDetail() {
                 </div>
 
                 {/* Negotiation thread — pre-award commercial chat on this
-                    specific bid, separate from the post-award job chat. */}
+                    specific bid, separate from the post-award job chat. Now a
+                    real two-way conversation (previously only the shipper had
+                    any entry point to it at all): messages are attributed by
+                    sender so either side can actually follow who said what. */}
                 <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Discuss with this transporter</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{isShipper ? 'Discuss with this transporter' : 'Discuss with the shipper'}</p>
                   <div className="mt-2 max-h-32 space-y-1.5 overflow-y-auto text-sm">
                     {negotiationMessages.length === 0 && <p className="text-ink-muted">No messages yet.</p>}
-                    {negotiationMessages.map((m) => (
-                      <p key={m.id} className="rounded-md px-2 py-1" style={{ background: 'var(--surface-container)' }}>{m.message}</p>
-                    ))}
+                    {negotiationMessages.map((m) => {
+                      const mine = m.sender_id === user?.id;
+                      return (
+                        <p
+                          key={m.id}
+                          className={`rounded-md px-2 py-1 ${mine ? 'ms-6' : 'me-6'}`}
+                          style={{ background: mine ? 'color-mix(in srgb, var(--brand-accent) 12%, transparent)' : 'var(--surface-container)' }}
+                        >
+                          <span className="block text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{mine ? 'You' : isShipper ? 'Transporter' : 'Shipper'}</span>
+                          {m.message}
+                        </p>
+                      );
+                    })}
                   </div>
                   <div className="mt-2 flex gap-2">
                     <Input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="e.g. Any Salik charges expected?" className="flex-1" />
@@ -404,16 +521,24 @@ export default function JobDetail() {
                   </div>
                 </div>
 
-                <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
-              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-                <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
-                {ancillaryCharges.length === 0 && (
-                  <Button variant="ghost" onClick={skipAndAward} loading={busy} disabled={isLowCapacity && !lowCapacityAcked}>No charges — award now</Button>
+                {isShipper ? (
+                  <>
+                    <p className="mt-3 text-xs text-ink-muted">This can't be undone from here — only a cancellation afterward can reverse it.</p>
+                    <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Cancel</Button>
+                      {ancillaryCharges.length === 0 && (
+                        <Button variant="ghost" onClick={skipAndAward} loading={busy} disabled={isLowCapacity && !lowCapacityAcked}>No charges — award now</Button>
+                      )}
+                      <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed || (isLowCapacity && !lowCapacityAcked)}>
+                        Confirm terms &amp; assign
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-4 flex flex-wrap justify-end gap-2 border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <Button variant="ghost" onClick={() => setAwardConfirm(null)}>Close</Button>
+                  </div>
                 )}
-                <Button variant="accent" onClick={confirmAward} loading={busy} disabled={!allChargesAgreed || (isLowCapacity && !lowCapacityAcked)}>
-                  Confirm terms &amp; assign
-                </Button>
-              </div>
         </Modal>
       )}
       <button
@@ -671,6 +796,19 @@ export default function JobDetail() {
                       {isShipper && job.status === 'OPEN' && b.status === 'PENDING' && (
                         <Button variant="accent" onClick={() => openAwardFlow(b)} loading={busy}>Discuss &amp; award</Button>
                       )}
+                      {/* Real-life gap: a carrier previously had no way at all to
+                          discuss their own bid with the shipper (propose/agree
+                          ancillary charges, ask a question) — only the shipper
+                          could open this thread, from their side, via "Discuss &
+                          award" above. The backend already allowed the bid's own
+                          carrier to read/post to it (bids.routes.js's
+                          loadBidWithJobForNegotiation), it just had no frontend
+                          entry point. Reuses the exact same modal/state as the
+                          shipper's flow — see isShipper checks inside it for
+                          what's award-only vs. shared. */}
+                      {isCarrier && job.status === 'OPEN' && b.status === 'PENDING' && b.carrier_id === user.id && (
+                        <Button variant="secondary" onClick={() => openAwardFlow(b)}>Discuss with shipper</Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -685,6 +823,53 @@ export default function JobDetail() {
           <Section title="Documents">
             <DocumentList documents={documents} jobId={job.id} onAdd={load} isShipperParty={isShipper} isCarrierParty={isAwardedCarrier} />
           </Section>
+
+          {/* Customs compliance — HS-code/manifest declaration. Filing is
+              SHIPPER/ADMIN-only (compliance.routes.js); shipper, the
+              awarded carrier, and admin can all view what's on file.
+              Clearing a PENDING declaration is admin-only. */}
+          {(isShipper || isAwardedCarrier || isAdmin) && (
+            <Section title="Customs compliance">
+              {complianceDeclarations.length === 0 ? (
+                <p className="text-sm text-ink-muted">No customs declarations filed for this job.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {complianceDeclarations.map((d) => (
+                    <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <div>
+                        <p className="font-mono font-semibold text-ink">HS {d.hs_code}</p>
+                        <p className="text-xs text-ink-muted">
+                          Filed {formatDateTime(d.created_at)}{d.cleared_at ? ` · Cleared ${formatDateTime(d.cleared_at)}` : ''}
+                        </p>
+                        <p className="mt-0.5 font-mono text-xs text-ink-muted" title="Simulated ZK-proof manifest commitment">{d.manifest_hash.slice(0, 24)}…</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge color={d.status === 'CLEARED' ? 'success' : 'warning'}>{d.status}</Badge>
+                        {isAdmin && d.status === 'PENDING' && (
+                          <Button size="sm" variant="secondary" loading={clearingComplianceId === d.id} onClick={() => clearComplianceDeclaration(d.id)}>
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(isShipper || isAdmin) && (
+                <div className="mt-3 flex gap-2 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <Input
+                    placeholder="HS code (6-10 digits)"
+                    value={newHsCode}
+                    onChange={(e) => setNewHsCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="w-48 font-mono"
+                  />
+                  <Button size="sm" variant="secondary" onClick={fileComplianceDeclaration} loading={complianceBusy}>
+                    File declaration
+                  </Button>
+                </div>
+              )}
+            </Section>
+          )}
 
           <Section title="Event history">
             <EventHistory events={events} />
@@ -788,6 +973,92 @@ export default function JobDetail() {
           {['PICKED_UP','IN_TRANSIT','DELIVERED'].includes(job.status) && (
             <Card className="mb-6"><Card.Header><Card.Title>Live location</Card.Title></Card.Header><Card.Content><LiveMap jobId={job.id} fallbackLat={job.pickup_lat} fallbackLng={job.pickup_lng} deliveryLat={job.delivery_lat} deliveryLng={job.delivery_lng} /><DetentionAlarm jobId={job.id} /></Card.Content></Card>
           )}
+
+          {/* Hardware telematics (reefer temperature/speed/fuel) — GET
+              /api/telematics/logs (telematics.routes.js) was fully built
+              with role-scoped access but no frontend caller anywhere,
+              found by a QA audit. Renders nothing at all when this job has
+              no device data (most jobs don't — it depends on the truck
+              actually carrying a telematics unit), rather than an
+              empty-state box every job would otherwise show. */}
+          {telematicsLogs.length > 0 && (
+            <Card className="mb-6">
+              <Card.Header><Card.Title>Telematics</Card.Title></Card.Header>
+              <Card.Content className="text-sm">
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-xs text-ink-muted">Temperature</p>
+                    <p className="tabular font-display text-xl font-bold text-ink">{telematicsLogs[0].temperature != null ? `${telematicsLogs[0].temperature}°C` : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-ink-muted">Speed</p>
+                    <p className="tabular font-display text-xl font-bold text-ink">{telematicsLogs[0].speed != null ? `${telematicsLogs[0].speed} km/h` : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-ink-muted">Fuel</p>
+                    <p className="tabular font-display text-xl font-bold text-ink">{telematicsLogs[0].fuel_level != null ? `${telematicsLogs[0].fuel_level}%` : '—'}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-ink-muted">Last reading {formatDateTime(telematicsLogs[0].recorded_at)} · device {telematicsLogs[0].device_id}</p>
+                {telematicsLogs.length > 1 && (
+                  <div className="mt-3 max-h-32 overflow-y-auto border-t pt-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {telematicsLogs.slice(1, 10).map((l) => (
+                      <div key={l.id} className="flex items-center justify-between gap-2 py-1 text-xs text-ink-muted">
+                        <span>{formatDateTime(l.recorded_at)}</span>
+                        <span className="tabular">{l.temperature != null ? `${l.temperature}°C` : '—'} · {l.speed != null ? `${l.speed} km/h` : '—'} · {l.fuel_level != null ? `${l.fuel_level}%` : '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card.Content>
+            </Card>
+          )}
+
+          {/* ETA prediction — see getEtaPrediction()'s comment on why this is
+              a manual "get a prediction" action rather than something
+              auto-fetched: the backend is an explicitly-labeled mock model
+              standing in for a real AIS/weather pipeline. Useful once
+              there's an actual movement to predict a duration for. */}
+          {['AWARDED', 'PICKED_UP', 'IN_TRANSIT'].includes(job.status) && (
+            <Card className="mb-6">
+              <Card.Header>
+                <Card.Title>ETA prediction</Card.Title>
+                <Button size="sm" variant="secondary" onClick={getEtaPrediction} loading={etaPredicting}>
+                  {etaPrediction ? 'Refresh prediction' : 'Get ETA prediction'}
+                </Button>
+              </Card.Header>
+              <Card.Content className="text-sm">
+                {!etaPrediction ? (
+                  <p className="text-ink-muted">Estimate a delivery window from route, weather, and port-congestion factors.</p>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs text-ink-muted">Predicted transit time</p>
+                      <p className="tabular font-display text-2xl font-bold text-ink">{etaPrediction.predictedHours}h</p>
+                      <p className="text-xs text-ink-muted">
+                        Base {etaPrediction.baseHours}h + weather {etaPrediction.weatherPenalty}h + port congestion {etaPrediction.congestion}h
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Route alternatives</p>
+                      <ul className="mt-1.5 space-y-1.5">
+                        {etaPrediction.alternatives.map((alt) => (
+                          <li key={alt.route} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5" style={{ background: 'var(--surface-container)' }}>
+                            <span className="flex items-center gap-1.5"><IconClock size={13} className="text-ink-muted" /> {alt.route}</span>
+                            <span className="flex items-center gap-2">
+                              <span className="tabular font-semibold text-ink">{alt.etaHours}h</span>
+                              <Badge color={alt.risk === 'LOW' ? 'success' : alt.risk === 'MEDIUM' ? 'warning' : 'danger'}>{alt.risk}</Badge>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <p className="text-xs italic text-ink-muted">Model estimate, not a guarantee — refresh for an updated read.</p>
+                  </div>
+                )}
+              </Card.Content>
+            </Card>
+          )}
           {/* Phase 4: EIR for carrier — captured at BOTH pickup and
               delivery now, not just pickup, so a damage/shortage dispute
               has evidence from both ends of the journey. Each stage only
@@ -804,67 +1075,6 @@ export default function JobDetail() {
             <Link to={`/jobs/${job.id}/dispute`} className="btn-danger mb-6 w-full justify-center">
               <IconGavel size={15} /> View dispute
             </Link>
-          )}
-
-          {/* Tokenize Bill of Lading — shipper only, after award */}
-          {(isShipper || isAwardedCarrier) && ['AWARDED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'].includes(job.status) && (
-            <Section title="Bill of Lading Token" className="mb-6">
-              <Card className="border-l-4" style={{ borderLeftColor: 'var(--brand-accent)' }}>
-                <Card.Content className="flex flex-col gap-3 p-4">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-ink">{t('jobDetail.tokenizeBL', 'Tokenize Bill of Lading')}</p>
-                      <p className="text-xs text-ink-muted">{t('jobDetail.tokenizeBLDesc', 'Create a verifiable, transferable digital token for this shipment\'s bill of lading')}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      placeholder={t('jobDetail.blNumber', 'Bill of Lading number')}
-                      value={blNumberDraft}
-                      onChange={(e) => setBlNumberDraft(e.target.value)}
-                      className="flex-1 min-w-[200px]"
-                    />
-                    <Button
-                      variant="accent"
-                      loading={tokenizeBusy}
-                      disabled={!blNumberDraft.trim()}
-                      onClick={async () => {
-                        setTokenizeBusy(true);
-                        try {
-                          const res = await api.tokenizeBL(job.id, { blNumber: blNumberDraft.trim(), shipmentType: job.shipment_type });
-                          setInstruments((prev) => [res.instrument, ...prev]);
-                          setBlNumberDraft('');
-                          addToast({
-                            type: 'system_message',
-                            title: 'Bill of Lading tokenized',
-                            body: `Token ${res.instrument.token_id} · risk score ${res.risk.score} · rate ${res.risk.rateBps}bps`,
-                          });
-                        } catch (err) {
-                          addToast({ type: 'system_message', title: 'Could not tokenize BL', body: err.message });
-                        } finally {
-                          setTokenizeBusy(false);
-                        }
-                      }}
-                    >
-                      {t('jobDetail.tokenizeBLBtn', 'Tokenize BL')}
-                    </Button>
-                  </div>
-                  {instruments.length > 0 && (
-                    <ul className="mt-1 space-y-1 text-sm text-ink-secondary">
-                      {instruments.map((inst) => (
-                        <li key={inst.id} className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs">{inst.token_id}</span>
-                          <span>BL {inst.bl_number}</span>
-                          <span>{formatAED(inst.face_value_aed)}</span>
-                          <span className="text-xs text-ink-muted">risk {inst.risk_score} · {inst.interest_rate_bps}bps</span>
-                          <Badge color={inst.status === 'ACTIVE' ? 'success' : 'warning'}>{inst.status}</Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </Card.Content>
-              </Card>
-            </Section>
           )}
 
           {/* Currency selector — shipper can change job currency before award */}

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, openDocument } from '../lib/api.js';
+import { getSocket } from '../lib/socket.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { formatDateTime } from '../lib/constants.js';
@@ -50,6 +51,24 @@ export default function JobDispute() {
 
   useEffect(() => { load(); }, [load]);
   usePageTitle(data?.job ? `Dispute · ${data.job.job_code}` : 'Dispute');
+
+  // Disputed-job correspondence has no socket room of its own (job-extras.
+  // routes.js sends messages with thread_id=null for a disputed job — see
+  // server/lib/socket.js's emitNewMessage comment) — this page never
+  // updated live at all before, only on the sender's own send(). The
+  // notify() call that route makes right alongside every message insert
+  // (type 'message', to whichever party didn't send it) already reaches
+  // this user's socket room regardless, so this reuses that existing push
+  // instead of adding a new server-side event, same fix as Messages.jsx.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+    function onNotification(n) {
+      if (n.type === 'message' && String(n.job_id) === String(id)) load();
+    }
+    socket.on('notification:new', onNotification);
+    return () => socket.off('notification:new', onNotification);
+  }, [id, load]);
 
   async function send(e) {
     e.preventDefault();

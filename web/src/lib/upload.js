@@ -54,3 +54,7 @@ export function driverDocumentUrl(driverId, docType) {
 export function profileDocumentUrl(docType, userId) {
   return userId ? `/api/profile/documents/${docType}/${userId}` : `/api/profile/documents/${docType}`;
 }
+
+export function creditRequestDocumentUrl(requestId) {
+  return `/api/credit/requests/${requestId}/document`;
+}

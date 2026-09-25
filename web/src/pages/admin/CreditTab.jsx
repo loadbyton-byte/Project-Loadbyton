@@ -2,8 +2,53 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { useToasts } from '../../components/Toast.jsx';
 import { formatAED, formatDate, paymentTermLabel } from '../../lib/constants.js';
+import { creditRequestDocumentUrl } from '../../lib/upload.js';
 import { Button, Card, Stat, Input, Label, Badge, EmptyState, ErrorState } from '../../components/ui.jsx';
-import { IconWallet, IconCheck } from '../../components/icons.jsx';
+import { IconWallet, IconCheck, IconAlert } from '../../components/icons.jsx';
+
+// Deciding a shipper-initiated credit request (server/routes/credit.routes.js)
+// — reject with an optional note, or approve at the requested amount
+// (adjustable) which feeds the same profiles.credit_limit_aed update the
+// plain ApproveForm below does.
+function DecideRequestForm({ request, onDone }) {
+  const { addToast } = useToasts();
+  const [limitAed, setLimitAed] = useState(request.requested_limit_aed);
+  const [termsDays, setTermsDays] = useState(30);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(null); // null | 'approve' | 'reject'
+
+  async function decide(action) {
+    setBusy(action);
+    try {
+      await api.adminDecideCreditRequest(request.id, action === 'approve' ? { action, limitAed: Number(limitAed), termsDays: Number(termsDays), note } : { action, note });
+      addToast({ type: 'status_change', title: action === 'approve' ? 'Credit request approved' : 'Credit request rejected' });
+      onDone();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not decide this request', body: err.message });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap items-end gap-2 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+      <div>
+        <Label>Credit limit (AED)</Label>
+        <Input type="number" min="0" value={limitAed} onChange={(e) => setLimitAed(e.target.value)} className="w-32" />
+      </div>
+      <div>
+        <Label>Net terms (days)</Label>
+        <Input type="number" min="1" value={termsDays} onChange={(e) => setTermsDays(e.target.value)} className="w-24" />
+      </div>
+      <div className="flex-1">
+        <Label>Note (optional)</Label>
+        <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Visible to the shipper" />
+      </div>
+      <Button size="sm" loading={busy === 'approve'} disabled={busy === 'reject'} onClick={() => decide('approve')}>Approve</Button>
+      <Button size="sm" variant="danger" loading={busy === 'reject'} disabled={busy === 'approve'} onClick={() => decide('reject')}>Reject</Button>
+    </div>
+  );
+}
 
 function ApproveForm({ userId, current, onDone }) {
   const { addToast } = useToasts();
@@ -45,12 +90,21 @@ function CreditTab() {
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [busyJobId, setBusyJobId] = useState(null);
+  const [pendingRequests, setPendingRequests] = useState(null);
+  const [requestsError, setRequestsError] = useState('');
+  const [decidingRequestId, setDecidingRequestId] = useState(null);
 
   function load() {
     setError('');
     api.adminCredit().then(setData).catch((err) => { setData({ shippers: [], outstandingJobs: [] }); setError(err.message); });
   }
   useEffect(load, []);
+
+  function loadRequests() {
+    setRequestsError('');
+    api.adminCreditRequests('PENDING').then((d) => setPendingRequests(d.requests)).catch((err) => { setPendingRequests([]); setRequestsError(err.message); });
+  }
+  useEffect(loadRequests, []);
 
   async function settle(jobId) {
     setBusyJobId(jobId);
@@ -83,6 +137,42 @@ function CreditTab() {
         <Stat label="Outstanding draws" value={data.outstandingJobs.length} />
         <Stat label="Outstanding total" value={formatAED(totalOutstanding)} />
       </div>
+
+      <h3 className="mb-2 font-display text-sm font-semibold text-ink">Pending credit requests</h3>
+      {requestsError ? (
+        <ErrorState className="mb-8" title="Couldn't load credit requests" description={requestsError} onRetry={loadRequests} />
+      ) : pendingRequests === null ? (
+        <p className="mb-8 text-sm text-ink-muted">Loading…</p>
+      ) : pendingRequests.length === 0 ? (
+        <div className="mb-8">
+          <EmptyState icon={<IconCheck size={26} />} title="Nothing pending" description="No shipper has an open credit request right now." />
+        </div>
+      ) : (
+        <div className="mb-8 space-y-3">
+          {pendingRequests.map((r) => (
+            <Card key={r.id} className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-ink">{r.shipper_company || r.shipper_email}</p>
+                  <p className="text-xs text-ink-muted">{r.shipper_email} · filed {formatDate(r.created_at)}</p>
+                  <p className="mt-0.5 flex items-center gap-1 text-xs" style={{ color: 'var(--status-warning)' }}>
+                    <IconAlert size={12} /> Requesting AED {Number(r.requested_limit_aed).toLocaleString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={creditRequestDocumentUrl(r.id)} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-secondary hover:underline">
+                    View proof document
+                  </a>
+                  <Button size="sm" variant="ghost" onClick={() => setDecidingRequestId(decidingRequestId === r.id ? null : r.id)}>
+                    {decidingRequestId === r.id ? 'Cancel' : 'Review'}
+                  </Button>
+                </div>
+              </div>
+              {decidingRequestId === r.id && <DecideRequestForm request={r} onDone={() => { setDecidingRequestId(null); loadRequests(); load(); }} />}
+            </Card>
+          ))}
+        </div>
+      )}
 
       <h3 className="mb-2 font-display text-sm font-semibold text-ink">Shipper credit standing</h3>
       {data.shippers.length === 0 ? (

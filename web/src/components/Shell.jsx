@@ -859,8 +859,13 @@ function ShellInner({ children }) {
           {!user && (
             <footer className="lb-footer" dir="ltr">
               <div className="mx-auto w-full max-w-content px-5 pb-8 pt-16 sm:px-6 lg:px-8 lg:pt-24">
-                <div className="grid gap-12 pb-16 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:gap-16">
-                  <div className="lb-footer-brand">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-10 pb-16 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:gap-16">
+                  {/* Link columns pair up 2-per-row from the smallest width
+                      instead of stacking all 4 blocks full-width (which
+                      made the footer very tall to scroll through) —
+                      footer-brand spans the full row since its logo +
+                      paragraph + badge don't fit a narrow column. */}
+                  <div className="lb-footer-brand col-span-2 lg:col-span-1">
                     <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-7 w-auto" />
                     <p className="mt-7 max-w-xs text-sm leading-7 text-white/55">
                       A connected freight workspace for the operational work behind the load.

@@ -7,6 +7,8 @@ import { Button, Card, Input, Label, Select, Badge, EmptyState, ErrorState } fro
 import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
 import EquipmentCapacity from '../features/profile/EquipmentCapacity.jsx';
 import { useLocale } from '../lib/i18n.jsx';
+import { useToasts } from '../components/Toast.jsx';
+import { uploadFile, UPLOAD_ACCEPT, creditRequestDocumentUrl } from '../lib/upload.js';
 
 const SEAT_ROLE_HELP = {
   OPS: 'Full day-to-day access — post jobs, bid, award, update status.',
@@ -15,11 +17,13 @@ const SEAT_ROLE_HELP = {
 };
 
 function TeamSection() {
+  const { addToast } = useToasts();
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [form, setForm] = useState({ email: '', password: '', seatRole: 'OPS', displayName: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [busySeatId, setBusySeatId] = useState(null);
 
   function load() {
     setLoadError('');
@@ -43,13 +47,27 @@ function TeamSection() {
   }
 
   async function toggleActive(seat) {
-    await api.updateOrgMember(seat.id, { isActive: !seat.is_active });
-    load();
+    setBusySeatId(seat.id);
+    try {
+      await api.updateOrgMember(seat.id, { isActive: !seat.is_active });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not update this seat', body: err.message });
+    } finally {
+      setBusySeatId(null);
+    }
   }
 
   async function changeRole(seat, seatRole) {
-    await api.updateOrgMember(seat.id, { seatRole });
-    load();
+    setBusySeatId(seat.id);
+    try {
+      await api.updateOrgMember(seat.id, { seatRole });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not change this seat\'s role', body: err.message });
+    } finally {
+      setBusySeatId(null);
+    }
   }
 
   if (loadError) return <Card className="mt-6"><Card.Content><ErrorState title="Couldn't load your team" description={loadError} onRetry={load} /></Card.Content></Card>;
@@ -76,10 +94,10 @@ function TeamSection() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge color={seat.is_active ? 'success' : 'neutral'}>{seat.is_active ? 'Active' : 'Deactivated'}</Badge>
-                  <Select value={seat.seat_role} onChange={(e) => changeRole(seat, e.target.value)} className="w-auto">
+                  <Select value={seat.seat_role} onChange={(e) => changeRole(seat, e.target.value)} disabled={busySeatId === seat.id} className="w-auto">
                     {Object.keys(SEAT_ROLE_HELP).map((r) => <option key={r} value={r}>{r}</option>)}
                   </Select>
-                  <Button size="sm" variant={seat.is_active ? 'danger' : 'secondary'} onClick={() => toggleActive(seat)}>
+                  <Button size="sm" variant={seat.is_active ? 'danger' : 'secondary'} loading={busySeatId === seat.id} onClick={() => toggleActive(seat)}>
                     {seat.is_active ? 'Deactivate' : 'Reactivate'}
                   </Button>
                 </div>
@@ -111,6 +129,108 @@ function TeamSection() {
           {error && <p className="sm:col-span-2 text-sm text-status-danger">{error}</p>}
           <Button type="submit" loading={busy} className="sm:col-span-2">Add team member</Button>
         </form>
+      </Card.Content>
+    </Card>
+  );
+}
+
+// Shipper-initiated credit requests (server/routes/credit.routes.js) — the
+// CONTRACT_CREDIT admin flow (CreditTab.jsx) previously only let an admin
+// proactively grant a limit with no shipper-side entry point and no proof
+// of ability to pay attached. A shipper submits a specific amount + a
+// document (a cheque scan, bank guarantee, whatever); an admin reviews it.
+function CreditSection() {
+  const { addToast } = useToasts();
+  const [requests, setRequests] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [amount, setAmount] = useState('');
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  function load() {
+    setLoadError('');
+    api.myCreditRequests().then((d) => setRequests(d.requests)).catch((err) => { setRequests([]); setLoadError(err.message); });
+  }
+  useEffect(load, []);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!file || !amount) return;
+    setBusy(true);
+    try {
+      const uploaded = await uploadFile(file, (mimeType) => api.getCreditRequestUploadUrl(mimeType));
+      await api.submitCreditRequest({ requestedLimitAed: Number(amount), ...uploaded });
+      setAmount('');
+      setFile(null);
+      load();
+      addToast({ type: 'status_change', title: 'Credit request submitted', body: "An admin will review your proof document and get back to you." });
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not submit request', body: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (loadError) return <Card className="mt-6"><Card.Content><ErrorState title="Couldn't load credit requests" description={loadError} onRetry={load} /></Card.Content></Card>;
+  if (!requests) return null;
+
+  const pending = requests.find((r) => r.status === 'PENDING');
+
+  return (
+    <Card className="mt-6">
+      <Card.Header><Card.Title>Contract credit</Card.Title></Card.Header>
+      <Card.Content className="space-y-4">
+        <p className="text-sm text-ink-muted">
+          Request a credit limit to unlock deferred payment terms (7/15/28-day) by submitting proof of your ability
+          to pay — a cheque, bank guarantee, or similar. An admin reviews it before approving.
+        </p>
+
+        {requests.length > 0 && (
+          <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
+            {requests.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                <div>
+                  <p className="text-sm font-medium text-ink">AED {Number(r.requested_limit_aed).toLocaleString()} requested</p>
+                  <p className="text-xs text-ink-muted">
+                    Filed {new Date(r.created_at).toLocaleDateString()}{r.admin_note ? ` · ${r.admin_note}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={creditRequestDocumentUrl(r.id)} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-secondary hover:underline">
+                    View proof
+                  </a>
+                  <Badge color={r.status === 'APPROVED' ? 'success' : r.status === 'REJECTED' ? 'danger' : 'neutral'}>{r.status}</Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {pending ? (
+          <p className="border-t pt-3 text-sm text-ink-muted" style={{ borderColor: 'var(--border-subtle)' }}>
+            You have a pending request for AED {Number(pending.requested_limit_aed).toLocaleString()} — wait for a decision before submitting another.
+          </p>
+        ) : (
+          <form onSubmit={submit} className="grid gap-3 border-t pt-4 sm:grid-cols-2" style={{ borderColor: 'var(--border-subtle)' }}>
+            <div>
+              <Label>Requested limit (AED)</Label>
+              <Input type="number" min="1" required value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+            <div>
+              <Label>Proof document</Label>
+              <input
+                type="file"
+                accept={UPLOAD_ACCEPT}
+                required
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                className="mt-1 block w-full text-sm text-ink-secondary"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Button type="submit" loading={busy}>Submit request</Button>
+            </div>
+          </form>
+        )}
       </Card.Content>
     </Card>
   );
@@ -408,6 +528,8 @@ export default function Profile() {
       </Card>
 
       {isOrgRoot && user.role !== 'ADMIN' && <TeamSection />}
+
+      {isOrgRoot && (user.role === 'SHIPPER' || user.role === 'FORWARDER') && <CreditSection />}
 
       {/* The walkthrough's copy (Shell.jsx's WALKTHROUGH_STEPS) is written
           for the shipper posting flow — for any other role "Start over"

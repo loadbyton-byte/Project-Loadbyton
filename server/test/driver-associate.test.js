@@ -25,7 +25,7 @@ async function postAwardedJob(shipper, carrier) {
     readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
   });
   const jobId = created.body.job.id;
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   return jobId;
 }

@@ -25,7 +25,7 @@ async function postAndAwardJob(shipper, carrier, containerCount = 1) {
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);
@@ -101,7 +101,7 @@ test('a carrier can mark units externally engaged and release them; bidding at z
     readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
     maxBudgetAed: 500,
   });
-  const bid = await carrier.post(`/api/jobs/${created.body.job.id}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${created.body.job.id}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, 'bidding at zero available units must still succeed (warned, not blocked)');
@@ -130,7 +130,7 @@ test('awarding a bid from a zero-capacity carrier is blocked until the shipper e
     maxBudgetAed: 500,
   });
   const jobId = created.body.job.id;
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);
@@ -171,7 +171,7 @@ test('award is blocked if the bidding carrier\'s verification was revoked after 
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
-  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
-import { Button, Card, Input, Label, Badge, ErrorState } from '../components/ui.jsx';
+import { Button, Card, Input, Label, Badge, Textarea, ErrorState } from '../components/ui.jsx';
 import { useToasts } from '../components/Toast.jsx';
 import { IconShield, IconCheckCircle, IconAlert, IconSearch } from '../components/icons.jsx';
 
@@ -15,6 +15,9 @@ export default function VerifyTrn() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [bulkInput, setBulkInput] = useState('');
+  const [bulkResults, setBulkResults] = useState(null);
+  const [bulkChecking, setBulkChecking] = useState(false);
 
   const UAE_TRN_RE = /^\d{15}$/;
 
@@ -35,9 +38,36 @@ export default function VerifyTrn() {
     }
   }
 
+  // A real bulk check, not the permanent "not yet implemented" stub this
+  // button used to be — reuses the same single-TRN endpoint the form above
+  // calls, once per line, since there's no separate batch endpoint on the
+  // backend (server/routes/verify.routes.js only ever exposed a one-TRN
+  // check). Invalid/malformed lines are reported inline rather than
+  // silently skipped or sent to the server.
   async function handleBulkCheck() {
-    // For future bulk check
-    addToast({ type: 'system_message', title: 'Bulk check not yet implemented' });
+    const lines = [...new Set(bulkInput.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean))];
+    if (lines.length === 0) {
+      addToast({ type: 'system_message', title: 'Enter at least one TRN' });
+      return;
+    }
+    setBulkChecking(true);
+    setBulkResults(null);
+    try {
+      const results = await Promise.all(lines.map(async (line) => {
+        if (!UAE_TRN_RE.test(line)) return { trn: line, error: 'Must be exactly 15 digits' };
+        try {
+          const data = await api.verifyTrn(line);
+          return { trn: line, valid: data.valid, company_name: data.company_name };
+        } catch (e) {
+          return { trn: line, error: e.message || 'Check failed' };
+        }
+      }));
+      setBulkResults(results);
+      const validCount = results.filter((r) => r.valid).length;
+      addToast({ type: 'status_change', title: `Checked ${results.length} TRN(s)`, body: `${validCount} valid, ${results.length - validCount} invalid or errored.` });
+    } finally {
+      setBulkChecking(false);
+    }
   }
 
   return (
@@ -88,9 +118,35 @@ export default function VerifyTrn() {
         )}
 
         <div className="border-t pt-4" style={{ borderColor: 'var(--border-subtle)' }}>
-          <Button variant="secondary" onClick={handleBulkCheck}>
+          <Label htmlFor="bulk-trn">{t('verify.bulkLabel', 'Bulk check (one TRN per line)')}</Label>
+          <Textarea
+            id="bulk-trn"
+            rows={4}
+            placeholder={'100000000000001\n100000000000002\n100000000000003'}
+            value={bulkInput}
+            onChange={(e) => setBulkInput(e.target.value)}
+            className="mt-1 font-mono text-sm"
+          />
+          <Button variant="secondary" className="mt-2" onClick={handleBulkCheck} loading={bulkChecking}>
             <IconCheckCircle size={16} className="me-2" /> {t('verify.bulkCheck', 'Bulk Check')}
           </Button>
+
+          {bulkResults && (
+            <ul className="mt-3 space-y-1.5 text-sm">
+              {bulkResults.map((r, i) => (
+                <li key={`${r.trn}-${i}`} className="flex items-center justify-between gap-2 rounded-md px-2 py-1" style={{ background: 'var(--surface-container)' }}>
+                  <span className="font-mono">{r.trn}</span>
+                  {r.error ? (
+                    <Badge color="danger"><IconAlert size={12} className="me-1" /> {r.error}</Badge>
+                  ) : (
+                    <Badge color={r.valid ? 'success' : 'danger'}>
+                      {r.valid ? (<span><IconCheckCircle size={12} className="me-1" /> Valid{r.company_name ? ` — ${r.company_name}` : ''}</span>) : (<span><IconAlert size={12} className="me-1" /> Invalid</span>)}
+                    </Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </Card>
     </div>

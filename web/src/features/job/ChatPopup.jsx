@@ -87,6 +87,27 @@ export default function ChatPopup({ jobId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, threads.map((t) => t.id).join(','), myId]);
 
+  // Edge case the room-join effect above can't cover: a thread this widget
+  // never joined because it didn't exist yet when threads were last loaded
+  // (e.g. the other party opens a brand-new SHIPPER-ADMIN thread on this
+  // job while this popup was already open with none). notify() (called
+  // alongside every message insert, job-extras.routes.js) still reaches
+  // this user's own socket room regardless of thread membership — on
+  // catching one for this job, reload the thread list so a new thread (and
+  // its first message) actually shows up instead of only appearing once
+  // the popup is closed and reopened.
+  useEffect(() => {
+    if (!loaded) return;
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+    function onNotification(n) {
+      if (n.type === 'message' && String(n.job_id) === String(jobId)) loadThreads();
+    }
+    socket.on('notification:new', onNotification);
+    return () => socket.off('notification:new', onNotification);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, jobId]);
+
   useEffect(() => {
     if (isOpen && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [activeThread?.messages, isOpen]);

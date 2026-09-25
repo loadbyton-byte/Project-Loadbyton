@@ -70,7 +70,7 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   // by the etaAt-vs-deadline check (job-lifecycle.routes.js), unrelated to
   // what this test is actually checking (the approval gate). A short,
   // safely-before-any-seeded-deadline ETA avoids the race entirely.
-  const bid = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 30 * 60000).toISOString() });
+  const bid = await client.post(`/api/jobs/${job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 100, etaAt: new Date(Date.now() + 30 * 60000).toISOString() });
   assert.equal(bid.status, 403, 'a pending account must not be able to bid');
 
   const createJob = await client.post('/api/jobs', {
@@ -96,10 +96,22 @@ test('new account starts PENDING and is read-only until an admin approves it', a
   const audit = await admin.get('/api/admin/audit');
   assert.ok(audit.body.entries.some((e) => e.action === 'ACCOUNT_APPROVE' && e.entity_id === registered.body.user.id), 'approval must be on the audit trail');
 
+  // Insurance is now a hard-blocked requirement before an admin can approve
+  // carrier verification (verification.service.js) — a fresh registration
+  // has none on file yet, so it has to be uploaded first, same as any real
+  // carrier would before Loadbyton lets them haul freight.
+  const withoutInsurance = await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
+  assert.equal(withoutInsurance.status, 400, 'verification must not approve a carrier with no insurance document on file');
+
+  const insuranceUpload = await client.post('/api/profile/documents', {
+    docType: 'INSURANCE', mimeType: 'application/pdf', fileBase64: Buffer.from('%PDF-1.4 test insurance').toString('base64'),
+  });
+  assert.equal(insuranceUpload.status, 200, insuranceUpload.raw);
+
   const verified = await admin.post(`/api/admin/verify/${registered.body.user.id}`, { action: 'approve', iban: 'AE070331234567890123456' });
   assert.equal(verified.status, 200, verified.raw);
 
-  const bidAfter = await client.post(`/api/jobs/${job.id}/bids`, { amountAed: 100, etaAt: new Date(Date.now() + 30 * 60000).toISOString() });
+  const bidAfter = await client.post(`/api/jobs/${job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 100, etaAt: new Date(Date.now() + 30 * 60000).toISOString() });
   assert.equal(bidAfter.status, 201, bidAfter.raw);
 });
 
@@ -244,7 +256,7 @@ test('documents are private until the bid is confirmed; uploads are for parties 
   const loserUpload = await loser.post(`/api/jobs/${jobId}/documents`, { docType: 'OTHER', title: 'Sneaky', fileUrl: 'https://files.loadbyton.demo/x.pdf' });
   assert.equal(loserUpload.status, 403, 'a bidding (non-awarded) carrier must not upload documents to the job');
 
-  const loserBid = await loser.post(`/api/jobs/${jobId}/bids`, { amountAed: 640, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS' });
+  const loserBid = await loser.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 640, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS' });
   assert.equal(loserBid.status, 201, loserBid.raw);
 
   const loserView = await loser.get(`/api/jobs/${jobId}`);
@@ -254,7 +266,7 @@ test('documents are private until the bid is confirmed; uploads are for parties 
   assert.deepEqual(carrierView.body.documents, [], 'the bidding carrier must not see the shipper\u2019s documents pre-award');
 
   // After the shipper confirms the winning bid, the carrier sees the documents.
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS' });
   const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
 
@@ -290,7 +302,7 @@ test('driver details are not collected at bid time and are required before PICKE
 
   // A bid with driver fields must be silently stripped — the API contract
   // is "no driver at bid time".
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'CONTAINER_CHASSIS', driverName: 'Should Not Stick', driverPhone: '+971509998877',
   });
   assert.equal(bidRes.status, 201, bidRes.raw);
