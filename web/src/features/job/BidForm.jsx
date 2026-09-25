@@ -21,6 +21,7 @@ export default function BidForm({ jobId, verified, defaultEquipment, paymentTier
   // Still refinable in the pre-award discussion (server/routes/bids.routes.js's
   // negotiation/ancillary-charges endpoints) once the shipper picks a bid.
   const [ancillaryCharges, setAncillaryCharges] = useState([]);
+  const [agreedToPaymentTerms, setAgreedToPaymentTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -54,6 +55,10 @@ export default function BidForm({ jobId, verified, defaultEquipment, paymentTier
       setError('Please choose an ETA date/time.');
       return;
     }
+    if (paymentTier && !agreedToPaymentTerms) {
+      setError('Please confirm you agree to this job\'s payment terms.');
+      return;
+    }
     const cleanCharges = ancillaryCharges.filter((c) => c.chargeType && Number(c.amountAed) > 0);
     if (ancillaryCharges.some((c) => c.chargeType && !(Number(c.amountAed) > 0))) {
       setError('Every ancillary charge needs a valid amount, or remove it.');
@@ -68,6 +73,7 @@ export default function BidForm({ jobId, verified, defaultEquipment, paymentTier
         truckType: form.truckType,
         notes: form.notes,
         ancillaryCharges: cleanCharges.map((c) => ({ chargeType: c.chargeType, amountAed: Number(c.amountAed) })),
+        acknowledgePaymentTerms: agreedToPaymentTerms,
       });
       addToast({ type: 'bid', title: 'Bid placed', body: `Your bid of ${formatAED(form.amount)} was submitted.` });
       onDone();
@@ -89,10 +95,25 @@ export default function BidForm({ jobId, verified, defaultEquipment, paymentTier
           submitting, so both sides are knowingly on the same terms before
           any agreement forms (not editable; informational only). */}
       {paymentTier && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
-          <IconWallet size={16} style={{ color: 'var(--brand-accent)' }} />
-          <span className="text-ink-secondary">Payment terms:</span>
-          <span className="font-semibold text-ink">{paymentTermLabel(paymentTier)}</span>
+        <div className="mb-4 rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-subtle)' }}>
+          <div className="flex items-center gap-2">
+            <IconWallet size={16} style={{ color: 'var(--brand-accent)' }} />
+            <span className="text-ink-secondary">Payment terms:</span>
+            <span className="font-semibold text-ink">{paymentTermLabel(paymentTier)}</span>
+          </div>
+          {/* Previously display-only, with no explicit consent step distinct
+              from the generic Submit-bid click — a carrier could miss the
+              badge entirely and only realize e.g. a 28-day wait after
+              already being awarded. Required, not just shown. */}
+          <label className="mt-2 flex items-start gap-2 text-xs text-ink-secondary">
+            <input
+              type="checkbox"
+              checked={agreedToPaymentTerms}
+              onChange={(e) => setAgreedToPaymentTerms(e.target.checked)}
+              className="mt-0.5"
+            />
+            I understand and agree to these payment terms.
+          </label>
         </div>
       )}
       <div className="grid gap-4 sm:grid-cols-2">

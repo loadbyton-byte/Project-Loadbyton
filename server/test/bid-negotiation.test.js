@@ -45,7 +45,7 @@ async function postJobAndBid(shipperClient, carrierClient) {
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
-  const bid = await carrierClient.post(`/api/jobs/${jobId}/bids`, {
+  const bid = await carrierClient.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(bid.status, 201, bid.raw);
@@ -150,13 +150,13 @@ test('a carrier can declare ancillary charges at bid time, and the shipper sees 
   const jobId = created.body.job.id;
 
   // Carrier A declares two anticipated charges as part of the bid itself.
-  const bidA = await carrierA.post(`/api/jobs/${jobId}/bids`, {
+  const bidA = await carrierA.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 700, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed',
     ancillaryCharges: [{ chargeType: 'SALIK', amountAed: 25 }, { chargeType: 'DEMURRAGE', amountAed: 150 }],
   });
   assert.equal(bidA.status, 201, bidA.raw);
 
-  const bidB = await carrierB.post(`/api/jobs/${jobId}/bids`, {
+  const bidB = await carrierB.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 720, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
     ancillaryCharges: [{ chargeType: 'ETOKEN', amountAed: 40 }],
   });
@@ -197,11 +197,11 @@ test('a losing bidder can see the winning bid\'s price/charges post-award (marke
     maxBudgetAed: 900,
   });
   const jobId = created.body.job.id;
-  const winningBid = await winner.post(`/api/jobs/${jobId}/bids`, {
+  const winningBid = await winner.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 700, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
     ancillaryCharges: [{ chargeType: 'SALIK', amountAed: 25 }],
   });
-  const losingBid = await loser.post(`/api/jobs/${jobId}/bids`, {
+  const losingBid = await loser.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 750, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed',
   });
   assert.equal(losingBid.status, 201, losingBid.raw);
@@ -305,13 +305,13 @@ test('a bid ETA after the job\'s own deadline is rejected; withdrawing a bid not
 
   // Commercial-logic audit finding: nothing previously checked a bid's ETA
   // against the job's own deadline.
-  const tooLate = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const tooLate = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 450, etaAt: new Date(Date.now() + 3 * 86400000).toISOString(), truckType: 'flatbed', // 3 days out, past the 2-day deadline
   });
   assert.equal(tooLate.status, 400, tooLate.raw);
   assert.match(tooLate.raw, /after this job's deadline/);
 
-  const onTime = await carrier.post(`/api/jobs/${jobId}/bids`, {
+  const onTime = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true,
     amountAed: 450, etaAt: new Date(Date.now() + 1.5 * 86400000).toISOString(), truckType: 'flatbed', // within the deadline
   });
   assert.equal(onTime.status, 201, onTime.raw);

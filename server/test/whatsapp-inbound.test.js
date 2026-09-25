@@ -40,7 +40,7 @@ test('inbound WhatsApp "Delivered" button reply marks the job DELIVERED via the 
 
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed' });
   const bidId = bidRes.body.bid.id;
   await shipper.post(`/api/jobs/${jobId}/award`, { bidId, skipNegotiation: true });
   const adminW1 = makeClient(server.baseUrl);
@@ -93,7 +93,7 @@ test('inbound WhatsApp text message lands in the job thread with channel=WHATSAP
 
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 650, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: '3-axle flatbed' });
   await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   const adminW2 = makeClient(server.baseUrl);
   await adminW2.login('admin@loadbyton.ae', 'demo1234');

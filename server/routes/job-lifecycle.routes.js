@@ -107,6 +107,16 @@ router.post('/api/jobs/:id/bids', auth(['CARRIER']), writeLimiter, bidLimiter, r
   }
   const legacyEtaMinutes = Math.max(0, Math.round(etaMs / 60000));
 
+  // Payment terms (job.payment_tier) were previously display-only in
+  // BidForm.jsx — informational, with no explicit "yes, I understood and
+  // agree to this" step distinct from the generic Submit-bid click, unlike
+  // the skipNegotiation/acknowledgeLowCapacity explicit-flag pattern the
+  // award flow already uses for comparable "make sure they meant it"
+  // moments. A carrier bidding blind on the payment terms (missed the
+  // badge, didn't realize NET_28 means a 28-day wait) had no server-side
+  // signal that they actually saw and accepted it.
+  if (!b.acknowledgePaymentTerms) return sendError(res, 400, 'You must acknowledge this job\'s payment terms before bidding.');
+
   const alreadyBidding = /** @type {any} */ (await db.prepare(`SELECT 1 FROM bids WHERE job_id=? AND carrier_id=? AND status='PENDING'`).get(job.id, req.user.id));
   if (alreadyBidding) return sendError(res, 409, 'You already have a pending bid on this job — withdraw it before placing another.');
 

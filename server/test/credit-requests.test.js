@@ -97,7 +97,7 @@ test('a shipper can request credit with a proof document, and an admin approving
     deadline: new Date(Date.now() + 4 * 86400000).toISOString(), maxBudgetAed: 1000, paymentTier: 'NET_7',
   });
   assert.equal(job.status, 201, job.raw);
-  const bid = await carrier.post(`/api/jobs/${job.body.job.id}/bids`, { amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
+  const bid = await carrier.post(`/api/jobs/${job.body.job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
   assert.equal(bid.status, 201, bid.raw);
   const award = await shipper.post(`/api/jobs/${job.body.job.id}/award`, { bidId: bid.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw, 'the shipper must now be able to award a NET_7 job on the credit just approved');

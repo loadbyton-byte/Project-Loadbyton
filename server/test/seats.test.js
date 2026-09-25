@@ -131,7 +131,7 @@ test('a VIEWER seat cannot pull a fuel advance or confirm bid terms — money-mo
     readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
   });
   assert.equal(job.status, 201, job.raw);
-  const bid = await carrierRoot.post(`/api/jobs/${job.body.job.id}/bids`, { amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
+  const bid = await carrierRoot.post(`/api/jobs/${job.body.job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 450, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
   assert.equal(bid.status, 201, bid.raw);
   const confirmByOwner = await shipper.post(`/api/bids/${bid.body.bid.id}/confirm-terms`);
   assert.equal(confirmByOwner.status, 200, confirmByOwner.raw);
@@ -166,7 +166,7 @@ test('a VIEWER seat cannot pull a fuel advance or confirm bid terms — money-mo
     readyAt: new Date(Date.now() + 86400000).toISOString(), deadline: new Date(Date.now() + 4 * 86400000).toISOString(),
   });
   assert.equal(job2.status, 201, job2.raw);
-  const bid2 = await carrierRoot.post(`/api/jobs/${job2.body.job.id}/bids`, { amountAed: 400, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
+  const bid2 = await carrierRoot.post(`/api/jobs/${job2.body.job.id}/bids`, { acknowledgePaymentTerms: true, amountAed: 400, etaAt: new Date(Date.now() + 24 * 3600000).toISOString() });
   assert.equal(bid2.status, 201, bid2.raw);
 
   const confirmBlocked = await shipperViewer.post(`/api/bids/${bid2.body.bid.id}/confirm-terms`);

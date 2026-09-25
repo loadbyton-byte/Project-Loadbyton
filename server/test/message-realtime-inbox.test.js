@@ -60,7 +60,7 @@ test('a threaded job message reaches the recipient\'s socket via notification:ne
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
 
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bidRes.status, 201, bidRes.raw);
   const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
@@ -100,7 +100,7 @@ test('disputed-job correspondence (thread_id=null, no socket room at all) still 
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bidRes.status, 201, bidRes.raw);
   const award = await shipper.post(`/api/jobs/${jobId}/award`, { bidId: bidRes.body.bid.id, skipNegotiation: true });
   assert.equal(award.status, 200, award.raw);
@@ -139,7 +139,7 @@ test('a pre-award bid_negotiations message reaches the other party via notificat
   });
   assert.equal(created.status, 201, created.raw);
   const jobId = created.body.job.id;
-  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
+  const bidRes = await carrier.post(`/api/jobs/${jobId}/bids`, { acknowledgePaymentTerms: true, amountAed: 900, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' });
   assert.equal(bidRes.status, 201, bidRes.raw);
 
   const shipperSocket = await connectAs(server.baseUrl, shipper.getCookie());
