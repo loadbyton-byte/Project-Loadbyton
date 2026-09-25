@@ -257,6 +257,14 @@ export const api = {
   runAutoRelease: () => post('/system/auto-release'),
   adminCredit: () => get('/admin/credit'),
   adminApproveCredit: (userId, limitAed, termsDays) => post(`/admin/credit/${userId}/approve`, { limitAed, termsDays }),
+  // Shipper-initiated credit requests (server/routes/credit.routes.js) —
+  // a shipper asks for a specific limit with a proof document attached,
+  // instead of only an admin proactively granting one.
+  getCreditRequestUploadUrl: (mimeType) => post('/credit/requests/upload-url', { mimeType }),
+  submitCreditRequest: (body) => post('/credit/requests', body),
+  myCreditRequests: () => get('/credit/requests'),
+  adminCreditRequests: (status) => get(`/admin/credit/requests?status=${status || 'PENDING'}`),
+  adminDecideCreditRequest: (id, body) => post(`/admin/credit/requests/${id}/decide`, body),
   adminSettleCredit: (jobId) => post(`/admin/credit/jobs/${jobId}/settle`),
 };
 // ——— enterprise additions (Phase 2-5) ———

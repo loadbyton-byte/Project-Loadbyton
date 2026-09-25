@@ -986,6 +986,23 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS credit_approved_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_due_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS credit_settled_at TEXT;
 
+-- Credit requests — see server/schema.js for the full reasoning; mirrored
+-- here for the opt-in Postgres path.
+CREATE TABLE IF NOT EXISTS credit_requests (
+  id SERIAL PRIMARY KEY,
+  shipper_id INTEGER NOT NULL REFERENCES users(id),
+  requested_limit_aed REAL NOT NULL,
+  proof_doc_storage_path TEXT NOT NULL,
+  proof_doc_mime_type TEXT,
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+  admin_note TEXT,
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_credit_requests_shipper ON credit_requests(shipper_id);
+CREATE INDEX IF NOT EXISTS idx_credit_requests_status ON credit_requests(status);
+
 -- Per-account commission override — see server/schema.js for the full
 -- reasoning; mirrored here for the opt-in Postgres path.
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS commission_rate_bps INTEGER;

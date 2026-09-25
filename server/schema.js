@@ -1280,6 +1280,33 @@ module.exports = function initSchema(db) {
   addColumn('jobs', 'credit_due_at', 'credit_due_at TEXT');
   addColumn('jobs', 'credit_settled_at', 'credit_settled_at TEXT');
 
+  // Credit requests — CONTRACT_CREDIT above only ever supported an admin
+  // proactively granting a limit (POST /api/admin/credit/:userId/approve,
+  // two plain numbers, no evidence attached). A real product gap: a
+  // shipper had no way to ASK for credit, and nothing tied a grant to any
+  // proof of the shipper's ability to pay (a cheque, a bank guarantee,
+  // whatever an ops team would actually want on file before extending
+  // unsecured trade credit). One row per request (not a single
+  // profiles column) deliberately, so a shipper's credit history —
+  // repeated requests, what was asked for vs. actually granted, rejections
+  // — stays visible rather than being overwritten each time.
+  db.exec(`
+  CREATE TABLE IF NOT EXISTS credit_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shipper_id INTEGER NOT NULL REFERENCES users(id),
+    requested_limit_aed REAL NOT NULL,
+    proof_doc_storage_path TEXT NOT NULL,
+    proof_doc_mime_type TEXT,
+    status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED')),
+    admin_note TEXT,
+    decided_by INTEGER REFERENCES users(id),
+    decided_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_credit_requests_shipper ON credit_requests(shipper_id);
+  CREATE INDEX IF NOT EXISTS idx_credit_requests_status ON credit_requests(status);
+  `);
+
   // Per-account commission override — admin can negotiate a different
   // platform commission rate for a specific shipper or carrier (a large
   // account, a promotional rate, etc.) instead of everyone paying the one

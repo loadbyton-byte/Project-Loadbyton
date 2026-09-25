@@ -98,6 +98,7 @@ const routes = [
   './routes/public.routes',
   './routes/audit.routes',
   './routes/compliance.routes',
+  './routes/credit.routes',
   './routes/admin-approvals.routes',
   './routes/currency.routes',
   './routes/docs.routes',

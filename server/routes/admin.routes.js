@@ -245,6 +245,53 @@ router.post('/api/admin/credit/:userId/approve', auth(['ADMIN']), async (req, re
   res.json({ ok: true, credit: updated });
 });
 
+// Shipper-initiated credit requests (server/routes/credit.routes.js) — the
+// other half of that flow. Closes the real gap the /approve endpoint above
+// never covered: a shipper asking for a specific limit, with a proof
+// document attached, rather than an admin unilaterally deciding.
+router.get('/api/admin/credit/requests', auth(['ADMIN']), async (req, res) => {
+  const status = ['PENDING', 'APPROVED', 'REJECTED'].includes(req.query.status) ? req.query.status : 'PENDING';
+  const requests = await db.prepare(
+    `SELECT cr.*, u.email AS shipper_email, p.company_name AS shipper_company
+     FROM credit_requests cr JOIN users u ON u.id = cr.shipper_id LEFT JOIN profiles p ON p.user_id = u.id
+     WHERE cr.status=? ORDER BY cr.created_at ASC`
+  ).all(status);
+  res.json({ requests });
+});
+
+router.post('/api/admin/credit/requests/:id/decide', auth(['ADMIN']), async (req, res) => {
+  const request = await db.prepare('SELECT * FROM credit_requests WHERE id=?').get(req.params.id);
+  if (!request) return sendError(res, 404, 'Credit request not found');
+  if (request.status !== 'PENDING') return apiResponse.error(req, res, 'CONFLICT', `This request was already ${request.status.toLowerCase()}`, { status: 409 });
+
+  const { action, limitAed, termsDays, note } = req.body || {};
+  if (!['approve', 'reject'].includes(action)) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'action must be approve or reject');
+
+  if (action === 'reject') {
+    await db.prepare(`UPDATE credit_requests SET status='REJECTED', admin_note=?, decided_by=?, decided_at=datetime('now') WHERE id=?`).run(note || null, req.actorId, request.id);
+    await writeAudit(req, { userId: req.actorId, action: 'CREDIT_REQUEST_REJECTED', details: `Rejected credit request #${request.id} (requested AED ${request.requested_limit_aed})`, entityType: 'user', entityId: request.shipper_id });
+    await notify(request.shipper_id, 'Credit request declined', note ? `Your credit request was declined: ${note}` : 'Your credit request was declined.', null, 'system');
+    const updated = await db.prepare('SELECT * FROM credit_requests WHERE id=?').get(request.id);
+    return res.json({ request: updated });
+  }
+
+  // Approve: same validation/update the plain /approve endpoint above
+  // does, just defaulting the limit to what the shipper actually asked
+  // for (an admin can still override it) and marking the request itself
+  // decided so it stops showing up as pending.
+  const limit = limitAed !== undefined ? Number(limitAed) : request.requested_limit_aed;
+  if (!Number.isFinite(limit) || limit < 0) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'limitAed must be a non-negative number');
+  const terms = termsDays !== undefined ? Number(termsDays) : 30;
+  if (!Number.isFinite(terms) || terms < 1) return apiResponse.error(req, res, 'VALIDATION_FAILED', 'termsDays must be a positive number');
+
+  await db.prepare(`UPDATE profiles SET credit_limit_aed=?, credit_terms_days=?, credit_approved_at=datetime('now') WHERE user_id=?`).run(limit, terms, request.shipper_id);
+  await db.prepare(`UPDATE credit_requests SET status='APPROVED', admin_note=?, decided_by=?, decided_at=datetime('now') WHERE id=?`).run(note || null, req.actorId, request.id);
+  await writeAudit(req, { userId: req.actorId, action: 'CREDIT_REQUEST_APPROVED', details: `Approved credit request #${request.id}: AED ${limit} credit limit, net ${terms} days`, entityType: 'user', entityId: request.shipper_id });
+  await notify(request.shipper_id, 'Credit terms approved', `You've been approved for AED ${limit} contract credit, net ${terms} days.`, null, 'system');
+  const updated = await db.prepare('SELECT * FROM credit_requests WHERE id=?').get(request.id);
+  res.json({ request: updated });
+});
+
 router.post('/api/admin/credit/jobs/:jobId/settle', auth(['ADMIN']), async (req, res) => {
   const job = await db.prepare(`SELECT * FROM jobs WHERE id=? AND payment_tier IN (${CREDIT_DRAW_TIERS.map(() => '?').join(',')})`).get(req.params.jobId, ...CREDIT_DRAW_TIERS);
   if (!job) return sendError(res, 404, 'Deferred-payment job not found');
