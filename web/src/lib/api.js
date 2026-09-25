@@ -293,7 +293,7 @@ Object.assign(api, {
   setEToken: (id, token) => post(`/jobs/${id}/etoken`, { token }),
   postEir: (id, photos, { stage = 'pickup', sealNumber } = {}) => post(`/jobs/${id}/eir?stage=${stage}`, { photos, sealNumber }),
   getDetention: (id) => get(`/jobs/${id}/detention`),
-  requestFuelAdvance: (id, type) => post(`/jobs/${id}/fuel-advance`, { type }),
+  requestFuelAdvance: (id, type, requestedAmountAed) => post(`/jobs/${id}/fuel-advance`, { type, requestedAmountAed }),
   getFuelAdvances: (id) => get(`/jobs/${id}/fuel-advances`),
   getFleet: () => get('/carrier/fleet'),
   // RFPs

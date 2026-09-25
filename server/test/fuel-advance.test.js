@@ -111,6 +111,45 @@ test('a second fuel-advance request for the same job is refused, even concurrent
   assert.match(second.raw, /already taken/i);
 });
 
+test('a carrier can request less than the full 20% ceiling, and it nets off the payout at that lower amount', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+
+  // amountAed=1000 -> ceiling is 200 (20%); request only 75.
+  const jobId = await createAwardedJob(shipper, carrier, 1000);
+  const advance = await carrier.post(`/api/jobs/${jobId}/fuel-advance`, { type: 'FUEL', requestedAmountAed: 75 });
+  assert.equal(advance.status, 200, advance.raw);
+  assert.equal(advance.body.amount, 75, 'the carrier\'s requested amount must be honored, not silently bumped to the ceiling');
+
+  await completeJob(shipper, carrier, jobId);
+  const payouts = await carrier.get('/api/earnings');
+  const payout = payouts.body.payouts.find((p) => p.job_id === jobId);
+  assert.equal(payout.net_aed, 865, 'net payout must be reduced by exactly the AED 75 actually taken (940 - 75)');
+});
+
+test('a requested fuel-advance amount above the 20% ceiling is rejected', async () => {
+  const shipper = makeClient(server.baseUrl);
+  await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
+  const carrier = makeClient(server.baseUrl);
+  await carrier.login('carrier@dubaidrayage.com', 'demo1234');
+
+  const jobId = await createAwardedJob(shipper, carrier, 1000);
+  const tooMuch = await carrier.post(`/api/jobs/${jobId}/fuel-advance`, { type: 'FUEL', requestedAmountAed: 500 });
+  assert.equal(tooMuch.status, 400);
+  assert.match(tooMuch.raw, /exceeds the maximum advance available/i);
+
+  const invalid = await carrier.post(`/api/jobs/${jobId}/fuel-advance`, { type: 'FUEL', requestedAmountAed: -10 });
+  assert.equal(invalid.status, 400);
+
+  // Still available at a valid amount afterward — the rejected attempts
+  // above must not have consumed the one-advance-per-job slot.
+  const valid = await carrier.post(`/api/jobs/${jobId}/fuel-advance`, { type: 'FUEL', requestedAmountAed: 150 });
+  assert.equal(valid.status, 200, valid.raw);
+  assert.equal(valid.body.amount, 150);
+});
+
 test('a fuel advance cannot be requested once the job is already settled (escrow RELEASED)', async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
