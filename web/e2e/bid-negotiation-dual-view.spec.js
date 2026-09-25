@@ -40,7 +40,7 @@ test('a carrier can discuss their own bid with the shipper, and the shipper sees
   // Carrier places the bid via its own already-authenticated page context.
   const bidRes = await page.request.post(`/api/jobs/${jobId}/bids`, {
     headers: { 'x-loadbyton-client': '1' },
-    data: { amountAed: 950, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' },
+    data: { acknowledgePaymentTerms: true, amountAed: 950, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' },
   });
   expect(bidRes.status()).toBe(201);
 

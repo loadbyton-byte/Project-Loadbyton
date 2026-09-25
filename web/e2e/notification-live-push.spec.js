@@ -66,7 +66,7 @@ test('a new bid makes the shipper\'s unread bell dot appear live, without a clic
   const carrierContext = await request.newContext({ baseURL, storageState: path.join(process.cwd(), 'e2e', '.auth', 'carrier.json') });
   const bidRes = await carrierContext.post(`/api/jobs/${job.id}/bids`, {
     headers: { 'x-loadbyton-client': '1' },
-    data: { amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' },
+    data: { acknowledgePaymentTerms: true, amountAed: 1500, etaAt: new Date(Date.now() + 24 * 3600000).toISOString(), truckType: 'flatbed' },
   });
   expect(bidRes.status()).toBe(201);
   await carrierContext.dispose();
