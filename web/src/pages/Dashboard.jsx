@@ -101,6 +101,7 @@ export default function Dashboard() {
   const [postStep, setPostStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [rerunningId, setRerunningId] = useState(null);
   // Progressive disclosure: most shippers already have a standing
   // acceptance of the current Terms version (from signup, or an earlier
   // job) — the backend silently skips requiring this per job in that case
@@ -260,8 +261,15 @@ export default function Dashboard() {
   }
 
   async function rerun(id) {
-    await api.rerunTemplate(id);
-    load();
+    setRerunningId(id);
+    try {
+      await api.rerunTemplate(id);
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not re-run this lane', body: err.message });
+    } finally {
+      setRerunningId(null);
+    }
   }
 
   // The 3-leg terminal/depot flow (Step 3) only makes sense when a real
@@ -868,10 +876,15 @@ export default function Dashboard() {
           <p className="mb-2 font-mono text-xs font-semibold uppercase tracking-wide text-ink-muted">Re-run a saved lane</p>
           <div className="scroll-fade-x flex gap-2.5 overflow-x-auto pb-1">
             {templates.map((t) => (
-              <button key={t.id} onClick={() => rerun(t.id)} className="card flex shrink-0 items-center gap-2 px-4 py-3 text-sm hover:shadow-md">
+              <button
+                key={t.id}
+                onClick={() => rerun(t.id)}
+                disabled={rerunningId === t.id}
+                className="card flex shrink-0 items-center gap-2 px-4 py-3 text-sm hover:shadow-md disabled:opacity-60"
+              >
                 <IconPackage size={16} style={{ color: 'var(--brand-accent)' }} />
                 <span className="font-medium text-ink">{t.name}</span>
-                <span className="text-ink-muted">· re-run</span>
+                <span className="text-ink-muted">· {rerunningId === t.id ? 're-running…' : 're-run'}</span>
               </button>
             ))}
           </div>

@@ -7,6 +7,7 @@ import { Button, Card, Input, Label, Select, Badge, EmptyState, ErrorState } fro
 import { IconUser, IconShield, IconChevronRight } from '../components/icons.jsx';
 import EquipmentCapacity from '../features/profile/EquipmentCapacity.jsx';
 import { useLocale } from '../lib/i18n.jsx';
+import { useToasts } from '../components/Toast.jsx';
 
 const SEAT_ROLE_HELP = {
   OPS: 'Full day-to-day access — post jobs, bid, award, update status.',
@@ -15,11 +16,13 @@ const SEAT_ROLE_HELP = {
 };
 
 function TeamSection() {
+  const { addToast } = useToasts();
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [form, setForm] = useState({ email: '', password: '', seatRole: 'OPS', displayName: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [busySeatId, setBusySeatId] = useState(null);
 
   function load() {
     setLoadError('');
@@ -43,13 +46,27 @@ function TeamSection() {
   }
 
   async function toggleActive(seat) {
-    await api.updateOrgMember(seat.id, { isActive: !seat.is_active });
-    load();
+    setBusySeatId(seat.id);
+    try {
+      await api.updateOrgMember(seat.id, { isActive: !seat.is_active });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not update this seat', body: err.message });
+    } finally {
+      setBusySeatId(null);
+    }
   }
 
   async function changeRole(seat, seatRole) {
-    await api.updateOrgMember(seat.id, { seatRole });
-    load();
+    setBusySeatId(seat.id);
+    try {
+      await api.updateOrgMember(seat.id, { seatRole });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not change this seat\'s role', body: err.message });
+    } finally {
+      setBusySeatId(null);
+    }
   }
 
   if (loadError) return <Card className="mt-6"><Card.Content><ErrorState title="Couldn't load your team" description={loadError} onRetry={load} /></Card.Content></Card>;
@@ -76,10 +93,10 @@ function TeamSection() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge color={seat.is_active ? 'success' : 'neutral'}>{seat.is_active ? 'Active' : 'Deactivated'}</Badge>
-                  <Select value={seat.seat_role} onChange={(e) => changeRole(seat, e.target.value)} className="w-auto">
+                  <Select value={seat.seat_role} onChange={(e) => changeRole(seat, e.target.value)} disabled={busySeatId === seat.id} className="w-auto">
                     {Object.keys(SEAT_ROLE_HELP).map((r) => <option key={r} value={r}>{r}</option>)}
                   </Select>
-                  <Button size="sm" variant={seat.is_active ? 'danger' : 'secondary'} onClick={() => toggleActive(seat)}>
+                  <Button size="sm" variant={seat.is_active ? 'danger' : 'secondary'} loading={busySeatId === seat.id} onClick={() => toggleActive(seat)}>
                     {seat.is_active ? 'Deactivate' : 'Reactivate'}
                   </Button>
                 </div>
