@@ -215,6 +215,30 @@ async function sendDeliveryConfirmationPrompt({ to, jobCode }) {
   return sendWhatsAppMessage({ to, template: 'delivery_confirmation_prompt', params: [jobCode] });
 }
 
+// Trip-offer prompt (Accept/Decline) — same open/closed-session fallback
+// as sendDeliveryConfirmationPrompt above. A QA audit found this send used
+// to go straight to sendInteractiveButtons() with no fallback at all: if
+// the pool driver's 24h session was closed (they hadn't messaged
+// recently, the common case for a driver not currently mid-conversation),
+// Meta silently rejected the send and the driver never saw the offer.
+async function sendTripOfferPrompt({ to, jobCode, pickupTerminal, deliveryArea }) {
+  if (!to) return { sent: false, reason: 'no_recipient' };
+  const sessionOpen = await isSessionOpen(to).catch(() => false);
+  if (sessionOpen) {
+    return sendInteractiveButtons({
+      to,
+      bodyText: `New trip: ${jobCode}, ${pickupTerminal} → ${deliveryArea}. Accept this job?`,
+      buttons: [
+        { id: 'ACCEPT_TRIP', title: 'Accept' },
+        { id: 'DECLINE_TRIP', title: 'Decline' },
+      ],
+    });
+  }
+  // eslint-disable-next-line no-console
+  console.log(`[whatsapp:session] 24h window closed for ${to} — sending trip_offer_new as a template instead of interactive buttons`);
+  return sendWhatsAppMessage({ to, template: 'trip_offer_new', params: [jobCode, pickupTerminal, deliveryArea] });
+}
+
 // Downloads an inbound media attachment (photo, voice note, document) from
 // Meta's Graph API. A QA audit found this gap: inbound images only ever
 // stored a literal '[Photo attachment]' placeholder string as the chat
@@ -258,6 +282,7 @@ module.exports = {
   recordOutboundJobContext,
   sendInteractiveButtons,
   sendDeliveryConfirmationPrompt,
+  sendTripOfferPrompt,
   downloadWhatsAppMedia,
   last9Digits,
 };

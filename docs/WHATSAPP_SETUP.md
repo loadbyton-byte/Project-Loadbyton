@@ -67,6 +67,13 @@ with everything else, per TODO-4's own framing.
    **Body:** `{{1}}: this trip couldn't be assigned to you — a compliance check failed. Your dispatcher has the details.`
    (`{{1}}` = job code.)
 
+   **`trip_offer_new`** — the fallback for the trip-offer bot flow (see
+   below) when the driver's 24h session is closed. Sent from
+   `sendTripOfferPrompt()` in `server/lib/whatsapp.js`.
+   **Category:** Utility
+   **Body:** `New trip: {{1}}, {{2}} → {{3}}. Reply Accept or Decline.`
+   (`{{1}}` = job code, `{{2}}` = pickup terminal, `{{3}}` = delivery area.)
+
 5. Once approved, set on the server:
 
    | Env var | Value |
@@ -108,17 +115,16 @@ always fell back to the template.
   - `DELAYED` records a `DELAY_REPORTED` shipment event and notifies the
     shipper immediately; there's no distinct "delayed" job status to
     transition to, so this is a notification, not a state change.
-- **Trip offer** (`POST /api/jobs/:id/trip-offer` in
-  `server/routes/job-lifecycle.routes.js`) — buttons `Accept` / `Decline`,
-  sent when a carrier pushes a job to a `DRIVER_ASSOCIATE` pool driver.
-  **Known gap:** unlike the delivery check, this send has no template
-  fallback — if the driver's session is closed (they haven't messaged
-  recently), the interactive send is simply rejected by Meta and the driver
-  never sees the offer. Submitting a `trip_offer_new` template (job code +
-  pickup/delivery area) and wiring the same open/closed-session fallback
-  `sendDeliveryConfirmationPrompt()` uses would close this gap — not done
-  yet because it needs a template submission first, same lead-time
-  constraint as everything else on this page.
+- **Trip offer** (`sendTripOfferPrompt()`, called from
+  `POST /api/jobs/:id/trip-offer` in `server/routes/job-lifecycle.routes.js`)
+  — buttons `Accept` / `Decline`, sent when a carrier pushes a job to a
+  `DRIVER_ASSOCIATE` pool driver. Same open/closed-session fallback as the
+  delivery check: if the session is open, sends the interactive prompt; if
+  not, falls back to the `trip_offer_new` template above. (This used to go
+  straight to the interactive send with no fallback at all — if the pool
+  driver's session was closed, the common case for a driver not currently
+  mid-conversation, Meta silently rejected it and the driver never saw the
+  offer.)
 
 ## Which job a reply lands on
 
@@ -148,8 +154,7 @@ an in-progress delivery-confirmation exchange on the first.
 
 Add more send points the same way the award handler does it — call
 `notifyDriverAsync({ to, template, params })` from `server/lib/whatsapp.js`
-at the next moment that matters (POD reminder, demurrage alert, the
-`trip_offer_new` fallback template noted above), and submit that template
-through the same Meta review process above. The SMS fallback tier (per
-STRATEGY.md's WhatsApp → SMS → in-app order) is not built — that's the
-next piece once WhatsApp is live and its failure rate is known.
+at the next moment that matters (POD reminder, demurrage alert), and submit
+that template through the same Meta review process above. The SMS fallback
+tier (per STRATEGY.md's WhatsApp → SMS → in-app order) is not built —
+that's the next piece once WhatsApp is live and its failure rate is known.

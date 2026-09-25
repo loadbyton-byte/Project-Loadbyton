@@ -300,14 +300,12 @@ router.post('/api/jobs/:id/trip-offer', auth(['CARRIER']), requireApproved(), re
   if (pending) return sendError(res, 409, 'A trip offer is already pending on this job');
 
   const result = await db.prepare('INSERT INTO trip_offers (job_id, carrier_id, driver_id) VALUES (?,?,?) RETURNING id').run(job.id, req.user.id, driver.id);
-  const { sendInteractiveButtons, recordOutboundJobContext } = require('../lib/whatsapp');
-  sendInteractiveButtons({
+  const { sendTripOfferPrompt, recordOutboundJobContext } = require('../lib/whatsapp');
+  sendTripOfferPrompt({
     to: driver.phone,
-    bodyText: `New trip: ${job.job_code}, ${job.pickup_terminal} → ${job.delivery_area}. Accept this job?`,
-    buttons: [
-      { id: 'ACCEPT_TRIP', title: 'Accept' },
-      { id: 'DECLINE_TRIP', title: 'Decline' },
-    ],
+    jobCode: job.job_code,
+    pickupTerminal: job.pickup_terminal,
+    deliveryArea: job.delivery_area,
   }).catch(() => {});
   recordOutboundJobContext(driver.phone, job.id).catch(() => {});
 
