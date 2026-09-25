@@ -14,9 +14,9 @@ const db = require('../db');
 const { confirmDelivery } = require('../services/delivery.service');
 const { fileDispute } = require('../services/dispute.service');
 const { bindDriverToJob } = require('../services/driver-assignment.service');
-const { recordInboundSession, isConfigured: isWhatsappConfigured, downloadWhatsAppMedia } = require('../lib/whatsapp');
+const { recordInboundSession, isConfigured: isWhatsappConfigured, downloadWhatsAppMedia, last9Digits } = require('../lib/whatsapp');
 const { resolveOrCreateThread } = require('../lib/messaging');
-const { saveUploadedFile } = require('../lib/helpers');
+const { saveUploadedFile, recordShipmentEvent, notify } = require('../lib/helpers');
 const router = require('express').Router();
 
 // Meta's subscription verification handshake — GET with hub.mode/verify_token/
@@ -46,13 +46,6 @@ function verifySignature(req) {
   const a = Buffer.from(signature);
   const b = Buffer.from(expected);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
-// Compares only the last 9 digits (the local UAE mobile part) since stored
-// phone numbers exist in a mix of formats (+971..., 0..., bare 5...) while
-// Meta's `from` field always arrives as bare E.164 digits (e.g. 971501234567).
-function last9Digits(raw) {
-  return String(raw || '').replace(/\D/g, '').slice(-9);
 }
 
 function extractContent(msg) {
@@ -106,6 +99,26 @@ async function storeInboundMedia(msg, { job, senderId }) {
   }
 }
 
+// A phone can legitimately match more than one active job at once (a
+// driver reassigned to a second load while the first is still awaiting a
+// reply). "Most recently updated" alone can misroute the reply to the
+// wrong one — this prefers whichever job this phone's last OUTBOUND
+// WhatsApp send was actually about (whatsapp_sessions.last_outbound_job_id,
+// set by lib/whatsapp.js's recordOutboundJobContext()) and only falls back
+// to the updated_at ordering already baked into `candidates` when no send
+// is on record for this phone, or it doesn't match any current candidate
+// (e.g. that job has since left the active-status set).
+async function pinnedJob(candidates, last9) {
+  if (candidates.length <= 1) return candidates[0] || null;
+  const session = await db.prepare('SELECT last_outbound_job_id FROM whatsapp_sessions WHERE phone=?').get(last9);
+  const pinnedId = session && session.last_outbound_job_id;
+  if (pinnedId) {
+    const pinned = candidates.find((j) => j.id === pinnedId);
+    if (pinned) return pinned;
+  }
+  return candidates[0];
+}
+
 // threadRoles pairs with lib/messaging.js's resolveOrCreateThread so an
 // inbound WhatsApp message lands in the SAME conversation a web reply would
 // use, rather than a disconnected side-channel — the whole point of adding
@@ -119,9 +132,13 @@ async function resolveSender(last9) {
     // yet (that only happens on acceptance) — check for a live offer first,
     // so ACCEPT_TRIP/DECLINE_TRIP has a job to act on before binding exists.
     const tripOffer = await db.prepare(`SELECT * FROM trip_offers WHERE driver_id=? AND status='PENDING' ORDER BY offered_at DESC LIMIT 1`).get(driver.id);
-    const job = tripOffer
-      ? await db.prepare('SELECT * FROM jobs WHERE id=?').get(tripOffer.job_id)
-      : await db.prepare(`SELECT * FROM jobs WHERE assigned_driver_id=? AND status IN ('AWARDED','PICKED_UP','IN_TRANSIT') ORDER BY updated_at DESC LIMIT 1`).get(driver.id);
+    let job;
+    if (tripOffer) {
+      job = await db.prepare('SELECT * FROM jobs WHERE id=?').get(tripOffer.job_id);
+    } else {
+      const candidates = await db.prepare(`SELECT * FROM jobs WHERE assigned_driver_id=? AND status IN ('AWARDED','PICKED_UP','IN_TRANSIT') ORDER BY updated_at DESC`).all(driver.id);
+      job = await pinnedJob(candidates, last9);
+    }
     if (driver.seat_user_id) {
       return { senderId: driver.seat_user_id, job, driver, tripOffer, threadRoles: ['DRIVER', 'CARRIER'] };
     }
@@ -136,9 +153,10 @@ async function resolveSender(last9) {
   // real-world match. No login identity exists for an ad-hoc driver, so the
   // inbound message/action is attributed to the carrier account, same as
   // every other job-level action taken on that driver's behalf today.
-  const adHocJob = await db
-    .prepare(`SELECT * FROM jobs WHERE status IN ('AWARDED','PICKED_UP','IN_TRANSIT') AND REPLACE(REPLACE(REPLACE(assigned_driver_phone,'+',''),'-',''),' ','') LIKE '%' || ? ORDER BY updated_at DESC LIMIT 1`)
-    .get(last9);
+  const adHocCandidates = await db
+    .prepare(`SELECT * FROM jobs WHERE status IN ('AWARDED','PICKED_UP','IN_TRANSIT') AND REPLACE(REPLACE(REPLACE(assigned_driver_phone,'+',''),'-',''),' ','') LIKE '%' || ? ORDER BY updated_at DESC`)
+    .all(last9);
+  const adHocJob = await pinnedJob(adHocCandidates, last9);
   if (adHocJob) {
     return { senderId: adHocJob.carrier_id, job: adHocJob, driver: null, threadRoles: ['CARRIER', 'SHIPPER'] };
   }
@@ -166,7 +184,6 @@ async function resolveSender(last9) {
 // uses — one implementation, not a second copy of the bind logic.
 async function handleTripOfferResponse(tripOffer, job, driver, accepted) {
   const { sendWhatsAppMessage } = require('../lib/whatsapp');
-  const { notify } = require('../lib/helpers');
 
   if (!accepted) {
     await db.prepare(`UPDATE trip_offers SET status='DECLINED', responded_at=datetime('now') WHERE id=?`).run(tripOffer.id);
@@ -185,6 +202,9 @@ async function handleTripOfferResponse(tripOffer, job, driver, accepted) {
       tripOffer.id
     );
     await notify(tripOffer.carrier_id, 'Trip offer blocked — compliance', `${driver.name} cannot take ${job.job_code}: ${result.blockers.map((b) => b.description).join('; ')}`, job.id, 'system');
+    // No pin here — informational only, no reply expected (see the comment
+    // on recordOutboundJobContext()'s call sites: only sends that invite a
+    // specific reply are allowed to move the "which job" pin).
     sendWhatsAppMessage({ to: driver.phone, template: 'trip_offer_blocked', params: [job.job_code] }).catch(() => {});
     return;
   }
@@ -259,8 +279,6 @@ async function handleInboundMessage(msg) {
     // text itself was already recorded as a thread message above regardless.
     // A job already DISPUTED (e.g. a repeat tap) is rejected by fileDispute
     // itself, so this can't create duplicates.
-    // 'DELAYED' stays log-only — no job-status value exists for "delayed" in
-    // the state machine to transition to, so there is nothing to automate.
     if (buttonId === 'ISSUE' && senderId) {
       try {
         await fileDispute(job, {
@@ -273,6 +291,32 @@ async function handleInboundMessage(msg) {
         // eslint-disable-next-line no-console
         console.error(`[whatsapp:webhook] auto-filing dispute for job ${job.id} failed:`, err.message);
       }
+    }
+    // 'DELAYED' has no job-status value to transition to (there's no
+    // "delayed" state in the state machine, and inventing one is a bigger
+    // schema/UI change than a button reply warrants) — so instead of
+    // staying log-only, it records a real DELAY_REPORTED shipment event
+    // (visible on the job's timeline, same as DRIVER_ASSIGNED/POD_SUBMITTED/
+    // DISPUTE_OPENED above) and notifies the shipper immediately, so a
+    // driver-reported delay actually reaches the party waiting on the load
+    // instead of sitting unread in a chat thread.
+    if (buttonId === 'DELAYED' && senderId) {
+      try {
+        await recordShipmentEvent(job.id, {
+          eventType: 'DELAY_REPORTED',
+          actorId: senderId,
+          actorRole: senderId === job.shipper_id ? 'SHIPPER' : 'CARRIER',
+          summary: `${job.job_code}: driver reported a delay via WhatsApp`,
+          data: { source: 'whatsapp' },
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[shipment_events] DELAY_REPORTED record failed for job ${job.id}:`, err.message);
+      }
+      await notify(job.shipper_id, 'Delivery delayed', `${job.job_code}: the driver reported a delay via WhatsApp.`, job.id, 'status').catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error(`[whatsapp:webhook] delay notification failed for job ${job.id}:`, err.message);
+      });
     }
   }
 }

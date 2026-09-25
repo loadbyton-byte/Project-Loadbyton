@@ -300,7 +300,7 @@ router.post('/api/jobs/:id/trip-offer', auth(['CARRIER']), requireApproved(), re
   if (pending) return sendError(res, 409, 'A trip offer is already pending on this job');
 
   const result = await db.prepare('INSERT INTO trip_offers (job_id, carrier_id, driver_id) VALUES (?,?,?) RETURNING id').run(job.id, req.user.id, driver.id);
-  const { sendInteractiveButtons } = require('../lib/whatsapp');
+  const { sendInteractiveButtons, recordOutboundJobContext } = require('../lib/whatsapp');
   sendInteractiveButtons({
     to: driver.phone,
     bodyText: `New trip: ${job.job_code}, ${job.pickup_terminal} → ${job.delivery_area}. Accept this job?`,
@@ -309,6 +309,7 @@ router.post('/api/jobs/:id/trip-offer', auth(['CARRIER']), requireApproved(), re
       { id: 'DECLINE_TRIP', title: 'Decline' },
     ],
   }).catch(() => {});
+  recordOutboundJobContext(driver.phone, job.id).catch(() => {});
 
   await writeAudit(req, { userId: req.actorId, action: 'TRIP_OFFER_SENT', details: `${job.job_code}: trip offer sent to ${driver.name}`, entityType: 'job', entityId: job.id });
   res.status(201).json({ tripOffer: await db.prepare('SELECT * FROM trip_offers WHERE id=?').get(Number(result.lastInsertRowid)) });

@@ -285,8 +285,9 @@ async function updateJobStatus(jobId, nextStatus, req) {
     // interactive buttons once the driver is en route. Fire-and-forget,
     // same as every other WhatsApp send site — never blocks the response.
     try {
-      const { sendDeliveryConfirmationPrompt } = require('../lib/whatsapp');
+      const { sendDeliveryConfirmationPrompt, recordOutboundJobContext } = require('../lib/whatsapp');
       sendDeliveryConfirmationPrompt({ to: job.assigned_driver_phone, jobCode: job.job_code });
+      recordOutboundJobContext(job.assigned_driver_phone, job.id).catch(() => {});
     } catch {}
   }
 

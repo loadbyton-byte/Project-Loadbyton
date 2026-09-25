@@ -32,21 +32,66 @@ function isConfigured() {
   return !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
 }
 
+// Stored phone numbers exist in a mix of formats (local 0-prefixed, bare
+// 5-prefixed, +971-prefixed) while Meta's inbound `from` field always
+// arrives as bare E.164 digits (e.g. 971501234567) — comparing only the
+// last 9 digits (the local UAE mobile part) is what makes those two worlds
+// match. Single implementation shared with routes/whatsapp.routes.js's
+// resolveSender(), which used to keep its own private copy of this.
+function last9Digits(raw) {
+  return String(raw || '').replace(/\D/g, '').slice(-9);
+}
+
 // Meta only allows free-form (including interactive button/list) messages
 // within 24h of the contact's last inbound message — outside that window
 // only a pre-approved template may be sent. server/routes/whatsapp.routes.js
 // updates this row on every inbound webhook message.
+//
+// A QA audit found this previously keyed whatsapp_sessions by whatever raw
+// format the caller happened to pass in — recordInboundSession() got the
+// webhook's bare E.164 digits (e.g. "971501234567"), while isSessionOpen()
+// got a stored driver phone in local format (e.g. "0501234567"). Those
+// never matched, so a session could never be found "open" for a real
+// driver phone and the interactive-buttons flow always fell through to the
+// template fallback, even seconds after the driver had just replied. Both
+// now key on last9Digits() instead, matching every other phone comparison
+// in this codebase (see routes/whatsapp.routes.js's resolveSender()).
 async function isSessionOpen(phone) {
-  const row = await getDb().prepare('SELECT session_expires_at FROM whatsapp_sessions WHERE phone=?').get(phone);
+  const row = await getDb().prepare('SELECT session_expires_at FROM whatsapp_sessions WHERE phone=?').get(last9Digits(phone));
   return !!row && new Date(row.session_expires_at) > new Date();
 }
 
 async function recordInboundSession(phone) {
+  const key = last9Digits(phone);
+  if (!key) return;
   const expiresAt = new Date(Date.now() + SESSION_WINDOW_HOURS * 3600 * 1000).toISOString();
   await getDb().prepare(
     `INSERT INTO whatsapp_sessions (phone, last_inbound_at, session_expires_at) VALUES (?, datetime('now'), ?)
      ON CONFLICT(phone) DO UPDATE SET last_inbound_at=datetime('now'), session_expires_at=excluded.session_expires_at`
-  ).run(phone, expiresAt);
+  ).run(key, expiresAt);
+}
+
+// Records which job an outbound send was about, so a later inbound reply
+// from the same phone can be routed back to that specific job even if the
+// phone is (or becomes, in the interim) bound to more than one active job
+// — see resolveSender() in routes/whatsapp.routes.js and schema.js's
+// comment on whatsapp_sessions.last_outbound_job_id. Call this ONLY for a
+// send that genuinely invites a reply (the delivery-confirmation and
+// trip-offer interactive-button prompts) — a purely informational push
+// (e.g. "here are your pickup details", no buttons) must not steal the
+// "which job is this conversation about" pin away from a job that's
+// actually mid-exchange. Deliberately never opens or extends the 24h
+// session window itself — only a genuine inbound message does that, per
+// Meta's actual rules — so a phone with no prior
+// inbound message gets a pre-expired row here, keeping isSessionOpen()
+// accurate.
+async function recordOutboundJobContext(phone, jobId) {
+  const key = last9Digits(phone);
+  if (!key || !jobId) return;
+  await getDb().prepare(
+    `INSERT INTO whatsapp_sessions (phone, last_inbound_at, session_expires_at, last_outbound_job_id) VALUES (?, datetime('now'), datetime('now'), ?)
+     ON CONFLICT(phone) DO UPDATE SET last_outbound_job_id=excluded.last_outbound_job_id`
+  ).run(key, jobId);
 }
 
 // `template` must already be an approved WhatsApp message template name
@@ -210,7 +255,9 @@ module.exports = {
   isConfigured,
   isSessionOpen,
   recordInboundSession,
+  recordOutboundJobContext,
   sendInteractiveButtons,
   sendDeliveryConfirmationPrompt,
   downloadWhatsAppMedia,
+  last9Digits,
 };

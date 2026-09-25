@@ -1373,6 +1373,18 @@ module.exports = function initSchema(db) {
   // exactly the stuck-unpaid case runUnpaidAwardReminderSweep exists to
   // catch.
   addColumn('jobs', 'awarded_at', 'awarded_at TEXT');
+  // Pins an inbound WhatsApp reply to the job it's actually about. Without
+  // this, resolving a phone number to a job (whatsapp.routes.js's
+  // resolveSender()) could only fall back to "whichever active job for this
+  // phone was updated most recently" — which silently misroutes a reply if
+  // the carrier reassigns the same driver to a second job while the first
+  // is still awaiting a reply (e.g. a delivery-confirmation prompt sent for
+  // job A, then job B gets awarded to the same driver before they reply —
+  // the old heuristic would attribute the reply to B, not the A it's
+  // actually replying to). Set on every outbound send tied to a job
+  // (recordOutboundJobContext() in lib/whatsapp.js); resolveSender() prefers
+  // whichever active job matches this over the updated_at tiebreak.
+  addColumn('whatsapp_sessions', 'last_outbound_job_id', 'last_outbound_job_id INTEGER REFERENCES jobs(id)');
 
   // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.

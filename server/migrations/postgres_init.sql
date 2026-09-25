@@ -694,6 +694,8 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
   last_inbound_at TEXT NOT NULL,
   session_expires_at TEXT NOT NULL
 );
+-- Pins an inbound reply to the job it's actually about — see server/schema.js.
+ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS last_outbound_job_id INTEGER REFERENCES jobs(id);
 
 -- Compliance-engine foundation for the future DRIVER_ASSOCIATE role
 -- (Change 25) — see server/schema.js for rationale.
