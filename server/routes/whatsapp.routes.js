@@ -13,8 +13,9 @@ const crypto = require('node:crypto');
 const db = require('../db');
 const { confirmDelivery } = require('../services/delivery.service');
 const { bindDriverToJob } = require('../services/driver-assignment.service');
-const { recordInboundSession, isConfigured: isWhatsappConfigured } = require('../lib/whatsapp');
+const { recordInboundSession, isConfigured: isWhatsappConfigured, downloadWhatsAppMedia } = require('../lib/whatsapp');
 const { resolveOrCreateThread } = require('../lib/messaging');
+const { saveUploadedFile } = require('../lib/helpers');
 const router = require('express').Router();
 
 // Meta's subscription verification handshake — GET with hub.mode/verify_token/
@@ -58,9 +59,50 @@ function extractContent(msg) {
   if (msg.type === 'interactive' && msg.interactive && msg.interactive.type === 'button_reply') {
     return `[Bot reply] ${msg.interactive.button_reply.title}`;
   }
+  // Real gap a QA audit found: this used to be a bare placeholder string
+  // with the actual photo never fetched, and 'audio' had no case at all —
+  // an inbound voice note was silently dropped, not even logged. Both now
+  // also get an actual attempt at storeInboundMedia() below; this text is
+  // just what lands in the chat thread either way (the real file, when the
+  // download succeeds, shows up in the job's Documents tab instead).
   if (msg.type === 'image') return '[Photo attachment]';
+  if (msg.type === 'audio') return '[Voice message]';
   if (msg.type === 'location') return `[Shared location] ${msg.location.latitude}, ${msg.location.longitude}`;
   return null;
+}
+
+// Downloads an inbound photo/voice-note via lib/whatsapp.js's
+// downloadWhatsAppMedia() and attaches it to the job as a real
+// job_documents row (doc_type WHATSAPP_MEDIA) — visible in the same
+// Documents tab/section any other job document uses, not a side-channel
+// only the chat thread knows about. Best-effort: dark mode, a network
+// error, or an unsupported mime type all just mean no document gets
+// attached (the chat message from extractContent() above still lands
+// regardless) — never lets a media-download failure break processing of
+// the message itself.
+async function storeInboundMedia(msg, { job, senderId }) {
+  if (!job || !senderId) return;
+  const media = msg.type === 'image' ? msg.image : msg.type === 'audio' ? msg.audio : null;
+  if (!media || !media.id) return;
+  const result = await downloadWhatsAppMedia(media.id);
+  if (!result.ok) {
+    // eslint-disable-next-line no-console
+    console.log(`[whatsapp:webhook] media download skipped for job ${job.id} (${result.reason}) — chat message still recorded`);
+    return;
+  }
+  try {
+    const { storagePath, mimeType } = await saveUploadedFile(String(job.id), result.mimeType, result.buffer.toString('base64'));
+    const title = `WhatsApp ${msg.type === 'image' ? 'photo' : 'voice message'} — ${new Date().toISOString()}`;
+    await db
+      .prepare('INSERT INTO job_documents (job_id, uploader_id, doc_type, title, file_url, storage_path, mime_type) VALUES (?,?,?,?,?,?,?)')
+      .run(job.id, senderId, 'WHATSAPP_MEDIA', title, storagePath, storagePath, mimeType);
+  } catch (err) {
+    // e.g. an mp4/unsupported mime type Meta sent that saveUploadedFile's
+    // allowlist rejects — log and move on, same "never break the message"
+    // guarantee as a failed download above.
+    // eslint-disable-next-line no-console
+    console.error(`[whatsapp:webhook] storing downloaded media failed for job ${job.id}:`, err.message);
+  }
 }
 
 // threadRoles pairs with lib/messaging.js's resolveOrCreateThread so an
@@ -187,6 +229,9 @@ async function handleInboundMessage(msg) {
     await db
       .prepare(`INSERT INTO messages (job_id, sender_id, thread_id, content, channel, whatsapp_message_id) VALUES (?,?,?,?,'WHATSAPP',?)`)
       .run(job.id, senderId, threadId, content, msg.id || null);
+    if (msg.type === 'image' || msg.type === 'audio') {
+      await storeInboundMedia(msg, { job, senderId });
+    }
   } else if (content) {
     // eslint-disable-next-line no-console
     console.log(`[whatsapp:webhook] inbound from unrecognized/jobless number ${digits}: ${content}`);
@@ -240,3 +285,9 @@ module.exports = router;
 // compliance-check/bind logic either channel triggers it through, not a
 // second copy for the case where a driver has no WhatsApp configured.
 module.exports.handleTripOfferResponse = handleTripOfferResponse;
+// Exported for direct testing (server/test/whatsapp-media.test.js) — lets
+// a test drive the real inbound-message/media-download logic in-process
+// against a real job/user, with global.fetch mocked, without needing a
+// second process's fetch calls to be interceptable over HTTP.
+module.exports.handleInboundMessage = handleInboundMessage;
+module.exports.storeInboundMedia = storeInboundMedia;

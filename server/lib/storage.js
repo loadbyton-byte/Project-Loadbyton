@@ -65,7 +65,12 @@ function isS3Enabled() {
   return !!s3Client && !!s3Bucket;
 }
 
-const ALLOWED_UPLOAD_MIME_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' };
+// audio/ogg (WhatsApp's own voice-note codec, opus-in-ogg) and audio/mpeg
+// added for inbound WhatsApp voice messages (lib/whatsapp.js's
+// downloadWhatsAppMedia) — every other entry here is a user-facing browser
+// upload; this is the one server-initiated write path into the same
+// storage layer.
+const ALLOWED_UPLOAD_MIME_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3' };
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 // Raw put, no mime/size validation — for server-internal writes (DB

@@ -170,6 +170,40 @@ async function sendDeliveryConfirmationPrompt({ to, jobCode }) {
   return sendWhatsAppMessage({ to, template: 'delivery_confirmation_prompt', params: [jobCode] });
 }
 
+// Downloads an inbound media attachment (photo, voice note, document) from
+// Meta's Graph API. A QA audit found this gap: inbound images only ever
+// stored a literal '[Photo attachment]' placeholder string as the chat
+// message, and voice/audio messages were silently dropped entirely
+// (extractContent() in whatsapp.routes.js had no case for them at all) —
+// neither the real photo nor the real voice note was ever fetched, so
+// nothing could show up in the web dashboard's Documents tab.
+//
+// Two-step Meta flow (developers.facebook.com/docs/whatsapp/cloud-api/reference/media):
+// resolve the media_id to a short-lived signed URL, then download from
+// that URL with the same bearer token. Gated behind isConfigured() like
+// every other real network call in this module — dark by default returns
+// {ok:false, reason:'not_configured'} with no attempt at either request.
+async function downloadWhatsAppMedia(mediaId) {
+  if (!mediaId) return { ok: false, reason: 'no_media_id' };
+  if (!isConfigured()) return { ok: false, reason: 'not_configured' };
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` },
+    });
+    if (!metaRes.ok) return { ok: false, reason: 'provider_error', status: metaRes.status };
+    const meta = await metaRes.json();
+    if (!meta || !meta.url) return { ok: false, reason: 'no_url' };
+    const fileRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}` } });
+    if (!fileRes.ok) return { ok: false, reason: 'download_failed', status: fileRes.status };
+    const buffer = Buffer.from(await fileRes.arrayBuffer());
+    return { ok: true, buffer, mimeType: meta.mime_type || fileRes.headers.get('content-type') || null };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[whatsapp:error] downloading media ${mediaId} failed:`, err.message);
+    return { ok: false, reason: 'network_error' };
+  }
+}
+
 module.exports = {
   sendWhatsAppMessage,
   notifyDriverAsync,
@@ -178,4 +212,5 @@ module.exports = {
   recordInboundSession,
   sendInteractiveButtons,
   sendDeliveryConfirmationPrompt,
+  downloadWhatsAppMedia,
 };

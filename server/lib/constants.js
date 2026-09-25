@@ -6,7 +6,11 @@ const CONTAINER_TYPES = ['DRY', 'REEFER', 'HAZMAT', 'OPEN_TOP', 'FLAT_RACK'];
 // GATE_PASS and POD_TEMPLATE (the upload) are shipper-facing. All reuse
 // the existing job_documents table and access pattern — see
 // job-extras.routes.js's uploader/type checks.
-const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'PACKING_LIST', 'OTHER', 'DO', 'BOE', 'GATE_PASS', 'POD_TEMPLATE', 'INSPECTION_PROOF'];
+// WHATSAPP_MEDIA: a photo or voice note a driver sent over WhatsApp,
+// downloaded and stored automatically (server/routes/whatsapp.routes.js,
+// server/lib/whatsapp.js's downloadWhatsAppMedia) — server-generated, not
+// offered in any upload form's dropdown, unlike every other value here.
+const DOC_TYPES = ['CUSTOMS', 'RECEIPT', 'POD', 'LICENCE', 'INSURANCE', 'PACKING_LIST', 'OTHER', 'DO', 'BOE', 'GATE_PASS', 'POD_TEMPLATE', 'INSPECTION_PROOF', 'WHATSAPP_MEDIA'];
 
 // Bumped by hand whenever web/src/pages/Terms.jsx's content materially
 // changes — a user re-accepts only when this changes since their last
