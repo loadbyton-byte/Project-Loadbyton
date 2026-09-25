@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
+import { getSocket } from '../lib/socket.js';
 import { useAuth } from '../lib/auth.jsx';
 import { usePageTitle } from '../lib/seo.jsx';
 import { useLocale } from '../lib/i18n.jsx';
@@ -138,6 +139,28 @@ export default function JobDetail() {
     return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
   }, [awardConfirm]);
 
+  // Pre-award bid negotiation had no real-time path at all — the sender
+  // saw their own message (from the POST response below), but the other
+  // party only ever saw a new one by closing and reopening this modal.
+  // bids.routes.js's POST /:id/negotiation already calls notify() (type
+  // 'bid') to the other party right alongside the insert — reuses that
+  // existing push instead of adding a new server-side event, same fix as
+  // Messages.jsx/JobDispute.jsx. Kept above the early data-loading returns
+  // below (React hooks must run in the same order every render).
+  useEffect(() => {
+    if (!awardConfirm || !data?.job?.id) return;
+    const jobId = data.job.id;
+    const socket = getSocket();
+    if (!socket.connected) socket.connect();
+    function onNotification(n) {
+      if (n.type === 'bid' && String(n.job_id) === String(jobId)) {
+        api.getBidNegotiation(awardConfirm.id).then((neg) => setNegotiationMessages(neg.messages || [])).catch(() => {});
+      }
+    }
+    socket.on('notification:new', onNotification);
+    return () => socket.off('notification:new', onNotification);
+  }, [awardConfirm, data?.job?.id]);
+
   if (error && !data) {
     return (
       <div className="container-page py-10">
@@ -211,6 +234,7 @@ export default function JobDetail() {
       setError(err.message);
     }
   }
+
 
   async function sendNegotiationMessage() {
     if (!newMessage.trim()) return;
