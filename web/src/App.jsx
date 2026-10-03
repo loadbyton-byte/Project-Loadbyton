@@ -9,6 +9,8 @@ import { Spinner } from './components/ui.jsx';
 // (renderToStaticMarkup, no Suspense support), so entry-server.jsx must be
 // able to render them without hitting a lazy() boundary.
 import Home from './pages/Home.jsx';
+import Services from './pages/Services.jsx';
+import { RouteSeo } from './lib/seo.jsx';
 import Features from './pages/Features.jsx';
 import Pricing from './pages/Pricing.jsx';
 import About from './pages/About.jsx';
@@ -152,9 +154,11 @@ export default function App() {
   return (
     <Shell>
       <ScrollToTop />
+      <RouteSeo />
       <Suspense fallback={<FullScreenSpinner />}>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/services" element={<Services />} />
           <Route path="/features" element={<Features />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/about" element={<About />} />

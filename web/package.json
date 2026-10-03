@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender.mjs",
-    "build:vercel": "vite build && node scripts/prerender.mjs && node scripts/vercel-static-seo.mjs",
+    "build": "vite build && node scripts/prerender.mjs && node scripts/search-discovery.mjs",
+    "build:vercel": "vite build && node scripts/prerender.mjs && node scripts/vercel-static-seo.mjs && node scripts/search-discovery.mjs",
     "preview": "vite preview",
     "lint": "eslint . --ext .js,.jsx",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:seo": "node scripts/check-seo.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

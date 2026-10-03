@@ -92,6 +92,7 @@ export function SiteMobileNav() {
 export function SiteFooter() {
   return (
     <footer>
+      <div className="container"><Link to="/services">UAE freight services &amp; booking guide</Link></div>
       <div className="container">
         <div className="footer-grid">
           <div className="footer-brand">

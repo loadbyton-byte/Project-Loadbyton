@@ -4,10 +4,10 @@ import { setUserContext } from './sentry.js';
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
+export function AuthProvider({ children, initialLoading = true }) {
   const [user, setUser] = useState(null);
   const [actingAs, setActingAs] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(initialLoading);
   // typeof-guarded on all three: this module also runs under Node during
   // build-time prerendering (see scripts/prerender.mjs), where
   // localStorage doesn't exist — prerender always gets the logged-out,

@@ -154,6 +154,13 @@ function renderSeoHtml(baseHtml, meta, route) {
     [/(<link rel="canonical" href=")[^"]*(")/, `$1${canonicalUrl}$2`],
   ];
   for (const [pattern, replacement] of replacements) html = html.replace(pattern, replacement);
+  html = html.replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${canonicalUrl}$2`);
+  const schema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'WebPage', '@id': `${canonicalUrl}#webpage`,
+    url: canonicalUrl, name: meta.title, description: meta.description, inLanguage: 'en',
+    isPartOf: { '@id': `${SITE_ORIGIN}/#website` }, about: { '@id': `${SITE_ORIGIN}/#organization` },
+  }).replace(/</g, '\\u003c');
+  html = html.replace(/(<script id="page-schema" type="application\/ld\+json">).*?(<\/script>)/s, (_, start, end) => start + schema + end);
   return html;
 }
 
@@ -165,7 +172,7 @@ if (fs.existsSync(DIST_DIR)) {
     immutable: true,
     setHeaders: (res, filePath) => {
       // HTML must never be cached immutably — only hashed assets
-      if (filePath.endsWith('.html')) {
+      if (filePath.endsWith('.html') || filePath.endsWith('robots.txt') || filePath.endsWith('sitemap.xml')) {
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       }
     },
@@ -181,6 +188,7 @@ if (fs.existsSync(DIST_DIR)) {
       if (meta) index = renderSeoHtml(index, meta, req.path);
       return res.type('html').send(index.replace('<div id="root"></div>', `<div id="root">${prerendered}</div>`));
     }
+    res.setHeader('X-Robots-Tag', 'noindex, follow');
     res.sendFile(DIST_INDEX, (err) => { if (err) next(); });
   });
 }

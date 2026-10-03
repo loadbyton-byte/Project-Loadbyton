@@ -57,6 +57,13 @@ function renderSeoHtml(baseHtml, meta, route) {
   for (const [pattern, replacement] of replacements) html = html.replace(pattern, replacement);
   const prerendered = meta.slug ? loadPrerendered(meta.slug) : null;
   if (prerendered) html = html.replace('<div id="root"></div>', `<div id="root">${prerendered}</div>`);
+  html = html.replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${canonicalUrl}$2`);
+  const schema = JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'WebPage', '@id': `${canonicalUrl}#webpage`,
+    url: canonicalUrl, name: meta.title, description: meta.description, inLanguage: 'en',
+    isPartOf: { '@id': `${SITE_ORIGIN}/#website` }, about: { '@id': `${SITE_ORIGIN}/#organization` },
+  }).replace(/</g, '\\u003c');
+  html = html.replace(/(<script id="page-schema" type="application\/ld\+json">).*?(<\/script>)/s, (_, start, end) => start + schema + end);
   return html;
 }
 
@@ -84,26 +91,7 @@ function main() {
     console.log(`[vercel-static-seo] ${route} -> static HTML written`);
   }
 
-  fs.writeFileSync(
-    path.join(distDir, 'robots.txt'),
-    [
-      'User-agent: *',
-      'Allow: /',
-      ...PUBLIC_APP_PATHS_DISALLOWED.map((p) => `Disallow: ${p}`),
-      '',
-      `Sitemap: ${SITE_ORIGIN}/sitemap.xml`,
-      '',
-    ].join('\n'),
-    'utf8'
-  );
 
-  const urls = Object.keys(SEO_META).map((p) => `  <url><loc>${SITE_ORIGIN}${p}</loc></url>`).join('\n');
-  fs.writeFileSync(
-    path.join(distDir, 'sitemap.xml'),
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
-    'utf8'
-  );
-  console.log(`[vercel-static-seo] robots.txt / sitemap.xml written (origin: ${SITE_ORIGIN})`);
 }
 
 main();

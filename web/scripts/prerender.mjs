@@ -27,21 +27,7 @@ const webRoot = path.resolve(__dirname, '..');
 // Every public, unauthenticated route — the set a search crawler or a link
 // preview bot actually needs real content for. Authenticated app pages are
 // deliberately excluded: there's nothing to index behind a login wall.
-const ROUTES = [
-  { path: '/', slug: 'root' },
-  { path: '/features', slug: 'features' },
-  { path: '/pricing', slug: 'pricing' },
-  { path: '/about', slug: 'about' },
-  { path: '/security', slug: 'security' },
-  { path: '/compliance', slug: 'compliance' },
-  { path: '/blog', slug: 'blog' },
-  { path: '/terms', slug: 'terms' },
-  { path: '/privacy', slug: 'privacy' },
-  { path: '/industries', slug: 'industries' },
-  { path: '/trust', slug: 'trust' },
-  { path: '/for-transporters', slug: 'for-transporters' },
-  { path: '/for-shippers', slug: 'for-shippers' },
-];
+const ROUTES = Object.entries(JSON.parse(fs.readFileSync(path.join(webRoot, '..', 'seo-meta.json'), 'utf8'))).map(([path, meta]) => ({ path, slug: meta.slug }));
 
 async function main() {
   const vite = await createServer({

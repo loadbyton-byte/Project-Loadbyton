@@ -14,5 +14,25 @@
       "source": "/(.*)",
       "destination": "/"
     }
+  ],
+  "headers": [
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/:path((?!features$|services$|pricing$|about$|blog$|security$|compliance$|terms$|privacy$|industries$|trust$|for-transporters$|for-shippers$|assets/|favicon|brand/|cinematic-assets/|apple-touch-icon|sitemap.xml$|robots.txt$).+)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, follow"
+        }
+      ]
+    }
   ]
 }

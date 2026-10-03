@@ -21,7 +21,7 @@ export function render(path) {
   const html = renderToStaticMarkup(
     <StaticRouter location={path}>
       <LocaleProvider>
-        <AuthProvider>
+        <AuthProvider initialLoading={false}>
           <ToastProvider>
             <App />
           </ToastProvider>
