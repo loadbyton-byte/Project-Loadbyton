@@ -96,6 +96,18 @@ async function startServer(extraEnv = {}) {
   });
 
   await Promise.race([waitForHealth(baseUrl), exitedEarly]);
+  // The server seeds its demo accounts AFTER it starts listening. SQLite does
+  // that instantly; on a brand-new Postgres database it takes several seconds,
+  // so a test that logged in straight after /api/health could be refused with
+  // "Invalid email or password". /api/health reports the seeding state.
+  {
+    const until = Date.now() + 90000;
+    while (Date.now() < until) {
+      const h = await fetch(`${baseUrl}/api/health`).then((r) => r.json()).catch(() => null);
+      if (!h || h.seed !== 'pending') break;
+      await new Promise((res) => setTimeout(res, 250));
+    }
+  }
 
   async function stop() {
     child.kill('SIGTERM');
@@ -155,4 +167,8 @@ function makeClient(baseUrl) {
   };
 }
 
-module.exports = { startServer, makeClient };
+// For the few tests that open the SQLite file directly: they can only run on SQLite.
+// Usage: test('name', { skip: sqliteOnly }, async () => {...})
+const sqliteOnly = process.env.USE_POSTGRES === 'true' ? 'opens the SQLite file directly — SQLite only' : false;
+
+module.exports = { startServer, makeClient, sqliteOnly };

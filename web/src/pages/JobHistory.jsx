@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, openDocument } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
-import { formatAED, formatDate, formatLabel } from '../lib/constants.js';
+import { formatAED, formatDate, formatLabel, parseDbTimestamp } from '../lib/constants.js';
 import { Card, Input, EmptyState, ErrorState, StatusBadge, Badge } from '../components/ui.jsx';
 import { IconHistory } from '../components/icons.jsx';
 import { useToasts } from '../components/Toast.jsx';
@@ -26,7 +26,7 @@ const FEE_STATUS_COLOR = { ACCRUED: 'warning', COLLECTED: 'success', WAIVED: 'ne
 // the investor demo work).
 function durationDays(job) {
   if (!job.ready_at || !job.delivered_at) return null;
-  const ms = new Date(job.delivered_at.replace(' ', 'T')) - new Date(job.ready_at.replace(' ', 'T'));
+  const ms = parseDbTimestamp(job.delivered_at) - parseDbTimestamp(job.ready_at);
   if (!Number.isFinite(ms) || ms < 0) return null;
   return Math.round((ms / 86400000) * 10) / 10;
 }

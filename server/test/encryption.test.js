@@ -6,7 +6,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -18,7 +18,7 @@ test.after(async () => {
   await server.stop();
 });
 
-test('IBAN and TRN are stored encrypted, and decrypt correctly through the API', async () => {
+test('IBAN and TRN are stored encrypted, and decrypt correctly through the API', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   const plaintextTrn = '100999888700005';
   const email = `encryption-test-${Date.now()}@example.ae`;

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -60,7 +60,7 @@ test('CUSTOM equipment still requires a written requirement', async () => {
   assert.equal(noNotes.status, 400);
 });
 
-test('Post later: scheduled job stays DRAFT then publishes via internal sweep route', async () => {
+test('Post later: scheduled job stays DRAFT then publishes via internal sweep route', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
 

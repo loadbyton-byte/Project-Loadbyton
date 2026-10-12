@@ -14,7 +14,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 const WEBHOOK_SECRET = 'test-webhook-secret';
 
@@ -174,7 +174,7 @@ test('AUTHORISED webhook funds escrow exactly once; replays are idempotent', asy
   assert.equal(afterDecline.processor_payment_status, 'PAID');
 });
 
-test('a stuck PENDING webhook_events row (delivery crashed before PROCESSED) is retried, not silently swallowed as a duplicate', async () => {
+test('a stuck PENDING webhook_events row (delivery crashed before PROCESSED) is retried, not silently swallowed as a duplicate', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);

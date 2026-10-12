@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "test": "node --test test/*.test.js",
+    "test:pg": "node scripts/test-postgres.js",
     "test:vitest": "vitest run --config ../vitest.config.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .js"

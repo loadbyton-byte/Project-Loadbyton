@@ -207,6 +207,17 @@ export function formatMoney(amount, currencyCode) {
   return ltrIsolate(`${code} ${Number(amount).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`);
 }
 
+// Parse a timestamp as stored by the API into a Date. Stored values are UTC in
+// one of two shapes: ISO-8601 with a zone ("2026-10-12T06:00:00.000Z"), or
+// SQLite's zone-less "YYYY-MM-DD HH:MM:SS". Naively appending 'T' to the second
+// shape makes the browser read it as LOCAL time, so subtracting it from an ISO
+// value is off by the UTC offset (4 hours in the UAE).
+export function parseDbTimestamp(raw) {
+  if (!raw) return new Date(NaN);
+  const hasZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  return new Date(hasZone ? raw : `${String(raw).replace(' ', 'T')}Z`);
+}
+
 export function formatDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso.includes('T') || iso.includes('Z') ? iso : iso.replace(' ', 'T') + 'Z');

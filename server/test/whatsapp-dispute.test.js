@@ -7,7 +7,7 @@
 // covered here via the real HTTP webhook, exactly as Meta would deliver it.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -103,7 +103,7 @@ test('an inbound "Issue" button reply files a real dispute — job freezes to DI
   assert.ok(foundMessage, 'the raw button-reply text must still be recorded in the job thread');
 });
 
-test('a repeat "Issue" tap on an already-disputed job does not create a second dispute or crash the webhook', async () => {
+test('a repeat "Issue" tap on an already-disputed job does not create a second dispute or crash the webhook', { skip: sqliteOnly }, async () => {
   const { jobId, shipper } = await inTransitJobWithDriverPhone('0557774444');
   await postIssueButtonReply('971557774444');
 

@@ -36,9 +36,23 @@ app.use((req, res, next) => {
   next();
 });
 
+const captureRawBody = (req, res, buf) => { req.rawBody = buf.toString('utf8'); };
+
+// File uploads travel as base64 inside a JSON body (no multipart — see
+// web/src/lib/upload.js), and base64 is ~33% bigger than the file. The web
+// client lets users pick files up to 5 MB, which is ~6.7 MB once encoded, but
+// the global 2 MB cap below rejected anything over ~1.5 MB with a bare
+// "request entity too large" — usually AFTER the job it belonged to had
+// already been created. These routes (and only these) get a body limit that
+// fits what the client allows; body-parser skips a request it has already
+// parsed, so the strict global limit still applies to every other route.
+const UPLOAD_ROUTE = /^\/api\/(jobs\/\d+\/(documents|pod|eir)|profile\/documents|fleet\/drivers\/\d+\/documents|credit\/requests)\/?$/;
+const uploadJson = express.json({ limit: '8mb', verify: captureRawBody });
+app.use((req, res, next) => (req.method === 'POST' && UPLOAD_ROUTE.test(req.path) ? uploadJson(req, res, next) : next()));
+
 app.use(express.json({
   limit: '2mb',
-  verify: (req, res, buf) => { req.rawBody = buf.toString('utf8'); },
+  verify: captureRawBody,
 }));
 
 app.use(cookieParser);

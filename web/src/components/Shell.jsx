@@ -32,7 +32,7 @@ export function Logo({ dark = false, className = '', to = '/' }) {
   const isDarkSurface = dark || theme === 'dark';
   return (
     <Link to={to} className={`flex shrink-0 items-center ${className}`} aria-label="Loadbyton home">
-      <BrandWordmark dark={isDarkSurface} className="h-8 w-auto" />
+      <BrandWordmark dark={isDarkSurface} className="h-6 w-auto sm:h-7" />
     </Link>
   );
 }
@@ -589,7 +589,7 @@ function ShellInner({ children }) {
                 without scrolling back to the top. */}
             <div className="sticky top-0 z-raised flex items-center justify-between px-5 pb-3 pt-5">
               <Link to={user ? homePath(user, actingAs) : '/'} aria-label="Loadbyton home" onClick={closeDrawer}>
-                <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
+                <BrandWordmark dark className="h-6 w-auto" />
               </Link>
               <button onClick={closeDrawer} className="flex h-10 w-10 items-center justify-center rounded-full text-white/80 hover:bg-white/10 hover:text-white" aria-label="Close menu">
                 <IconClose size={18} />
@@ -722,7 +722,7 @@ function ShellInner({ children }) {
                   asset which bakes in a fixed navy rect and would leave a
                   visible mismatched box in dark theme. */}
               <Link to={homePath(user, actingAs)} aria-label="Loadbyton home">
-                <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-6 w-auto" />
+                <BrandWordmark dark className="h-6 w-auto" />
               </Link>
               <span className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-widest text-white/60">
                 <span className="lb-status-dot" style={{ width: 6, height: 6 }} aria-hidden="true" /> Live
@@ -755,7 +755,9 @@ function ShellInner({ children }) {
                         )
                       }
                       style={({ isActive }) => ({
-                        color: isActive ? 'var(--text-inverse)' : 'var(--lb-slate-300)',
+                        // The sidebar is dark in BOTH themes, so the active label is a fixed white: --text-inverse flips to a dark
+                        // colour in dark theme, which made the current page's label dark-on-dark and nearly invisible.
+                        color: isActive ? '#FFFFFF' : 'var(--lb-slate-300)',
                         background: isActive ? 'rgba(255,255,255,.09)' : 'transparent',
                         boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.1), 0 8px 20px -12px rgba(0,0,0,0.6)' : 'none',
                         border: isActive ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent',
@@ -866,7 +868,7 @@ function ShellInner({ children }) {
                       footer-brand spans the full row since its logo +
                       paragraph + badge don't fit a narrow column. */}
                   <div className="lb-footer-brand col-span-2 lg:col-span-1">
-                    <img src="/brand/logo-full-on-dark-transparent.svg" alt="Loadbyton" className="h-7 w-auto" />
+                    <BrandWordmark dark className="h-7 w-auto" />
                     <p className="mt-7 max-w-xs text-sm leading-7 text-white/55">
                       A connected freight workspace for the operational work behind the load.
                     </p>

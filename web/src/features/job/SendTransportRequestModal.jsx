@@ -35,7 +35,8 @@ export default function SendTransportRequestModal({ job, onClose, onSent }) {
       await api.directAssign(job.id, {
         carrierId: Number(carrierId),
         amountAed: amount,
-        etaAt: etaAt || undefined,
+        // datetime-local gives zone-less local wall-clock time; send an unambiguous UTC instant.
+        etaAt: etaAt && !Number.isNaN(new Date(etaAt).getTime()) ? new Date(etaAt).toISOString() : undefined,
         ...(spreadBps !== '' ? { brokerSpreadBps: Number(spreadBps) } : {}),
       });
       addToast({ type: 'status_change', title: 'Transport request sent', body: `${job.job_code}: awaiting the transporter's acceptance.` });

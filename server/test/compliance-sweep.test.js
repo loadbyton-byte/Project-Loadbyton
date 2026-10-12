@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -21,7 +21,7 @@ test('compliance sweep requires the internal key', async () => {
   assert.equal(res.status, 403);
 });
 
-test('compliance sweep auto-pauses a driver with an expired visa', async () => {
+test('compliance sweep auto-pauses a driver with an expired visa', { skip: sqliteOnly }, async () => {
   const carrier = makeClient(server.baseUrl);
   await carrier.login('carrier@dubaidrayage.com', 'demo1234');
   const created = await carrier.post('/api/fleet/drivers', { name: 'Expired Visa Driver', phone: '0501112233' });

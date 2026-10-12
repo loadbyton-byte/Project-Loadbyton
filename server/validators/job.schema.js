@@ -1,7 +1,21 @@
 const db = require('../db');
-const { randomToken, jobCode } = require('../lib/http');
-const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, DEPOTS, CONTAINER_EQUIPMENT, TERMS_VERSION, PAYMENT_TERMS } = require('../lib/constants');
+const { jobCode, isUniqueViolation } = require('../lib/http');
+const { EQUIPMENT_TYPES, CARGO_TYPES, SHIPMENT_TYPES, TERMS_VERSION, PAYMENT_TERMS } = require('../lib/constants');
 const { isValidUaeLatLng } = require('../lib/helpers');
+
+// jobs.ready_at / jobs.deadline are TEXT columns, so the database itself
+// accepts any string ("tomorrow"). Everything downstream — sort order,
+// detention/demurrage clocks, auto-release, the scheduled-post sweep — parses
+// them as dates, so a bad value used to be stored happily and then broke
+// those later, far from the post that caused it. Parse and normalise to ISO
+// 8601 here, at the one place that can reject it with a useful message.
+function parseDateField(raw, name) {
+  const d = new Date(raw);
+  if (typeof raw !== 'string' || !raw.trim() || Number.isNaN(d.getTime())) {
+    throw { status: 400, message: `${name} must be a valid date and time` };
+  }
+  return d;
+}
 
 async function createJobFromBody(body, req) {
   // T&C acceptance, per job — but only re-prompt if the shipper hasn't
@@ -57,19 +71,20 @@ async function createJobFromBody(body, req) {
 
   if (!effectivePickupTerminal) throw { status: 400, message: 'pickupTerminal is required' };
   if (!effectiveDeliveryArea && !deliveryAddress) throw { status: 400, message: 'deliveryArea or deliveryAddress is required' };
-  // jobs.ready_at / jobs.deadline are both NOT NULL. The web form's own
-  // submit handler (Dashboard.jsx) guards this client-side and always
-  // computes deadline from readyAt before sending, but that guard doesn't
-  // exist for a direct API call or the CSV bulk-import path (POST
-  // /api/jobs/import loops this same function per row) — either used to
-  // insert `null` into a NOT NULL column, an unhandled crash rather than a
-  // real validation error. middleware/validate.js's jobCreateSchema marks
-  // both `.optional()` (loosened for the scheduled-post/other optional
-  // fields on the same schema), so this is the one place that can actually
+  // jobs.ready_at / jobs.deadline are both NOT NULL, and the CSV bulk-import
+  // path (POST /api/jobs/import loops this same function per row) and direct
+  // API callers have no client-side guard — this is the one place that can
   // enforce it before the INSERT.
   if (!readyAt) throw { status: 400, message: 'readyAt is required' };
   if (!deadline) throw { status: 400, message: 'deadline is required' };
+  const readyDate = parseDateField(readyAt, 'readyAt');
+  const deadlineDate = parseDateField(deadline, 'deadline');
+  if (deadlineDate.getTime() <= readyDate.getTime()) throw { status: 400, message: 'deadline must be after readyAt' };
+  if (deadlineDate.getTime() <= Date.now()) throw { status: 400, message: 'deadline is already in the past — pick a later ready time' };
 
+  // Unknown/legacy equipment or cargo values (older API clients and saved CSVs
+  // still send e.g. "FLATBED") fall back to the defaults rather than blocking
+  // the post.
   const eqType = EQUIPMENT_TYPES.includes(equipmentType) ? equipmentType : 'CONTAINER_CHASSIS';
   const cgType = CARGO_TYPES.includes(cargoType) ? cargoType : 'GENERAL_GOODS';
 
@@ -77,12 +92,11 @@ async function createJobFromBody(body, req) {
 
   if (cargoWeightTons !== undefined && cargoWeightTons !== null && Number(cargoWeightTons) <= 0) throw { status: 400, message: 'cargoWeightTons must be positive' };
 
-  // LOCAL-shipment truck specs — validated here (before the INSERT below,
-  // which isn't wrapped in a transaction) so a bad value never leaves an
-  // orphaned job row behind; both optional and meaningless outside LOCAL
+  // LOCAL-shipment truck specs — both optional and meaningless outside LOCAL
   // jobs, so no requirement beyond "if present, must be valid".
   const { truckLengthM, equipmentBodyType } = body;
-  if (truckLengthM !== undefined && truckLengthM !== null && truckLengthM !== '' && !(Number.isFinite(Number(truckLengthM)) && Number(truckLengthM) > 0)) {
+  const hasTruckLength = truckLengthM !== undefined && truckLengthM !== null && truckLengthM !== '';
+  if (hasTruckLength && !(Number.isFinite(Number(truckLengthM)) && Number(truckLengthM) > 0)) {
     throw { status: 400, message: 'truckLengthM must be a positive number' };
   }
   if (equipmentBodyType && !['OPEN', 'COVERED'].includes(equipmentBodyType)) {
@@ -95,147 +109,150 @@ async function createJobFromBody(body, req) {
 
   // jobs.container_size / jobs.container_type are both NOT NULL. LOCAL
   // shipments never carry a container, hence the 'N/A' fallback below — but
-  // IMPORT/EXPORT genuinely need one, and the old code let a missing value
-  // fall through to `null` there with no rejecting check (the web form
-  // always has a non-empty default, but a direct API call or the CSV
-  // bulk-import path did not), hitting the same class of unhandled NOT
-  // NULL crash as the delivery_address bug above.
+  // IMPORT/EXPORT genuinely need one.
   if (shipType !== 'LOCAL' && (!containerSize || !containerType)) {
     throw { status: 400, message: 'containerSize and containerType are required for IMPORT/EXPORT shipments' };
   }
   const effectiveContainerSize = containerSize || (shipType === 'LOCAL' ? 'N/A' : null);
   const effectiveContainerType = containerType || (shipType === 'LOCAL' ? 'N/A' : null);
   // jobs.delivery_address is NOT NULL — the web form's "Delivery address
-  // detail" field (which is what `deliveryAddress` actually is) has no
-  // `required` attribute for IMPORT/EXPORT, so a shipper who skips it
-  // (it reads as optional/supplementary, not essential) sent `deliveryAddress:
-  // undefined` here. The old fallback only covered LOCAL — every IMPORT/EXPORT
-  // job posted without that optional field hit a raw, unhandled NOT NULL
-  // constraint violation (Postgres error 23502) surfaced to the shipper as a
-  // bare "Internal server error", since the validation above only requires
-  // deliveryArea OR deliveryAddress, not deliveryAddress specifically.
-  // Falling back to effectiveDeliveryArea for every shipment type closes
-  // this: that check already guarantees at least one of deliveryAddress/
-  // effectiveDeliveryArea is truthy by this point, so this can never insert
-  // null.
+  // detail" field is optional for IMPORT/EXPORT, so fall back to the
+  // delivery area (the check above guarantees at least one is set).
   const effectiveDeliveryAddress = deliveryAddress || effectiveDeliveryArea;
 
-  const code = jobCode();
-  const initialStatus = scheduledPostAt && new Date(scheduledPostAt) > new Date() ? 'DRAFT' : 'OPEN';
-  // A job created by a demo (investor-showcase) shipper account must itself
-  // be flagged is_demo so it stays inside the demo/real partition enforced
-  // by job.service.js's listJobs and the other filters in
-  // server/migrations/003_demo_data_flag.sql — otherwise it defaults to 0
-  // and leaks into real carriers' Open Loads while being invisible to the
-  // demo carrier it was meant for.
-  const result = await db.prepare(
-    `INSERT INTO jobs (job_code, shipper_id, status, shipment_type, equipment_type, cargo_type, container_size, container_type, container_count,
-       pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, notes,
-       truck_count, cargo_weight_tons, pickup_lat, pickup_lng, pickup_address_detail,
-       delivery_lat, delivery_lng, delivery_address_detail, loading_location, delivery_location,
-       import_pickup_terminal, import_unloading_location, import_empty_return_location,
-       export_empty_pickup_location, export_loading_location, export_deposit_terminal,
-       scheduled_post_at, is_demo)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-     RETURNING id`
-  ).run(
-    code,
-    req.user.id,
-    initialStatus,
-    shipType,
-    eqType,
-    cgType,
-    effectiveContainerSize,
-    effectiveContainerType,
-    Math.max(1, Number(containerCount) || 1),
-    effectivePickupTerminal,
-    effectiveDeliveryArea || null,
-    effectiveDeliveryAddress || null,
-    readyAt || null,
-    deadline || null,
-    targetPriceAed ? Number(targetPriceAed) : null,
-    effectiveNotes || null,
-    Math.max(1, Number(truckCount) || 1),
-    cargoWeightTons ? Number(cargoWeightTons) : null,
-    pickupLat ? Number(pickupLat) : null,
-    pickupLng ? Number(pickupLng) : null,
-    pickupAddressDetail || null,
-    deliveryLat ? Number(deliveryLat) : null,
-    deliveryLng ? Number(deliveryLng) : null,
-    deliveryAddressDetail || null,
-    loadingLocation || null,
-    deliveryLocation || null,
-    importPickupTerminal || null,
-    importUnloadingLocation || null,
-    importEmptyReturnLocation || null,
-    exportEmptyPickupLocation || null,
-    exportLoadingLocation || null,
-    exportDepositTerminal || null,
-    scheduledPostAt || null,
-    req.user.is_demo ? 1 : 0,
-  );
-
-  const jobId = Number(result.lastInsertRowid);
-
-  // payment_tier: when a shipper is due to pay (see server/lib/constants.js's
-  // PAYMENT_TERMS — escrow is an implementation detail, not a tier the
-  // shipper picks by that name anymore). Not gated by credit eligibility
-  // here — that check happens at award time (award.service.js), since
-  // eligibility can change between posting and award. jobs.payment_tier's
-  // column-level default is still the legacy 'SPOT_ESCROW' string (kept
-  // to avoid an unnecessary migration; every service treats it as an
-  // alias for INSTANT) — explicitly writing 'INSTANT' here instead keeps
-  // every newly-created job's stored value and displayed label
-  // consistent, rather than silently falling back to the old name.
-  const { paymentTier } = body;
-  const resolvedPaymentTier = PAYMENT_TERMS.includes(paymentTier) ? paymentTier : 'INSTANT';
-  await db.prepare('UPDATE jobs SET payment_tier=? WHERE id=?').run(resolvedPaymentTier, jobId);
-  if (!alreadyAgreedToCurrentVersion) {
-    const { byIp } = require('../lib/rateLimit');
-    await db.prepare(
-      `INSERT INTO terms_acceptances (user_id, terms_version, context, job_id, ip_address) VALUES (?,?,'JOB',?,?)`
-    ).run(req.user.id, TERMS_VERSION, jobId, byIp(req) || null);
-  }
-
-  // Already validated above (before the INSERT) — this is now just the
-  // write, matching payment_tier's post-insert-UPDATE pattern below.
-  if (truckLengthM !== undefined && truckLengthM !== null && truckLengthM !== '') {
-    await db.prepare('UPDATE jobs SET truck_length_m=? WHERE id=?').run(Number(truckLengthM), jobId);
-  }
-  if (equipmentBodyType) {
-    await db.prepare('UPDATE jobs SET equipment_body_type=? WHERE id=?').run(equipmentBodyType, jobId);
-  }
-
-  // requires_seal: no existing field reliably implies sealed-vs-empty (see
-  // server/schema.js's comment) — defaults by shipment type (IMPORT/EXPORT
-  // typically sealed customs containers, LOCAL typically not), overridable
-  // by the shipper. The DB-level column default is 1, so only a LOCAL job
-  // (or an explicit override) needs this follow-up UPDATE.
-  const effectiveRequiresSeal = requiresSeal !== undefined ? (requiresSeal ? 1 : 0) : (shipType === 'LOCAL' ? 0 : 1);
-  if (effectiveRequiresSeal !== 1) {
-    await db.prepare('UPDATE jobs SET requires_seal=? WHERE id=?').run(effectiveRequiresSeal, jobId);
-  }
-  // Extra line items beyond the first (which became the job's own
-  // container_size/type/count above).
-  if (normalizedLineItems.length > 1) {
-    const insertLineItem = db.prepare('INSERT INTO job_line_items (job_id, container_size, container_type, count) VALUES (?,?,?,?)');
-    for (const li of normalizedLineItems.slice(1)) {
-      await insertLineItem.run(jobId, li.containerSize, li.containerType, li.count);
-    }
-  }
-  // GIT insurance opt-in (Change 20) — declared cargo value + flag at posting.
-  // Binding itself is a separate step (POST /api/jobs/:id/insurance/bind);
-  // this just records the shipper's declared value so quote/bind has it.
+  // Declared cargo value / insurance opt-in. These used to be validated
+  // AFTER the job row was inserted, so a bad value returned a 400 while the
+  // job was already live in Open Loads — the shipper saw an error, fixed the
+  // field, re-posted, and ended up with a ghost duplicate. Everything that
+  // can reject the request now runs before the first write.
+  let declaredCargoValue = null;
   if (cargoValueAed !== undefined && cargoValueAed !== null && cargoValueAed !== '') {
-    const cv = Number(cargoValueAed);
-    if (!Number.isFinite(cv) || cv <= 0) throw { status: 400, message: 'cargoValueAed must be a positive number' };
-    await db.prepare('UPDATE jobs SET cargo_value_aed=?, insurance_opt_in=? WHERE id=?').run(cv, insuranceOptIn ? 1 : 0, jobId);
+    declaredCargoValue = Number(cargoValueAed);
+    if (!Number.isFinite(declaredCargoValue) || declaredCargoValue <= 0) throw { status: 400, message: 'cargoValueAed must be a positive number' };
   } else if (insuranceOptIn) {
     throw { status: 400, message: 'cargoValueAed is required when opting into insurance' };
   }
+
+  let scheduledAt = null;
+  if (scheduledPostAt) {
+    scheduledAt = parseDateField(scheduledPostAt, 'scheduledPostAt');
+  }
+  const initialStatus = scheduledAt && scheduledAt.getTime() > Date.now() ? 'DRAFT' : 'OPEN';
+
+  // Map pins are optional: keep a lat/lng pair only when both halves are
+  // valid UAE coordinates, otherwise store neither (never a lone half).
+  const pickupPin = isValidUaeLatLng(Number(pickupLat), Number(pickupLng)) && pickupLat !== null && pickupLng !== null;
+  const deliveryPin = isValidUaeLatLng(Number(deliveryLat), Number(deliveryLng)) && deliveryLat !== null && deliveryLng !== null;
+
+  const resolvedPaymentTier = PAYMENT_TERMS.includes(body.paymentTier) ? body.paymentTier : 'INSTANT';
+  // requires_seal: no existing field reliably implies sealed-vs-empty — defaults
+  // by shipment type (IMPORT/EXPORT typically sealed customs containers, LOCAL
+  // typically not), overridable by the shipper.
+  const effectiveRequiresSeal = requiresSeal !== undefined ? (requiresSeal ? 1 : 0) : (shipType === 'LOCAL' ? 0 : 1);
+
+  // A job created by a demo (investor-showcase) shipper account must itself
+  // be flagged is_demo so it stays inside the demo/real partition enforced
+  // by job.service.js's listJobs and the other filters in
+  // server/migrations/003_demo_data_flag.sql.
+  //
+  // Every write below happens in ONE transaction: the job row (including its
+  // payment tier, truck specs, seal flag and declared cargo value, which used
+  // to be follow-up UPDATEs), the extra line items and the terms-acceptance
+  // record either all land or none do — no half-configured job is ever left
+  // live in Open Loads if a later step fails.
+  //
+  // job_code is UNIQUE and only 9,000 four-digit codes exist per month, so a
+  // collision is a normal event, not an error: retry with a fresh code (the
+  // later attempts use a wider suffix) instead of surfacing a 500 to the
+  // shipper. Each attempt is its own transaction because a failed INSERT
+  // aborts a Postgres transaction.
+  const MAX_CODE_ATTEMPTS = 8;
+  let jobId;
+  for (let attempt = 0; ; attempt++) {
+    const code = jobCode(attempt);
+    try {
+      jobId = await db.transaction(async (trx) => {
+        const result = await trx.prepare(
+          `INSERT INTO jobs (job_code, shipper_id, status, shipment_type, equipment_type, cargo_type, container_size, container_type, container_count,
+             pickup_terminal, delivery_area, delivery_address, ready_at, deadline, max_budget_aed, notes,
+             truck_count, cargo_weight_tons, pickup_lat, pickup_lng, pickup_address_detail,
+             delivery_lat, delivery_lng, delivery_address_detail, loading_location, delivery_location,
+             import_pickup_terminal, import_unloading_location, import_empty_return_location,
+             export_empty_pickup_location, export_loading_location, export_deposit_terminal,
+             scheduled_post_at, is_demo, payment_tier, truck_length_m, equipment_body_type, requires_seal,
+             cargo_value_aed, insurance_opt_in)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           RETURNING id`
+        ).run(
+          code,
+          req.user.id,
+          initialStatus,
+          shipType,
+          eqType,
+          cgType,
+          effectiveContainerSize,
+          effectiveContainerType,
+          Math.max(1, Number(containerCount) || 1),
+          effectivePickupTerminal,
+          effectiveDeliveryArea || null,
+          effectiveDeliveryAddress || null,
+          readyDate.toISOString(),
+          deadlineDate.toISOString(),
+          targetPriceAed ? Number(targetPriceAed) : null,
+          effectiveNotes || null,
+          Math.max(1, Number(truckCount) || 1),
+          cargoWeightTons ? Number(cargoWeightTons) : null,
+          pickupPin ? Number(pickupLat) : null,
+          pickupPin ? Number(pickupLng) : null,
+          pickupAddressDetail || null,
+          deliveryPin ? Number(deliveryLat) : null,
+          deliveryPin ? Number(deliveryLng) : null,
+          deliveryAddressDetail || null,
+          loadingLocation || null,
+          deliveryLocation || null,
+          importPickupTerminal || null,
+          importUnloadingLocation || null,
+          importEmptyReturnLocation || null,
+          exportEmptyPickupLocation || null,
+          exportLoadingLocation || null,
+          exportDepositTerminal || null,
+          scheduledAt ? scheduledAt.toISOString() : null,
+          req.user.is_demo ? 1 : 0,
+          resolvedPaymentTier,
+          hasTruckLength ? Number(truckLengthM) : null,
+          equipmentBodyType || null,
+          effectiveRequiresSeal,
+          declaredCargoValue,
+          declaredCargoValue !== null && insuranceOptIn ? 1 : 0,
+        );
+        const newId = Number(result.lastInsertRowid);
+
+        // Extra line items beyond the first (which became the job's own
+        // container_size/type/count above).
+        for (const li of normalizedLineItems.slice(1)) {
+          await trx.prepare('INSERT INTO job_line_items (job_id, container_size, container_type, count) VALUES (?,?,?,?)')
+            .run(newId, li.containerSize, li.containerType, li.count);
+        }
+        if (!alreadyAgreedToCurrentVersion) {
+          const { byIp } = require('../lib/rateLimit');
+          await trx.prepare(
+            `INSERT INTO terms_acceptances (user_id, terms_version, context, job_id, ip_address) VALUES (?,?,'JOB',?,?)`
+          ).run(req.user.id, TERMS_VERSION, newId, byIp(req) || null);
+        }
+        return newId;
+      });
+      break;
+    } catch (e) {
+      if (isUniqueViolation(e, 'job_code') && attempt + 1 < MAX_CODE_ATTEMPTS) continue;
+      throw e;
+    }
+  }
+
   // Change 30 — priority placement: optional paid boost at posting. Recorded
   // as a platform_fees + ledger row via chargeFee() (idempotent per job);
   // collection rides existing rails (internal bookkeeping until billing).
+  // Deliberately outside the transaction above: a failed charge must never
+  // undo (or hold back) the job itself.
   if (body.priorityPlacement) {
     try {
       const { chargeFee } = require('../lib/ledger');

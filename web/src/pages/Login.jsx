@@ -4,6 +4,7 @@
 // (`setMsg("This preview isn't connected...")`) — this uses the same
 // login/redirect/error-handling logic the previous Login.jsx had
 // (useAuth().login, ApiError-driven MFA prompt, redirect-after-login).
+import BrandWordmark from '../components/BrandWordmark.jsx';
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, homePath } from '../lib/auth.jsx';
@@ -45,7 +46,7 @@ export default function Login() {
     <SitePage>
       <MktAuthFrame photo={PHOTOS.port} kicker="OPERATIONS LOGIN" title="Return to the operating record." body="Your loads, bids, drivers, documents and delivery state remain connected in one freight workspace.">
         <div className="auth-card mkt-reveal">
-          <div className="auth-card-head"><h2>Log in to <img src="/brand/logo-full.svg" alt="Loadbyton" /></h2><p>Post loads, bid on freight, or run the ops console.</p></div>
+          <div className="auth-card-head"><h2>Log in to <BrandWordmark className="auth-logo" /></h2><p>Post loads, bid on freight, or run the ops console.</p></div>
           <form className="auth-card-body" onSubmit={submit}>
             <div className="group"><label htmlFor="email">Email</label><input className="input" id="email" name="email" type="email" required autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@company.ae" /></div>
             <div className="group">

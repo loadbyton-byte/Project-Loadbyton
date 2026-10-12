@@ -2,7 +2,7 @@
 // (platform_fees via chargeFee: cancellation + priority placement).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -32,7 +32,7 @@ async function postAwardFund(shipper, carrier, admin, extra = {}) {
   return jobId;
 }
 
-test('two-person rule: requester cannot self-confirm; second admin executes release', async () => {
+test('two-person rule: requester cannot self-confirm; second admin executes release', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);
@@ -119,7 +119,7 @@ async function makeSecondAdmin(server, requesterAdmin) {
 // endpoint with no test coverage. This checks the two-person rule holds for
 // rejection too, and — the actual financial invariant that matters — that a
 // rejected request never executes the underlying escrow/payout change.
-test('action-approvals reject: requester cannot self-reject; a rejected request never executes; decided requests cannot be re-decided', async () => {
+test('action-approvals reject: requester cannot self-reject; a rejected request never executes; decided requests cannot be re-decided', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);

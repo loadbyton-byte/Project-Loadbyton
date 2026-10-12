@@ -4,9 +4,27 @@ import { api } from '../../lib/api.js';
 import { CONTAINER_EQUIPMENT, TERMINALS, AREAS, EQUIPMENT_TYPES, formatLabel } from '../../lib/constants.js';
 import { Button, Card, Input, Label, Select, Textarea, SegmentedControl } from '../../components/ui.jsx';
 
+// Stored timestamps are UTC: ISO-8601 with a trailing Z for jobs posted
+// through the app, or SQLite's zone-less "YYYY-MM-DD HH:MM:SS" (also UTC) for
+// seeded/legacy rows. A <input type="datetime-local"> wants the user's LOCAL
+// wall-clock time, so convert properly. This used to just slice the first 16
+// characters, which showed the UTC clock time as if it were local — a job
+// posted for 10:00 in the UAE displayed as 06:00, and saving it back (with no
+// timezone) moved the job again.
 function toDatetimeLocal(raw) {
   if (!raw) return '';
-  return raw.replace(' ', 'T').slice(0, 16);
+  const hasZone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const d = new Date(hasZone ? raw : `${raw.replace(' ', 'T')}Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// datetime-local value (local wall clock, no zone) -> unambiguous UTC ISO string.
+function fromDatetimeLocal(value) {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
 export default function JobEditForm({ job, onDone, onCancel }) {
@@ -42,11 +60,6 @@ export default function JobEditForm({ job, onDone, onCancel }) {
   // 3-leg flow it never had.
   const useSimpleLocations = form.shipmentType === 'LOCAL' || !CONTAINER_EQUIPMENT.includes(job.equipment_type);
 
-  function toDatetimeLocal(raw) {
-    if (!raw) return '';
-    return raw.replace(' ', 'T').slice(0, 16);
-  }
-
   async function save(e) {
     e.preventDefault();
     setBusy(true);
@@ -54,6 +67,8 @@ export default function JobEditForm({ job, onDone, onCancel }) {
     try {
       await api.editJob(job.id, {
         ...form,
+        readyAt: fromDatetimeLocal(form.readyAt),
+        deadline: fromDatetimeLocal(form.deadline),
         targetPriceAed: form.targetPriceAed === '' ? undefined : Number(form.targetPriceAed),
         cargoWeightTons: form.cargoWeightTons === '' ? undefined : Number(form.cargoWeightTons),
       });

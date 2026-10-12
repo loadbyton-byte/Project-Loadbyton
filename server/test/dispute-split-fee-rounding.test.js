@@ -12,7 +12,7 @@
 // reported as AED 20.00 instead of the correct AED 19.78.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 let admin;
@@ -27,7 +27,7 @@ test.after(async () => {
   await server.stop();
 });
 
-test('dispute SPLIT rounds the platform fee to the nearest fils, not the nearest whole AED', async () => {
+test('dispute SPLIT rounds the platform fee to the nearest fils, not the nearest whole AED', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);

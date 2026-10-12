@@ -9,7 +9,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -186,7 +186,7 @@ test('a deferred-term job\'s credit draw cannot be restored twice, in either ord
 // first here deliberately — starting from the 5.0 ceiling, an on-time nudge
 // alone would clamp right back to 5.0 and the test would prove nothing
 // about the "up" direction actually firing.
-test('settling a credit draw updates payment_reliability_score: down more when overdue, up a little when on-time', async () => {
+test('settling a credit draw updates payment_reliability_score: down more when overdue, up a little when on-time', { skip: sqliteOnly }, async () => {
   const admin = makeClient(server.baseUrl);
   await admin.login('admin@loadbyton.ae', 'demo1234');
   const shipper = await freshShipper(server.baseUrl, admin);
