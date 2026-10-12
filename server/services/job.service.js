@@ -620,12 +620,38 @@ async function editJob(jobId, body, req) {
   if ((b.deliveryLat !== undefined || b.deliveryLng !== undefined) && !isValidUaeLatLng(Number(b.deliveryLat), Number(b.deliveryLng))) {
     const e = new Error('deliveryLat/deliveryLng must be valid UAE coordinates'); e.status = 400; throw e;
   }
+  // Same date rules as job creation (validators/job.schema.js): ready_at /
+  // deadline are TEXT columns, so without this the edit endpoint stored
+  // whatever string it was sent — including zone-less local times that the
+  // browser and the server then read differently — and never checked that the
+  // deadline still comes after the ready time.
+  const edited = { ...b };
+  for (const field of ['readyAt', 'deadline']) {
+    if (edited[field] === undefined) continue;
+    const d = new Date(edited[field]);
+    if (typeof edited[field] !== 'string' || !edited[field].trim() || Number.isNaN(d.getTime())) {
+      const e = new Error(`${field} must be a valid date and time`); e.status = 400; throw e;
+    }
+    edited[field] = d.toISOString();
+  }
+  if (edited.readyAt !== undefined || edited.deadline !== undefined) {
+    const parseStored = (raw) => new Date(/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(raw) ? raw : `${String(raw).replace(' ', 'T')}Z`);
+    const ready = new Date(edited.readyAt !== undefined ? edited.readyAt : parseStored(job.ready_at));
+    const dead = new Date(edited.deadline !== undefined ? edited.deadline : parseStored(job.deadline));
+    if (dead.getTime() <= ready.getTime()) { const e = new Error('deadline must be after readyAt'); e.status = 400; throw e; }
+  }
+  for (const [field, label, max] of [['targetPriceAed', 'Target price', 1_000_000], ['cargoWeightTons', 'Cargo weight', 1000]]) {
+    if (edited[field] === undefined || edited[field] === null || edited[field] === '') { if (edited[field] === '') delete edited[field]; continue; }
+    const n = Number(edited[field]);
+    if (!Number.isFinite(n) || n <= 0) { const e = new Error(`${label} must be greater than 0`); e.status = 400; throw e; }
+    if (n > max) { const e = new Error(`${label} must be at most ${max.toLocaleString('en-US')}`); e.status = 400; throw e; }
+  }
   const sets = [];
   const params = [];
   const beforeState = {};
   for (const [key, column] of Object.entries(JOB_EDITABLE_FIELDS)) {
-    if (b[key] === undefined) continue;
-    let value = b[key];
+    if (edited[key] === undefined) continue;
+    let value = edited[key];
     if (BOOLEAN_JOB_FIELDS.has(key)) value = value ? 1 : 0;
     if (COUNT_JOB_FIELDS.has(key)) value = Math.max(1, Number(value) || 1);
     beforeState[column] = job[column];
@@ -643,7 +669,7 @@ async function editJob(jobId, body, req) {
     entityType: 'job',
     entityId: job.id,
     beforeState: JSON.stringify(beforeState),
-    afterState: JSON.stringify(Object.fromEntries(Object.entries(JOB_EDITABLE_FIELDS).filter(([k]) => b[k] !== undefined).map(([k, col]) => [col, b[k]]))),
+    afterState: JSON.stringify(Object.fromEntries(Object.entries(JOB_EDITABLE_FIELDS).filter(([k]) => edited[k] !== undefined).map(([k, col]) => [col, edited[k]]))),
   });
   const updated = await jobRepository.findById(job.id);
   return updated;

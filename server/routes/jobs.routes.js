@@ -59,7 +59,7 @@ router.get('/api/jobs/:id', auth(), jobController.getJob);
 // contract: a client that doesn't send an Idempotency-Key header gets no
 // protection from this middleware (still gets the frontend's disable-on-
 // click guard), one that does gets a cached replay of the first response.
-router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireApproved(), requireSeatRole(['OPS']), idempotency, validate(jobCreateSchema), jobController.createJob);
+router.post('/api/jobs', auth(['SHIPPER']), writeLimiter, requireApproved(), requireSeatRole(['OPS']), idempotency, validate(jobCreateSchema, { plain: true }), jobController.createJob);
 
 // Award — the money-moving transaction lives in services/award.service.js;
 // this wrapper only does HTTP (kept for backwards compat, not moved to job.controller to preserve award.service isolation).

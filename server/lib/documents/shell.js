@@ -4,10 +4,22 @@
 // brand kit (docs/brand/design-tokens.json, docs/brand/BRAND_GUIDELINES.md)
 // — nothing here is a new visual identity, only the existing one applied.
 //
-// Every document is served from this same Express app, which serves
-// web/dist statically (server/app.js), so a relative /brand/logo-full.svg
-// reference resolves correctly whether the page is opened directly against
-// the API host or through the Vercel rewrite proxy at the app's own domain.
+// The logo is embedded as a data URI rather than linked. The web app opens
+// these documents from a blob: URL (web/src/lib/api.js's openDocument), where
+// a path-absolute reference like /brand/logo.svg has no origin to resolve
+// against — the image failed to load and the old onerror handler silently
+// hid it, so documents went out with no logo at all. A data URI has no
+// dependency on where the HTML is opened, printed or saved from.
+const fs = require('node:fs');
+const path = require('node:path');
+
+let logoDataUri = '';
+try {
+  const png = fs.readFileSync(path.join(__dirname, 'assets', 'logo-wordmark-light-bg.png'));
+  logoDataUri = `data:image/png;base64,${png.toString('base64')}`;
+} catch (e) {
+  console.warn('[documents] logo asset missing — documents will render without it:', e.message);
+}
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -70,7 +82,8 @@ function renderDocumentShell({ title, subtitle, bodyHtml, docCode }) {
     border-bottom: 3px solid var(--lb-red);
     margin-bottom: 24px;
   }
-  .doc-header img { height: 34px; display: block; }
+  .doc-header img { height: 30px; width: auto; display: block; }
+  .doc-header .doc-wordmark { font: 900 22px 'Geist', 'Inter', sans-serif; letter-spacing: 2px; color: var(--lb-navy); }
   .doc-header .doc-meta { text-align: right; font-size: 13px; color: var(--lb-muted); }
   .doc-title { font-size: 22px; font-weight: 700; color: var(--lb-navy); margin: 0 0 2px; }
   .doc-subtitle { font-size: 14px; color: var(--lb-muted); margin: 0 0 24px; }
@@ -126,7 +139,7 @@ function renderDocumentShell({ title, subtitle, bodyHtml, docCode }) {
 <body>
   <div class="print-bar no-print"><button onclick="window.print()">Print / Save as PDF</button></div>
   <div class="doc-header">
-    <img src="/brand/logo-full.svg" alt="Loadbyton" onerror="this.style.display='none'" />
+    ${logoDataUri ? `<img src="${logoDataUri}" alt="Loadbyton" />` : '<strong class="doc-wordmark">LOADBYTON</strong>'}
     <div class="doc-meta">${docCode ? `<div class="mono">${esc(docCode)}</div>` : ''}</div>
   </div>
   <h1 class="doc-title">${esc(title)}</h1>

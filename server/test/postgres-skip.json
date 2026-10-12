@@ -1,0 +1,22 @@
+{
+  "_comment": "Test files not run by `npm run test:pg`. Group 1: they load the DB module in-process or open the SQLite file directly, so they can only run on SQLite (they still run in `npm test`). Group 2: DB-independent unit/build checks that `npm test` already covers.",
+  "files": [
+    "compliance-engine.test.js",
+    "csp-theme-script.test.js",
+    "dispute-types.test.js",
+    "iban-change-payout-hold.test.js",
+    "payout-unknown-reconciliation.test.js",
+    "pg-types.test.js",
+    "postgres-query-safety.test.js",
+    "prerender.test.js",
+    "reconciliation.test.js",
+    "schema-postgres-parity.test.js",
+    "shipment-events.test.js",
+    "sql-translate.test.js",
+    "sweep-concurrency.test.js",
+    "two-person-approval-dispute-payout.test.js",
+    "whatsapp-media.test.js",
+    "whatsapp-session-key.test.js",
+    "whatsapp-trip-offer-prompt.test.js"
+  ]
+}

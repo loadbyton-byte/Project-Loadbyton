@@ -30,11 +30,14 @@ const httpServer = app.listen(PORT, () => {
   // it restarted. SEED_DEMO_ACCOUNTS=0 still opts a real customer-facing
   // deployment out of demo-account creation entirely, same as before —
   // now it gates the one unified call instead of just half of it.
+  app.locals.seedStatus = process.env.SEED_DEMO_ACCOUNTS !== '0' ? 'pending' : 'disabled';
   if (process.env.SEED_DEMO_ACCOUNTS !== '0') {
     (async () => {
       try {
         await require('./seed')();
+        app.locals.seedStatus = 'done';
       } catch (e) {
+        app.locals.seedStatus = 'failed';
         console.log(`[warning] seed() failed: ${e.message}`);
       }
     })();

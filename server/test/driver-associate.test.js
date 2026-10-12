@@ -6,7 +6,7 @@
 // the browser-Geolocation path already uses.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -101,7 +101,7 @@ test('trip offer declined over WhatsApp does not bind the driver', async () => {
   assert.equal(detail.body.job.assigned_driver_id, null);
 });
 
-test('a private-plate vehicle blocks trip-offer acceptance via the compliance engine', async () => {
+test('a private-plate vehicle blocks trip-offer acceptance via the compliance engine', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);

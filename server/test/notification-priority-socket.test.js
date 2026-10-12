@@ -14,7 +14,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { io: ioClient } = require('socket.io-client');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -50,7 +50,7 @@ async function createOpenJob(shipper) {
   return created.body.job.id;
 }
 
-test('a bid notification is stored with priority=normal and pushed live only to the shipper, not the bidding carrier', async () => {
+test('a bid notification is stored with priority=normal and pushed live only to the shipper, not the bidding carrier', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);
@@ -104,7 +104,7 @@ test('a bid notification is stored with priority=normal and pushed live only to 
   db.close();
 });
 
-test('a dispute notification is stored with priority=high', async () => {
+test('a dispute notification is stored with priority=high', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const admin = makeClient(server.baseUrl);

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/brand/logo-wordmark-dark-bg.png">
+    <img src="web/public/brand/logo-wordmark-light-bg.png" alt="Loadbyton" width="420">
+  </picture>
+</p>
+
 # Loadbyton
 
 **UAE Road Freight & Container Drayage Marketplace** — a full-stack platform that connects **shippers** who need a container, a flatbed load, or a multi-truck job moved across Dubai, Abu Dhabi, Sharjah, or Fujairah with **carriers** who truck them (across 13 equipment types, from a container chassis to a genset trailer to custom loads), and gives **admins** a verification, escrow and dispute console.

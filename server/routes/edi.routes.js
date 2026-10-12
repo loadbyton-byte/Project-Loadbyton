@@ -59,8 +59,8 @@ router.post('/api/edi/ingest', auth(['SHIPPER','ADMIN']), async (req,res)=>{
 // linked). ADMIN keeps unrestricted access.
 router.get('/api/edi/consignments', auth(['SHIPPER','ADMIN']), async (req,res)=>{
   const rows = req.user.role === 'ADMIN'
-    ? await db.prepare('SELECT * FROM global_consignments ORDER BY updated_at DESC LIMIT 100').all()
-    : await db.prepare(`SELECT gc.* FROM global_consignments gc JOIN jobs j ON j.id = gc.linked_job_id WHERE j.shipper_id=? ORDER BY gc.updated_at DESC LIMIT 100`).all(req.user.id);
+    ? await db.prepare('SELECT gc.*, j.job_code FROM global_consignments gc LEFT JOIN jobs j ON j.id = gc.linked_job_id ORDER BY gc.updated_at DESC LIMIT 100').all()
+    : await db.prepare(`SELECT gc.*, j.job_code FROM global_consignments gc JOIN jobs j ON j.id = gc.linked_job_id WHERE j.shipper_id=? ORDER BY gc.updated_at DESC LIMIT 100`).all(req.user.id);
   res.json({ consignments: rows });
 });
 router.get('/api/edi/consignments/:id', auth(['SHIPPER','ADMIN']), async (req,res)=>{

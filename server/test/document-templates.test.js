@@ -10,7 +10,7 @@
 // rendered directly in the browser.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -22,7 +22,7 @@ test.after(async () => {
   await server.stop();
 });
 
-test('every seeded AWARDED-or-beyond job has a matching payouts row (no orphaned "awarded" job with no payout)', async () => {
+test('every seeded AWARDED-or-beyond job has a matching payouts row (no orphaned "awarded" job with no payout)', { skip: sqliteOnly }, async () => {
   const { DatabaseSync } = require('node:sqlite');
   const db = new DatabaseSync(server.dbPath);
   const orphans = db.prepare(
@@ -35,7 +35,7 @@ test('every seeded AWARDED-or-beyond job has a matching payouts row (no orphaned
   assert.deepEqual(orphans, [], 'every awarded-or-beyond job must have a payouts row — see seed.js\'s payout backfill');
 });
 
-test('the Settlement document renders for a seeded COMPLETED job instead of 404ing', async () => {
+test('the Settlement document renders for a seeded COMPLETED job instead of 404ing', { skip: sqliteOnly }, async () => {
   const admin = makeClient(server.baseUrl);
   await admin.login('admin@loadbyton.ae', 'demo1234');
   const { DatabaseSync } = require('node:sqlite');

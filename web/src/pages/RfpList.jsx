@@ -38,7 +38,9 @@ export default function RfpList() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.createRfp(form);
+      // datetime-local gives zone-less local wall-clock time; send an unambiguous UTC instant.
+      const deadline = form.deadline && !Number.isNaN(new Date(form.deadline).getTime()) ? new Date(form.deadline).toISOString() : form.deadline;
+      await api.createRfp({ ...form, deadline });
       addToast({ type: 'status_change', title: 'RFP created' });
       setShowModal(false);
       setForm({ title: '', description: '', origin: '', destination: '', equipmentType: 'CONTAINER_CHASSIS', cargoType: 'GENERAL_GOODS', deadline: '', budgetAed: '' });

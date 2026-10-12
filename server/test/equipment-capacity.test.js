@@ -4,7 +4,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -152,7 +152,7 @@ test('awarding a bid from a zero-capacity carrier is blocked until the shipper e
   assert.equal(release.body.available_units, startUnits);
 });
 
-test('award is blocked if the bidding carrier\'s verification was revoked after they bid', async () => {
+test('award is blocked if the bidding carrier\'s verification was revoked after they bid', { skip: sqliteOnly }, async () => {
   // Commercial-logic audit finding: is_verified is checked at bid time
   // (job-lifecycle.routes.js) but nothing re-checked it at award time — a
   // carrier who bids while verified, then has verification revoked before

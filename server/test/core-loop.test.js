@@ -8,7 +8,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -185,7 +185,7 @@ test('core loop: post -> bid -> award -> pod -> status, with escrow and payout t
 // other fee computation in this codebase. 125.40 @ the default 6%
 // commission = 7.524 — the old code rounded that to 8 (a whole AED off);
 // the fix rounds to 7.52.
-test('award commission rounds to the nearest fils, not the nearest whole AED', async () => {
+test('award commission rounds to the nearest fils, not the nearest whole AED', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const created = await shipper.post('/api/jobs', {

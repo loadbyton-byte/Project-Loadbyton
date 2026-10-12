@@ -44,6 +44,7 @@ cd web && npm install && npm run dev        # SPA on :5173
 
 ## Testing
 - `cd server && npm test` — isolated temp SQLite per run, real HTTP (harness `server/test/harness.js`), no mocks
+- `cd server && PG_TEST_URL=postgres://user:pw@localhost:5432/postgres npm run test:pg` — the same suite against a **real Postgres**, one throw-away database per test file. Production runs on Postgres, so SQL that only works on SQLite (scalar `MAX(a,b)`, case-insensitive `LIKE`, ...) must be caught here, not in production. CI runs it as the `test-postgres` job. Tests that can only run on SQLite (they open the DB file directly) are listed in `server/test/postgres-skip.json`. SQLite-isms are translated for Postgres in `server/lib/sqlTranslate.js`.
 - `cd server && npm run typecheck` — `tsc --noEmit` (types only, JS excluded)
 - `cd web && npm run build` — Vite + prerender (9 SEO pages) must succeed
 - `npm --prefix server audit` — 0 vulnerabilities expected

@@ -16,7 +16,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Stripe = require('stripe');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 const STRIPE_WEBHOOK_SECRET = 'whsec_test_regress_1234';
 const stripeForSigning = Stripe('sk_test_fake_for_signing_only');
@@ -66,7 +66,7 @@ async function createAwardedJob(shipper, carrier) {
   return jobId;
 }
 
-test('an unrecognized Stripe charge.refunded event freezes escrow for manual review', async () => {
+test('an unrecognized Stripe charge.refunded event freezes escrow for manual review', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);
@@ -99,7 +99,7 @@ test('an unrecognized Stripe charge.refunded event freezes escrow for manual rev
   );
 });
 
-test('a charge.refunded event that only confirms our OWN already-recorded refund is a no-op', async () => {
+test('a charge.refunded event that only confirms our OWN already-recorded refund is a no-op', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);

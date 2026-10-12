@@ -34,10 +34,14 @@ export default function EdiConsignments() {
     }
   }
 
+  // Rows come straight from global_consignments: the key is `id` (there is no
+  // `consignment_id` column — reading it threw "Cannot read properties of
+  // undefined (reading 'toLowerCase')" and crashed the whole page as soon as a
+  // shipper had one consignment). origin/destination can also be blank for a
+  // partially-ingested file, so every searched field is coerced to text first.
+  const needle = search.trim().toLowerCase();
   const filtered = consignments.filter((c) =>
-    c.consignment_id.toLowerCase().includes(search.toLowerCase()) ||
-    c.origin.toLowerCase().includes(search.toLowerCase()) ||
-    c.destination.toLowerCase().includes(search.toLowerCase())
+    !needle || [c.id, c.origin, c.destination, c.job_code].some((v) => String(v ?? '').toLowerCase().includes(needle))
   );
 
   if (loading) return <div className="flex justify-center py-12"><Spinner size={32} className="text-brand-primary" /></div>;
@@ -90,9 +94,9 @@ export default function EdiConsignments() {
             <tbody className="divide-y divide-outline-variant">
               {filtered.map((c) => (
                 <tr key={c.id} className="hover:bg-surface-container-high">
-                  <td className="px-4 py-3 font-mono text-sm text-ink">{c.consignment_id}</td>
-                  <td className="px-4 py-3 text-sm text-ink">{c.origin}</td>
-                  <td className="px-4 py-3 text-sm text-ink">{c.destination}</td>
+                  <td className="px-4 py-3 font-mono text-sm text-ink">{c.id}</td>
+                  <td className="px-4 py-3 text-sm text-ink">{c.origin || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-ink">{c.destination || '—'}</td>
                   <td className="px-4 py-3"><Badge color={c.status === 'DELIVERED' ? 'success' : c.status === 'EXCEPTION' ? 'danger' : c.status === 'IN_TRANSIT' ? 'warning' : 'neutral'}>{c.status}</Badge></td>
                   <td className="px-4 py-3 text-sm text-ink-muted">{c.job_code || '—'}</td>
                   <td className="px-4 py-3 text-sm text-ink-muted">{c.updated_at ? new Date(c.updated_at).toLocaleString() : '—'}</td>

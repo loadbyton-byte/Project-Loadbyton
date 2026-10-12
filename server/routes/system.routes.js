@@ -93,6 +93,10 @@ router.get('/api/health', async (/** @type {any} */ req, /** @type {any} */ res)
     port: PORT,
     db: { ok: dbOk, latencyMs: dbLatencyMs, mode: db.isPostgres ? 'postgres' : 'sqlite' },
     redis: redisStatus,
+    // 'pending' while the post-boot demo-account top-up is still running
+    // (several seconds on a fresh Postgres database), then 'done' | 'failed';
+    // 'disabled' when SEED_DEMO_ACCOUNTS=0. See index.js.
+    seed: req.app.locals.seedStatus || 'unknown',
     payments: payments.providerInfo(),
     uptimeSec: Math.floor(process.uptime()),
   });

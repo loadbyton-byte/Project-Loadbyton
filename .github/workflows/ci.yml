@@ -153,3 +153,44 @@ jobs:
           path: |
             /tmp/loadbyton-api.log
             /tmp/loadbyton-web.log
+
+  # Production runs on Postgres but the `test` job above runs on SQLite, so any
+  # place the two engines disagree (scalar MAX(), LIKE case-sensitivity,
+  # BIGINT-as-string, ...) used to ship to production unnoticed. This runs the
+  # same HTTP-level suite against a real Postgres, one throw-away database per
+  # test file. Files that can only run on SQLite are listed in
+  # server/test/postgres-skip.json. See docs/REVIEW-2026-10-12.md.
+  test-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Run server tests against Postgres
+        working-directory: server
+        run: npm run test:pg
+        env:
+          PG_TEST_URL: postgres://postgres:postgres@localhost:5432/postgres
+          INTERNAL_KEY: ci-test-key
+          ENCRYPTION_KEY: ci-test-encryption-key-32chars-long

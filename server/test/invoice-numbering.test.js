@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
-const { startServer, makeClient } = require('./harness');
+const { startServer, makeClient, sqliteOnly } = require('./harness');
 
 let server;
 
@@ -23,7 +23,7 @@ test.after(async () => {
   await server.stop();
 });
 
-test('issueInvoice retries and still succeeds when its computed number collides with an existing invoice', async () => {
+test('issueInvoice retries and still succeeds when its computed number collides with an existing invoice', { skip: sqliteOnly }, async () => {
   const shipper = makeClient(server.baseUrl);
   await shipper.login('shipper@jebelalilogistics.ae', 'demo1234');
   const carrier = makeClient(server.baseUrl);

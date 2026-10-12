@@ -72,7 +72,7 @@ const emptyJob = {
 
 export default function Dashboard() {
   usePageTitle('Dashboard');
-  const { user } = useAuth();
+  const { user, actingAs } = useAuth();
   const { t, isRtl } = useLocale();
   const navigate = useNavigate();
   const [analytics, setAnalytics] = useState(null);
@@ -119,6 +119,17 @@ export default function Dashboard() {
   const [assignJob, setAssignJob] = useState(null);
   const { addToast } = useToasts();
   const isBroker = user?.role === 'BROKER';
+  // Why the final "Post job" button can be unavailable. Both are enforced
+  // server-side too (requireApproved / requireSeatRole(['OPS'])); surfacing
+  // the reason at the button means the shipper isn't left guessing why a
+  // fully filled-in form can't be submitted.
+  const awaitingApproval = !!(user?.account_approval_status && user.account_approval_status !== 'APPROVED');
+  const seatCannotPost = !!(actingAs?.seatRole && actingAs.seatRole !== 'OPS');
+  const postBlockedReason = awaitingApproval
+    ? 'Your account is awaiting admin approval. You can finish preparing this load now; posting unlocks as soon as you are approved.'
+    : seatCannotPost
+      ? `Your seat role (${actingAs.seatRole}) can't post jobs. Ask your account owner for the Ops role.`
+      : '';
 
   // Search-as-you-type without a request per keystroke.
   useEffect(() => {
@@ -181,6 +192,7 @@ export default function Dashboard() {
 
   async function onCreate(e) {
     e.preventDefault();
+    if (postBlockedReason) { setError(postBlockedReason); return; }
     // TimeSlotPicker's native `required` only guards its own <input
     // type="date"> sub-field — picking a date without also tapping a
     // 2-hour slot button leaves form.readyAt as '' (see its commit()),
@@ -527,13 +539,13 @@ export default function Dashboard() {
                   {CONTAINER_EQUIPMENT.includes(form.equipmentType) ? (
                     <div>
                       <Label>No. of containers</Label>
-                      <Input type="number" min="1" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
+                      <Input type="number" min="1" max="100" value={form.containerCount} onChange={(e) => setForm({ ...form, containerCount: e.target.value })} />
                       <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a transporter fulfils as a batch.</p>
                     </div>
                   ) : (
                     <div>
                       <Label>No. of trucks required</Label>
-                      <Input type="number" min="1" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
+                      <Input type="number" min="1" max="100" value={form.truckCount} onChange={(e) => setForm({ ...form, truckCount: e.target.value })} />
                       <p className="mt-1 text-xs text-ink-muted">Leave at 1 for a single load. Raise to post one inquiry a transporter fulfils as a batch.</p>
                     </div>
                   )}
@@ -633,7 +645,7 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <Label>Cargo weight (tons)</Label>
-                        <Input type="number" min="0.1" step="0.1" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 8.5" />
+                        <Input type="number" min="0.1" max="1000" step="0.1" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 8.5" />
                       </div>
                     </>
                   ) : LOCAL_BODY_TYPE_TYPES.includes(form.equipmentType) ? (
@@ -761,7 +773,7 @@ export default function Dashboard() {
                   {!(form.shipmentType === 'LOCAL' && LOCAL_LENGTH_TYPES.includes(form.equipmentType)) && (
                   <div>
                     <Label>Cargo weight (tons)</Label>
-                    <Input type="number" min="0" step="0.5" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
+                    <Input type="number" min="0.1" max="1000" step="0.1" value={form.cargoWeightTons} onChange={(e) => setForm({ ...form, cargoWeightTons: e.target.value })} placeholder="e.g. 24" />
                     <p className="mt-1 text-xs text-ink-muted">Approximate gross weight of the cargo — helps transporters pick the right equipment.</p>
                   </div>
                   )}
@@ -778,7 +790,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <Label>Target price (AED, per trip)</Label>
-                    <Input type="number" min="0" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
+                    <Input type="number" min="1" max="1000000" value={form.targetPriceAed} onChange={(e) => setForm({ ...form, targetPriceAed: e.target.value })} placeholder="600" />
                     <p className="mt-1 text-xs text-ink-muted">The price you're targeting for this trip — not a hard cap; higher bids still arrive, flagged.</p>
                   </div>
                   <div className="sm:col-span-2 grid gap-3 rounded-lg border p-4" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-raised)' }}>
@@ -826,6 +838,9 @@ export default function Dashboard() {
                 </>
               )}
 
+              {postStep === POST_JOB_STEPS.length - 1 && postBlockedReason && (
+                <p role="status" className="sm:col-span-2 rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-warning-bg)', color: 'var(--status-warning)' }}>{postBlockedReason}</p>
+              )}
               {error && <p className="sm:col-span-2 rounded-md px-3 py-2 text-sm" style={{ background: 'var(--status-danger-bg)', color: 'var(--status-danger)' }}>{error}</p>}
               </div>
             <Card.Footer className="-mx-5 -mb-5 mt-5">
@@ -863,7 +878,7 @@ export default function Dashboard() {
                   Continue
                 </Button>
               ) : (
-                <Button type="submit" loading={submitting} disabled={(needsTermsCheckbox && !agreedToTerms) || (user?.account_approval_status && user.account_approval_status !== 'APPROVED')}>Post job</Button>
+                <Button type="submit" loading={submitting} disabled={(needsTermsCheckbox && !agreedToTerms) || !!postBlockedReason} title={postBlockedReason || undefined}>Post job</Button>
               )}
             </Card.Footer>
         </form>

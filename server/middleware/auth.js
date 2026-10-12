@@ -133,7 +133,7 @@ function requireSeatRole(allowedSeatRoles) {
     // hit the users table a second time.
     if (!req.user || !req.user.actingSeatId) return next();
     if (allowedSeatRoles && !allowedSeatRoles.includes(req.user.actingSeatRole)) {
-      return res.status(403).json({ error: `Seat role ${req.user.actingSeatRole} not in [${allowedSeatRoles}]` });
+      return res.status(403).json({ error: `Your seat role (${req.user.actingSeatRole}) can't do this — it needs one of: ${allowedSeatRoles.join(', ')}. Ask your account owner to change your seat role.`, code: 'SEAT_ROLE_FORBIDDEN' });
     }
     next();
   };

@@ -46,6 +46,20 @@ export async function openDocument(path) {
 // origin other than this app's real frontend(s).
 export const CSRF_HEADER = 'x-loadbyton-client';
 
+// Raw server wording for the two cases a user can't act on directly: a body
+// over the size limit ("request entity too large"), and the generic 500
+// (production deliberately hides the cause, so all the user sees is "Internal
+// server error"). Give them something actionable, plus the request id so
+// support can find the exact failure in the logs. Deliberate messages — 4xx,
+// and 502/503 such as "Payment provider unavailable" — pass through untouched.
+function friendlyMessage(status, message, requestId) {
+  if (status === 413) return 'That upload is too large. Choose a smaller file (up to 5 MB) and try again.';
+  if (status === 500 && /^internal server error$/i.test(String(message).trim())) {
+    return `Something went wrong on our side. Please try again in a moment${requestId ? ` (reference ${requestId})` : ''}.`;
+  }
+  return message;
+}
+
 async function request(method, path, body, extraHeaders) {
   const res = await fetch(`${API_BASE_URL}/api${path}`, {
     method,
@@ -68,7 +82,7 @@ async function request(method, path, body, extraHeaders) {
       : data?.message || data?.error?.message || data?._legacy?.error
       || `Request failed (${res.status})`;
     const code = data?.code || (typeof data?.error === 'object' ? data.error.code : undefined);
-    throw new ApiError(message, res.status, code);
+    throw new ApiError(friendlyMessage(res.status, message, data?.requestId), res.status, code);
   }
   return data;
 }

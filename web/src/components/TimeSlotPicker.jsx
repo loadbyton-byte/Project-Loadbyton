@@ -50,6 +50,13 @@ export default function TimeSlotPicker({ label, value, onChange, required, minDa
   const currentHour = new Date().getHours();
 
   function commit(nextDateStr, nextHour) {
+    // Switching the date to today while a slot picked for another day is still
+    // selected can leave a slot that has already ended (those buttons are
+    // disabled, but the stale selection used to survive and emit a ready time
+    // in the past). Drop it so the shipper must pick a real slot.
+    if (nextDateStr === today && nextHour !== '' && nextHour !== undefined && Number(nextHour) + 2 <= new Date().getHours()) {
+      nextHour = '';
+    }
     setPicked({ dateStr: nextDateStr, hourStr: nextHour === '' || nextHour === undefined ? '' : String(nextHour) });
     if (!nextDateStr || nextHour === '' || nextHour === undefined) { onChange(''); return; }
     // Build in local time, not UTC — a slot picked as "08:00" in the

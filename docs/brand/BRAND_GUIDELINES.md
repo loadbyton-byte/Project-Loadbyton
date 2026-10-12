@@ -22,16 +22,28 @@ navy-tile "LB" icon mark down to the browser-tab favicon. Navy and red are
 fixed on every surface; the wordmark is not a `currentColor` glyph that
 recolors to match its container.
 
-- `web/public/brand/logo-mark.svg` — the icon-only monogram: a rounded navy
-  tile with "LB" in red. Used at nav/sidebar scale (~28–30px) and anywhere the
-  mark needs to stand alone without the full wordmark.
-- `web/public/brand/logo-full.svg` — full lockup (`LOAD | BY | TON`) for light
-  surfaces: navy type, red divider bars, transparent background.
-- `web/public/brand/logo-full-on-dark.svg` — same lockup on a solid navy fill,
-  white type, red divider bars — for the dark navy surface (nav bar, footer,
-  hero panels).
-- `web/public/favicon.svg` — the icon mark simplified for 16–32px browser-tab
-  scale: navy tile, red "LB", nothing else.
+The logo files come from the supplied brand pack (masters in
+`docs/brand/logo/`); every web asset is generated from them by
+`python3 scripts/generate-brand-assets.py`. Render the wordmark with
+`<BrandWordmark />` (`web/src/components/BrandWordmark.jsx`) — never hard-code
+a file path or redraw it in live text.
+
+- `web/public/brand/logo-wordmark-dark-bg.png` — full lockup, white letters on
+  a transparent background, for dark surfaces (sidebar, footer, auth panel).
+- `web/public/brand/logo-wordmark-light-bg.png` — the same lockup with navy
+  letters, for light surfaces (marketing nav, login card, documents). The pack
+  ships only the white version; this one is a lossless recolour of it
+  (`#FFFFFF` -> `#0F2B3D`), the red divider bars untouched.
+- `web/public/brand/logo-wordmark-on-navy.png` — white lockup on a solid navy
+  tile, for e-mail headers and anywhere a transparent PNG is unreliable.
+- `web/public/brand/logo-icon.png` — the container app icon (`L | BY | T`),
+  512px. Also the source of the favicons, `apple-touch-icon.png` and the PWA
+  icons (`icon-192.png`, `icon-512.png`).
+- `web/public/og-image.png` — 1200x630 social-share card.
+
+These are PNGs, not the SVGs from the pack: the pack's SVGs draw the letters
+with live `<text>` in `sans-serif`, and an SVG used through `<img>` cannot
+load web fonts, so every OS rendered different letterforms.
 
 **Clear space & minimum size.** Keep clear space around the wordmark or the
 icon mark equal to the height of one divider bar on every side. Below ~24px,
