@@ -10,6 +10,9 @@ import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../../lib/auth.jsx';
 import BrandWordmark from '../BrandWordmark.jsx';
 import { IconMoon, IconSun } from '../icons.jsx';
+import { ecosystemUi } from '../../lib/features.js';
+import EcosystemMenu from '../ecosystem/EcosystemMenu.jsx';
+import BranchDirectory from '../ecosystem/BranchDirectory.jsx';
 
 const navLinkClass = ({ isActive }) => (isActive ? 'current' : undefined);
 
@@ -27,11 +30,13 @@ export function SiteNav() {
         </Link>
         <nav className="links" aria-label="Primary">
           <NavLink to="/features" className={navLinkClass}>Features</NavLink>
+          {ecosystemUi && <NavLink to="/business-os" className={navLinkClass}>Business OS</NavLink>}
           <NavLink to="/pricing" className={navLinkClass}>Pricing</NavLink>
           <NavLink to="/about" className={navLinkClass}>About</NavLink>
           <NavLink to="/blog" className={navLinkClass}>Blog</NavLink>
           <NavLink to="/security" className={navLinkClass}>Security</NavLink>
           <NavLink to="/compliance" className={navLinkClass}>Compliance</NavLink>
+          {ecosystemUi && <EcosystemMenu />}
         </nav>
         <div className="nav-right">
           <button
@@ -66,6 +71,7 @@ export function SiteMobileNav() {
     <div className="mobile-nav" id="mobileNav">
       <NavLink to="/features" className={navLinkClass}>Features</NavLink>
       <NavLink to="/industries" className={navLinkClass}>Industries</NavLink>
+      {ecosystemUi && <NavLink to="/business-os" className={navLinkClass}>Business OS</NavLink>}
       <NavLink to="/pricing" className={navLinkClass}>Pricing</NavLink>
       <NavLink to="/for-shippers" className={navLinkClass}>For shippers</NavLink>
       <NavLink to="/for-transporters" className={navLinkClass}>For transporters</NavLink>
@@ -119,6 +125,7 @@ export function SiteFooter() {
               <li><Link to="/login">Operations login</Link></li>
             </ul>
           </div>
+          {ecosystemUi && <BranchDirectory />}
           <div className="fcol">
             <h4>Company</h4>
             <ul>

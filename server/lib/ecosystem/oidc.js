@@ -156,7 +156,7 @@ async function exchangeCode({ client, code, redirectUri, codeVerifier, now = new
     org_verified: principal.org.verification_status === 'VERIFIED',
   });
   const accessToken = signJwt({ ...base, exp: iat + ACCESS_TOKEN_TTL_SECONDS, scope: row.scope, client_id: client.client_id, jti: crypto.randomUUID() }, { typ: 'at+jwt' });
-  return { id_token: idToken, access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TOKEN_TTL_SECONDS, scope: row.scope, _userId: row.user_id };
+  return { id_token: idToken, access_token: accessToken, token_type: 'Bearer', expires_in: ACCESS_TOKEN_TTL_SECONDS, scope: row.scope };
 }
 
 module.exports = {

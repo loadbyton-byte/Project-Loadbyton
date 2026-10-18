@@ -64,7 +64,7 @@ function securityHeaders(req, res, next) {
   }
   res.setHeader(
     'Content-Security-Policy',
-    `default-src 'self'; img-src 'self' data: https://*.tile.openstreetmap.org https://api.mapbox.com https://*.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com; font-src 'self' https://fonts.gstatic.com data:; script-src 'self'${themeScriptCspSource()} https://api.mapbox.com https://js.stripe.com; connect-src 'self' https://nominatim.openstreetmap.org https://api.mapbox.com https://api.stripe.com https://*.sentry.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`
+    `default-src 'self'; img-src 'self' data: https://*.tile.openstreetmap.org https://api.mapbox.com https://*.stripe.com; style-src 'self' 'unsafe-inline' https://api.mapbox.com; font-src 'self' data:; script-src 'self'${themeScriptCspSource()} https://api.mapbox.com https://js.stripe.com; connect-src 'self' https://nominatim.openstreetmap.org https://api.mapbox.com https://api.stripe.com https://*.sentry.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`
   );
   res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()');
   // Cache control: API responses must not be cached by intermediaries

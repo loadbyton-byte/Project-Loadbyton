@@ -156,6 +156,13 @@ for (const r of routes) {
 // hand-copy this object independently, kept in sync only by a code
 // comment; both now read the same file.
 const SEO_META = JSON.parse(require('node:fs').readFileSync(path.join(__dirname, '..', 'seo-meta.json'), 'utf8'));
+// Routes that exist only in a build made with VITE_ECOSYSTEM_UI=true: the
+// build prerenders /business-os, so its presence tells us the build has them.
+try {
+  if (require('node:fs').existsSync(path.join(DIST_DIR, '__prerendered__', 'business-os.html'))) {
+    Object.assign(SEO_META, JSON.parse(require('node:fs').readFileSync(path.join(__dirname, '..', 'seo-meta.ecosystem.json'), 'utf8')));
+  }
+} catch (e) { console.warn('[app] ecosystem SEO meta not loaded:', e.message); }
 const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://loadbyton.com';
 
 function renderSeoHtml(baseHtml, meta, route) {

@@ -1,0 +1,7 @@
+/* Self-hosted variable fonts (SIL OFL 1.1 — licences beside the files in public/brand/fonts).
+   Same families the site used before; only the source changed. */
+@font-face{font-family:"Geist";src:url("/brand/fonts/geist.woff2") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:"Inter";src:url("/brand/fonts/inter.woff2") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/brand/fonts/jetbrains-mono.woff2") format("woff2");font-style:normal;font-weight:100 900;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url("/brand/fonts/noto-sans-arabic.woff2") format("woff2");font-style:normal;font-weight:100 900;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+FB50-FDFF,U+FE70-FEFF}
+@font-face{font-family:"Noto Sans Arabic";src:url("/brand/fonts/noto-sans-arabic-latin.woff2") format("woff2");font-style:normal;font-weight:100 900;font-display:swap;unicode-range:U+0000-00FF}

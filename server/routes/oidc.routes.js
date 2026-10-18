@@ -106,8 +106,7 @@ router.post('/api/oidc/token', express.urlencoded({ extended: false, limit: '16k
   if (b.grant_type !== 'authorization_code') return res.status(400).json({ error: 'unsupported_grant_type' });
   const result = await oidc.exchangeCode({ client, code: b.code, redirectUri: b.redirect_uri, codeVerifier: b.code_verifier });
   if (result.error) return res.status(400).json({ error: result.error });
-  const { _userId, ...tokens } = result;
-  return res.json(tokens);
+  return res.json(result);
 });
 
 router.get('/api/oidc/userinfo', async (req, res) => {

@@ -26,6 +26,10 @@ const prerenderDir = path.join(distDir, '__prerendered__');
 // ("must match X exactly") holding the two in sync. Both now read the same
 // file instead.
 const SEO_META = JSON.parse(fs.readFileSync(path.join(webRoot, '..', 'seo-meta.json'), 'utf8'));
+// Routes that exist only when the ecosystem UI is built (VITE_ECOSYSTEM_UI=true).
+if (process.env.VITE_ECOSYSTEM_UI === 'true') {
+  Object.assign(SEO_META, JSON.parse(fs.readFileSync(path.join(webRoot, '..', 'seo-meta.ecosystem.json'), 'utf8')));
+}
 
 const PUBLIC_APP_PATHS_DISALLOWED = [
   '/dashboard', '/open-loads', '/my-bids', '/won-jobs', '/earnings', '/jobs/', '/profile',

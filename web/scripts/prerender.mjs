@@ -41,6 +41,9 @@ const ROUTES = [
   { path: '/trust', slug: 'trust' },
   { path: '/for-transporters', slug: 'for-transporters' },
   { path: '/for-shippers', slug: 'for-shippers' },
+  // Only when the ecosystem UI is built in (VITE_ECOSYSTEM_UI=true); otherwise
+  // the route does not exist and would prerender the 404 page.
+  ...(process.env.VITE_ECOSYSTEM_UI === 'true' ? [{ path: '/business-os', slug: 'business-os' }] : []),
 ];
 
 async function main() {
