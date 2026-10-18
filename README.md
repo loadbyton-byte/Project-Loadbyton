@@ -61,6 +61,8 @@ Project-Loadbyton/
 │   ├── DISASTER_RECOVERY.md   # backups, restore, incident playbook
 │   ├── ENTERPRISE_AUDIT.md    # audit log of production-readiness fixes
 │   ├── ROADMAP.md             # shipped / next / known limits
+│   ├── ECOSYSTEM.md           # .com ↔ .store: organisations, entitlements, signed events, sign-in
+
 │   ├── enterprise-roadmap.md  # longer-horizon technical roadmap
 │   ├── GOOGLE_MAPS_SETUP.md   # optional Places Autocomplete API key
 │   ├── WHATSAPP_SETUP.md      # WhatsApp Business API setup (gated on Meta approval)
