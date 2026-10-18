@@ -10,7 +10,6 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient.js';
 import './styles/fonts.css';
 import './index.css';
-import './styles/ecosystem.css';
 import './styles/operations-system.css';
 // Ported from the design-tool export's home.css + site.css, scoped entirely
 // under `.mkt-scope` (see the file header) so nothing in it can leak onto —

@@ -17,14 +17,11 @@ import Security from './pages/Security.jsx';
 import Compliance from './pages/Compliance.jsx';
 import Terms from './pages/Terms.jsx';
 import Privacy from './pages/Privacy.jsx';
-import EcosystemLegal from './pages/EcosystemLegal.jsx';
 import Industries from './pages/Industries.jsx';
 import Trust from './pages/Trust.jsx';
 import ForTransporters from './pages/ForTransporters.jsx';
 import ForShippers from './pages/ForShippers.jsx';
 import NotFound from './pages/NotFound.jsx';
-import BusinessOS from './pages/BusinessOS.jsx';
-import { ecosystemUi } from './lib/features.js';
 import { safeOidcReturn } from './lib/returnTo.js';
 
 // Everything behind a login (or login itself) is never part of that
@@ -87,10 +84,6 @@ const AdminReconciliation = lazy(() => import('./pages/admin/AdminReconciliation
 const AdminPlatformFees = lazy(() => import('./pages/admin/AdminPlatformFees.jsx'));
 const AdminLedgerVerify = lazy(() => import('./pages/admin/AdminLedgerVerify.jsx'));
 
-// Ecosystem (Business OS benefits, organisation identity, cross-domain interstitial)
-const Benefits = lazy(() => import('./pages/account/Benefits.jsx'));
-const Organisation = lazy(() => import('./pages/account/Organisation.jsx'));
-const Go = lazy(() => import('./pages/Go.jsx'));
 
 // Account deletion
 const AccountDeletion = lazy(() => import('./pages/AccountDeletion.jsx'));
@@ -179,15 +172,12 @@ export default function App() {
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
-          <Route path="/premium-terms" element={<EcosystemLegal doc="premium" />} />
-          <Route path="/business-os-terms" element={<EcosystemLegal doc="business-os" />} />
-          <Route path="/data-sharing" element={<EcosystemLegal doc="data-sharing" />} />
+
           <Route path="/industries" element={<Industries />} />
           <Route path="/trust" element={<Trust />} />
           <Route path="/for-transporters" element={<ForTransporters />} />
           <Route path="/for-shippers" element={<ForShippers />} />
-          {ecosystemUi && <Route path="/business-os" element={<BusinessOS />} />}
-          {ecosystemUi && <Route path="/go/:key" element={<Go />} />}
+
 
           <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
           <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
@@ -236,9 +226,6 @@ export default function App() {
           <Route path="/admin/platform-fees" element={<RequireAuth roles={['ADMIN']}><AdminPlatformFees /></RequireAuth>} />
           <Route path="/admin/ledger-verify" element={<RequireAuth roles={['ADMIN']}><AdminLedgerVerify /></RequireAuth>} />
 
-          {/* Ecosystem — company-level, so every company role (and seat) may open them; driver seats are redirected by RequireAuth */}
-          {ecosystemUi && <Route path="/account/benefits" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Benefits /></RequireAuth>} />}
-          {ecosystemUi && <Route path="/account/organisation" element={<RequireAuth roles={['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']}><Organisation /></RequireAuth>} />}
 
           {/* Account deletion */}
           <Route path="/account/deletion" element={<RequireAuth><AccountDeletion /></RequireAuth>} />
