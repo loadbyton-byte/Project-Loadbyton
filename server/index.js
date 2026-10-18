@@ -44,6 +44,7 @@ const httpServer = app.listen(PORT, () => {
   }
   // Outbox worker — reliable delivery of post-transaction side-effects (notifications, ledger fanout)
   try { require('./workers/outbox.worker').startOutboxWorker(); } catch (e) { console.warn('[outbox] worker failed to start:', e.message); }
+  try { require('./workers/ecosystem.worker').startEcosystemWorker(); } catch (e) { console.warn('[ecosystem] worker failed to start:', e.message); }
   try { require('./lib/socket').initSocket(httpServer); } catch (e) { console.warn('[socket] failed to start:', e.message); }
 });
 

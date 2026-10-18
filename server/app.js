@@ -132,6 +132,8 @@ const routes = [
   './routes/ml.routes',
   './routes/monetization.routes',
   './routes/org.routes',
+  './routes/ecosystem.routes',
+  './routes/oidc.routes',
   './routes/retention.routes',
   './routes/rfp.routes',
   './routes/stripe.routes',
