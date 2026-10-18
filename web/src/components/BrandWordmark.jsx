@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { LOGO_FOR_DARK_BG, LOGO_FOR_LIGHT_BG, LOGO_WORDMARK_SIZE } from '../lib/brand.js';
 import { brandV2 } from '../lib/features.js';
 
@@ -14,8 +15,10 @@ const V2_FOR_LIGHT_BG = '/brand/v2/masters/logo-parent-navy.svg';
 const V2_SIZE = { width: 450, height: 112 };
 
 export default function BrandWordmark({ dark = false, className = '' }) {
-  const size = brandV2 ? V2_SIZE : LOGO_WORDMARK_SIZE;
-  const src = brandV2 ? (dark ? V2_FOR_DARK_BG : V2_FOR_LIGHT_BG) : (dark ? LOGO_FOR_DARK_BG : LOGO_FOR_LIGHT_BG);
+  // The home page keeps the original wordmark (owner request, 18 Oct 2026).
+  const useV2 = brandV2 && useLocation().pathname !== '/';
+  const size = useV2 ? V2_SIZE : LOGO_WORDMARK_SIZE;
+  const src = useV2 ? (dark ? V2_FOR_DARK_BG : V2_FOR_LIGHT_BG) : (dark ? LOGO_FOR_DARK_BG : LOGO_FOR_LIGHT_BG);
   return (
     <img
       src={src}

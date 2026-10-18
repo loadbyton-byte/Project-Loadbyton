@@ -6,13 +6,16 @@
 // react-router `<Link>`/`<NavLink>` — there are no static .html documents
 // in the actual app.
 import React from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../lib/auth.jsx';
 import BrandWordmark from '../BrandWordmark.jsx';
 import { IconMoon, IconSun } from '../icons.jsx';
-import { ecosystemUi } from '../../lib/features.js';
+import { ecosystemUi as ecosystemFlag } from '../../lib/features.js';
 import EcosystemMenu from '../ecosystem/EcosystemMenu.jsx';
 import BranchDirectory from '../ecosystem/BranchDirectory.jsx';
+
+// The home page keeps its original navigation and footer (owner request, 18 Oct 2026).
+const useEcosystemUi = () => ecosystemFlag && useLocation().pathname !== '/';
 
 const navLinkClass = ({ isActive }) => (isActive ? 'current' : undefined);
 
@@ -21,6 +24,7 @@ export function SiteProgress() {
 }
 
 export function SiteNav() {
+  const ecosystemUi = useEcosystemUi();
   const { theme, setTheme } = useAuth();
   return (
     <header className="nav" id="nav">
@@ -66,6 +70,7 @@ export function SiteNav() {
 }
 
 export function SiteMobileNav() {
+  const ecosystemUi = useEcosystemUi();
   const { theme, setTheme } = useAuth();
   return (
     <div className="mobile-nav" id="mobileNav">
@@ -96,6 +101,7 @@ export function SiteMobileNav() {
 }
 
 export function SiteFooter() {
+  const ecosystemUi = useEcosystemUi();
   return (
     <footer>
       <div className="container">
