@@ -9,12 +9,11 @@ import {
   IconMenu, IconClose, IconBell, IconLogOut, IconUser, IconMoon, IconSun,
   IconHome, IconHistory, IconFile, IconGavel, IconCheckCircle, IconWallet,
   IconTrendUp, IconSettings, IconTruck, IconMessage, IconReceipt,
-  IconCompass, IconShield, IconSearch, IconArrowRight, IconLayers,
+  IconCompass, IconShield, IconSearch, IconArrowRight,
 } from './icons.jsx';
 import { useToasts } from './Toast.jsx';
 import CommandPalette from './CommandPalette.jsx';
 import BrandWordmark from './BrandWordmark.jsx';
-import { ecosystemUi } from '../lib/features.js';
 
 function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -290,12 +289,6 @@ function navByRole(t) {
       { to: '/gcc/corridors', label: t('nav.gccCorridors', 'Trade corridors'), icon: <IconCompass size={20} />, group: 'Insights' },
     ],
   };
-  // Company-level Business OS entry (ecosystem UI only). Platform staff have no company.
-  if (ecosystemUi) {
-    for (const role of ['SHIPPER', 'CARRIER', 'FORWARDER', 'BROKER', 'OWNER_OPERATOR']) {
-      nav[role].push({ to: '/account/benefits', label: t('nav.businessOs', 'Business OS'), icon: <IconLayers size={20} />, group: 'Account' });
-    }
-  }
   return nav;
 }
 
@@ -336,7 +329,7 @@ const FOOTER_TICKER = [
 const MKT_CHROME_ROUTES = new Set([
   '/', '/features', '/pricing', '/about', '/blog', '/security', '/compliance',
   '/industries', '/trust', '/for-transporters', '/for-shippers',
-  '/login', '/register', '/business-os',
+  '/login', '/register',
 ]);
 
 export function Shell({ children }) {
@@ -365,7 +358,7 @@ function ShellInner({ children }) {
   const { addToast } = useToasts();
   const routeSurface = (() => {
     const path = location.pathname;
-    if (['/features', '/pricing', '/about', '/blog', '/security', '/compliance', '/terms', '/privacy', '/premium-terms', '/business-os-terms', '/data-sharing', '/industries', '/trust', '/for-transporters', '/for-shippers', '/business-os'].includes(path)) return 'public';
+    if (['/features', '/pricing', '/about', '/blog', '/security', '/compliance', '/terms', '/privacy', '/industries', '/trust', '/for-transporters', '/for-shippers'].includes(path)) return 'public';
     if (['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'].includes(path)) return 'auth';
     if (path === '/admin' || path.startsWith('/admin/')) return 'admin';
     if (path === '/driver' || path.startsWith('/driver/')) return 'driver';
@@ -915,7 +908,7 @@ function ShellInner({ children }) {
                 <div className="flex flex-col gap-5 border-t border-white/10 pt-8 text-xs text-white/60 lg:flex-row lg:items-center lg:justify-between">
                   <p>© {new Date().getFullYear()} Loadbyton. All rights reserved.</p>
                   <div className="flex flex-wrap gap-x-7 gap-y-3">
-                    <Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/premium-terms">Premium terms</Link><Link to="/data-sharing">Data sharing</Link><Link to="/security">Security</Link><Link to="/compliance">Compliance</Link>
+                    <Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link><Link to="/security">Security</Link><Link to="/compliance">Compliance</Link>
                   </div>
                   <p className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.16em]"><span className="h-5 w-5 rounded bg-emerald-500" /> UAE · Freight technology</p>
                 </div>

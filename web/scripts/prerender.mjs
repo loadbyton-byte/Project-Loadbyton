@@ -41,14 +41,6 @@ const ROUTES = [
   { path: '/trust', slug: 'trust' },
   { path: '/for-transporters', slug: 'for-transporters' },
   { path: '/for-shippers', slug: 'for-shippers' },
-  // Present unless the ecosystem UI is switched off (VITE_ECOSYSTEM_UI=false);
-  // otherwise the route does not exist and would prerender the 404 page.
-  ...(process.env.VITE_ECOSYSTEM_UI !== 'false' ? [
-    { path: '/business-os', slug: 'business-os' },
-    { path: '/premium-terms', slug: 'premium-terms' },
-    { path: '/business-os-terms', slug: 'business-os-terms' },
-    { path: '/data-sharing', slug: 'data-sharing' },
-  ] : []),
 ];
 
 async function main() {

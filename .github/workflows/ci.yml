@@ -38,17 +38,6 @@ jobs:
         working-directory: web
         run: npm run build
 
-      # The default build above is what ships until the owner approves the
-      # Business OS / premium promises (docs/ECOSYSTEM.md). The e2e job below
-      # runs against a second build with the ecosystem surfaces switched on,
-      # so both variants are built on every change and the flagged one is
-      # exercised end to end (web/e2e/ecosystem.spec.js).
-      - name: Build web frontend (ecosystem UI on, used by e2e)
-        working-directory: web
-        run: npm run build
-        env:
-          VITE_ECOSYSTEM_UI: 'true'
-
       - name: Run server tests
         working-directory: server
         run: npm test
@@ -118,10 +107,7 @@ jobs:
           PORT: 4000
           INTERNAL_KEY: ci-test-key
           ENCRYPTION_KEY: ci-test-encryption-key-32chars-long
-          # The e2e ecosystem spec signs in through the OIDC issuer as this client.
           FRONTEND_URL: http://127.0.0.1:5173
-          STORE_BASE_URL: https://loadbyton.store
-          OIDC_CLIENTS: '[{"client_id":"e2e-store","client_secret":"e2e-secret","redirect_uris":["http://127.0.0.1:5173/oidc-callback"]}]'
 
       # Playwright's own `webServer` (playwright.config.js) is meant to
       # spawn this itself, and does on a real dev machine — but on this
@@ -159,8 +145,6 @@ jobs:
       - name: Run Playwright E2E
         working-directory: web
         run: npx playwright test --reporter=list
-        env:
-          VITE_ECOSYSTEM_UI: 'true'
 
       - name: Upload server logs on failure
         if: failure()

@@ -16,7 +16,7 @@ const TIERS = [
 
 export default function Pricing() {
   usePageTitle('Pricing');
-  useMeta('A transparent take rate, no marketplace subscription. See how Loadbyton pricing compares to broker markups.');
+  useMeta('A transparent take rate, no subscription. See how Loadbyton pricing compares to broker markups.');
   const [takeRate, setTakeRate] = useState('6%');
   useEffect(() => { api.publicMarket().then((d) => setTakeRate(d.market.takeRate)).catch(() => {}); }, []);
   return (
@@ -24,7 +24,7 @@ export default function Pricing() {
       <SubHero
         photo={PHOTOS.roadFreight}
         kicker="PRICING"
-        title="One take rate. No marketplace subscription, no listing fee."
+        title="One take rate. No subscription, no listing fee."
         lede={<>Loadbyton takes <b>{takeRate}</b> of the agreed price on award — the same rate whether it's your first job or your five-hundredth. Volume lowers it through loyalty tiers, not negotiation.</>}
         actions={<>
           <Link className="btn btn-red shimmer" to={P.register}>Create a free account &#8594;</Link>
@@ -43,9 +43,6 @@ export default function Pricing() {
       </SubSection>
       <SubSection tone="paper" no="02 / Where it goes" title="Where the fee actually goes.">
         <p className="sub-lead mkt-reveal">The take rate funds transporter verification, payment administration, dispute resolution, and the Lane Index data product — not a sales team cold-calling shippers. Freight amount passes through to the transporter; the platform only ever holds the fee.</p>
-      </SubSection>
-      <SubSection tone="cloud" no="03 / Premium (optional)" title="Premium membership, if your company wants more." copy="The marketplace needs no subscription. Premium is an optional company membership that upgrades Business OS from Starter Included to Enterprise Included.">
-        <p className="sub-lead mkt-reveal">AED 199 per month or AED 1,990 per year (two months free), excluding 5% UAE VAT. Cancel any time; access continues to the end of the paid period, and a late payment has a 14-day grace window. <Link to="/premium-terms">Read the Premium terms</Link>.</p>
       </SubSection>
       <SubCta kicker="Begin with the next movement" title="No card required to browse open loads." body="Create a free account and see live freight before you commit to anything." primary={['Create a free account', P.register]} secondary={['Already have an account', P.login]} />
     </SitePage>
