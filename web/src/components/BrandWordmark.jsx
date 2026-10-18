@@ -16,7 +16,8 @@ const V2_SIZE = { width: 450, height: 112 };
 
 export default function BrandWordmark({ dark = false, className = '' }) {
   // The home page keeps the original wordmark (owner request, 18 Oct 2026).
-  const useV2 = brandV2 && useLocation().pathname !== '/';
+  const { pathname } = useLocation();
+  const useV2 = brandV2 && pathname !== '/';
   const size = useV2 ? V2_SIZE : LOGO_WORDMARK_SIZE;
   const src = useV2 ? (dark ? V2_FOR_DARK_BG : V2_FOR_LIGHT_BG) : (dark ? LOGO_FOR_DARK_BG : LOGO_FOR_LIGHT_BG);
   return (

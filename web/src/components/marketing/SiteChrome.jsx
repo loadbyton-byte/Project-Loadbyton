@@ -15,7 +15,10 @@ import EcosystemMenu from '../ecosystem/EcosystemMenu.jsx';
 import BranchDirectory from '../ecosystem/BranchDirectory.jsx';
 
 // The home page keeps its original navigation and footer (owner request, 18 Oct 2026).
-const useEcosystemUi = () => ecosystemFlag && useLocation().pathname !== '/';
+const useEcosystemUi = () => {
+  const { pathname } = useLocation();
+  return ecosystemFlag && pathname !== '/';
+};
 
 const navLinkClass = ({ isActive }) => (isActive ? 'current' : undefined);
 
