@@ -13,6 +13,7 @@ const C = require('../lib/ecosystem/constants');
 const E = require('../lib/ecosystem/entitlements');
 const { verify } = require('../lib/ecosystem/signing');
 const { deliverPending } = require('../lib/ecosystem/delivery');
+const P = require('../lib/ecosystem/premium');
 const { timingSafeEqualStr } = require('../lib/helpers');
 
 const router = express.Router();
@@ -108,17 +109,51 @@ router.post('/api/ecosystem/store/activate', auth(COMPANY), asyncHandler(async (
 
 router.get('/api/ecosystem/premium/plans', auth(COMPANY), asyncHandler(async (req, res) => {
   const plans = await db.prepare('SELECT * FROM premium_plan_versions WHERE is_published=1 ORDER BY plan_code, version DESC').all();
+  const state = P.checkoutState();
   res.json({
     plans: plans.map((p) => ({
       id: p.id, planCode: p.plan_code, version: p.version, name: p.name, billingPeriod: p.billing_period,
       priceMinor: p.price_minor, currency: p.currency, taxNote: p.tax_note,
       cancellationTerms: p.cancellation_terms, benefitTerms: p.benefit_terms,
+      ...P.priced(Number(p.price_minor)),
     })),
-    // Premium checkout stays closed until the billing entity and payment
-    // provider are approved (master plan §13). Subscriptions are recorded by
-    // staff after payment is confirmed.
-    checkout: 'not_open',
+    // Checkout opens only when PREMIUM_CHECKOUT_ENABLED=true and a real
+    // payment provider is configured. Otherwise staff record subscriptions.
+    checkout: state.open ? 'open' : 'not_open',
+    checkoutReason: state.reason,
+    termsVersion: C.TERMS_VERSION,
   });
+}));
+
+// Starts a hosted checkout for a published plan. Company administrator only.
+router.post('/api/ecosystem/premium/checkout', auth(COMPANY), asyncHandler(async (req, res) => {
+  if (req.user.actingSeatId) return sendError(res, 403, 'Only the company administrator can buy Premium', 'OWNER_ONLY');
+  const { planVersionId, acceptTerms } = req.body || {};
+  if (acceptTerms !== true) return sendError(res, 422, 'You must accept the Premium Membership terms', 'TERMS_REQUIRED');
+  const state = P.checkoutState();
+  if (!state.open) return sendError(res, 409, 'Premium checkout is not open yet', 'CHECKOUT_NOT_OPEN');
+  const ctx = await E.getOrganisationForUser(req.user.id);
+  if (!ctx) return sendError(res, 404, 'No organisation for this account');
+  const { syncVerification } = require('../lib/ecosystem/orgs');
+  const org = await syncVerification(ctx.org, ctx.root);
+  if (org.verification_status !== 'VERIFIED') return sendError(res, 403, 'Your company must be verified before you can buy Premium', 'ORGANISATION_UNVERIFIED');
+  const plan = await db.prepare('SELECT * FROM premium_plan_versions WHERE id=?').get(planVersionId);
+  if (!plan || !plan.is_published) return sendError(res, 422, 'planVersionId must be a published plan version', 'VALIDATION_FAILED');
+  const base = (process.env.SITE_ORIGIN || require('../lib/config').FRONTEND_URL || '').replace(/\/$/, '');
+  const back = `${base}/account/benefits`;
+  const order = await P.createOrder({ org, userId: req.user.id, plan, returnUrls: { auth: `${back}?paid=1`, cancel: `${back}?paid=cancelled`, decline: `${back}?paid=declined` } });
+  if (!order.ok) return sendError(res, 502, 'The payment provider could not start the checkout', 'CHECKOUT_FAILED');
+  await writeAudit(req, { userId: req.actorId, action: 'PREMIUM_CHECKOUT_STARTED', details: `${plan.plan_code} v${plan.version} order ${order.id} total ${order.money.totalMinor}`, entityType: 'organisation', entityId: org.id });
+  res.status(201).json({ orderId: order.id, url: order.url, ...order.money });
+}));
+
+router.get('/api/ecosystem/premium/orders', auth(COMPANY), asyncHandler(async (req, res) => {
+  const ctx = await E.getOrganisationForUser(req.actorId);
+  if (!ctx) return sendError(res, 404, 'No organisation for this account');
+  const rows = await db.prepare(
+    `SELECT o.*, p.name AS plan_name, p.billing_period FROM premium_orders o JOIN premium_plan_versions p ON p.id=o.plan_version_id
+      WHERE o.organisation_id=? ORDER BY o.id DESC LIMIT 50`).all(ctx.org.id);
+  res.json({ orders: rows.map(P.receiptOf) });
 }));
 
 // --- Staff ---------------------------------------------------------------
@@ -141,6 +176,12 @@ router.get('/api/admin/ecosystem/overview', auth(['ADMIN']), asyncHandler(async 
 
 router.get('/api/admin/ecosystem/premium-plans', auth(['ADMIN']), asyncHandler(async (req, res) => {
   res.json({ plans: await db.prepare('SELECT * FROM premium_plan_versions ORDER BY plan_code, version DESC').all() });
+}));
+
+router.get('/api/admin/ecosystem/premium-orders/:id', auth(['ADMIN']), asyncHandler(async (req, res) => {
+  const o = await db.prepare('SELECT * FROM premium_orders WHERE id=?').get(req.params.id);
+  if (!o) return sendError(res, 404, 'Order not found');
+  res.json({ id: o.id, status: o.status, paymentRef: o.payment_ref, provider: o.provider, tranref: o.tranref, totalMinor: Number(o.total_minor), receiptNo: o.receipt_no });
 }));
 
 router.post('/api/admin/ecosystem/premium-plans', auth(['ADMIN']), asyncHandler(async (req, res) => {

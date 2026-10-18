@@ -213,6 +213,9 @@ export default function TermsContent({ compact = false }) {
           <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
             Questions about these Terms: <span className="font-mono">legal@loadbyton.ae</span> (placeholder — replace with monitored inbox before launch).
           </p>
+          <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
+            Optional company services have their own terms: <a href="/premium-terms" className="text-brand-secondary hover:underline">Premium Membership Terms</a> and the <a href="/business-os-terms" className="text-brand-secondary hover:underline">Business OS Activation Terms</a>.
+          </p>
         </Reveal>
       </div>
     </>

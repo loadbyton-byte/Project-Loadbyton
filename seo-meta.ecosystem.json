@@ -1,3 +1,22 @@
 {
-  "/business-os": { "title": "Business OS — Loadbyton", "description": "Operating software for UAE logistics companies, included with a verified Loadbyton company account. Eighteen logistics sectors in one workspace; your data stays yours.", "slug": "business-os" }
+  "/business-os": {
+    "title": "Business OS — Loadbyton",
+    "description": "Operating software for UAE logistics companies, included with a verified Loadbyton company account. Eighteen logistics sectors in one workspace; your data stays yours.",
+    "slug": "business-os"
+  },
+  "/premium-terms": {
+    "title": "Premium Membership Terms | Loadbyton",
+    "description": "Price, VAT, renewal, cancellation, 14-day grace and refund terms for the Loadbyton Premium company membership.",
+    "slug": "premium-terms"
+  },
+  "/business-os-terms": {
+    "title": "Business OS Activation Terms | Loadbyton",
+    "description": "What your company accepts when it activates Business OS on loadbyton.store from its Loadbyton account.",
+    "slug": "business-os-terms"
+  },
+  "/data-sharing": {
+    "title": "Ecosystem Data Sharing Notice | Loadbyton",
+    "description": "Exactly what data loadbyton.com and loadbyton.store exchange, and what they never exchange.",
+    "slug": "data-sharing"
+  }
 }

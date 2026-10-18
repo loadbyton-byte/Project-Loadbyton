@@ -2,11 +2,11 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-// The ecosystem surfaces only exist in a build made with VITE_ECOSYSTEM_UI=true
-// (web/src/lib/features.js), and the OIDC checks need the API started with
+// The ecosystem surfaces exist in every build except one made with
+// VITE_ECOSYSTEM_UI=false (web/src/lib/features.js), and the OIDC checks need the API started with
 // OIDC_CLIENTS registering the callback below (see docs/ECOSYSTEM.md for the
 // exact commands). Without both, this file is skipped rather than failing.
-test.skip(process.env.VITE_ECOSYSTEM_UI !== 'true', 'build with VITE_ECOSYSTEM_UI=true to run the ecosystem specs');
+test.skip(process.env.VITE_ECOSYSTEM_UI === 'false', 'the ecosystem specs need a build with the ecosystem UI on (the default)');
 
 test.use({ reducedMotion: 'reduce' });
 const auth = (role) => path.join(process.cwd(), 'e2e', '.auth', `${role}.json`);
@@ -77,7 +77,7 @@ test.describe('company benefits', () => {
     await expect(page.getByText('Road transport')).toBeVisible();
     const users = page.getByRole('row', { name: /^Users/ });
     await expect(users).toContainText('3');
-    await expect(page.getByText(/not open for purchase yet/)).toBeVisible();
+    await expect(page.getByText(/Online checkout is not open yet/)).toBeVisible();
   });
 
   test('organisation page shows a stable organisation id', async ({ page }) => {
@@ -145,6 +145,16 @@ test.describe('accessibility of ecosystem surfaces', () => {
     await page.getByRole('button', { name: /Loadbyton network/ }).click();
     const v = await audit(page);
     expect(v, describeViolations(v)).toEqual([]);
+  });
+
+  test('ecosystem legal pages carry the draft notice and are accessible', async ({ page }) => {
+    for (const [route, heading] of [['/premium-terms', /Premium Membership Terms/], ['/business-os-terms', /Business OS Activation Terms/], ['/data-sharing', /Data Sharing Notice/]]) {
+      await page.goto(route);
+      await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+      await expect(page.getByText(/awaiting review by a qualified UAE lawyer/)).toBeVisible();
+      const v = await audit(page);
+      expect(v, `${route}\n${describeViolations(v)}`).toEqual([]);
+    }
   });
 
   test('interstitial', async ({ page }) => {

@@ -26,8 +26,8 @@ const prerenderDir = path.join(distDir, '__prerendered__');
 // ("must match X exactly") holding the two in sync. Both now read the same
 // file instead.
 const SEO_META = JSON.parse(fs.readFileSync(path.join(webRoot, '..', 'seo-meta.json'), 'utf8'));
-// Routes that exist only when the ecosystem UI is built (VITE_ECOSYSTEM_UI=true).
-if (process.env.VITE_ECOSYSTEM_UI === 'true') {
+// Routes that exist unless the ecosystem UI is switched off (VITE_ECOSYSTEM_UI=false).
+if (process.env.VITE_ECOSYSTEM_UI !== 'false') {
   Object.assign(SEO_META, JSON.parse(fs.readFileSync(path.join(webRoot, '..', 'seo-meta.ecosystem.json'), 'utf8')));
 }
 

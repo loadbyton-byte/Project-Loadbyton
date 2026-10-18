@@ -26,6 +26,8 @@ const LIMIT_ROWS = [
 ];
 const n = (v) => Number(v).toLocaleString('en-AE');
 
+const formatMoney = (minor, cur = 'AED') => `${String(cur).toUpperCase()} ${(Number(minor) / 100).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export default function Benefits() {
   usePageTitle('Business OS & benefits');
   const { addToast } = useToasts();
@@ -35,11 +37,15 @@ export default function Benefits() {
   const [sector, setSector] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [planId, setPlanId] = useState('');
+  const [premTerms, setPremTerms] = useState(false);
+  const [orders, setOrders] = useState([]);
 
   function load() {
     setError('');
     api.ecosystemBenefits().then(setData).catch((e) => setError(e.message || 'Could not load your benefits.'));
     api.premiumPlans().then(setPlans).catch(() => setPlans({ plans: [], checkout: 'not_open' }));
+    api.premiumOrders().then((r) => setOrders(r.orders || [])).catch(() => setOrders([]));
   }
   useEffect(load, []);
 
@@ -52,6 +58,19 @@ export default function Benefits() {
       load();
     } catch (err) {
       addToast({ type: 'system_message', title: 'Could not activate', body: err.message });
+    } finally { setBusy(false); }
+  }
+
+  async function subscribe(e) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await api.premiumCheckout({ planVersionId: Number(planId), acceptTerms: premTerms });
+      if (r.url) { window.location.assign(r.url); return; }
+      addToast({ type: 'status_change', title: 'Checkout started', body: 'Waiting for the payment provider to confirm.' });
+      load();
+    } catch (err) {
+      addToast({ type: 'system_message', title: 'Could not start checkout', body: err.message });
     } finally { setBusy(false); }
   }
 
@@ -102,7 +121,7 @@ export default function Benefits() {
               </div>
               <label className="flex items-start gap-2 text-sm text-ink-secondary">
                 <input type="checkbox" className="mt-1" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
-                <span>I am authorised to act for {organisation.name} and accept the Business OS terms, including that limits are plan ceilings and that external usage and managed services are quoted separately.</span>
+                <span>I am authorised to act for {organisation.name} and accept the <Link className="text-brand-secondary underline" to="/business-os-terms">Business OS terms</Link> and the <Link className="text-brand-secondary underline" to="/data-sharing">data sharing notice</Link>, including that limits are plan ceilings and that external usage and managed services are quoted separately.</span>
               </label>
               <Button type="submit" loading={busy} disabled={!sector || !accepted}>Activate Business OS</Button>
             </form>
@@ -162,10 +181,45 @@ export default function Benefits() {
               <li key={s.id}>{s.planName} · <b className="text-ink">{s.status.replace('_', ' ').toLowerCase()}</b> · current period ends {formatDate(s.periodEnd)}</li>
             ))}
           </ul>
-        ) : plans && plans.plans.length > 0 ? (
-          <p className="mt-3 text-sm text-ink-secondary">Premium membership is published but checkout is not open yet. Your account manager can set it up for your company.</p>
-        ) : (
-          <p className="mt-3 text-sm text-ink-secondary">Premium membership (which upgrades Business OS to Enterprise Included) is not open for purchase yet.</p>
+        ) : null}
+        {premium.subscriptions.length === 0 && plans && plans.plans.length > 0 && plans.checkout === 'open' && isOwner && verified ? (
+          <form className="mt-3 space-y-4" onSubmit={subscribe}>
+            <p className="text-sm text-ink-secondary">Premium upgrades Business OS from Starter Included to Enterprise Included. Cancel any time; access continues to the end of the period you paid for.</p>
+            <fieldset className="space-y-2">
+              <legend className="sr-only">Choose a plan</legend>
+              {plans.plans.map((p) => (
+                <label key={p.id} className="flex items-start gap-3 rounded-md border p-3 text-sm" style={{ borderColor: 'var(--border)' }}>
+                  <input type="radio" name="plan" className="mt-1" value={p.id} checked={String(planId) === String(p.id)} onChange={() => setPlanId(String(p.id))} />
+                  <span className="text-ink-secondary">
+                    <b className="text-ink">{p.name}</b> · {formatMoney(p.priceMinor, p.currency)} {p.billingPeriod === 'annual' ? 'per year' : 'per month'}
+                    <br /><span className="text-xs text-ink-muted">+ VAT {formatMoney(p.vatMinor, p.currency)} = {formatMoney(p.totalMinor, p.currency)} today</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <p className="text-xs text-ink-muted">{plans.plans[0].taxNote}</p>
+            <label className="flex items-start gap-2 text-sm text-ink-secondary">
+              <input type="checkbox" className="mt-1" checked={premTerms} onChange={(e) => setPremTerms(e.target.checked)} />
+              <span>I am authorised to act for {organisation.name} and accept the <Link className="text-brand-secondary underline" to="/premium-terms">Premium Membership terms</Link>.</span>
+            </label>
+            <Button type="submit" loading={busy} disabled={!planId || !premTerms}>Continue to secure payment</Button>
+          </form>
+        ) : premium.subscriptions.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-secondary">
+            {plans && plans.plans.length > 0
+              ? (!isOwner ? 'Only your company administrator can buy Premium.' : !verified ? 'Verify your company to buy Premium.' : 'Online checkout is not open yet. Your account manager can set Premium up for your company.')
+              : 'Premium membership is not open for purchase yet.'}
+          </p>
+        ) : null}
+        {orders.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-sm font-semibold text-ink">Payments and receipts</h3>
+            <ul className="mt-2 space-y-1 text-sm text-ink-secondary">
+              {orders.map((o) => (
+                <li key={o.id}>{formatDate(o.paidAt || o.createdAt)} · {o.planName} · {formatMoney(o.totalMinor, o.currency)} incl. VAT · <b className="text-ink">{o.status.replace('_', ' ').toLowerCase()}</b>{o.receiptNo ? ` · ${o.receiptNo}` : ''}</li>
+              ))}
+            </ul>
+          </div>
         )}
       </Card>
     </div>

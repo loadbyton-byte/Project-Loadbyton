@@ -6,7 +6,7 @@ Companion to `BRAND_GUIDELINES.md` for the six-domain family (master plan §10).
 
 | Asset | Location | Used by |
 |---|---|---|
-| Outlined SVG masters (parent wordmark: navy, white, black, mono; BY mark) | `web/public/brand/v2/masters`, `v2/by-mark.svg` | `BrandWordmark` when `VITE_BRAND_V2=true` |
+| Outlined SVG masters (parent wordmark: navy, white, black, mono; BY mark) | `web/public/brand/v2/masters`, `v2/by-mark.svg` | `BrandWordmark` unless `VITE_BRAND_V2=false` |
 | Product and sector line icons, `.store` lockups | `web/public/brand/v2/{products,icons,store}` | available to pages; not yet used |
 | Self-hosted fonts (Geist, Inter, JetBrains Mono, Noto Sans Arabic; SIL OFL, licences beside them) | `web/public/brand/fonts`, `web/src/styles/fonts.css` | whole site |
 | Branch accent tokens | `web/src/styles/ecosystem.css` | network menu, footer, interstitial |
@@ -40,6 +40,6 @@ All clear 4.5:1 for text, Store narrowly on paper. Dark theme uses lighter tints
 
 ## Open
 
-* **Logo variant.** The Store kit's BY is red; the .com guidelines describe white/navy BY in some applications. Pick one before `VITE_BRAND_V2` goes on.
+* **Logo variant.** Decided 18 Oct 2026: the red BY is canonical on every domain (Master Plan v1.1). `VITE_BRAND_V2` is on by default; set it to `false` to build with the legacy wordmark.
 * **Trademark** clearance and registrant proof for the other four domains are not assessed.
 * **Photography.** None is supplied for the new pages; they use the existing campaign images.

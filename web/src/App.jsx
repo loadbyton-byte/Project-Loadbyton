@@ -17,6 +17,7 @@ import Security from './pages/Security.jsx';
 import Compliance from './pages/Compliance.jsx';
 import Terms from './pages/Terms.jsx';
 import Privacy from './pages/Privacy.jsx';
+import EcosystemLegal from './pages/EcosystemLegal.jsx';
 import Industries from './pages/Industries.jsx';
 import Trust from './pages/Trust.jsx';
 import ForTransporters from './pages/ForTransporters.jsx';
@@ -178,6 +179,9 @@ export default function App() {
           <Route path="/compliance" element={<Compliance />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/premium-terms" element={<EcosystemLegal doc="premium" />} />
+          <Route path="/business-os-terms" element={<EcosystemLegal doc="business-os" />} />
+          <Route path="/data-sharing" element={<EcosystemLegal doc="data-sharing" />} />
           <Route path="/industries" element={<Industries />} />
           <Route path="/trust" element={<Trust />} />
           <Route path="/for-transporters" element={<ForTransporters />} />

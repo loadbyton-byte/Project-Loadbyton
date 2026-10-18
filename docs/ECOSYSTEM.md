@@ -2,7 +2,7 @@
 
 How the freight marketplace (this repo) and Business OS (`Loadbyton-OS`) work as one account, one company and one entitlement, and how to run, test and switch it on. Implements phases A–D and the Store side of F of the master plan (v1.0, 18 Oct 2026).
 
-> **Status.** Built and tested. **Nothing is switched on in production.** Interface flags default to off, the OIDC issuer and the event delivery do nothing until configured, and Premium cannot be bought. Section 9 lists what must be decided before launch.
+> **Status.** Built and tested. The interface flags now default to **on** (owner decisions of 18 Oct 2026, see `docs/MASTER_PLAN_v1.1.md`), but the OIDC issuer and event delivery do nothing until configured, and Premium cannot be bought until `PREMIUM_CHECKOUT_ENABLED=true` with a live payment provider. Section 9 lists what remains outside the code.
 
 ## 1. What exists
 
@@ -89,8 +89,11 @@ The login page accepts `?return_to=` **only** when it is exactly a relative `/ap
 | `OIDC_SIGNING_KEY_PEM` | .com | RSA private key. **Required in production** (without it the issuer answers 503). `openssl genrsa 2048` |
 | `OIDC_ISSUER` | .com | defaults to `${FRONTEND_URL}/api/oidc` |
 | `COM_BASE_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | Store | where to sign in and reconcile; the redirect URI is `${PUBLIC_BASE_URL}/auth/loadbyton/callback` |
-| `VITE_ECOSYSTEM_UI=true` | web build | network menu, footer directory, Business OS, benefits, organisation |
-| `VITE_BRAND_V2=true` | web build | outlined SVG wordmark from the shared kit |
+| `VITE_ECOSYSTEM_UI` | web build | default on; `false` hides the network menu, footer directory, Business OS, benefits, organisation |
+| `VITE_BRAND_V2` | web build | default on (red BY is canonical); `false` uses the legacy wordmark |
+| `VITE_LEGAL_REVIEWED=true` | web build | hides the draft notice on `/premium-terms`, `/business-os-terms`, `/data-sharing` after legal review |
+| `PREMIUM_CHECKOUT_ENABLED=true` | .com | opens Premium checkout; also needs `PAYMENTS_PROVIDER=stripe|telr` with credentials (mock never opens it in production) |
+| `VAT_BPS` | .com | UAE VAT in basis points, default 500 (5%) |
 | `VITE_STORE_URL` | web build | overrides `https://loadbyton.store` |
 
 ## 7. Operating it
@@ -98,30 +101,35 @@ The login page accepts `?return_to=` **only** when it is exactly a relative `/ap
 * **Overview:** `GET /api/admin/ecosystem/overview` (staff): organisations, activations, queue depth (`pending` / `delivered` / `dead`).
 * **Force a sweep** (grace expiry + re-queue + delivery): `POST /api/system/ecosystem-sweep` with `x-internal-key`. It also runs every 15 minutes in the worker.
 * **Dead event:** fix the cause, then `POST /api/admin/ecosystem/events/:id/retry`. The Store de-duplicates, so a retry is safe.
-* **Premium (no checkout yet):** staff create and publish a plan version (`/api/admin/ecosystem/premium-plans`), then record a subscription after payment is confirmed (`/subscriptions`, idempotent on `sourceRef`), and use `payment-failed`, `payment-recovered`, `cancel`, `renew`. Published plan versions are immutable.
+* **Premium:** two plan versions are seeded on first start (Premium Monthly AED 199, Premium Annual AED 1,990, excluding VAT). A company administrator buys through hosted checkout (`POST /api/ecosystem/premium/checkout`); the provider webhook (`/api/webhooks/payments`, `PREM-` references) confirms the order, extends or creates the subscription once and issues a receipt number. Staff can still record a subscription manually (`/api/admin/ecosystem/subscriptions`, idempotent on `sourceRef`) and use `payment-failed`, `payment-recovered`, `cancel`, `renew`. Published plan versions are immutable; a price change is a new version.
 * **Rotate the shared secret:** change it on both sides in one deploy window; events signed with the old secret fail with 401 and are retried, then land.
 * **Rotate the signing key:** deploy the new PEM; relying parties re-fetch the JWKS when they see an unknown `kid`. Tokens are 10 minutes.
 
 ## 8. Tests
 
-* `.com`: `server/test/ecosystem-entitlements.test.js` (rules, signing, back-off), `ecosystem-flow.test.js` (HTTP: identity, activation, premium lifecycle, signed delivery to a fake Store, reconciliation, OIDC incl. replay/PKCE/redirect/staff), `ecosystem-grace.test.js` (grace expiry, seat permissions); `web/e2e/ecosystem.spec.js` (UI, axe, OIDC round trip; needs `VITE_ECOSYSTEM_UI=true`).
+* `.com`: `server/test/ecosystem-entitlements.test.js` (rules, signing, back-off), `ecosystem-flow.test.js` (HTTP: identity, activation, premium lifecycle, signed delivery to a fake Store, reconciliation, OIDC incl. replay/PKCE/redirect/staff), `ecosystem-grace.test.js` (grace expiry, seat permissions), `ecosystem-premium.test.js` (pricing, VAT, gating, idempotent confirmation, renewal, amount mismatch); `web/e2e/ecosystem.spec.js` (UI, axe, OIDC round trip; skipped only when built with `VITE_ECOSYSTEM_UI=false`).
 * Store: `tests/ecosystem.test.ts` (signature, ordering, no-downgrade, grace/suspension, fail-safe, reconciliation, full OIDC callback with tampered tokens, account linking).
 * The two sides were also checked against each other: real events from a running .com were fed, with their real signatures, into the Store's receiver.
 
-## 9. Before this goes live (not decided by the code)
+## 9. Before this goes live (outside the code)
 
-1. **Billing entity and payment provider for Premium.** The Store's decision register (#2) names an India-based GST-registered freelancer with Stripe/Razorpay; this marketplace runs Stripe Connect/Telr escrow. Which entity invoices Premium, and its tax treatment, is open. Until then checkout stays closed (`checkout: "not_open"`).
-2. **Premium price, period, tax and cancellation terms** (the plan-version fields exist; no price is seeded). When Premium launches, `/pricing` must change: it currently says "no subscription".
-3. **Business OS scope.** The Store ships in brochure mode (`BROCHURE_MODE` defaults to true); the operating application is fenced and all 18 sectors are still `pilot`. Activation is only meaningful once the Store runs with `BROCHURE_MODE=false` for named pilot companies and the sector gates for what is exposed are accepted.
-4. **Legal.** Terms/privacy/DPA for the data shared between the sites (company name, verified status, contact), the Business OS terms text (`ECOSYSTEM_TERMS_VERSION` is a draft marker), and a decision on the 14-day grace.
-5. **Brand approval** (logo variant, red vs white/navy "BY"): `VITE_BRAND_V2` stays off until then. See `docs/brand/ECOSYSTEM_BRAND.md`.
+Decided on 18 Oct 2026 (see `docs/MASTER_PLAN_v1.1.md`): one UAE entity operates both sites; Premium is AED 199 per month or AED 1,990 per year excluding 5% VAT; the 14-day grace is approved; red BY is canonical; all 18 sectors are released by operator declaration; legal documents are written as drafts.
+
+Still open:
+
+1. **Entity details.** Legal name, trade licence, licence authority, TRN and address, entered through `SELLER_*` on the Store and used on receipts and legal pages.
+2. **Payment account.** A Stripe (UAE) or Telr merchant account for the entity, live keys and webhook secret, then `PREMIUM_CHECKOUT_ENABLED=true`. Verify the Telr callback signature canonicalisation against Telr's current documentation (marked VERIFY in `server/lib/payments.js`) before using Telr live.
+3. **Legal review.** A qualified UAE lawyer reviews every document, then `LEGAL_REVIEWED` (Store) and `VITE_LEGAL_REVIEWED` (.com) are set. The iubenda connector was not authorised, so the texts are hand-written.
+4. **Business OS operating mode.** The Store ships in brochure mode (`BROCHURE_MODE` defaults to true). Activation is only meaningful once the Store runs with `BROCHURE_MODE=false`. All 18 sectors then show live with `SECTOR_RELEASE=all`; that is a declaration, not independent acceptance evidence, and the specialist warnings stay.
+5. **Contact.** Replace the Store's default contact phone (`CONTACT_PHONE`).
 6. **Arabic.** The new screens are English only.
-7. **Other four domains** (`.shop`, `.net`, `.me`, `.xyz`) are listed as "Coming soon" and never linked.
+7. **Trademark** clearance and domain registrant proof.
+8. **Other four domains** (`.shop`, `.net`, `.me`, `.xyz`) are listed as "Coming soon" and never linked.
 
 ## 10. Switching it on (staging first)
 
 1. Generate the shared secret and the signing key; set the variables in §6 on both services; register the Store as an OIDC client.
-2. Deploy .com with `VITE_ECOSYSTEM_UI=true` to staging; deploy the Store with the `COM_BASE_URL` / `OIDC_*` variables.
+2. Deploy .com to staging (the ecosystem UI is on by default); deploy the Store with the `COM_BASE_URL` / `OIDC_*` variables.
 3. With a pilot company: verify it, activate Business OS, confirm the event arrives (`overview` shows `delivered`), sign in on the Store with "Continue with Loadbyton", confirm one workspace on `starter_included`.
 4. Record a test premium subscription, confirm `enterprise_included`; mark payment failed, confirm grace; let the window pass (or set `ECOSYSTEM_GRACE_DAYS=0`), confirm the return to Starter with data intact.
 5. Restore a backup of both databases into isolation and repeat step 3.

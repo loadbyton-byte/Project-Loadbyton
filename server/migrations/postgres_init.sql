@@ -1098,6 +1098,28 @@ CREATE INDEX IF NOT EXISTS idx_org_subscriptions_org ON org_subscriptions(organi
 
 ALTER TABLE org_subscriptions ADD COLUMN IF NOT EXISTS last_renewal_ref TEXT;
 
+CREATE TABLE IF NOT EXISTS premium_orders (
+  id SERIAL PRIMARY KEY,
+  organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  plan_version_id INTEGER NOT NULL REFERENCES premium_plan_versions(id),
+  status TEXT NOT NULL DEFAULT 'CREATED',
+  net_minor INTEGER NOT NULL,
+  vat_minor INTEGER NOT NULL,
+  total_minor INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  vat_bps INTEGER NOT NULL,
+  payment_ref TEXT UNIQUE NOT NULL,
+  provider TEXT NOT NULL,
+  tranref TEXT,
+  receipt_no TEXT UNIQUE,
+  terms_version TEXT NOT NULL,
+  subscription_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  paid_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_premium_orders_org ON premium_orders(organisation_id);
+
 CREATE TABLE IF NOT EXISTS store_activations (
   id SERIAL PRIMARY KEY,
   organisation_id INTEGER UNIQUE NOT NULL REFERENCES organisations(id),

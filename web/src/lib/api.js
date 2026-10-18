@@ -120,6 +120,8 @@ export const api = {
   ecosystemBenefits: () => get('/ecosystem/benefits'),
   activateStore: (body) => post('/ecosystem/store/activate', body),
   premiumPlans: () => get('/ecosystem/premium/plans'),
+  premiumCheckout: (body) => post('/ecosystem/premium/checkout', body),
+  premiumOrders: () => get('/ecosystem/premium/orders'),
 
   // public
   publicLanes: () => get('/public/lanes'),

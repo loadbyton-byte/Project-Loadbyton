@@ -42,7 +42,7 @@ const PRODUCT_STORE = 'store';
 // terms are signed off.
 const GRACE_DAYS = Math.max(0, Number(process.env.ECOSYSTEM_GRACE_DAYS ?? 14));
 
-const TERMS_VERSION = process.env.ECOSYSTEM_TERMS_VERSION || 'store-activation-draft-2026-10';
+const TERMS_VERSION = process.env.ECOSYSTEM_TERMS_VERSION || 'business-os-terms-2026-10-18';
 
 const DELIVERY_MAX_ATTEMPTS = 12;
 
