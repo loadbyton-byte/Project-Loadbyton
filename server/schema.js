@@ -1386,6 +1386,152 @@ module.exports = function initSchema(db) {
   // whichever active job matches this over the updated_at tiebreak.
   addColumn('whatsapp_sessions', 'last_outbound_job_id', 'last_outbound_job_id INTEGER REFERENCES jobs(id)');
 
+
+  // ---------------------------------------------------------------------------
+  // Ecosystem layer (master plan §3, §9): organisations, signed entitlement
+  // grants for LOAD|BY|TON.store, premium subscriptions, and the OIDC issuer's
+  // authorization codes. Mirrored in migrations/postgres_init.sql.
+  //
+  // An organisation is the root user of an owner/seat tree (users.org_owner_id)
+  // — one row per company, created lazily by lib/ecosystem/orgs.js. subject_id
+  // is the immutable identifier handed to other domains; integer user ids never
+  // leave this service.
+  // ---------------------------------------------------------------------------
+  addColumn('users', 'subject_id', 'subject_id TEXT');
+  db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_users_subject ON users(subject_id);
+
+  CREATE TABLE IF NOT EXISTS organisations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_id TEXT UNIQUE NOT NULL,
+    owner_user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    verification_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
+    verified_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS org_memberships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organisation_id INTEGER NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_role TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (organisation_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_org_memberships_user ON org_memberships(user_id);
+
+  CREATE TABLE IF NOT EXISTS premium_plan_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_code TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    billing_period TEXT NOT NULL,
+    price_minor INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    tax_note TEXT NOT NULL,
+    cancellation_terms TEXT NOT NULL,
+    benefit_terms TEXT NOT NULL,
+    is_published INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (plan_code, version)
+  );
+
+  CREATE TABLE IF NOT EXISTS org_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+    plan_version_id INTEGER NOT NULL REFERENCES premium_plan_versions(id),
+    status TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    grace_until TEXT,
+    cancelled_at TEXT,
+    source TEXT NOT NULL,
+    source_ref TEXT UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_org_subscriptions_org ON org_subscriptions(organisation_id);
+
+  CREATE TABLE IF NOT EXISTS premium_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    plan_version_id INTEGER NOT NULL REFERENCES premium_plan_versions(id),
+    status TEXT NOT NULL DEFAULT 'CREATED',
+    net_minor INTEGER NOT NULL,
+    vat_minor INTEGER NOT NULL,
+    total_minor INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    vat_bps INTEGER NOT NULL,
+    payment_ref TEXT UNIQUE NOT NULL,
+    provider TEXT NOT NULL,
+    tranref TEXT,
+    receipt_no TEXT UNIQUE,
+    terms_version TEXT NOT NULL,
+    subscription_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    paid_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_premium_orders_org ON premium_orders(organisation_id);
+
+  CREATE TABLE IF NOT EXISTS store_activations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organisation_id INTEGER UNIQUE NOT NULL REFERENCES organisations(id),
+    sector TEXT NOT NULL,
+    accepted_by_user_id INTEGER NOT NULL REFERENCES users(id),
+    terms_version TEXT NOT NULL,
+    accepted_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS entitlement_grants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT UNIQUE NOT NULL,
+    organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+    version INTEGER NOT NULL,
+    product TEXT NOT NULL,
+    plan_code TEXT,
+    status TEXT NOT NULL,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT,
+    grace_until TEXT,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (organisation_id, product, version)
+  );
+
+  CREATE TABLE IF NOT EXISTS ecosystem_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT UNIQUE NOT NULL,
+    organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+    event_type TEXT NOT NULL,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL,
+    last_error TEXT,
+    delivered_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_ecosystem_events_due ON ecosystem_events(status, next_attempt_at);
+
+  CREATE TABLE IF NOT EXISTS oidc_codes (
+    code_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    redirect_uri TEXT NOT NULL,
+    code_challenge TEXT NOT NULL,
+    nonce TEXT,
+    scope TEXT NOT NULL,
+    auth_time TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT
+  );
+  `);
+
+  addColumn('org_subscriptions', 'last_renewal_ref', 'last_renewal_ref TEXT');
+
   // ---------------------------------------------------------------------------
   // Expired sessions are purged on every boot.
   // ---------------------------------------------------------------------------

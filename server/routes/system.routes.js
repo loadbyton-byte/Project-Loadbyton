@@ -283,6 +283,16 @@ router.post(
       // Table missing (DB without 002) — fall through to legacy idempotency via escrow status check
     }
 
+    // Premium membership orders carry a PREM- reference and never touch escrow.
+    if (String(parsed.ref).startsWith('PREM-')) {
+      const outcome = await require('../lib/ecosystem/premium').applyPaymentEvent({ ref: parsed.ref, event: parsed.event, tranref: parsed.tranref, amountAed: parsed.amountAed });
+      await writeAudit(req, { action: 'PREMIUM_PAYMENT_EVENT', details: `${parsed.event} ${parsed.ref} -> ${outcome.ok ? outcome.status : outcome.reason}` });
+      if (outcome.ok || outcome.reason === 'unknown_ref') {
+        try { await db.prepare(`UPDATE payment_webhook_events SET status='PROCESSED', processed_at=? WHERE provider_event_id=?`).run(new Date().toISOString(), providerEventId); } catch {}
+      }
+      return res.status(200).json({ ok: !!outcome.ok, ...(outcome.reason ? { reason: outcome.reason } : { idempotent: !!outcome.idempotent }) });
+    }
+
     const job = /** @type {Job} */ (await db.prepare('SELECT * FROM jobs WHERE processor_payment_ref=?').get(parsed.ref));
     if (!job) {
       await writeAudit(req, { action: 'PAYMENT_WEBHOOK_ERROR', details: `Webhook for unknown payment ref ${parsed.ref}` });

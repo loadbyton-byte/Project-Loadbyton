@@ -11,6 +11,8 @@ drift from them.
 
 ---
 
+> **Update, 18 Oct 2026 (Master Plan v1.1).** The owner decided that the **red BY** is the canonical logo variant on every domain. Where the text below describes a white or navy BY, the red BY applies. The outlined SVG masters in `web/public/brand/v2` are the source for new work.
+
 ## 1. The mark
 
 **Concept — the "LOAD | BY | TON" wordmark.** The mark is a set-in-stone

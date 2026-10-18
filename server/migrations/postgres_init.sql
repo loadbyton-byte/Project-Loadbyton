@@ -1039,4 +1039,139 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS cancelled_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS payment_reminder_sent_at TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS awarded_at TEXT;
 
+-- Ecosystem layer (master plan §3, §9) — see server/schema.js for the full
+-- reasoning; mirrored here for the opt-in Postgres path.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subject_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_subject ON users(subject_id);
+
+CREATE TABLE IF NOT EXISTS organisations (
+  id SERIAL PRIMARY KEY,
+  subject_id TEXT UNIQUE NOT NULL,
+  owner_user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+  name TEXT NOT NULL,
+  verification_status TEXT NOT NULL DEFAULT 'UNVERIFIED',
+  verified_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+
+CREATE TABLE IF NOT EXISTS org_memberships (
+  id SERIAL PRIMARY KEY,
+  organisation_id INTEGER NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  org_role TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  UNIQUE (organisation_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_org_memberships_user ON org_memberships(user_id);
+
+CREATE TABLE IF NOT EXISTS premium_plan_versions (
+  id SERIAL PRIMARY KEY,
+  plan_code TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  billing_period TEXT NOT NULL,
+  price_minor INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  tax_note TEXT NOT NULL,
+  cancellation_terms TEXT NOT NULL,
+  benefit_terms TEXT NOT NULL,
+  is_published INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  UNIQUE (plan_code, version)
+);
+
+CREATE TABLE IF NOT EXISTS org_subscriptions (
+  id SERIAL PRIMARY KEY,
+  organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+  plan_version_id INTEGER NOT NULL REFERENCES premium_plan_versions(id),
+  status TEXT NOT NULL,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  grace_until TEXT,
+  cancelled_at TEXT,
+  source TEXT NOT NULL,
+  source_ref TEXT UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_org_subscriptions_org ON org_subscriptions(organisation_id);
+
+ALTER TABLE org_subscriptions ADD COLUMN IF NOT EXISTS last_renewal_ref TEXT;
+
+CREATE TABLE IF NOT EXISTS premium_orders (
+  id SERIAL PRIMARY KEY,
+  organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  plan_version_id INTEGER NOT NULL REFERENCES premium_plan_versions(id),
+  status TEXT NOT NULL DEFAULT 'CREATED',
+  net_minor INTEGER NOT NULL,
+  vat_minor INTEGER NOT NULL,
+  total_minor INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  vat_bps INTEGER NOT NULL,
+  payment_ref TEXT UNIQUE NOT NULL,
+  provider TEXT NOT NULL,
+  tranref TEXT,
+  receipt_no TEXT UNIQUE,
+  terms_version TEXT NOT NULL,
+  subscription_id INTEGER,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  paid_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_premium_orders_org ON premium_orders(organisation_id);
+
+CREATE TABLE IF NOT EXISTS store_activations (
+  id SERIAL PRIMARY KEY,
+  organisation_id INTEGER UNIQUE NOT NULL REFERENCES organisations(id),
+  sector TEXT NOT NULL,
+  accepted_by_user_id INTEGER NOT NULL REFERENCES users(id),
+  terms_version TEXT NOT NULL,
+  accepted_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+
+CREATE TABLE IF NOT EXISTS entitlement_grants (
+  id SERIAL PRIMARY KEY,
+  event_id TEXT UNIQUE NOT NULL,
+  organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+  version INTEGER NOT NULL,
+  product TEXT NOT NULL,
+  plan_code TEXT,
+  status TEXT NOT NULL,
+  starts_at TEXT NOT NULL,
+  ends_at TEXT,
+  grace_until TEXT,
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC'),
+  UNIQUE (organisation_id, product, version)
+);
+
+CREATE TABLE IF NOT EXISTS ecosystem_events (
+  id SERIAL PRIMARY KEY,
+  event_id TEXT UNIQUE NOT NULL,
+  organisation_id INTEGER NOT NULL REFERENCES organisations(id),
+  event_type TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT NOT NULL,
+  last_error TEXT,
+  delivered_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (NOW() AT TIME ZONE 'UTC')
+);
+CREATE INDEX IF NOT EXISTS idx_ecosystem_events_due ON ecosystem_events(status, next_attempt_at);
+
+CREATE TABLE IF NOT EXISTS oidc_codes (
+  code_hash TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  redirect_uri TEXT NOT NULL,
+  code_challenge TEXT NOT NULL,
+  nonce TEXT,
+  scope TEXT NOT NULL,
+  auth_time TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT
+);
+
 COMMIT;

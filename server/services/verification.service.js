@@ -95,6 +95,16 @@ async function verifyCarrier(req, userId, action, iban) {
     afterState: action === 'approve' ? 'verified' : 'unverified',
   });
 
+  // Master plan §3: a change in company verification changes Store
+  // eligibility. Never let the ecosystem layer fail an admin decision — the
+  // periodic sweep repairs anything this misses.
+  try {
+    const ctx = await require('../lib/ecosystem/orgs').getOrganisationForUser(userId);
+    if (ctx) await require('../lib/ecosystem/entitlements').reconcile(ctx.org.id);
+  } catch (e) {
+    console.warn('[ecosystem] reconcile after verification failed:', e.message);
+  }
+
   if (action === 'approve') {
     await notify(userId, 'Carrier verified', 'Your carrier account has been verified. You can now bid on jobs.', null, 'verification');
   }

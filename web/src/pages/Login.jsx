@@ -10,6 +10,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, homePath } from '../lib/auth.jsx';
 import { ApiError } from '../lib/api.js';
 import { usePageTitle } from '../lib/seo.jsx';
+import { safeOidcReturn } from '../lib/returnTo.js';
 import { SitePage, PHOTOS, PAGE } from '../components/marketing/SubKit.jsx';
 import { MktAuthFrame, PwField } from '../components/marketing/AuthKit.jsx';
 
@@ -32,6 +33,10 @@ export default function Login() {
       // A driver seat always lands on its own minimal view, ignoring any
       // deep link it was bounced here from — RequireAuth (App.jsx) would
       // send it there anyway, this just skips the extra redirect.
+      // Another Loadbyton site started this sign-in (OIDC): hand the person back
+      // to the authorization endpoint. It is a server route, so navigate for real.
+      const back = safeOidcReturn(location.search);
+      if (back && actingAs?.seatRole !== 'DRIVER') { window.location.assign(back); return; }
       const dest = actingAs?.seatRole === 'DRIVER' ? '/driver' : (location.state?.from?.pathname || homePath(user, actingAs));
       navigate(dest, { replace: true });
     } catch (err) {

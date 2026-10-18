@@ -115,6 +115,14 @@ export const api = {
   addOrgMember: (body) => post('/org/members', body),
   updateOrgMember: (id, body) => patch(`/org/members/${id}`, body),
 
+  // ecosystem (organisation identity, Business OS benefits)
+  ecosystemMe: () => get('/ecosystem/me'),
+  ecosystemBenefits: () => get('/ecosystem/benefits'),
+  activateStore: (body) => post('/ecosystem/store/activate', body),
+  premiumPlans: () => get('/ecosystem/premium/plans'),
+  premiumCheckout: (body) => post('/ecosystem/premium/checkout', body),
+  premiumOrders: () => get('/ecosystem/premium/orders'),
+
   // public
   publicLanes: () => get('/public/lanes'),
   publicCarriers: () => get('/public/carriers'),

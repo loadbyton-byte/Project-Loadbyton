@@ -56,6 +56,10 @@ export default function Privacy() {
               Loadbyton ("Company", "we", "us", "our") is the data controller for personal data processed through the Platform.
               Contact: <span className="font-mono">privacy@loadbyton.ae</span> (placeholder — replace with monitored inbox before launch).
             </p>
+            <p className="mt-3 text-sm leading-relaxed text-ink-secondary">
+              The same UAE company operates loadbyton.com and loadbyton.store. If you use Business OS or "Continue with Loadbyton", the two sites exchange only the
+              limited data listed in the <a href="/data-sharing" className="text-brand-secondary hover:underline">Ecosystem Data Sharing Notice</a>.
+            </p>
           </Reveal>
 
           <Reveal delay={60}>

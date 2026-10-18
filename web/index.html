@@ -52,25 +52,13 @@
     <meta name="apple-mobile-web-app-title" content="Loadbyton" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Loaded non-render-blocking (media=print, swapped to all in main.jsx) so a
-         slow or unreachable font CDN never delays first paint of the app shell. -->
-    <!-- Noto Sans Arabic covers both display and body weights so the
-         Arabic locale never falls back to the browser's unstyled default
-         font next to the branded Latin type — see web/src/index.css
-         [lang="ar"] rule and web/src/lib/i18n.jsx. -->
-    <!-- Geist is the display face (see docs/brand/BRAND_GUIDELINES.md §3) —
-         the Loadbyton Brand Kit's chosen headline face, corporate/enterprise
-         register. JetBrains Mono is the data/label face (job codes, AED
-         amounts, timestamps) — replaced IBM Plex Mono in the Industrial
-         Trust redesign pass and carries over unchanged into this rebrand. -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Geist:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-      media="print"
-      data-async-font
-    />
+    <!-- Fonts are self-hosted (public/brand/fonts, SIL OFL 1.1, @font-face in
+         src/styles/fonts.css): Geist for display, Inter for text, JetBrains Mono
+         for codes and amounts, Noto Sans Arabic for the Arabic locale. No third
+         party is contacted to render the site, and first paint no longer waits
+         on a font CDN. See docs/brand/BRAND_GUIDELINES.md §3. -->
+    <link rel="preload" href="/brand/fonts/inter.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/brand/fonts/geist.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Scroll-reveal (.reveal in index.css) starts at opacity:0 and is
          only flipped visible by an IntersectionObserver in lib/motion.js —
          correct for a JS-enabled browser, but a fetcher that never
