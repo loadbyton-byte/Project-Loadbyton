@@ -13,6 +13,8 @@ let deliveryTimer = null;
 
 function startEcosystemWorker({ sweepMs = 15 * 60 * 1000, deliveryMs = 15 * 1000 } = {}) {
   if (sweepTimer || process.env.NODE_ENV === 'test') return;
+  const secret = process.env.ECOSYSTEM_SHARED_SECRET;
+  if (secret && secret.length < 32) logger.error('ecosystem_weak_secret', { hint: 'ECOSYSTEM_SHARED_SECRET should be at least 32 random characters' });
   // Give existing accounts an organisation and subject id; idempotent.
   backfillOrganisations()
     .then((n) => logger.info('ecosystem_backfill', { organisations: n }))
