@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 100" width="470" height="100" role="img" aria-label="LOAD BY TON">
+<title>LOADBYTON — light-background</title>
+<text x="0" y="70" fill="#0F2B3D" font-family="Geist, sans-serif" font-size="58" font-weight="900" letter-spacing="2">LOAD</text>
+<line x1="200" y1="18" x2="200" y2="82" stroke="#E53935" stroke-width="4"/>
+<text x="228" y="47" text-anchor="middle" fill="#E53935" font-family="Geist, sans-serif" font-size="22" font-weight="900">B</text>
+<text x="228" y="72" text-anchor="middle" fill="#E53935" font-family="Geist, sans-serif" font-size="22" font-weight="900">Y</text>
+<line x1="256" y1="18" x2="256" y2="82" stroke="#E53935" stroke-width="4"/>
+<text x="278" y="70" fill="#0F2B3D" font-family="Geist, sans-serif" font-size="58" font-weight="900" letter-spacing="2">TON</text>
+</svg>
